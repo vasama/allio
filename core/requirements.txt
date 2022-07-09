@@ -1,0 +1,11 @@
+vsm-core 0.1
+vsm-intrusive 0.1
+vsm-intrusive_ptr 0.1
+vsm-linear 0.1
+vsm-literals 0.1
+vsm-math 0.1
+vsm-numeric 0.1
+vsm-offset_ptr 0.1
+vsm-result 0.1
+vsm-tag_ptr 0.1
+vsm-unique_resource 0.1
