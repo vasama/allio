@@ -8,11 +8,17 @@ namespace allio {
 namespace detail::path_impl {
 
 template<typename Char>
+constexpr bool is_separator(Char const character)
+{
+	return basic_path_view<Char>::is_separator(character);
+}
+
+template<typename Char>
 constexpr Char const* find_separator(Char const* const beg, Char const* const end)
 {
 	return std::find_if(beg, end, [](Char const character)
 	{
-		return basic_path_view<Char>::is_separator(character);
+		return is_separator(character);
 	});
 }
 
@@ -21,7 +27,7 @@ constexpr Char const* skip_separators(Char const* const beg, Char const* const e
 {
 	return std::find_if_not(beg, end, [](Char const character)
 	{
-		return basic_path_view<Char>::is_separator(character);
+		return is_separator(character);
 	});
 }
 
@@ -48,8 +54,8 @@ template<typename Char>
 constexpr bool is_drive_letter(Char const letter)
 {
 	return
-		'a' <= letter && letter <= 'z' ||
-		'A' <= letter && letter <= 'Z';
+		static_cast<Char>('a') <= letter && letter <= static_cast<Char>('z') ||
+		static_cast<Char>('A') <= letter && letter <= static_cast<Char>('Z');
 }
 
 template<typename Char>
@@ -74,22 +80,22 @@ constexpr Char const* find_root_name_end(Char const* const beg, Char const* cons
 	}
 
 	// All other root names begin with a separator.
-	if (!basic_path_view<Char>::is_separator(beg[0]))
+	if (!is_separator(beg[0]))
 	{
 		return beg;
 	}
 
 	// Any \xy\z where z, if present, is not a separator and xy is one of ?? or \? or \.
-	if (end - beg >= 4 && basic_path_view<Char>::is_separator(beg[3]) &&
-		(end - beg == 4 || !basic_path_view<Char>::is_separator(beg[4])) && (
-			(basic_path_view<Char>::is_separator(beg[1]) && (beg[2] == '?' || beg[2] == '.')) ||
+	if (end - beg >= 4 && is_separator(beg[3]) &&
+		(end - beg == 4 || !is_separator(beg[4])) && (
+			(is_separator(beg[1]) && (beg[2] == '?' || beg[2] == '.')) ||
 			(beg[1] == '?' && beg[2] == '?')))
 	{
 		return beg + 3;
 	}
 
 	// \\server
-	if (end - beg >= 3 && basic_path_view<Char>::is_separator(beg[1]) && !basic_path_view<Char>::is_separator(beg[2]))
+	if (end - beg >= 3 && is_separator(beg[1]) && !is_separator(beg[2]))
 	{
 		return find_separator(beg + 3, end);
 	}
@@ -107,7 +113,7 @@ template<typename Char>
 constexpr Char const* find_leaf_name(Char const* const beg, Char const* end)
 {
 	Char const* const root_path_end = find_root_path_end(beg, end);
-	while (end != root_path_end && !basic_path_view<Char>::is_separator(end[-1]))
+	while (end != root_path_end && !is_separator(end[-1]))
 	{
 		--end;
 	}
@@ -154,19 +160,19 @@ template<typename Char>
 constexpr Char const* find_trailing_separator(Char const* const beg, Char const* end)
 {
 	// If the path does not end in a separator, return end.
-	if (beg == end || !basic_path_view<Char>::is_separator(end[-1]))
+	if (beg == end || !is_separator(end[-1]))
 	{
 		return end;
 	}
 
-	// If the separator at the end if part of the root directory, return end.
+	// If the separator at the end is part of the root directory, return end.
 	if (find_root_path_end(beg, end) == end)
 	{
 		return end;
 	}
 
 	// All trailing separators can be skipped without bounds check now.
-	while (allio_VERIFY(--end != beg), basic_path_view<Char>::is_separator(end[-1]));
+	while (allio_VERIFY(--end != beg), is_separator(end[-1]));
 
 	return end;
 }
@@ -223,7 +229,7 @@ template<typename Char>
 constexpr std::pair<Char const*, Char const*> take_component(Char const*& beg_ref, Char const* const end)
 {
 	Char const* const beg = beg_ref;
-	allio_ASSERT(beg != end && !basic_path_view<Char>::is_separator(*beg));
+	allio_ASSERT(beg != end && !is_separator(*beg));
 
 	Char const* const sep = find_separator(beg, end);
 
@@ -233,6 +239,104 @@ constexpr std::pair<Char const*, Char const*> take_component(Char const*& beg_re
 
 	return { beg, sep };
 }
+
+
+#if 0
+template<typename Char>
+constexpr int32_t count_lexically_normal_segments(Char const* const beg, Char const* end)
+{
+	// Equivalence classes:
+	// 0: default
+	// 1: .
+	// 2: / or \
+
+	auto const get_equivalence_class = [](Char const input)
+	{
+		switch (input)
+		{
+		default:
+			return 0;
+
+		case '.':
+			return 4;
+
+		case '/':
+		case '\\':
+			return 8;
+		}
+	};
+
+	// States:
+	// 0: separator
+	// 1: separator, dot
+	// 2: separator, dot, dot
+	// 3: separator, *
+
+	// Transitions:
+	//    0   1   2   3
+	// *  3   3   3   3
+	// .  1   2   3   3
+	// /  0   0   0-  0+
+
+	static constexpr uint8_t transitions[] =
+	{
+		0x03, 0x03, 0x03, 0x03,
+		0x01, 0x02, 0x03, 0x03,
+		0x00, 0x00, 0xc0, 0x40,
+	};
+
+	int32_t segment_count = 0;
+
+	uint8_t state = 1;
+	auto const handle_input = [&](Char const input)
+	{
+		uint8_t const equivalence_class = get_equivalence_class(input);
+		uint8_t const transition = transitions[equivalence_class + state];
+		segment_count += static_cast<int8_t>(transition & 0xf0) >> 6;
+		state = transition & 0x0f;
+	};
+
+	while (--end != beg)
+	{
+		handle_input(*beg);
+	}
+	handle_input('/');
+
+	return segment_count;
+}
+#endif
+
+template<typename Char>
+class normalizer
+{
+	struct cache_element
+	{
+		Char const* beg;
+		Char const* end;
+	};
+
+	Char const* m_beg;
+	Char const* m_pos;
+	Char const* m_end;
+
+	cache_element m_cache[8];
+	uint8_t m_cache_head = 0;
+	uint8_t m_cache_tail = 0;
+	int32_t m_segment_count = 0;
+
+public:
+	explicit normalizer(Char const* const beg, Char const* const* end)
+		: m_beg(beg)
+		, m_pos(beg)
+		, m_end(end)
+	{
+	}
+
+	normalizer(normalizer const&) = delete;
+	normalizer& operator=(normalizer const&) = delete;
+
+
+};
 
 } // namespace detail::path_impl
 
@@ -598,7 +702,7 @@ constexpr int basic_path_view<Char>::compare(basic_path_view const lhs, basic_pa
 
 
 template<typename Char>
-constexpr void basic_path_view<Char>::iterator::init_begin(Char const* beg, Char const* end)
+constexpr void basic_path_view<Char>::iterator::init_begin(Char const* const beg, Char const* const end)
 {
 	using namespace detail::path_impl;
 

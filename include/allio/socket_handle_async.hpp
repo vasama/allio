@@ -11,101 +11,121 @@
 
 namespace allio {
 
-inline basic_sender<io::socket> detail::common_socket_handle_base::create_async(network_address_kind const address_kind, socket_parameters const& args)
+template<parameters<common_socket_handle::create_parameters> Parameters>
+basic_sender<io::socket_create> common_socket_handle::create_async(network_address_kind const address_kind, Parameters const& args)
 {
-	socket_parameters args_copy = args;
-	args_copy.handle_flags |= flags::multiplexable;
-	return { *this, address_kind, args_copy };
+	basic_sender<io::socket_create> sender = { *this, args, address_kind };
+	sender.arguments().multiplexable = true;
+	return sender;
 }
 
-inline basic_sender<io::connect> detail::socket_handle_base::connect_async(network_address const& address)
+namespace detail {
+
+template<parameters<stream_socket_handle_base::create_parameters> Parameters>
+basic_sender<io::socket_connect> stream_socket_handle_base::connect_async(network_address const& address, Parameters const& args)
 {
-	return { static_cast<socket_handle&>(*this), address };
+	return { static_cast<stream_socket_handle&>(*this), args, address };
 }
 
-inline basic_sender<io::stream_scatter_read> detail::socket_handle_base::read_async(read_buffer const buffer)
+template<parameters<stream_socket_handle_base::byte_io_parameters> Parameters>
+basic_sender<io::stream_scatter_read> stream_socket_handle_base::read_async(read_buffer const buffer, Parameters const& args)
 {
-	return { *this, buffer };
+	return { *this, args, buffer };
 }
 
-inline basic_sender<io::stream_scatter_read> detail::socket_handle_base::read_async(read_buffers const buffers)
+template<parameters<stream_socket_handle_base::byte_io_parameters> Parameters>
+basic_sender<io::stream_scatter_read> stream_socket_handle_base::read_async(read_buffers const buffers, Parameters const& args)
 {
-	return { *this, buffers };
+	return { *this, args, buffers };
 }
 
-inline basic_sender<io::stream_gather_write> detail::socket_handle_base::write_async(write_buffer const buffer)
+template<parameters<stream_socket_handle_base::byte_io_parameters> Parameters>
+basic_sender<io::stream_gather_write> stream_socket_handle_base::write_async(write_buffer const buffer, Parameters const& args)
 {
-	return { *this, buffer };
+	return { *this, args, buffer };
 }
 
-inline basic_sender<io::stream_gather_write> detail::socket_handle_base::write_async(write_buffers const buffers)
+template<parameters<stream_socket_handle_base::byte_io_parameters> Parameters>
+basic_sender<io::stream_gather_write> stream_socket_handle_base::write_async(write_buffers const buffers, Parameters const& args)
 {
-	return { *this, buffers };
+	return { *this, args, buffers };
 }
 
-inline basic_sender<io::listen> detail::listen_socket_handle_base::listen_async(network_address const& address, listen_parameters const& args)
+template<parameters<listen_socket_handle_base::listen_parameters> Parameters>
+basic_sender<io::socket_listen> listen_socket_handle_base::listen_async(network_address const& address, Parameters const& args)
 {
-	return { static_cast<listen_socket_handle&>(*this), address, args };
+	return { static_cast<listen_socket_handle&>(*this), args, address };
 }
 
-inline basic_sender<io::accept> detail::listen_socket_handle_base::accept_async(socket_parameters const& create_args) const
+template<parameters<listen_socket_handle_base::accept_parameters> Parameters>
+basic_sender<io::socket_accept> listen_socket_handle_base::accept_async(Parameters const& args) const
 {
-	socket_parameters create_args_copy = create_args;
-	create_args_copy.handle_flags |= flags::multiplexable;
-	return { static_cast<listen_socket_handle const&>(*this), create_args_copy };
+	basic_sender<io::socket_accept> sender = { static_cast<listen_socket_handle const&>(*this), args };
+	sender.arguments().multiplexable = true;
+	return sender;
 }
 
+} // namespace detail
 
-inline auto connect_async(multiplexer& multiplexer, network_address const& address, socket_parameters const& create_args = {})
+template<parameters<stream_socket_handle::connect_parameters> Parameters = stream_socket_handle::connect_parameters::interface>
+auto connect_async(multiplexer& multiplexer, network_address const& address, Parameters const& args = {})
 {
 	struct context
 	{
-		socket_handle handle;
+		stream_socket_handle handle;
 		allio::multiplexer* multiplexer;
 		network_address address;
-		socket_parameters create_args;
+		stream_socket_handle::connect_parameters args;
 	};
 
 	return error_into_except(unifex::let_value_with(
-		[ctx = context{ socket_handle(), &multiplexer, address, create_args }]() mutable -> context&
+		[ctx = context{ stream_socket_handle(), &multiplexer, address, args }]() mutable -> context&
 		{
 			return ctx;
 		},
 		[](context& ctx)
 		{
 			return unifex::sequence(
-				unifex::defer([&] { return result_into_error(unifex::just(ctx.handle.set_multiplexer(ctx.multiplexer))); }),
-				unifex::defer([&] { return ctx.handle.create_async(ctx.address.kind(), ctx.create_args); }),
-				unifex::defer([&] { return ctx.handle.connect_async(ctx.address); }),
-				unifex::defer([&] { return unifex::just(static_cast<decltype(context::handle)&&>(ctx.handle)); })
+				unifex::defer([&]
+				{
+					ctx.args.deadline = ctx.args.deadline.start();
+					return result_into_error(unifex::just(ctx.handle.set_multiplexer(ctx.multiplexer)));
+				}),
+				unifex::defer([&] { return ctx.handle.create_async(ctx.address.kind(), ctx.args); }),
+				unifex::defer([&] { return ctx.handle.connect_async(ctx.address, ctx.args); }),
+				unifex::defer([&] { return unifex::just(static_cast<stream_socket_handle&&>(ctx.handle)); })
 			);
 		}
 	));
 }
 
-inline auto listen_async(multiplexer& multiplexer, network_address const& address, listen_parameters const& args = {}, socket_parameters const& create_args = {})
+template<parameters<listen_socket_handle::listen_parameters> Parameters = listen_socket_handle::listen_parameters::interface>
+auto listen_async(multiplexer& multiplexer, network_address const& address, Parameters const& args = {})
 {
 	struct context
 	{
 		listen_socket_handle handle;
 		allio::multiplexer* multiplexer;
 		network_address address;
-		listen_parameters args;
-		socket_parameters create_args;
+		listen_socket_handle::listen_parameters args;
 	};
 
 	return error_into_except(unifex::let_value_with(
-		[ctx = context{ listen_socket_handle(), &multiplexer, address, args, create_args }]() mutable -> context&
+		[ctx = context{ listen_socket_handle(), &multiplexer, address, args }]() mutable -> context&
 		{
 			return ctx;
 		},
 		[](context& ctx)
 		{
 			return unifex::sequence(
-				unifex::defer([&] { return result_into_error(unifex::just(ctx.handle.set_multiplexer(ctx.multiplexer))); }),
-				unifex::defer([&] { return ctx.handle.create_async(ctx.address.kind(), ctx.create_args); }),
+				unifex::defer([&]
+				{
+					ctx.args.deadline = ctx.args.deadline.start();
+					return result_into_error(unifex::just(ctx.handle.set_multiplexer(ctx.multiplexer)));
+				}),
+				unifex::defer([&] { return ctx.handle.create_async(ctx.address.kind(), ctx.args); }),
 				unifex::defer([&] { return ctx.handle.listen_async(ctx.address, ctx.args); }),
-				unifex::defer([&] { return unifex::just(static_cast<decltype(context::handle)&&>(ctx.handle)); })
+				unifex::defer([&] { return unifex::just(static_cast<listen_socket_handle&&>(ctx.handle)); })
 			);
 		}
 	));

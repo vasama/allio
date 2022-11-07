@@ -9,12 +9,12 @@ namespace allio {
 
 class synchronized_multiplexer final : public multiplexer
 {
-	unique_multiplexer m_multiplexer;
+	unique_multiplexer_ptr m_multiplexer;
 	std::mutex m_mutex;
 
 public:
-	explicit synchronized_multiplexer(unique_multiplexer multiplexer)
-		: m_multiplexer(static_cast<unique_multiplexer&&>(multiplexer))
+	explicit synchronized_multiplexer(unique_multiplexer_ptr multiplexer)
+		: m_multiplexer(static_cast<unique_multiplexer_ptr&&>(multiplexer))
 	{
 	}
 

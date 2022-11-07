@@ -53,41 +53,50 @@ public:
 	}
 };
 
+// Note that ipv4_address always represents addresses using native integer endianness.
+// This means that for example the loopback address 127.0.0.1 is unambiguously represented as 0x7f'00'00'01.
+// Some use cases outside of this library may require explicit conversion to network byte order.
 class ipv4_address
 {
 	uint32_t m_addr;
-	uint16_t m_port;
 
 public:
-	constexpr ipv4_address(uint32_t const address, uint16_t const port)
+	explicit constexpr ipv4_address(uint32_t const address)
 		: m_addr(address)
-		, m_port(port)
 	{
 	}
 
-	constexpr uint32_t address() const
+	constexpr uint32_t integer() const
 	{
 		return m_addr;
 	}
 
-	constexpr uint16_t port() const
-	{
-		return m_port;
-	}
 
-	static constexpr ipv4_address localhost(uint16_t const port)
-	{
-		return ipv4_address(0x7f000001, port);
-	}
+	static ipv4_address const localhost;
 };
+
+inline constexpr ipv4_address ipv4_address::localhost = ipv4_address(0x7f'00'00'01);
 
 class ipv6_address
 {
 	uint32_t m_addr[4];
 
 public:
+	static ipv6_address const localhost;
 };
 
+
+template<typename Address>
+struct network_endpoint
+{
+	Address address;
+	uint16_t port;
+};
+
+using ipv4_endpoint = network_endpoint<ipv4_address>;
+using ipv6_endpoint = network_endpoint<ipv6_address>;
+
+//TODO: Rename to network_endpoint?
 class network_address
 {
 	network_address_kind m_kind;
@@ -95,8 +104,8 @@ class network_address
 	{
 		struct {} m_null;
 		local_address m_local;
-		ipv4_address m_ipv4;
-		ipv6_address m_ipv6;
+		ipv4_endpoint m_ipv4;
+		ipv6_endpoint m_ipv6;
 	};
 
 public:
@@ -112,13 +121,13 @@ public:
 	{
 	}
 
-	constexpr network_address(ipv4_address const& address)
+	constexpr network_address(ipv4_endpoint const& address)
 		: m_kind(network_address_kind::ipv4)
 		, m_ipv4(address)
 	{
 	}
 
-	constexpr network_address(ipv6_address const& address)
+	constexpr network_address(ipv6_endpoint const& address)
 		: m_kind(network_address_kind::ipv6)
 		, m_ipv6(address)
 	{
@@ -140,13 +149,13 @@ public:
 		return m_local;
 	}
 
-	constexpr ipv4_address const& ipv4() const
+	constexpr ipv4_endpoint const& ipv4() const
 	{
 		allio_ASSERT(m_kind == network_address_kind::ipv4);
 		return m_ipv4;
 	}
 
-	constexpr ipv6_address const& ipv6() const
+	constexpr ipv6_endpoint const& ipv6() const
 	{
 		allio_ASSERT(m_kind == network_address_kind::ipv6);
 		return m_ipv6;

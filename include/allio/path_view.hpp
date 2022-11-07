@@ -3,6 +3,7 @@
 #include <allio/detail/box.hpp>
 #include <allio/detail/platform.hpp>
 #include <allio/detail/preprocessor.h>
+#include <allio/path_literal.hpp>
 
 #include <string_view>
 
@@ -311,12 +312,12 @@ class basic_path_combine_result
 	bool m_requires_separator;
 
 public:
-	constexpr explicit basic_path_combine_result(basic_path_view<Char> const path, bool const requires_separator = false)
+	explicit constexpr basic_path_combine_result(basic_path_view<Char> const path, bool const requires_separator = false)
 		: m_lhs(path), m_requires_separator(requires_separator)
 	{
 	}
 
-	constexpr explicit basic_path_combine_result(basic_path_view<Char> const lhs, basic_path_view<Char> const rhs, bool const requires_separator = false)
+	explicit constexpr basic_path_combine_result(basic_path_view<Char> const lhs, basic_path_view<Char> const rhs, bool const requires_separator = false)
 		: m_lhs(lhs), m_rhs(rhs), m_requires_separator(requires_separator)
 	{
 	}

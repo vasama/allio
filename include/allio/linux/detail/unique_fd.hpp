@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/detail/unique_resource.hpp>
+#include <allio/result.hpp>
 
 namespace allio::detail {
 
@@ -13,7 +14,6 @@ struct fd_deleter
 		release(fd);
 	}
 };
-
-using unique_fd = unique_resource<int, fd_deleter, -1>;
+using unique_fd = unique_resource<int, fd_deleter, static_cast<int>(-1)>;
 
 } // namespace allio::detail

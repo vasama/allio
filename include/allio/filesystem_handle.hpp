@@ -1,5 +1,6 @@
 #pragma once
 
+#include <allio/input_path_view.hpp>
 #include <allio/multiplexer.hpp>
 #include <allio/platform_handle.hpp>
 #include <allio/path.hpp>
@@ -10,14 +11,70 @@
 
 namespace allio {
 
+class filesystem_handle;
+
+namespace io {
+
+struct filesystem_open;
+
+template<typename Char>
+struct get_current_path;
+
+template<typename Char>
+struct copy_current_path;
+
+} // namespace io
+
+
+enum class file_kind
+{
+	unknown,
+
+	regular,
+	directory,
+
+	pipe,
+	socket,
+
+	block_device,
+	character_device,
+
+	symbolic_link,
+
+	ntfs_junction,
+};
+
+class file_id
+{
+	std::byte m_data alignas(uintptr_t)[16];
+
+public:
+	auto operator<=>(file_id const&) const = default;
+};
+
+class file_permissions
+{
+};
+
+
 enum class file_mode : uint8_t
 {
+	unchanged,
+	none,
+	read_attributes,
+	write_attributes,
+	read,
+	write,
+	append,
+
+#if 0
 	none                                = 0b0010,
 	attr_read                           = 0b0100,
 	attr_write                          = 0b0101,
 	read                                = 0b0110,
 	write                               = 0b0111,
 	append                              = 0b1001,
+#endif
 };
 
 enum class file_creation : uint8_t
@@ -31,6 +88,8 @@ enum class file_creation : uint8_t
 
 enum class file_caching : uint8_t
 {
+	unchanged                           = 0,
+	none                                = 1,
 };
 
 enum class file_flags : uint32_t
@@ -42,7 +101,7 @@ enum class file_flags : uint32_t
 	disable_prefetching                 = 1 << 3,
 	maximum_prefetching                 = 1 << 4,
 
-#if _WIN32
+#if allio_detail_WIN32
 #	define allio_detail_WIN_FILE_FLAG(x) 1 << x
 #else
 #	define allio_detail_WIN_FILE_FLAG(x) 0
@@ -54,56 +113,105 @@ enum class file_flags : uint32_t
 #undef allio_detail_WIN_FILE_FLAG
 };
 
-struct file_parameters
-{
-	flags handle_flags = {};
-	file_mode mode = file_mode::read;
-	file_creation creation = file_creation::open_existing;
-	file_caching caching = {};
-	file_flags flags = {};
-};
-
 enum class path_kind : uint32_t
 {
-	any                         = 0,
+	any                         = static_cast<uint32_t>(-1),
 
-	windows_nt                  = 1 << 0,
-	windows_guid                = 1 << 1,
-	windows_dos                 = 1 << 2,
+	win_nt                      = 1 << 0,
+	win_guid                    = 1 << 1,
+	win_dos                     = 1 << 2,
+};
+allio_detail_FLAG_ENUM(path_kind);
+
+
+class filesystem_handle : public platform_handle
+{
+public:
+	using base_type = platform_handle;
+
+	using async_operations = type_list_cat<
+		base_type::async_operations,
+		type_list<
+			io::filesystem_open,
+			io::get_current_path<char>,
+			io::copy_current_path<char>
+		>
+	>;
+
+	#define allio_FILESYSTEM_HANDLE_OPEN_PARAMETERS(type, data, ...) \
+		type(allio::filesystem_handle, open_parameters) \
+		allio_PLATFORM_HANDLE_CREATE_PARAMETERS(__VA_ARGS__, __VA_ARGS__) \
+		data(::allio::file_mode,            mode,           ::allio::file_mode::read) \
+		data(::allio::file_creation,        creation,       ::allio::file_creation::open_existing) \
+		data(::allio::file_caching,         caching,        ::allio::file_caching::none) \
+		data(::allio::file_flags,           flags,          ::allio::file_flags::none) \
+
+	allio_INTERFACE_PARAMETERS(allio_FILESYSTEM_HANDLE_OPEN_PARAMETERS);
+
+	#define allio_FILESYSTEM_HANDLE_CURRENT_PATH_PARAMETERS(type, data, ...) \
+		type(allio::filesystem_handle, current_path_parameters) \
+		data(::allio::path_kind,            kind,           ::allio::path_kind::any) \
+
+	allio_INTERFACE_PARAMETERS(allio_FILESYSTEM_HANDLE_CURRENT_PATH_PARAMETERS);
+
+
+	template<typename Char = char, parameters<current_path_parameters> Parameters = current_path_parameters::interface>
+	result<basic_path<Char>> get_current_path(Parameters const& args = {}) const
+	{
+		return block_get_current_path<Char>(args);
+	}
+
+	template<typename Char = char, parameters<current_path_parameters> Parameters = current_path_parameters::interface>
+	result<basic_path_view<Char>> copy_current_path(std::span<Char> const buffer, Parameters const& args = {}) const
+	{
+		return block_copy_current_path<Char>(buffer, args);
+	}
+
+protected:
+	explicit constexpr filesystem_handle(type_id<filesystem_handle> const type)
+		: base_type(type)
+	{
+	}
+
+	filesystem_handle(filesystem_handle&&) = default;
+	filesystem_handle& operator=(filesystem_handle&&) = default;
+	~filesystem_handle() = default;
+
+
+	template<typename Char>
+	result<basic_path<Char>> block_get_current_path(current_path_parameters const& args);
+
+	template<typename Char>
+	result<basic_path_view<Char>> block_copy_current_path(std::span<Char> buffer, current_path_parameters const& args);
+
+
+	using base_type::sync_impl;
+
+	template<typename Char>
+	static result<void> sync_impl(io::parameters_with_result<io::get_current_path<Char>> const& args);
+
+	template<typename Char>
+	static result<void> sync_impl(io::parameters_with_result<io::copy_current_path<Char>> const& args);
+
+	template<typename H, typename O>
+	friend result<void> allio::synchronous(io::parameters_with_result<O> const& args);
 };
 
-class filesystem_handle;
-
-namespace detail {
-
-template<typename Char>
-result<basic_path<Char>> get_current_path(filesystem_handle const& handle, path_kind kind);
-
-template<typename Char>
-result<basic_path_view<Char>> copy_current_path(filesystem_handle const& handle, std::span<Char> buffer, path_kind kind);
-
-} // namespace detail
-
-namespace io {
-
-struct open_file;
 
 template<>
-struct parameters<open_file>
+struct io::parameters<io::filesystem_open>
+	: filesystem_handle::open_parameters
 {
 	using handle_type = filesystem_handle;
 	using result_type = void;
 
 	filesystem_handle const* base;
-	path_view path;
-	file_parameters args;
+	input_path_view path;
 };
 
 template<typename Char>
-struct get_current_path;
-
-template<typename Char>
-struct parameters<get_current_path<Char>>
+struct io::parameters<io::get_current_path<Char>>
+	: basic_parameters
 {
 	using handle_type = filesystem_handle;
 	using result_type = void;
@@ -113,51 +221,14 @@ struct parameters<get_current_path<Char>>
 };
 
 template<typename Char>
-struct copy_current_path;
-
-template<typename Char>
-struct parameters<copy_current_path<Char>> : async_operation_parameters
+struct io::parameters<io::copy_current_path<Char>>
+	: basic_parameters
 {
 	using handle_type = filesystem_handle;
 	using result_type = void;
 
 	path_kind kind;
 	std::span<Char> buffer;
-};
-
-} // namespace io
-
-class filesystem_handle : public platform_handle
-{
-public:
-	using async_operations = type_list_cat<
-		platform_handle::async_operations,
-		type_list<
-			io::open_file,
-			io::get_current_path<char>,
-			io::copy_current_path<char>
-		>
-	>;
-
-	template<typename Char = char>
-	result<basic_path<Char>> get_current_path(path_kind const kind = path_kind::any) const
-	{
-		return detail::get_current_path<Char>(*this, kind);
-	}
-
-	template<typename Char = char>
-	result<basic_path_view<Char>> copy_current_path(std::span<Char> const buffer, path_kind const kind = path_kind::any) const
-	{
-		return detail::copy_current_path<Char>(*this, buffer, kind);
-	}
-
-protected:
-	using platform_handle::platform_handle;
-
-	filesystem_handle() = default;
-	filesystem_handle(filesystem_handle&&) = default;
-	filesystem_handle& operator=(filesystem_handle&&) = default;
-	~filesystem_handle() = default;
 };
 
 } // namespace allio

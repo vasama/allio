@@ -4,40 +4,264 @@
 #include <allio/detail/flags.hpp>
 #include <allio/detail/linear.hpp>
 #include <allio/multiplexer.hpp>
+#include <allio/parameters.hpp>
 #include <allio/type_list.hpp>
 
 #include <cstdint>
 
 namespace allio {
 
-enum class flags : uint32_t
-{
-	none                                = 0,
-	multiplexable                       = 1 << 0,
-};
-allio_detail_FLAG_ENUM(flags);
+class handle;
+
+template<typename Handle>
+class final_handle;
 
 namespace io {
 
+struct flush;
 struct close;
 
 } // namespace io
 
-class handle
-{
-	detail::linear<flags> m_flags;
 
-	detail::linear<multiplexer*> m_multiplexer;
-	detail::linear<multiplexer_handle_relation const*> m_multiplexer_relation;
-	detail::linear<void*> m_multiplexer_data;
+namespace detail {
+
+template<typename Enum>
+concept handle_flags_enum = requires { Enum::allio_detail_handle_flags_flag_count; };
+
+} // namespace detail
+
+class handle_flags
+{
+	uint32_t m_flags;
 
 public:
-	struct native_handle_type
+	static handle_flags const none;
+
+
+	handle_flags() = default;
+
+	constexpr handle_flags(detail::handle_flags_enum auto const index)
+		: m_flags(convert_index(index))
 	{
-		flags handle_flags;
+	}
+
+	constexpr handle_flags& operator=(handle_flags const&) & = default;
+
+
+	constexpr bool operator[](detail::handle_flags_enum auto const index)
+	{
+		return m_flags & convert_index(index);
+	}
+
+
+	constexpr handle_flags operator~() const
+	{
+		return handle_flags(~m_flags);
+	}
+
+	constexpr handle_flags& operator&=(handle_flags const flags) &
+	{
+		m_flags &= flags.m_flags;
+		return *this;
+	}
+
+	constexpr handle_flags& operator|=(handle_flags const flags) &
+	{
+		m_flags |= flags.m_flags;
+		return *this;
+	}
+
+	constexpr handle_flags& operator^=(handle_flags const flags) &
+	{
+		m_flags ^= flags.m_flags;
+		return *this;
+	}
+
+	friend constexpr handle_flags operator&(handle_flags const& lhs, handle_flags const& rhs)
+	{
+		return handle_flags(lhs.m_flags & rhs.m_flags);
+	}
+
+	friend constexpr handle_flags operator|(handle_flags const& lhs, handle_flags const& rhs)
+	{
+		return handle_flags(lhs.m_flags | rhs.m_flags);
+	}
+
+	friend constexpr handle_flags operator^(handle_flags const& lhs, handle_flags const& rhs)
+	{
+		return handle_flags(lhs.m_flags ^ rhs.m_flags);
+	}
+
+	bool operator==(handle_flags const&) const = default;
+
+
+#if 0
+	friend constexpr handle_flags operator|(detail::handle_flags_enum auto const lhs, detail::handle_flags_enum auto const rhs)
+	{
+		return handle_flags(convert_index(lhs) | convert_index(rhs));
+	}
+#endif
+
+private:
+	explicit constexpr handle_flags(uint32_t const flags)
+		: m_flags(flags)
+	{
+	}
+
+	static constexpr uint32_t convert_index(detail::handle_flags_enum auto const index)
+	{
+		return (static_cast<uint32_t>(1) << decltype(index)::allio_detail_handle_flags_base_count) << static_cast<uint32_t>(index);
+	}
+};
+
+inline constexpr handle_flags handle_flags::none = handle_flags(0);
+
+
+#define allio_detail_handle_flags(base, ...) \
+	struct flags : base::flags \
+	{ \
+		enum : ::uint32_t \
+		{ \
+			__VA_ARGS__ \
+			allio_detail_handle_flags_enum_count, \
+			allio_detail_handle_flags_base_count = base::flags::allio_detail_handle_flags_flag_count, \
+			allio_detail_handle_flags_flag_count = allio_detail_handle_flags_base_count + allio_detail_handle_flags_enum_count, \
+		}; \
+		static_assert(allio_detail_handle_flags_flag_count <= base::flags::allio_detail_handle_flags_flag_limit); \
+	} \
+
+#define allio_handle_flags(...) \
+	allio_detail_handle_flags(base_type, __VA_ARGS__)
+
+#define allio_handle_implementation_flags(...) \
+	allio_detail_handle_flags(base_type::implementation, __VA_ARGS__)
+
+
+using synchronous_operation = result<void>(*)(async_operation_parameters const& args);
+
+template<typename Handle, typename Operation>
+struct synchronous_operation_implementation;
+#if 0
+{
+	static result<void> execute(io::parameters_with_result<Operation> const& args)
+	{
+		return Handle::sync_impl(args);
+	}
+};
+#endif
+
+
+template<typename M, typename H>
+struct multiplexer_handle_implementation;
+
+template<typename M, typename H, typename O>
+struct multiplexer_handle_operation_implementation;
+
+namespace detail {
+
+// https://godbolt.org/z/Y7Gqncz6T
+class handle_base
+{
+	using async_operations = type_list<>;
+
+protected:
+	struct flags : handle_flags
+	{
+		flags() = delete;
+		static constexpr uint32_t allio_detail_handle_flags_flag_count = 0;
+		static constexpr uint32_t allio_detail_handle_flags_flag_limit = 16;
 	};
 
-	using async_operations = type_list<io::close>;
+	struct implementation
+	{
+		struct flags : handle_flags
+		{
+			flags() = delete;
+			static constexpr uint32_t allio_detail_handle_flags_flag_count = 16;
+			static constexpr uint32_t allio_detail_handle_flags_flag_limit = 32;
+		};
+	};
+
+protected:
+	void sync_impl();
+};
+
+
+template<typename H, typename O>
+struct synchronous_operation_translation;
+
+template<typename H, typename O>
+struct synchronous_operation_translation<final_handle<H>, O>
+{
+	static result<void> execute(async_operation_parameters const& args)
+	{
+		return synchronous<final_handle<H>>(static_cast<io::parameters_with_result<O> const&>(args));
+	}
+};
+
+template<typename H, typename Os = typename H::async_operations>
+struct synchronous_operations;
+
+template<typename H, typename... Os>
+struct synchronous_operations<final_handle<H>, type_list<Os...>>
+{
+	static synchronous_operation const operations[];
+};
+
+template<typename H, typename... Os>
+constinit synchronous_operation const synchronous_operations<final_handle<H>, type_list<Os...>>::operations[] =
+{
+	synchronous_operation_translation<final_handle<H>, Os>::execute...
+};
+
+} // namespace detail
+
+template<>
+struct type_id_traits<handle>
+{
+	using object_type = synchronous_operation[];
+};
+
+class handle : public detail::handle_base
+{
+	struct flags_linear_traits
+	{
+		static constexpr handle_flags default_value()
+		{
+			return handle_flags{};
+		}
+	};
+
+	synchronous_operation const(* m_synchronous_operations)[];
+	detail::basic_linear<handle_flags, flags_linear_traits> m_flags;
+	detail::linear<multiplexer*> m_multiplexer;
+	detail::linear<multiplexer_handle_relation const*> m_multiplexer_relation;
+	//void* m_multiplexer_data;
+
+public:
+	using base_type = detail::handle_base;
+
+	struct native_handle_type
+	{
+		handle_flags flags;
+	};
+
+	allio_handle_flags
+	(
+		not_null,
+	);
+
+	using async_operations = type_list<
+		io::flush,
+		io::close
+	>;
+
+
+	[[nodiscard]] type_id<handle> get_type_id() const
+	{
+		return type_id<handle>(m_synchronous_operations);
+	}
 
 	[[nodiscard]] native_handle_type get_native_handle() const
 	{
@@ -47,7 +271,7 @@ public:
 		};
 	}
 
-	[[nodiscard]] flags get_flags() const
+	[[nodiscard]] handle_flags get_flags() const
 	{
 		return m_flags.value;
 	}
@@ -57,53 +281,74 @@ public:
 		return m_multiplexer.value;
 	}
 
+	result<void> set_multiplexer(multiplexer* const multiplexer)
+	{
+		return set_multiplexer(multiplexer, multiplexer);
+	}
+
+	result<void> set_multiplexer(multiplexer* const multiplexer, multiplexer_handle_relation_provider const& relation_provider)
+	{
+		return set_multiplexer(multiplexer, &relation_provider);
+	}
+
+	[[nodiscard]] synchronous_operation const* get_synchronous_operations() const
+	{
+		return *m_synchronous_operations;
+	}
+
 	[[nodiscard]] multiplexer_handle_relation const& get_multiplexer_relation() const
 	{
+		allio_ASSERT(m_multiplexer.value != nullptr);
 		return *m_multiplexer_relation.value;
 	}
 
 	[[nodiscard]] storage_requirements get_async_operation_storage_requirements() const
 	{
-		allio_ASSERT(m_multiplexer_relation.value != nullptr);
+		allio_ASSERT(m_multiplexer.value != nullptr);
 		return m_multiplexer_relation.value->operation_storage_requirements;
 	}
 
+#if 0
 	[[nodiscard]] void* get_multiplexer_data() const
 	{
-		return m_multiplexer_data.value;
+		allio_ASSERT(m_multiplexer.value != nullptr);
+		return m_multiplexer_data;
+	}
+#endif
+
+	[[nodiscard]] explicit operator bool() const
+	{
+		return m_flags.value != flags::none;
 	}
 
 protected:
-	explicit handle(native_handle_type const handle)
-		: m_flags(handle.handle_flags)
+	static constexpr size_t flag_base = 0;
+
+	explicit constexpr handle(type_id<handle> const type)
+		: m_synchronous_operations(type.get_object())
 	{
 	}
 
-	handle() = default;
 	handle(handle&&) = default;
 	handle& operator=(handle&&) = default;
 	~handle() = default;
 
-	void set_flags(flags const flags)
+	void set_flags(handle_flags const flags)
 	{
-		m_flags.value = flags;
+		m_flags = flags;
 	}
 
-	result<void> do_flush()
+	result<void> flush_sync(basic_parameters const& args)
 	{
 		return {};
 	}
 
-	result<void> set_multiplexer(multiplexer* multiplexer, multiplexer_handle_relation_provider const* relation_provider, type_id<handle> handle_type, bool is_valid);
+	result<void> set_multiplexer(multiplexer* multiplexer, multiplexer_handle_relation_provider const* relation_provider);
 
 	result<void> register_handle()
 	{
-		if ((m_flags.value & flags::multiplexable) == flags::none)
-		{
-			return allio_ERROR(error::handle_is_not_multiplexable);
-		}
 		allio_ASSERT(m_multiplexer.value != nullptr);
-		allio_TRYA(m_multiplexer_data.value, m_multiplexer_relation.value->register_handle(*m_multiplexer.value, *this));
+		allio_TRYV(m_multiplexer_relation.value->register_handle(*m_multiplexer.value, *this));
 		return {};
 	}
 
@@ -111,26 +356,91 @@ protected:
 	{
 		allio_ASSERT(m_multiplexer.value != nullptr);
 		allio_TRYV(m_multiplexer_relation.value->deregister_handle(*m_multiplexer.value, *this));
-		m_multiplexer_data.value = nullptr;
 		return {};
 	}
 
 	result<void> set_native_handle(native_handle_type handle);
 	result<native_handle_type> release_native_handle();
+
+	friend class multiplexer;
+
+	template<typename>
+	friend class final_handle;
 };
+
+template<std::derived_from<handle> Handle>
+struct type_id_traits<Handle> : type_id_traits<handle> {};
+
+
+template<typename Operation, typename Handle>
+synchronous_operation get_synchronous_operation(Handle const& handle)
+{
+	return handle.get_synchronous_operations()[
+		type_list_index<typename Handle::async_operations, Operation>];
+}
+
+template<typename Operation, typename Handle>
+async_operation_descriptor const& get_async_operation_descriptor(Handle const& handle)
+{
+	return handle.get_multiplexer_relation().operations[
+		type_list_index<typename Handle::async_operations, Operation>];
+}
+
+
+template<typename Handle, typename Operation>
+result<void> synchronous(io::parameters_with_result<Operation> const& args)
+{
+	return Handle::sync_impl(args);
+}
+
+template<typename Operation, typename Handle, typename... Args>
+result<typename io::parameters<Operation>::result_type> block(Handle& handle, auto const& optional_args, Args&&... required_args)
+{
+	using result_type = typename io::parameters<Operation>::result_type;
+
+	allio::result<result_type> r(result_value);
+	io::parameters_with_result<Operation> const args_object(
+		io::result_pointer<result_type>(r), handle, optional_args, static_cast<Args&&>(required_args)...);
+
+	if (multiplexer* const multiplexer = handle.get_multiplexer())
+	{
+		allio_TRYV(multiplexer->block(get_async_operation_descriptor<Operation>(handle), args_object));
+	}
+	else
+	{
+		allio_TRYV(get_synchronous_operation<Operation>(handle)(args_object));
+	}
+
+	return r;
+}
+
+
+template<>
+struct io::parameters<io::flush>
+	: basic_parameters
+{
+	using handle_type = handle;
+	using result_type = void;
+};
+
+template<>
+struct io::parameters<io::close>
+	: basic_parameters
+{
+	using handle_type = handle;
+	using result_type = void;
+};
+
 
 template<typename Handle>
 class final_handle final : public Handle
 {
-	static_assert(std::is_same_v<type_list_at<typename Handle::async_operations, 0>, io::close>,
-		"io::close must be located at index 0 in the async operation table.");
-
 public:
 	using Handle::Handle;
 
 	final_handle(final_handle&& source) noexcept = default;
 
-	final_handle& operator=(final_handle&& source) noexcept
+	final_handle& operator=(final_handle&& source) & noexcept
 	{
 		if (*this)
 		{
@@ -149,58 +459,69 @@ public:
 	}
 
 
-	result<void> flush()
+	result<void> set_native_handle(typename Handle::native_handle_type const& handle)
 	{
 		if (*this)
 		{
-			return Handle::do_flush();
+			return allio_ERROR(error::handle_is_not_null);
 		}
-		return allio_ERROR(make_error_code(std::errc::bad_file_descriptor));
+		return Handle::set_native_handle(handle);
 	}
 
-	result<void> close()
+	result<typename Handle::native_handle_type> release_native_handle()
 	{
-		if (*this)
+		if (!*this)
 		{
-			allio_TRYV(Handle::do_flush());
-			return Handle::do_close();
+			return allio_ERROR(error::handle_is_null);
 		}
-		return allio_ERROR(make_error_code(std::errc::bad_file_descriptor));
+		return Handle::release_native_handle();
 	}
 
 
-	template<typename Operation>
-	async_operation_descriptor const& get_descriptor() const
+	result<void> flush(basic_parameters::interface const& args = {})
 	{
-		return Handle::get_multiplexer_relation().operations[
-			type_list_index<typename Handle::async_operations, Operation>];
+		return block<io::flush>(*this, args);
 	}
 
-
-	result<void> set_multiplexer(multiplexer* const multiplexer)
+	result<void> close(basic_parameters::interface const& args = {})
 	{
-		return handle::set_multiplexer(multiplexer, multiplexer, type_of(*this), static_cast<bool>(*this));
-	}
-
-	result<void> set_multiplexer(multiplexer* const multiplexer, multiplexer_handle_relation_provider const& relation_provider)
-	{
-		return handle::set_multiplexer(multiplexer, &relation_provider, type_of(*this), static_cast<bool>(*this));
+		return block<io::close>(*this, args);
 	}
 
 private:
 	void close_unchecked()
 	{
-		allio_VERIFY(Handle::do_flush());
-		Handle::do_close();
+		allio_VERIFY(close());
+	}
+
+protected:
+	using Handle::sync_impl;
+
+	static result<void> sync_impl(io::parameters_with_result<io::flush> const& args)
+	{
+		return static_cast<final_handle*>(args.handle)->Handle::flush_sync(args);
+	}
+
+	static result<void> sync_impl(io::parameters_with_result<io::close> const& args)
+	{
+		return static_cast<final_handle*>(args.handle)->Handle::close_sync(args);
+	}
+
+	template<typename H, typename O>
+	friend result<void> allio::synchronous(io::parameters_with_result<O> const& args);
+};
+
+template<std::derived_from<handle> Handle>
+struct type_id_traits<final_handle<Handle>> : type_id_traits<Handle>
+{
+	static constexpr typename type_id_traits<Handle>::object_type const* get_object()
+	{
+		return &detail::synchronous_operations<final_handle<Handle>>::operations;
 	}
 };
 
 
-template<>
-struct io::parameters<io::close>
-{
-	using handle_type = handle;
-	using result_type = void;
-};
+#define allio_HANDLE_IMPLEMENTATION(H) \
+	template struct ::allio::detail::synchronous_operations<H>
 
 } // namespace allio

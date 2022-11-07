@@ -12,11 +12,15 @@
 namespace allio {
 namespace detail {
 
+#if 0
 struct sync_wait_void {};
 
 template<typename T>
 using sync_wait_void_lift = std::conditional_t<std::is_void_v<T>, sync_wait_void, T>;
+#endif
 
+
+#if 0
 enum class sync_wait_state
 {
 	pending,
@@ -163,7 +167,7 @@ result<Result> sync_wait_impl(multiplexer& multiplexer, Sender&& sender)
 			std::rethrow_exception(static_cast<sync_wait_promise<Result>&&>(promise).get_error());
 		}
 
-		if (auto const r = multiplexer.submit_and_poll(); !r)
+		if (auto const r = multiplexer.pump(); !r)
 		{
 			//TODO: cancel operation
 			return allio_ERROR(r.error());
@@ -176,6 +180,176 @@ auto sync_wait(multiplexer& multiplexer, Sender&& sender)
 {
 	using Result = unifex::sender_single_value_result_t<std::remove_cvref_t<Sender>>;
 	return sync_wait_impl<Result>(multiplexer, static_cast<Sender&&>(sender));
+}
+#endif
+
+
+enum class sync_wait_state
+{
+	pending,
+	done,
+	result,
+	exception,
+};
+
+template<typename Value>
+class sync_wait_promise
+{
+	sync_wait_state m_state;
+	union
+	{
+		unifex::manual_lifetime<result<Value>> m_result;
+		unifex::manual_lifetime<std::exception_ptr> m_exception;
+	};
+
+public:
+	sync_wait_promise()
+		: m_state(sync_wait_state::pending)
+	{
+	}
+
+	sync_wait_promise(sync_wait_promise const&) = delete;
+	sync_wait_promise& operator=(sync_wait_promise const&) = delete;
+
+	~sync_wait_promise()
+	{
+		switch (m_state)
+		{
+		case sync_wait_state::result:
+			unifex::deactivate_union_member(m_result);
+			break;
+
+		case sync_wait_state::exception:
+			unifex::deactivate_union_member(m_exception);
+			break;
+		}
+	}
+
+	sync_wait_state state() const
+	{
+		return m_state;
+	}
+
+	void set_done()
+	{
+		allio_ASSERT(m_state == sync_wait_state::pending);
+		m_state = sync_wait_state::done;
+	}
+
+	void set_value()
+		requires std::is_void_v<Value>
+	{
+		allio_ASSERT(m_state == sync_wait_state::pending);
+		unifex::activate_union_member(m_result, result_value);
+		m_state = sync_wait_state::result;
+	}
+
+	void set_value(auto&& value)
+	{
+		allio_ASSERT(m_state == sync_wait_state::pending);
+		unifex::activate_union_member(m_result, result_value, static_cast<decltype(value)&&>(value));
+		m_state = sync_wait_state::result;
+	}
+
+	void set_error(std::error_code const error)
+	{
+		allio_ASSERT(m_state == sync_wait_state::pending);
+		unifex::activate_union_member(m_result, result_error, error);
+		m_state = sync_wait_state::result;
+	}
+
+	void set_error(std::exception_ptr exception)
+	{
+		allio_ASSERT(m_state == sync_wait_state::pending);
+		unifex::activate_union_member(m_exception, static_cast<std::exception_ptr>(exception));
+		m_state = sync_wait_state::exception;
+	}
+
+	result<Value>&& get_result() &&
+	{
+		allio_ASSERT(m_state == sync_wait_state::result);
+		return static_cast<result<Value>&&>(m_result.get());
+	}
+
+	std::exception_ptr&& get_exception() &&
+	{
+		allio_ASSERT(m_state == sync_wait_state::exception);
+		return static_cast<std::exception_ptr&&>(m_exception.get());
+	}
+};
+
+template<typename Value>
+class sync_wait_receiver
+{
+	using promise_type = sync_wait_promise<Value>;
+
+	promise_type* m_promise;
+
+public:
+	explicit sync_wait_receiver(promise_type& promise)
+		: m_promise(&promise)
+	{
+	}
+
+	void set_done() && noexcept
+	{
+		m_promise->set_done();
+	}
+
+	void set_value() && noexcept
+		requires std::is_void_v<Value>
+	{
+		m_promise->set_value();
+	}
+
+	void set_value(auto&& value) && noexcept
+	{
+		m_promise->set_value(static_cast<decltype(value)&&>(value));
+	}
+
+	void set_error(auto&& error) && noexcept
+	{
+		m_promise->set_error(static_cast<decltype(error)&&>(error));
+	}
+};
+
+template<typename Value, typename Sender>
+result<Value> sync_wait_impl(multiplexer& multiplexer, Sender&& sender)
+{
+	sync_wait_promise<Value> promise;
+	auto operation = unifex::connect(
+		static_cast<Sender&&>(sender),
+		sync_wait_receiver<Value>(promise));
+	unifex::start(operation);
+
+	while (true)
+	{
+		switch (promise.state())
+		{
+		case sync_wait_state::done:
+			return allio_ERROR(error::async_operation_cancelled);
+
+		case sync_wait_state::result:
+			return static_cast<sync_wait_promise<Value>&&>(promise).get_result();
+
+		case sync_wait_state::exception:
+			std::rethrow_exception(static_cast<sync_wait_promise<Value>&&>(promise).get_exception());
+		}
+
+		if (auto const r = multiplexer.pump(); !r)
+		{
+			//TODO: cancel operation
+			return allio_ERROR(r.error());
+		}
+	}
+}
+
+template<typename Sender>
+auto sync_wait(multiplexer& multiplexer, Sender&& sender)
+{
+	using value_type = unifex::sender_single_value_result_t<std::remove_cvref_t<Sender>>;
+	using value_or_void_type = std::conditional_t<std::is_same_v<value_type, unifex::unit>, void, value_type>;
+	return sync_wait_impl<value_or_void_type>(multiplexer, static_cast<Sender&&>(sender));
 }
 
 } // namespace detail

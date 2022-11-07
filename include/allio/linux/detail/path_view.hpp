@@ -10,6 +10,12 @@ namespace allio {
 namespace detail::path_impl {
 
 template<typename Char>
+constexpr bool is_separator(Char const character)
+{
+	return basic_path_view<Char>::is_separator(character);
+}
+
+template<typename Char>
 constexpr Char const* find_separator(Char const* const beg, Char const* const end)
 {
 	return std::find(beg, end, static_cast<Char>('/'));
@@ -46,14 +52,14 @@ constexpr int compare_chars(Char const* beg1, Char const* const end1, Char const
 template<typename Char>
 constexpr bool starts_with_separator(Char const* const beg, Char const* const end)
 {
-	return beg != end && basic_path_view<Char>::is_separator(*beg);
+	return beg != end && is_separator(*beg);
 }
 
 template<typename Char>
 constexpr Char const* find_leaf_name(Char const* const beg, Char const* end)
 {
 	Char const* const rel = skip_separators(beg, end);
-	while (rel != end && !basic_path_view<Char>::is_separator(end[-1]))
+	while (rel != end && !is_separator(end[-1]))
 	{
 		--end;
 	}
@@ -100,19 +106,19 @@ template<typename Char>
 constexpr Char const* find_trailing_separator(Char const* const beg, Char const* end)
 {
 	// If the path does not end in a separator, return end.
-	if (beg == end || !basic_path_view<Char>::is_separator(end[-1]))
+	if (beg == end || !is_separator(end[-1]))
 	{
 		return end;
 	}
 
-	// If the separator at the end if part of the root directory, return end.
+	// If the separator at the end is part of the root directory, return end.
 	if (skip_separators(beg, end) == end)
 	{
 		return end;
 	}
 
 	// All trailing separators can be skipped without bounds check now.
-	while (allio_VERIFY(--end != beg), basic_path_view<Char>::is_separator(end[-1]));
+	while (allio_VERIFY(--end != beg), is_separator(end[-1]));
 
 	return end;
 }

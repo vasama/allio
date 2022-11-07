@@ -41,7 +41,7 @@ protected:
 		source.m_resource = Sentinel;
 	}
 
-	unique_resource_storage& operator=(unique_resource_storage&& source)
+	unique_resource_storage& operator=(unique_resource_storage&& source) &
 	{
 		m_resource = source.m_resource;
 		source.m_resource = Sentinel;
@@ -92,7 +92,7 @@ protected:
 		source.m_resource.reset();
 	}
 
-	unique_resource_storage& operator=(unique_resource_storage&& source)
+	unique_resource_storage& operator=(unique_resource_storage&& source) &
 	{
 		m_resource = source.m_resource;
 		source.m_resource.reset();
@@ -148,7 +148,7 @@ public:
 	{
 	}
 
-	unique_resource& operator=(unique_resource&& source)
+	unique_resource& operator=(unique_resource&& source) &
 	{
 		if (*this)
 		{

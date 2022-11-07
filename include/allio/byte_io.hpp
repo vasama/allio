@@ -39,14 +39,19 @@ public:
 	{
 	}
 
-	void const* data() const
+	bool empty() const
 	{
-		return m_data;
+		return m_size == 0;
 	}
 
 	size_t size() const
 	{
 		return m_size;
+	}
+
+	void const* data() const
+	{
+		return m_data;
 	}
 };
 
@@ -59,6 +64,8 @@ class basic_buffer : public untyped_buffer
 	static_assert(sizeof(T) == 1);
 
 public:
+	basic_buffer() = default;
+
 	basic_buffer(T* const data, size_t const size)
 		: untyped_buffer(data, size)
 	{
@@ -138,44 +145,43 @@ namespace detail {
 
 class untyped_buffers_storage
 {
-	bool m_single;
+	static constexpr size_t view_mask = static_cast<size_t>(-1) >> 1;
+	static constexpr size_t view_flag = ~view_mask;
+
 	untyped_buffer m_buffer;
 
 public:
-	untyped_buffers_storage()
-		: m_single(false)
-	{
-	}
+	untyped_buffers_storage() = default;
 
 	untyped_buffers_storage(untyped_buffer const buffer)
-		: m_single(true), m_buffer(buffer)
+		: m_buffer(buffer.data(), buffer.size())
 	{
+		allio_ASSERT(buffer.size() <= view_mask);
 	}
 
 	untyped_buffers_storage(untyped_buffers const buffers)
-		: m_single(false), m_buffer(buffers.data(), buffers.size())
+		: m_buffer(buffers.data(), buffers.size() | view_flag)
 	{
+		allio_ASSERT(buffers.size() <= view_mask);
 	}
 
-	untyped_buffer const* data() const&
+	bool empty() const&
 	{
-		return m_single
-			? &m_buffer
-			: reinterpret_cast<untyped_buffer const*>(m_buffer.data());
+		return m_buffer.size() == view_flag;
 	}
 
 	size_t size() const&
 	{
-		return m_single
-			? 1
-			: m_buffer.size();
+		size_t const size = m_buffer.size();
+		return size & view_flag ? size & view_mask : 1;
 	}
 
 	untyped_buffers buffers() const&
 	{
-		return m_single
-			? untyped_buffers(&m_buffer, 1)
-			: untyped_buffers(reinterpret_cast<untyped_buffer const*>(m_buffer.data()), m_buffer.size());
+		size_t const size = m_buffer.size();
+		return size & view_flag
+			? untyped_buffers(reinterpret_cast<untyped_buffer const*>(m_buffer.data()), size & view_mask)
+			: untyped_buffers(&m_buffer, 1);
 	}
 };
 
@@ -184,8 +190,9 @@ public:
 namespace io {
 
 struct scatter_gather_parameters
+	: basic_parameters
 {
-	using handle_type = handle;
+	using handle_type = handle const;
 	using result_type = size_t;
 
 	detail::untyped_buffers_storage buffers;
@@ -201,13 +208,13 @@ struct parameters<scatter_read_at> : scatter_gather_parameters
 {
 	parameters() = default;
 
-	parameters(file_offset const offset, read_buffer const buffer)
-		: scatter_gather_parameters{ buffer, offset }
+	parameters(auto const& args, file_offset const offset, read_buffer const buffer)
+		: scatter_gather_parameters{ args, buffer, offset }
 	{
 	}
 
-	parameters(file_offset const offset, read_buffers const buffers)
-		: scatter_gather_parameters{ as_untyped_buffers(buffers), offset }
+	parameters(auto const& args, file_offset const offset, read_buffers const buffers)
+		: scatter_gather_parameters{ args, as_untyped_buffers(buffers), offset }
 	{
 	}
 };
@@ -217,13 +224,13 @@ struct parameters<gather_write_at> : scatter_gather_parameters
 {
 	parameters() = default;
 
-	parameters(file_offset const offset, write_buffer const buffer)
-		: scatter_gather_parameters{ buffer, offset }
+	parameters(auto const& args, file_offset const offset, write_buffer const buffer)
+		: scatter_gather_parameters{ args, buffer, offset }
 	{
 	}
 
-	parameters(file_offset const offset, write_buffers const buffers)
-		: scatter_gather_parameters{ as_untyped_buffers(buffers), offset }
+	parameters(auto const& args, file_offset const offset, write_buffers const buffers)
+		: scatter_gather_parameters{ args, as_untyped_buffers(buffers), offset }
 	{
 	}
 };
@@ -242,13 +249,13 @@ struct parameters<stream_scatter_read> : scatter_gather_parameters
 {
 	parameters() = default;
 
-	parameters(read_buffer const buffer)
-		: scatter_gather_parameters{ buffer, 0 }
+	parameters(auto const& args, read_buffer const buffer)
+		: scatter_gather_parameters{ args, buffer, 0 }
 	{
 	}
 
-	parameters(read_buffers const buffers)
-		: scatter_gather_parameters{ as_untyped_buffers(buffers), 0 }
+	parameters(auto const& args, read_buffers const buffers)
+		: scatter_gather_parameters{ args, as_untyped_buffers(buffers), 0 }
 	{
 	}
 };
@@ -258,13 +265,13 @@ struct parameters<stream_gather_write> : scatter_gather_parameters
 {
 	parameters() = default;
 
-	parameters(write_buffer const buffer)
-		: scatter_gather_parameters{ buffer, 0 }
+	parameters(auto const& args, write_buffer const buffer)
+		: scatter_gather_parameters{ args, buffer, 0 }
 	{
 	}
 
-	parameters(write_buffers const buffers)
-		: scatter_gather_parameters{ as_untyped_buffers(buffers), 0 }
+	parameters(auto const& args, write_buffers const buffers)
+		: scatter_gather_parameters{ args, as_untyped_buffers(buffers), 0 }
 	{
 	}
 };

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <allio/result.hpp>
 #include <allio/storage.hpp>
 
 #include <cstddef>
@@ -14,7 +15,7 @@ struct dynamic_storage_base
 	size_t m_capacity = 0;
 	union
 	{
-		std::byte* m_remote;
+		std::byte* m_remote = nullptr;
 		std::byte m_local alignas(std::max_align_t)[LocalCapacity];
 	};
 
@@ -33,7 +34,7 @@ template<>
 struct dynamic_storage_base<0>
 {
 	size_t m_capacity = 0;
-	std::byte* m_remote;
+	std::byte* m_remote = nullptr;
 
 	bool has_remote_storage() const
 	{
@@ -65,6 +66,7 @@ public:
 	{
 	}
 
+#if 0
 	small_dynamic_storage(storage_requirements const& requirements)
 	{
 		(void)get(requirements);
@@ -75,24 +77,56 @@ public:
 	{
 		(void)get(requirements);
 	}
+#endif
 
-	storage_ptr get(storage_requirements const& requirements)
+	small_dynamic_storage(small_dynamic_storage&& src) noexcept
+		: Allocator(static_cast<Allocator&&>(src))
+	{
+		allio_ASSERT(src.m_capacity == 0);
+	}
+
+	small_dynamic_storage& operator=(small_dynamic_storage&& src) & noexcept
+	{
+		allio_ASSERT(this->m_capacity == 0 && src.m_capacity == 0);
+		static_cast<Allocator&>(*this) = static_cast<Allocator&&>(src);
+		return *this;
+	}
+
+	~small_dynamic_storage()
+	{
+		if (this->has_remote_storage())
+		{
+			Allocator::deallocate(this->m_remote, this->m_capacity);
+		}
+	}
+
+
+	storage_ptr get()
+	{
+		return storage_ptr(this->get_storage(), this->m_capacity);
+	}
+
+	result<storage_ptr> get(storage_requirements const& requirements)
 	{
 		size_t const min_capacity =
 			requirements.alignment > alignof(std::max_align_t)
 				? requirements.size + requirements.alignment
 				: requirements.size;
 
-		void* const storage =
-			min_capacity > this->m_capacity
-				? grow_storage(min_capacity)
-				: this->get_storage();
+		allio_TRY(storage, [&]() -> result<void*>
+		{
+			if (min_capacity > this->m_capacity)
+			{
+				return grow_storage(min_capacity);
+			}
+			return this->get_storage();
+		}());
 
 		return storage_ptr(storage, this->m_capacity);
 	}
 
 private:
-	void* grow_storage(size_t const min_capacity)
+	result<void*> grow_storage(size_t const min_capacity)
 	{
 		if (this->has_remote_storage())
 		{

@@ -39,10 +39,15 @@ class basic_sender
 		: async_operation_listener
 		, io::result_storage<result_type>
 	{
-		size_t m_operation_index;
+		union
+		{
+			size_t m_operation_index;
+			async_operation_descriptor const* m_operation_descriptor;
+		};
 		io::parameters_with_result<Operation> m_args;
 		Receiver m_receiver;
 		small_dynamic_storage<96> m_storage;
+		async_operation* m_operation = nullptr;
 
 	public:
 		operation(basic_sender&& sender, Receiver&& receiver)
@@ -54,22 +59,47 @@ class basic_sender
 
 		void start() & noexcept
 		{
-			m_args.bind_storage(*this);
-			multiplexer_handle_relation const& relation = m_args.handle->get_multiplexer_relation();
-			auto const result = m_args.handle->get_multiplexer()->construct_and_start(
-				relation.operations[m_operation_index], m_storage.get(relation.operation_storage_requirements), m_args, this);
-			if (!result)
+			handle const& handle = *m_args.handle;
+			if (multiplexer* const multiplexer = handle.get_multiplexer())
 			{
-				set_error(result.error());
+				m_args.bind_storage(*this);
+
+				multiplexer_handle_relation const& relation = handle.get_multiplexer_relation();
+				async_operation_descriptor const& descriptor = relation.operations[m_operation_index];
+
+				auto r = [&]() -> result<async_operation_ptr>
+				{
+					allio_TRY(storage, m_storage.get(relation.operation_storage_requirements));
+					return multiplexer->construct_and_start(descriptor, storage, m_args, this);
+				}();
+
+				if (r)
+				{
+					m_operation_descriptor = &descriptor;
+					// The async operation lifetime is managed by the S&R operation state.
+					m_operation = r->release();
+				}
+				else
+				{
+					set_error(r.error());
+				}
+			}
+			else
+			{
+				set_error(error::handle_is_not_multiplexable);
 			}
 		}
 
 	private:
 		void concluded(async_operation& operation) override
 		{
+			// Signaling the receiver invalidates *this.
+			// Destroy the operation state before signaling.
+			m_operation_descriptor->destroy(*m_operation);
+
 			if (std::error_code const result = operation.get_result())
 			{
-				if (operation.is_cancelled())
+				if (result.default_error_condition() == make_error_code(std::errc::operation_canceled))
 				{
 					unifex::set_done(static_cast<Receiver&&>(m_receiver));
 				}
@@ -122,6 +152,16 @@ public:
 		: m_operation_index(type_list_index<typename Handle::async_operations, Operation>)
 		, m_args(handle, static_cast<Args&&>(args)...)
 	{
+	}
+
+	io::parameters<Operation>& arguments()
+	{
+		return m_args;
+	}
+
+	io::parameters<Operation> const& arguments() const
+	{
+		return m_args;
 	}
 
 	template<typename Receiver>
@@ -264,7 +304,7 @@ public:
 	template<typename E>
 	void set_error(E&& error) && noexcept
 	{
-		unifex::set_error(static_cast<Receiver&&>(m_receiver), result<T>(tl::make_unexpected(static_cast<E&&>(error))));
+		unifex::set_error(static_cast<Receiver&&>(m_receiver), result<T>(allio_ERROR(static_cast<E&&>(error))));
 	}
 
 	void set_done() && noexcept

@@ -63,9 +63,8 @@ public:
 	result<multiplexer_handle_relation const*> find_handle_relation(type_id<handle> handle_type) const override;
 
 
-	result<void> submit(deadline deadline) override;
-	result<void> poll(deadline deadline) override;
-	result<void> submit_and_poll(deadline deadline) override;
+	using multiplexer::pump;
+	result<statistics> pump(pump_parameters const& args) override;
 
 
 	void complete(async_operation_storage& storage, std::error_code result);
