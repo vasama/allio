@@ -1,2 +1,5 @@
 .vscode
-/build*
+
+**/build*/
+
+CMakeUserPresets.json
