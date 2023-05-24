@@ -7,8 +7,9 @@ include(FetchContent)
 FetchContent_Declare(
 	unifex
 	#GIT_REPOSITORY https://github.com/facebookexperimental/libunifex.git
-	GIT_REPOSITORY file://D:/Code/libunifex
-	GIT_TAG main
+	#GIT_TAG main
+	GIT_REPOSITORY https://github.com/vasama/libunifex.git
+	GIT_TAG aligned_union
 )
 FetchContent_MakeAvailable(unifex)
 
@@ -79,7 +80,7 @@ vsm_add_library(allio
 		include/allio/linux/detail/path_view.hpp
 		include/allio/linux/detail/undef.i
 		include/allio/linux/detail/unique_fd.hpp
-	
+
 		include/allio/win32/iocp_multiplexer.hpp
 		include/allio/win32/ioring_multiplexer.hpp
 		include/allio/win32/nt_error.hpp
@@ -93,7 +94,7 @@ vsm_add_library(allio
 		source/allio/impl/async_handle_types.hpp
 		source/allio/impl/default_multiplexer.cpp
 		source/allio/impl/deferring_multiplexer.cpp
-		source/allio/impl/directory_handle.cpp
+		#source/allio/impl/directory_handle.cpp
 		source/allio/impl/error.cpp
 		source/allio/impl/filesystem_handle.cpp
 		source/allio/impl/file_handle.cpp
@@ -174,7 +175,7 @@ vsm_target_platform_sources(allio Windows
 vsm_target_platform_sources(allio Linux
 	source/allio/impl/linux/api_string.hpp
 	source/allio/impl/linux/default_multiplexer.cpp
-	source/allio/impl/linux/directory_handle.cpp
+	#source/allio/impl/linux/directory_handle.cpp
 	source/allio/impl/linux/error.hpp
 	source/allio/impl/linux/filesystem_handle.cpp
 	source/allio/impl/linux/filesystem_handle.hpp
@@ -190,7 +191,6 @@ vsm_target_platform_sources(allio Linux
 	source/allio/impl/linux/platform_handle.hpp
 	source/allio/impl/linux/posix_socket.cpp
 	source/allio/impl/linux/posix_socket.hpp
-	source/allio/impl/linux/process_clone.cpp.ignore
 	source/allio/impl/linux/process_handle.cpp
 	source/allio/impl/linux/process_handle.hpp
 	source/allio/impl/linux/sync_byte_io.hpp

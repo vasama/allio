@@ -101,7 +101,7 @@ struct multiplexer_handle_operation_translation<M, H, O, 1>
 		}
 		else
 		{
-			return std::unexpected(error::unsupported_operation);
+			return vsm::unexpected(error::unsupported_operation);
 		}
 	}
 
@@ -155,22 +155,22 @@ struct multiplexer_handle_operation_translation<M, H, O, 0>
 
 	static vsm::result<async_operation_ptr> construct(multiplexer&, storage_ptr, async_operation_parameters const&, async_operation_listener*)
 	{
-		return std::unexpected(error::unsupported_asynchronous_operation);
+		return vsm::unexpected(error::unsupported_asynchronous_operation);
 	}
 
 	static vsm::result<void> start(multiplexer&, async_operation&)
 	{
-		return std::unexpected(error::unsupported_asynchronous_operation);
+		return vsm::unexpected(error::unsupported_asynchronous_operation);
 	}
 
 	static vsm::result<async_operation_ptr> construct_and_start(multiplexer&, storage_ptr, async_operation_parameters const&, async_operation_listener*)
 	{
-		return std::unexpected(error::unsupported_asynchronous_operation);
+		return vsm::unexpected(error::unsupported_asynchronous_operation);
 	}
 
 	static vsm::result<void> cancel(multiplexer&, async_operation&)
 	{
-		return std::unexpected(error::unsupported_asynchronous_operation);
+		return vsm::unexpected(error::unsupported_asynchronous_operation);
 	}
 
 	static vsm::result<void> block(multiplexer&, async_operation_parameters const& a)

@@ -80,7 +80,7 @@ static vsm::result<open_info> make_open_info(filesystem_handle::open_parameters 
 		break;
 
 	default:
-		return std::unexpected(error::invalid_argument);
+		return vsm::unexpected(error::invalid_argument);
 	}
 
 	switch (args.creation)
@@ -158,7 +158,7 @@ static vsm::result<unique_handle_with_flags> create_file(HANDLE const root_handl
 
 	if (!NT_SUCCESS(status))
 	{
-		return std::unexpected(nt_error(status));
+		return vsm::unexpected(nt_error(status));
 	}
 
 	handle_flags handle_flags = info.handle_flags;
@@ -257,7 +257,7 @@ static vsm::result<file_name_information_ptr> allocate_file_name_information()
 	void* const block = operator new(file_name_information_size, std::nothrow);
 	if (block == nullptr)
 	{
-		return std::unexpected(error::not_enough_memory);
+		return vsm::unexpected(error::not_enough_memory);
 	}
 	return vsm::result<file_name_information_ptr>(vsm::result_value, new (block) FILE_NAME_INFORMATION);
 }
@@ -268,7 +268,7 @@ static vsm::result<file_name_information_ptr> query_file_name_information(HANDLE
 
 	if (!r)
 	{
-		return std::unexpected(r.error());
+		return vsm::unexpected(r.error());
 	}
 
 	IO_STATUS_BLOCK io_status_block = make_io_status_block();
@@ -287,7 +287,7 @@ static vsm::result<file_name_information_ptr> query_file_name_information(HANDLE
 
 	if (!NT_SUCCESS(status))
 	{
-		return std::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<nt_error>(status));
 	}
 
 	return r;
@@ -302,7 +302,7 @@ vsm::result<void> filesystem_handle::sync_impl(io::parameters_with_result<io::ge
 
 	if (!h)
 	{
-		return std::unexpected(error::handle_is_null);
+		return vsm::unexpected(error::handle_is_null);
 	}
 
 	vsm_try(information, query_file_name_information(unwrap_handle(h.get_platform_handle())));

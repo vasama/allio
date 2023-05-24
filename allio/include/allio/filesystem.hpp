@@ -3,6 +3,7 @@
 #include <bit>
 #include <compare>
 
+#include <cstddef>
 #include <cstdint>
 
 namespace allio {

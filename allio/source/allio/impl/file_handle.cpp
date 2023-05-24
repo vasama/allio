@@ -44,17 +44,17 @@ vsm::result<file_handle> detail::block_open_unique_file(filesystem_handle const*
 		}
 		else if (auto const& e = r.error(); e.default_error_condition() != file_exists)
 		{
-			return std::unexpected(e);
+			return vsm::unexpected(e);
 		}
 	}
 }
 
 vsm::result<file_handle> detail::block_open_temporary_file(file_handle_base::open_parameters const& args)
 {
-	return std::unexpected(error::unsupported_operation);
+	return vsm::unexpected(error::unsupported_operation);
 }
 
 vsm::result<file_handle> detail::block_open_anonymous_file(filesystem_handle const* const base, file_handle_base::open_parameters const& args)
 {
-	return std::unexpected(error::unsupported_operation);
+	return vsm::unexpected(error::unsupported_operation);
 }

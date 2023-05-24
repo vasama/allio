@@ -482,7 +482,7 @@ constexpr basic_path_view<Char> basic_path_view<Char>::without_trailing_separato
 template<typename Char>
 constexpr basic_path_view<Char> basic_path_view<Char>::render_lexically_normal(Char* const buffer)
 {
-	
+
 }
 
 template<typename Char>

@@ -456,7 +456,7 @@ public:
 	{
 		if (*this)
 		{
-			return std::unexpected(error::handle_is_not_null);
+			return vsm::unexpected(error::handle_is_not_null);
 		}
 		return Handle::set_native_handle(handle);
 	}
@@ -465,7 +465,7 @@ public:
 	{
 		if (!*this)
 		{
-			return std::unexpected(error::handle_is_null);
+			return vsm::unexpected(error::handle_is_null);
 		}
 		return Handle::release_native_handle();
 	}

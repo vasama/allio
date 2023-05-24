@@ -10,6 +10,9 @@ template<typename... Ts>
 struct type_list
 {
 	static constexpr size_t size = sizeof...(Ts);
+
+	template<typename... Lhs, typename... Rhs>
+	friend type_list<Lhs..., Rhs...> operator+(type_list<Lhs...>, type_list<Rhs...>);
 };
 
 namespace detail {
@@ -50,9 +53,6 @@ auto type_list_index_1(U)
 template<typename List, typename T>
 inline constexpr size_t type_list_index = decltype(type_list_index_1<T>(List{}))::value;
 
-
-template<typename... Lhs, typename... Rhs>
-type_list<Lhs..., Rhs...> operator+(type_list<Lhs...>, type_list<Rhs...>);
 
 template<typename... Lists>
 using type_list_cat = decltype((Lists{} + ...));

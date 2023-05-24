@@ -58,7 +58,7 @@ static vsm::result<kernel_path> rtl_convert_path(rtl_kernel_path_storage& storag
 
 	if (!NT_SUCCESS(status))
 	{
-		return std::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<nt_error>(status));
 	}
 
 	UNICODE_STRING const rtl_kernel_path =
@@ -84,7 +84,7 @@ static vsm::result<kernel_path> rtl_make_kernel_path(rtl_kernel_path_storage& st
 	switch (RtlDetermineDosPathNameType_U(win32_path))
 	{
 	case RtlPathTypeUnknown:
-		return std::unexpected(error::invalid_path);
+		return vsm::unexpected(error::invalid_path);
 
 	case RtlPathTypeRelative:
 		{
@@ -105,7 +105,7 @@ static vsm::result<kernel_path> rtl_make_kernel_path(rtl_kernel_path_storage& st
 	case RtlPathTypeRooted:
 		if (args.handle == NULL)
 		{
-			return std::unexpected(error::invalid_path);
+			return vsm::unexpected(error::invalid_path);
 		}
 
 	case RtlPathTypeUncAbsolute:
@@ -155,7 +155,7 @@ static vsm::result<void> fuzz_main(uint8_t const* data_beg, uint8_t const* data_
 			if (kernel_path_r2->path != kernel_path_r2->path ||
 				kernel_path_r1->handle != kernel_path_r2->handle)
 			{
-				return std::unexpected(error::unsupported_operation);
+				return vsm::unexpected(error::unsupported_operation);
 			}
 		}
 	}
@@ -163,7 +163,7 @@ static vsm::result<void> fuzz_main(uint8_t const* data_beg, uint8_t const* data_
 	{
 		if (kernel_path_r1)
 		{
-			return std::unexpected(error::unsupported_operation);
+			return vsm::unexpected(error::unsupported_operation);
 		}
 	}
 

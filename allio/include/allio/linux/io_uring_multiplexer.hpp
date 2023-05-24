@@ -2,13 +2,12 @@
 
 #include <allio/deferring_multiplexer.hpp>
 #include <allio/detail/api.hpp>
-#include <allio/detail/capture.hpp>
-#include <allio/detail/concepts.hpp>
 #include <allio/linux/detail/unique_fd.hpp>
 #include <allio/multiplexer.hpp>
 #include <allio/platform_handle.hpp>
 
 #include <vsm/assert.h>
+#include <vsm/concepts.hpp>
 
 #include <atomic>
 #include <bit>
@@ -195,7 +194,7 @@ private:
 	uint32_t const m_sq_size;
 	uint32_t const m_cq_size;
 
-	// 
+	//
 	uint32_t m_sq_produce_pending;
 
 	uint32_t m_sq_available;
@@ -262,7 +261,7 @@ public:
 				uint32_t array;
 			}
 			sq_off;
-			
+
 			struct
 			{
 				uint32_t head;

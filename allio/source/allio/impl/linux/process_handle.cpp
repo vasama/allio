@@ -27,7 +27,7 @@ vsm::result<unique_fd> linux::open_process(pid_t const pid)
 	int const fd = syscall(SYS_pidfd_open, pid, flags);
 	if (fd == -1)
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 	return vsm::result<unique_fd>(vsm::result_value, fd);
 }
@@ -81,10 +81,10 @@ static system_result<void> send_result(int const socket, system_result<raw_proce
 	switch (sendmsg(socket, &header, 0))
 	{
 	case static_cast<ssize_t>(-1):
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 
 	default:
-		return std::unexpected(/*TBD*/);
+		return vsm::unexpected(/*TBD*/);
 
 	case static_cast<ssize_t>(sizeof(message)):
 		break;
@@ -115,10 +115,10 @@ static system_result<raw_process_info> recv_result(int const socket)
 	switch (recvmsg(socket, &header, 0))
 	{
 	case static_cast<ssize_t>(-1):
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 
 	default:
-		return std::unexpected(/*TBD*/);
+		return vsm::unexpected(/*TBD*/);
 
 	case static_cast<ssize_t>(sizeof(message)):
 		break;
@@ -126,7 +126,7 @@ static system_result<raw_process_info> recv_result(int const socket)
 
 	if (message.error != system_error::none)
 	{
-		return std::unexpected(message.error);
+		return vsm::unexpected(message.error);
 	}
 
 	cmsghdr const* const control_header = CMSG_FIRSTHDR(&header);
@@ -135,7 +135,7 @@ static system_result<raw_process_info> recv_result(int const socket)
 		control_header->cmsg_type != SCM_RIGHTS ||
 		control_header->cmsg_len != CMSG_LEN(sizeof(int)))
 	{
-		return std::unexpected(/*TBD*/);
+		return vsm::unexpected(/*TBD*/);
 	}
 
 	int pid_fd;
@@ -196,7 +196,7 @@ static system_result<stream_pair<int>> create_pipe_pair()
 	int fds[2];
 	if (pipe2(fds, FD_CLOEXEC) == -1)
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 	return system_result<stream_pair>(vsm::result_value, fds[0], fds[1]);
 }
@@ -221,12 +221,12 @@ static system_result<raw_process_info> create_target_process(create_process_para
 
 	if (target_pid == -1)
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 
 	if (close(pipe.write) == -1)
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 
 	switch (system_error exec_error; read(pipe.read.get(), &exec_error, sizeof(exec_error)))
@@ -234,15 +234,15 @@ static system_result<raw_process_info> create_target_process(create_process_para
 	case static_cast<ssize_t>(-1):
 		if (system_error const pipe_error = get_last_error(); pipe_error != static_cast<system_error>(EPIPE))
 		{
-			return std::unexpected(pipe_error);
+			return vsm::unexpected(pipe_error);
 		}
 		break;
 
 	case static_cast<ssize_t>(sizeof(exec_error)):
-		return std::unexpected(exec_error);
+		return vsm::unexpected(exec_error);
 
 	default:
-		return std::unexpected(/*TBD*/);
+		return vsm::unexpected(/*TBD*/);
 	}
 
 	return raw_process_info
@@ -257,7 +257,7 @@ static system_result<stream_pair<unique_fd>> create_socket_pair()
 	int fds[2];
 	if (socketpair(AF_UNIX, SOCK_CLOEXEC, 0, fds) == -1)
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 	return vsm::result<socket_pair>(vsm::result_value, fds[0], fds[1]);
 }
@@ -278,22 +278,22 @@ static system_result<raw_process_info> create_orphan_process(create_process_para
 
 	if (helper_pid == -1)
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 
 	if (int wait_status; waitpid(helper_pid, &wait_status, 0) == -1)
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 	else if (wait_status != 0)
 	{
 		if (wait_status == 1)
 		{
-			return std::unexpected(/*TBD*/);
+			return vsm::unexpected(/*TBD*/);
 		}
 		else
 		{
-			return std::unexpected(/*TBD*/);
+			return vsm::unexpected(/*TBD*/);
 		}
 	}
 
@@ -367,7 +367,7 @@ static vsm::result<unique_fd> open_current_directory()
 	int const fd = openat(AT_FDCWD, ".", O_RDONLY | O_DIRECTORY);
 	if (fd == -1)
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 	return vsm::result<unique_fd>(vsm::result_value, fd);
 }
@@ -409,7 +409,7 @@ vsm::result<process_info> linux::launch_process(filesystem_handle const* const b
 	//auto const r = create_orphan_process(create_args);
 	//if (!r)
 	//{
-	//	return std::unexpected(std::error_code(r.error(), std::system_category()));
+	//	return vsm::unexpected(std::error_code(r.error(), std::system_category()));
 	//}
 	//return vsm::result<process_info>(vsm::result_value, r->pid_fd, static_cast<process_id>(r->pid));
 }
@@ -428,7 +428,7 @@ vsm::result<unique_child_pid> linux::launch_process(path_view const path, proces
 		api_strings(args.arguments),
 		api_strings(args.environment)))
 	{
-		return std::unexpected(std::error_code(error, std::system_category()));
+		return vsm::unexpected(std::error_code(error, std::system_category()));
 	}
 
 	return vsm::result<unique_child_pid>(vsm::result_value, pid);
@@ -478,7 +478,7 @@ struct synchronous_operation_implementation<process_handle, io::process_open>
 
 		if (h)
 		{
-			return std::unexpected(error::handle_is_not_null);
+			return vsm::unexpected(error::handle_is_not_null);
 		}
 
 		vsm_try(fd, linux::open_process(pid));
@@ -495,7 +495,7 @@ struct synchronous_operation_implementation<process_handle, io::process_launch>
 
 		if (!h)
 		{
-			return std::unexpected(error::handle_is_null);
+			return vsm::unexpected(error::handle_is_null);
 		}
 
 		vsm_try(pid, linux::launch_process(path, args));
@@ -516,12 +516,12 @@ struct synchronous_operation_implementation<process_handle, io::process_wait>
 
 		if (!h)
 		{
-			return std::unexpected(error::handle_is_null);
+			return vsm::unexpected(error::handle_is_null);
 		}
 
 		if (h.is_current())
 		{
-			return std::unexpected(error::process_is_current_process);
+			return vsm::unexpected(error::process_is_current_process);
 		}
 
 		if ((h.m_flags.value & process_flags::exited) == process_flags::none)
@@ -547,12 +547,12 @@ struct synchronous_operation_implementation<process_handle, io::process_wait>
 
 						if (r == 0)
 						{
-							return std::unexpected(error::async_operation_timed_out);
+							return vsm::unexpected(error::async_operation_timed_out);
 						}
 
 						if (r < 0)
 						{
-							return std::unexpected(get_last_error());
+							return vsm::unexpected(get_last_error());
 						}
 
 						vsm_assert(pfd.revents == EPOLLIN);
@@ -576,7 +576,7 @@ struct synchronous_operation_implementation<process_handle, io::process_wait>
 			siginfo_t siginfo = {};
 			if (waitid(id_type, id, &siginfo, wait_options) == -1)
 			{
-				return std::unexpected(get_last_error());
+				return vsm::unexpected(get_last_error());
 			}
 
 			h.m_flags.value &= ~impl_flags::requires_wait;

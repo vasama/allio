@@ -13,6 +13,6 @@ struct fd_deleter
 		release(fd);
 	}
 };
-using unique_fd = unique_resource<int, fd_deleter, static_cast<int>(-1)>;
+using unique_fd = vsm::unique_resource<int, fd_deleter, static_cast<int>(-1)>;
 
 } // namespace allio::detail

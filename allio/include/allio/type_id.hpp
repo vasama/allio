@@ -10,8 +10,7 @@ struct type_id_traits;
 
 namespace detail {
 
-struct type_id_base;
-
+struct type_id_base {};
 struct type_id_object {};
 
 template<typename T>

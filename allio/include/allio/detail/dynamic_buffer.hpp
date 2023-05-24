@@ -87,7 +87,7 @@ public:
 
 			if (block == nullptr)
 			{
-				return std::unexpected(error::not_enough_memory);
+				return vsm::unexpected(error::not_enough_memory);
 			}
 
 			delete_dynamic();

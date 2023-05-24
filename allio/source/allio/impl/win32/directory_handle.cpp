@@ -190,7 +190,7 @@ static vsm::result<void> query_directory_file(
 
 	if (!NT_SUCCESS(status))
 	{
-		return std::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<nt_error>(status));
 	}
 
 	return {};
@@ -208,7 +208,7 @@ vsm::result<void> detail::directory_handle_base::sync_impl(io::parameters_with_r
 
 	if (!h)
 	{
-		return std::unexpected(error::handle_is_null);
+		return vsm::unexpected(error::handle_is_null);
 	}
 
 	IO_STATUS_BLOCK io_status_block = make_io_status_block();
@@ -225,7 +225,7 @@ vsm::result<void> detail::directory_handle_base::sync_impl(io::parameters_with_r
 
 	if (!NT_SUCCESS(status))
 	{
-		return std::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<nt_error>(status));
 	}
 
 	return {};
@@ -258,7 +258,7 @@ static vsm::result<void> set_current_directory_impl(std::wstring_view const path
 
 	if (!NT_SUCCESS(status))
 	{
-		return std::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<nt_error>(status));
 	}
 
 	return {};
@@ -299,7 +299,7 @@ vsm::result<directory_stream*> win32::get_or_create_directory_stream(directory_s
 		void* const memory = operator new(directory_stream_size);
 		if (memory == nullptr)
 		{
-			return std::unexpected(error::not_enough_memory);
+			return vsm::unexpected(error::not_enough_memory);
 		}
 		stream = ::new (memory) directory_stream;
 		handle = wrap_directory_stream(stream);
@@ -331,7 +331,7 @@ static vsm::result<directory_entry_attributes> query_file_information(HANDLE con
 
 	if (!NT_SUCCESS(status))
 	{
-		return std::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<nt_error>(status));
 	}
 
 	return attributes;
@@ -558,7 +558,7 @@ static vsm::result<void> query_directory_file(HANDLE const handle, directory_str
 
 	if (!NT_SUCCESS(status))
 	{
-		return std::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<nt_error>(status));
 	}
 
 	return {};
@@ -626,7 +626,7 @@ vsm::result<void> detail::directory_stream_handle_base::sync_impl(io::parameters
 
 	if (h)
 	{
-		return std::unexpected(error::handle_is_not_null);
+		return vsm::unexpected(error::handle_is_not_null);
 	}
 
 	vsm_try(directory, create_file(args.base, args.path, make_stream_open_args(args), open_kind::directory));
@@ -640,12 +640,12 @@ vsm::result<void> detail::directory_stream_handle_base::sync_impl(io::parameters
 
 	if (h)
 	{
-		return std::unexpected(error::handle_is_not_null);
+		return vsm::unexpected(error::handle_is_not_null);
 	}
 
 	if (!*args.directory)
 	{
-		return std::unexpected(error::invalid_argument);
+		return vsm::unexpected(error::invalid_argument);
 	}
 
 	vsm_try(directory, reopen_file(*args.directory, make_stream_open_args(args), open_kind::directory));
@@ -659,14 +659,14 @@ vsm::result<void> detail::directory_stream_handle_base::sync_impl(io::parameters
 
 	if (!h)
 	{
-		return std::unexpected(error::handle_is_null);
+		return vsm::unexpected(error::handle_is_null);
 	}
 
 	vsm_try(stream, get_or_create_directory_stream(h.m_stream.value));
 
 	if (!stream->can_fetch && !stream->restart)
 	{
-		return std::unexpected(error::directory_stream_at_end);
+		return vsm::unexpected(error::directory_stream_at_end);
 	}
 
 	vsm_try_void(query_directory_file(unwrap_handle(h.get_platform_handle()), *stream));
@@ -682,7 +682,7 @@ vsm::result<void> detail::directory_stream_handle_base::sync_impl(io::parameters
 
 	if (!h)
 	{
-		return std::unexpected(error::handle_is_null);
+		return vsm::unexpected(error::handle_is_null);
 	}
 
 	directory_stream* const stream = unwrap_directory_stream(h.m_stream.value);
@@ -711,7 +711,7 @@ vsm::result<void> detail::directory_stream_handle_base::sync_impl(io::parameters
 
 	if (!h)
 	{
-		return std::unexpected(error::handle_is_null);
+		return vsm::unexpected(error::handle_is_null);
 	}
 
 	std::wstring_view const wide_name =
@@ -737,7 +737,7 @@ vsm::result<void> detail::directory_stream_handle_base::sync_impl(io::parameters
 	}
 	catch (std::bad_alloc const&)
 	{
-		return std::unexpected(error::not_enough_memory);
+		return vsm::unexpected(error::not_enough_memory);
 	}
 
 	if constexpr (std::is_same_v<Char, char>)
@@ -759,7 +759,7 @@ vsm::result<void> detail::directory_stream_handle_base::sync_impl(io::parameters
 
 	if (!h)
 	{
-		return std::unexpected(error::handle_is_null);
+		return vsm::unexpected(error::handle_is_null);
 	}
 
 	std::wstring_view const wide_name =
@@ -775,7 +775,7 @@ vsm::result<void> detail::directory_stream_handle_base::sync_impl(io::parameters
 		{
 			if (wide_name.size() > args.buffer.size())
 			{
-				return std::unexpected(error::no_buffer_space);
+				return vsm::unexpected(error::no_buffer_space);
 			}
 
 			memcpy(args.buffer.data(), wide_name.data(), wide_name.size() * sizeof(wchar_t));

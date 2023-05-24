@@ -17,7 +17,7 @@ struct synchronous_operation_implementation<Handle, io::filesystem_open>
 
 		if (h)
 		{
-			return std::unexpected(error::handle_is_not_null);
+			return vsm::unexpected(error::handle_is_not_null);
 		}
 
 		vsm_try(file, linux::create_file(base, path, args));

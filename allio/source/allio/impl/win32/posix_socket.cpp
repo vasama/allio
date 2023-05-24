@@ -56,7 +56,7 @@ static vsm::result<void> wsa_startup()
 
 	if (init.error != 0)
 	{
-		return std::unexpected(get_last_socket_error());
+		return vsm::unexpected(get_last_socket_error());
 	}
 
 	return {};
@@ -97,7 +97,7 @@ vsm::result<unique_socket_with_flags> allio::create_socket(int const address_fam
 
 	if (socket == INVALID_SOCKET)
 	{
-		return std::unexpected(get_last_socket_error());
+		return vsm::unexpected(get_last_socket_error());
 	}
 
 	if (args.multiplexable)
@@ -118,7 +118,7 @@ vsm::result<unique_socket_with_flags> allio::accept_socket(socket_type const lis
 	wsa_accept_address_buffer addr_buffer;
 	if (DWORD const error = wsa_accept_ex(listen_socket, socket.socket.get(), addr_buffer, nullptr))
 	{
-		return std::unexpected(static_cast<socket_error>(error));
+		return vsm::unexpected(static_cast<socket_error>(error));
 	}
 
 	static_cast<socket_address_union&>(addr) = addr_buffer.remote;
@@ -154,7 +154,7 @@ vsm::result<void> allio::packet_scatter_read(io::parameters_with_result<io::pack
 
 	if (!h)
 	{
-		return std::unexpected(error::handle_is_null);
+		return vsm::unexpected(error::handle_is_null);
 	}
 
 	SOCKET const socket = unwrap_socket(h.get_platform_handle());
@@ -190,7 +190,7 @@ vsm::result<void> allio::packet_scatter_read(io::parameters_with_result<io::pack
 			DWORD transferred;
 			if (DWORD const error = wsa_recv_msg(socket, &message, &transferred))
 			{
-				return std::unexpected(static_cast<socket_error>(error));
+				return vsm::unexpected(static_cast<socket_error>(error));
 			}
 
 			*descriptor.result =
@@ -223,7 +223,7 @@ vsm::result<void> allio::packet_gather_write(io::parameters_with_result<io::pack
 
 	if (!h)
 	{
-		return std::unexpected(error::handle_is_null);
+		return vsm::unexpected(error::handle_is_null);
 	}
 
 	SOCKET const socket = unwrap_socket(h.get_platform_handle());
@@ -252,7 +252,7 @@ vsm::result<void> allio::packet_gather_write(io::parameters_with_result<io::pack
 			DWORD transferred;
 			if (DWORD const error = wsa_send_msg(socket, &message, &transferred))
 			{
-				return std::unexpected(static_cast<socket_error>(error));
+				return vsm::unexpected(static_cast<socket_error>(error));
 			}
 
 			//TODO: Is there any reason why a datagram sendmsg would transfer fewer bytes than requested?

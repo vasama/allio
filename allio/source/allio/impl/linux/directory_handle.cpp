@@ -12,14 +12,14 @@ vsm::result<size_t> this_process::get_current_directory(output_path_ref const ou
 {
 	if (output.is_wide())
 	{
-		return std::unexpected(error::wide_string_not_supported);
+		return vsm::unexpected(error::wide_string_not_supported);
 	}
 
 	char const* const c_string = getcwd(nullptr, 0);
 
 	if (c_string == nullptr)
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 
 	struct cwd_deleter
@@ -44,7 +44,7 @@ vsm::result<void> this_process::set_current_directory(input_path_view const path
 {
 	if (output.is_wide())
 	{
-		return std::unexpected(error::wide_string_not_supported);
+		return vsm::unexpected(error::wide_string_not_supported);
 	}
 
 	api_string_storage storage;
@@ -52,7 +52,7 @@ vsm::result<void> this_process::set_current_directory(input_path_view const path
 
 	if (chdir(c_string) == -1)
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 
 	return {};

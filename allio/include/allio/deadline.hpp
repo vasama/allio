@@ -123,7 +123,7 @@ private:
 	}
 
 
-	static repr_type units_since_epoch(clock::time_point const& time_point)
+	static constexpr repr_type units_since_epoch(clock::time_point const& time_point)
 	{
 		return std::chrono::duration_cast<duration>(time_point.time_since_epoch()).count();
 	}

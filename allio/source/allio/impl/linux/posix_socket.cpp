@@ -18,7 +18,7 @@ vsm::result<unique_socket> allio::create_socket(int const address_family, flags 
 
 	if (socket == invalid_socket)
 	{
-		return std::unexpected(get_last_socket_error());
+		return vsm::unexpected(get_last_socket_error());
 	}
 
 	return vsm::result<unique_socket>(vsm::result_value, socket);
@@ -30,7 +30,7 @@ vsm::result<unique_socket> allio::accept_socket(socket_type const listen_socket,
 
 	if (socket == invalid_socket)
 	{
-		return std::unexpected(get_last_socket_error());
+		return vsm::unexpected(get_last_socket_error());
 	}
 
 	return vsm::result<unique_socket>(vsm::result_value, socket);

@@ -72,7 +72,7 @@ private:
 		static constexpr size_t buffer_size = win32_type_traits<T>::size;
 		static_assert(buffer_size >= win32_type_traits<IO_STATUS_BLOCK>::size);
 		std::byte m_buffer alignas(uintptr_t) [buffer_size];
-	
+
 	public:
 		T& operator*()
 		{

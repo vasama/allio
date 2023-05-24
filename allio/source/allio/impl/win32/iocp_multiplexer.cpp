@@ -31,7 +31,7 @@ static vsm::result<void> set_waitable_timer(HANDLE const handle, deadline const 
 		nullptr,
 		false))
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 	return {};
 }
@@ -40,7 +40,7 @@ static vsm::result<void> cancel_waitable_timer(HANDLE const handle)
 {
 	if (!CancelWaitableTimer(handle))
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 	return {};
 }
@@ -70,7 +70,7 @@ static vsm::result<bool> associate_wait_packet(
 
 	if (!NT_SUCCESS(status))
 	{
-		return std::unexpected(nt_error(status));
+		return vsm::unexpected(nt_error(status));
 	}
 
 	if (already_signaled)
@@ -90,7 +90,7 @@ static vsm::result<bool> cancel_wait_packet(HANDLE const handle, bool const remo
 
 	if (!NT_SUCCESS(status))
 	{
-		return std::unexpected(nt_error(status));
+		return vsm::unexpected(nt_error(status));
 	}
 
 	return status != STATUS_PENDING;
@@ -132,7 +132,7 @@ vsm::result<iocp_multiplexer::init_result> iocp_multiplexer::init(init_options c
 
 		if (completion_port == NULL)
 		{
-			return std::unexpected(get_last_error());
+			return vsm::unexpected(get_last_error());
 		}
 
 		return vsm::result<unique_handle>(vsm::result_value, completion_port);
@@ -232,7 +232,7 @@ vsm::result<multiplexer::statistics> iocp_multiplexer::pump(pump_parameters cons
 
 				if (!NT_SUCCESS(status))
 				{
-					return std::unexpected(static_cast<nt_error>(status));
+					return vsm::unexpected(static_cast<nt_error>(status));
 				}
 
 				if (status == STATUS_TIMEOUT)
@@ -295,7 +295,7 @@ static vsm::result<void> set_completion_information(HANDLE const handle, HANDLE 
 
 	if (!NT_SUCCESS(status))
 	{
-		return std::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<nt_error>(status));
 	}
 
 	return {};
@@ -330,7 +330,7 @@ vsm::result<void> iocp_multiplexer::cancel_io(io_slot& slot, native_platform_han
 
 	if (!NT_SUCCESS(status) && status != STATUS_NOT_FOUND)
 	{
-		return std::unexpected(nt_error(status));
+		return vsm::unexpected(nt_error(status));
 	}
 
 	return {};
@@ -431,7 +431,7 @@ vsm::result<iocp_multiplexer::unique_wait_packet> iocp_multiplexer::acquire_wait
 
 		if (!NT_SUCCESS(status))
 		{
-			return std::unexpected(nt_error(status));
+			return vsm::unexpected(nt_error(status));
 		}
 	}
 

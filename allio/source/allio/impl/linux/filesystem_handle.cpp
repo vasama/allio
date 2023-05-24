@@ -29,7 +29,7 @@ vsm::result<open_parameters> open_parameters::make(file_parameters const& args)
 		break;
 
 	default:
-		std::unexpected(error::unsupported_operation);
+		vsm::unexpected(error::unsupported_operation);
 	}
 
 	switch (args.creation)
@@ -50,7 +50,7 @@ vsm::result<open_parameters> open_parameters::make(file_parameters const& args)
 		break;
 
 	default:
-		std::unexpected(error::unsupported_operation);
+		vsm::unexpected(error::unsupported_operation);
 	}
 
 	return open_parameters{ flags, mode };
@@ -72,7 +72,7 @@ vsm::result<unique_fd> linux::create_file(filesystem_handle const* const base, p
 
 	if (result == -1)
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 
 	return vsm::result<unique_fd>(vsm::result_value, result);

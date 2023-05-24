@@ -35,5 +35,5 @@ vsm::result<unique_multiplexer_ptr> allio::create_default_multiplexer(default_mu
 		return std::make_unique<io_uring_multiplexer>(vsm_move(result));
 	}
 
-	return std::unexpected(error::unsupported_operation);
+	return vsm::unexpected(error::unsupported_operation);
 }

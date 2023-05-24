@@ -41,12 +41,12 @@ struct multiplexer_handle_operation_implementation<process_handle, io::process_w
 
 		if (!h)
 		{
-			return std::unexpected(error::handle_is_null);
+			return vsm::unexpected(error::handle_is_null);
 		}
 
 		if ((h.m_flags.value & process_flags::current) != process_flags::none)
 		{
-			return std::unexpected(error::process_is_current_process);
+			return vsm::unexpected(error::process_is_current_process);
 		}
 
 		if ((h.m_flags.value & process_flags::exited) == process_flags::none)

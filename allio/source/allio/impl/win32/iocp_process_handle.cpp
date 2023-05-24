@@ -76,12 +76,12 @@ struct allio::multiplexer_handle_operation_implementation<iocp_multiplexer, proc
 
 			if (!h)
 			{
-				return std::unexpected(error::handle_is_null);
+				return vsm::unexpected(error::handle_is_null);
 			}
 
 			if (h.is_current())
 			{
-				return std::unexpected(error::process_is_current_process);
+				return vsm::unexpected(error::process_is_current_process);
 			}
 
 			s.slot.set_handler(s);

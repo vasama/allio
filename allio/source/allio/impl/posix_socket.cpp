@@ -35,7 +35,7 @@ vsm::result<socket_address> socket_address::make(network_address const& address)
 			std::string_view const path = address.local().path().string();
 			if (path.size() > unix_socket_max_path)
 			{
-				return std::unexpected(error::filename_too_long);
+				return vsm::unexpected(error::filename_too_long);
 			}
 			addr.unix.sun_family = AF_UNIX;
 			memcpy(addr.unix.sun_path, path.data(), path.size());
@@ -79,7 +79,7 @@ vsm::result<socket_address> socket_address::get(socket_type const socket)
 
 	if (getsockname(socket, &r->addr, &r->size))
 	{
-		return std::unexpected(get_last_socket_error());
+		return vsm::unexpected(get_last_socket_error());
 	}
 
 	return r;
@@ -101,7 +101,7 @@ vsm::result<unique_socket_with_flags> allio::create_socket(network_address_kind 
 		break;
 
 	default:
-		return std::unexpected(error::unsupported_operation);
+		return vsm::unexpected(error::unsupported_operation);
 	}
 
 	return create_socket(address_family, args);
@@ -115,12 +115,12 @@ vsm::result<void> allio::listen_socket(socket_type const socket, network_address
 
 	if (::bind(socket, &addr.addr, addr.size) == socket_error_value)
 	{
-		return std::unexpected(get_last_socket_error());
+		return vsm::unexpected(get_last_socket_error());
 	}
 
 	if (::listen(socket, backlog) == socket_error_value)
 	{
-		return std::unexpected(get_last_socket_error());
+		return vsm::unexpected(get_last_socket_error());
 	}
 
 	return {};
@@ -136,7 +136,7 @@ static vsm::result<void> sync_create_socket(io::parameters_with_result<io::socke
 
 	if (h)
 	{
-		return std::unexpected(error::handle_is_not_null);
+		return vsm::unexpected(error::handle_is_not_null);
 	}
 
 	vsm_try(socket, create_socket(args.address_kind, args));
@@ -167,13 +167,13 @@ vsm::result<void> detail::stream_socket_handle_base::sync_impl(io::parameters_wi
 
 	if (!h)
 	{
-		return std::unexpected(error::handle_is_null);
+		return vsm::unexpected(error::handle_is_null);
 	}
 
 	vsm_try(addr, socket_address::make(args.address));
 	if (::connect(unwrap_socket(h.get_platform_handle()), &addr.addr, addr.size) == socket_error_value)
 	{
-		return std::unexpected(get_last_socket_error());
+		return vsm::unexpected(get_last_socket_error());
 	}
 
 	return {};
@@ -221,7 +221,7 @@ vsm::result<void> detail::listen_socket_handle_base::sync_impl(io::parameters_wi
 
 	if (!h)
 	{
-		return std::unexpected(error::handle_is_null);
+		return vsm::unexpected(error::handle_is_null);
 	}
 
 	return listen_socket(unwrap_socket(h.get_platform_handle()), args.address, args);
@@ -233,7 +233,7 @@ vsm::result<void> detail::listen_socket_handle_base::sync_impl(io::parameters_wi
 
 	if (!h)
 	{
-		return std::unexpected(error::handle_is_null);
+		return vsm::unexpected(error::handle_is_null);
 	}
 
 	socket_address addr;

@@ -7,6 +7,7 @@
 #include <vsm/flags.hpp>
 #include <vsm/linear.hpp>
 
+#include <optional>
 #include <span>
 #include <string_view>
 

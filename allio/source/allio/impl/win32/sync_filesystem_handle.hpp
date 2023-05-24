@@ -13,7 +13,7 @@ vsm::result<void> sync_open(io::parameters_with_result<io::filesystem_open> cons
 
 	if (h)
 	{
-		return std::unexpected(error::handle_is_not_null);
+		return vsm::unexpected(error::handle_is_not_null);
 	}
 
 	vsm_try(file, create_file(args.base, args.path, args, kind));
@@ -44,7 +44,7 @@ struct synchronous_operation_implementation<Handle, io::filesystem_open>
 
 		if (h)
 		{
-			return std::unexpected(error::handle_is_not_null);
+			return vsm::unexpected(error::handle_is_not_null);
 		}
 
 		vsm_try(file, create_file(args.base, args.path, args, win32::handle_open_kind<Handle>::value));
@@ -67,7 +67,7 @@ struct synchronous_operation_implementation<Handle, io::get_current_path<Char>>
 {
 	static vsm::result<void> execute(io::parameters_with_result<io::get_current_path<Char>> const& args)
 	{
-		return std::unexpected(error::unsupported_operation);
+		return vsm::unexpected(error::unsupported_operation);
 	}
 };
 
@@ -76,7 +76,7 @@ struct synchronous_operation_implementation<Handle, io::copy_current_path<Char>>
 {
 	static vsm::result<void> execute(io::parameters_with_result<io::copy_current_path<Char>> const& args)
 	{
-		return std::unexpected(error::unsupported_operation);
+		return vsm::unexpected(error::unsupported_operation);
 	}
 };
 #endif

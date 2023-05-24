@@ -11,7 +11,7 @@ vsm::result<void> win32::close_handle(HANDLE const handle)
 {
 	if (!CloseHandle(handle))
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 	return {};
 }

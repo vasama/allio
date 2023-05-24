@@ -84,7 +84,7 @@ vsm::result<async_operation_ptr> background_multiplexer::construct_and_start(asy
 
 	if (!r && r.error() == error::unsupported_asynchronous_operation)
 	{
-		
+
 	}
 
 	return r;

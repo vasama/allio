@@ -14,7 +14,7 @@ vsm::result<void> platform_handle::close_sync()
 	vsm_assert(m_native_handle.value != native_platform_handle::null);
 	if (::close(unwrap_handle(m_native_handle.value)) == -1)
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 	m_native_handle = native_platform_handle::null;
 	return {};

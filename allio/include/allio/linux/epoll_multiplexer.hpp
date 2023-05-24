@@ -13,7 +13,7 @@ class epoll_multiplexer final : public deferring_multiplexer
 	detail::unique_fd const m_epoll;
 
 public:
-	
+
 	type_id<multiplexer> get_type_id() const override;
 
 	vsm::result<multiplexer_handle_relation const*> find_handle_relation(type_id<handle> handle_type) const override;

@@ -35,12 +35,12 @@ vsm::result<multiplexer_handle_relation const*> manual_multiplexer::find_handle_
 		return m_relation_provider->find_multiplexer_handle_relation(type_of(*this), handle_type);
 	}
 
-	return std::unexpected(error::unsupported_multiplexer_handle_relation);
+	return vsm::unexpected(error::unsupported_multiplexer_handle_relation);
 }
 
 vsm::result<multiplexer::statistics> manual_multiplexer::pump(pump_parameters const& args)
 {
-	return std::unexpected(error::unsupported_operation);
+	return vsm::unexpected(error::unsupported_operation);
 
 #if 0
 	auto defer_head = m_defer_head.load(std::memory_order_acquire);

@@ -22,7 +22,7 @@ namespace allio {
 using socket_type = SOCKET;
 using socket_address_size_type = int;
 
-static constexpr int socket_error_value = SOCKET_ERROR;
+static constexpr auto socket_error_value = SOCKET_ERROR;
 static constexpr socket_type invalid_socket = INVALID_SOCKET;
 static constexpr size_t unix_socket_max_path = UNIX_PATH_MAX;
 
@@ -82,7 +82,7 @@ inline vsm::result<void> close_socket(socket_type const socket)
 {
 	if (closesocket(socket))
 	{
-		return std::unexpected(get_last_socket_error());
+		return vsm::unexpected(get_last_socket_error());
 	}
 	return {};
 }

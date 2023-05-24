@@ -21,7 +21,7 @@ struct multiplexer_handle_operation_implementation<win32::iocp_multiplexer, Hand
 		{
 			if (!s.args.multiplexable)
 			{
-				return std::unexpected(error::invalid_argument);
+				return vsm::unexpected(error::invalid_argument);
 			}
 
 			return synchronous<Handle>(s.args);

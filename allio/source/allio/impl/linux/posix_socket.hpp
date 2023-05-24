@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef allio_detail_socket_api
-#	error Include source/posix_socket.hpp instead.
+#	error Include <allio/impl/posix_socket.hpp> instead.
 #endif
 
 #include <allio/linux/detail/undef.i>
@@ -21,16 +21,16 @@ namespace allio {
 using socket_type = int;
 using socket_address_size_type = unsigned int;
 
-static constexpr int socket_error_value = SOCKET_ERROR;
+static constexpr auto socket_error_value = -1;
 static constexpr socket_type invalid_socket = static_cast<socket_type>(-1);
 static constexpr size_t unix_socket_max_path = sizeof(sockaddr_un::sun_path);
 
 
-using socket_error = system_error;
+using socket_error = linux::system_error;
 
 inline socket_error get_last_socket_error()
 {
-	return get_last_error();
+	return linux::get_last_error();
 }
 
 
@@ -49,7 +49,7 @@ inline vsm::result<void> close_socket(socket_type const socket)
 {
 	if (close(socket))
 	{
-		return std::unexpected(get_last_socket_error());
+		return vsm::unexpected(get_last_socket_error());
 	}
 	return {};
 }

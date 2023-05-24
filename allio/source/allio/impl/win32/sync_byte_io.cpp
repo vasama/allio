@@ -11,7 +11,7 @@ static vsm::result<size_t> sync_scatter_gather_io(platform_handle const& h, io::
 {
 	if (!h)
 	{
-		return std::unexpected(error::handle_is_null);
+		return vsm::unexpected(error::handle_is_null);
 	}
 
 	vsm_try_void(kernel_init());
@@ -50,7 +50,7 @@ static vsm::result<size_t> sync_scatter_gather_io(platform_handle const& h, io::
 				break;
 			}
 
-			return std::unexpected(static_cast<nt_error>(status));
+			return vsm::unexpected(static_cast<nt_error>(status));
 		}
 
 		transferred += io_status_block.Information;

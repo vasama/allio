@@ -346,7 +346,7 @@ public:
 
 		if (std::error_code const error = operation.get_result())
 		{
-			return std::unexpected(error);
+			return vsm::unexpected(error);
 		}
 
 		return {};
@@ -397,7 +397,7 @@ protected:
 			statistics const& s = *r;
 			if (s.submitted == 0 && s.completed == 0 && s.concluded == 0)
 			{
-				return std::unexpected(e.error());
+				return vsm::unexpected(e.error());
 			}
 		}
 		return r;

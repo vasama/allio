@@ -18,5 +18,5 @@ vsm::result<multiplexer_handle_relation const*> detail::find_handle_relation(
 		return it->relation;
 	}
 
-	return std::unexpected(error::unsupported_multiplexer_handle_relation);
+	return vsm::unexpected(error::unsupported_multiplexer_handle_relation);
 }

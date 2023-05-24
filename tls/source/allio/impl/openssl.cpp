@@ -14,7 +14,7 @@ vsm::result<std::unique_ptr<T>> make_unique(Args&&... args)
 
 	if (ptr == nullptr)
 	{
-		return std::unexpected(error::not_enough_memory);
+		return vsm::unexpected(error::not_enough_memory);
 	}
 
 	return ptr;
@@ -51,7 +51,7 @@ static vsm::result<bio_method_ptr> const& create_stream_socket_bio_method()
 
 	if (method == nullptr)
 	{
-		return std::unexpected(get_last_openssl_error());
+		return vsm::unexpected(get_last_openssl_error());
 	}
 
 	BIO_meth_set_write_ex(method, [](BIO* const bio, char const* const buffer, size_t const size, size_t* const transferred) -> int
@@ -77,10 +77,10 @@ struct openssl_resources
 	vsm::result<bio_ptr> create_stream_socket_bio(stream_socket_handle& socket)
 	{
 		BIO* const bio = BIO_new(resources.stream_socket_bio_method.get());
-	
+
 		if (bio == nullptr)
 		{
-			return std::unexpected(get_last_openssl_error());
+			return vsm::unexpected(get_last_openssl_error());
 		}
 
 		BIO_set_data(bio, &socket);
@@ -94,7 +94,7 @@ struct openssl_resources
 
 		if (bio == nullptr)
 		{
-			return std::unexpected(get_last_openssl_error());
+			return vsm::unexpected(get_last_openssl_error());
 		}
 
 		return vsm::result<bio_ptr>(vsm::result_value, bio);
@@ -112,7 +112,7 @@ vsm::result<openssl_resources const*> initialize_resources()
 
 	if (!resources)
 	{
-		return std::unexpected(resources.error());
+		return vsm::unexpected(resources.error());
 	}
 
 	return &*resources;

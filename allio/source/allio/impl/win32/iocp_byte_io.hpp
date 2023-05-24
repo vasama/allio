@@ -127,13 +127,13 @@ public:
 		auto const buffers = m_args.buffers.buffers();
 		if (buffers.empty() || buffers.size() > max_buffer_count)
 		{
-			return std::unexpected(error::invalid_argument);
+			return vsm::unexpected(error::invalid_argument);
 		}
 		for (size_t space = max_buffer_total; auto const buffer : buffers)
 		{
 			if (space < buffer.size())
 			{
-				return std::unexpected(error::invalid_argument);
+				return vsm::unexpected(error::invalid_argument);
 			}
 			space -= buffer.size();
 		}

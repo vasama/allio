@@ -157,7 +157,7 @@ private:
 
 			if (buffer == nullptr)
 			{
-				return std::unexpected(error::not_enough_memory);
+				return vsm::unexpected(error::not_enough_memory);
 			}
 
 			m_storage.m_dynamic.reset(buffer);

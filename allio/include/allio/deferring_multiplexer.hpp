@@ -72,7 +72,7 @@ private:
 			async_error_code const& error = result.error();
 			if (error.is_synchronous())
 			{
-				return std::unexpected(error.error_code());
+				return vsm::unexpected(error.error_code());
 			}
 			set_result(operation, error.error_code());
 			post(operation, async_operation_status::concluded);

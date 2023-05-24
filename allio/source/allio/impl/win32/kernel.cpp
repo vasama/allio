@@ -55,7 +55,7 @@ vsm::result<void> win32::kernel_init()
 		return {};
 
 	return_error:
-		return std::unexpected(error::unsupported_operation);
+		return vsm::unexpected(error::unsupported_operation);
 	}();
 	return r;
 }

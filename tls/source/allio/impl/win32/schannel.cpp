@@ -8,12 +8,12 @@ namespace {
 
 struct schannel_stream_socket_handle : secure_stream_socket_handle
 {
-	
+
 };
 
 struct schannel_listen_socket_handle : secure_listen_socket_handle
 {
-	
+
 };
 
 } // namespace

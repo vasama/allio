@@ -19,7 +19,7 @@ struct synchronous_operation_implementation<Handle, io::scatter_read_at>
 
 		if (!h)
 		{
-			return std::unexpected(error::handle_is_null);
+			return vsm::unexpected(error::handle_is_null);
 		}
 
 		int const result = preadv(
@@ -30,7 +30,7 @@ struct synchronous_operation_implementation<Handle, io::scatter_read_at>
 
 		if (result == -1)
 		{
-			return std::unexpected(get_last_error());
+			return vsm::unexpected(get_last_error());
 		}
 
 		*args.result = static_cast<size_t>(result);
@@ -47,7 +47,7 @@ struct synchronous_operation_implementation<Handle, io::gather_write_at>
 
 		if (!h)
 		{
-			return std::unexpected(error::handle_is_null);
+			return vsm::unexpected(error::handle_is_null);
 		}
 
 		int const result = pwritev(
@@ -58,7 +58,7 @@ struct synchronous_operation_implementation<Handle, io::gather_write_at>
 
 		if (result == -1)
 		{
-			return std::unexpected(get_last_error());
+			return vsm::unexpected(get_last_error());
 		}
 
 		*args.result = static_cast<size_t>(result);

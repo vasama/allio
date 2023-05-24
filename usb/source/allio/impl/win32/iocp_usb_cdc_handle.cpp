@@ -45,7 +45,7 @@ struct allio::multiplexer_handle_operation_implementation<iocp_multiplexer, usb_
 					nullptr,
 					&overlapped))
 				{
-					
+
 				}
 				else if (DWORD const e = GetLastError(); e != ERROR_IO_PENDING)
 				{

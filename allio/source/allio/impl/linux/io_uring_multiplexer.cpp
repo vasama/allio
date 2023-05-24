@@ -87,7 +87,7 @@ vsm::result<io_uring_multiplexer::init_result> io_uring_multiplexer::init(init_o
 		uint32_t const lz = std::countl_zero(value);
 		if (lz == 0 && (value & value - 1) != 0)
 		{
-			return std::unexpected(error::invalid_argument);
+			return vsm::unexpected(error::invalid_argument);
 		}
 		return static_cast<uint32_t>(1) << (31 - lz);
 	};
@@ -113,7 +113,7 @@ vsm::result<io_uring_multiplexer::init_result> io_uring_multiplexer::init(init_o
 
 		if (io_uring == -1)
 		{
-			return std::unexpected(get_last_error());
+			return vsm::unexpected(get_last_error());
 		}
 
 		return vsm::result<detail::unique_fd>(vsm::result_value, io_uring);
@@ -132,7 +132,7 @@ vsm::result<io_uring_multiplexer::init_result> io_uring_multiplexer::init(init_o
 
 		if (addr == MAP_FAILED)
 		{
-			return std::unexpected(get_last_error());
+			return vsm::unexpected(get_last_error());
 		}
 
 		return vsm::result<unique_mmapping>(vsm::result_value, reinterpret_cast<std::byte*>(addr), size);
@@ -338,7 +338,7 @@ vsm::result<statistics> io_uring_multiplexer::pump(pump_parameters const& args)
 				}
 				else
 				{
-					return std::unexpected(error::unsupported_operation);
+					return vsm::unexpected(error::unsupported_operation);
 				}
 			}
 
@@ -352,7 +352,7 @@ vsm::result<statistics> io_uring_multiplexer::pump(pump_parameters const& args)
 
 			if (enter_result == -1)
 			{
-				return std::unexpected(get_last_error());
+				return vsm::unexpected(get_last_error());
 			}
 
 			if (submission)
@@ -420,7 +420,7 @@ vsm::result<void> io_uring_multiplexer::cancel_io(io_slot& slot)
 
 vsm::result<void> io_uring_multiplexer::submit_finalize()
 {
-	
+
 }
 
 //TODO: These functions cannot be used directly for temporary SQEs.
@@ -434,7 +434,7 @@ vsm::result<uint32_t> io_uring_multiplexer::acquire_sqe()
 	if (sq_acquire == sq_consume)
 	{
 		++m_sq_cq_available; // Release previously acquired CQE.
-		return std::unexpected(error::too_many_concurrent_async_operations);
+		return vsm::unexpected(error::too_many_concurrent_async_operations);
 	}
 
 	m_sq_acquire = sq_acquire + 1;
@@ -464,7 +464,7 @@ vsm::result<void> io_uring_multiplexer::acquire_cqe()
 
 		if (cq_cq_available == 0)
 		{
-			return std::unexpected(error::too_many_concurrent_async_operations);
+			return vsm::unexpected(error::too_many_concurrent_async_operations);
 		}
 
 		sq_cq_available = m_cq_cq_available.exchange(0, std::memory_order_acq_rel);

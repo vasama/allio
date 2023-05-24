@@ -14,9 +14,32 @@ namespace allio {
 template<std::integral T>
 constexpr T network_byte_order(T const value)
 {
-	if constexpr (std::endian::native == std::endian::little)
+	if constexpr (sizeof(T) == 1)
 	{
+		return value;
+	}
+	else if constexpr (std::endian::native == std::endian::little)
+	{
+#ifdef __cpp_lib_byteswap
 		return std::byteswap(value);
+#else
+		/**/ if constexpr (sizeof(T) == 2)
+		{
+			return __builtin_bswap16(value);
+		}
+		else if constexpr (sizeof(T) == 4)
+		{
+			return __builtin_bswap32(value);
+		}
+		else if constexpr (sizeof(T) == 8)
+		{
+			return __builtin_bswap64(value);
+		}
+		else
+		{
+			static_assert(sizeof(T) == 0);
+		}
+#endif
 	}
 	else if constexpr (std::endian::native == std::endian::big)
 	{

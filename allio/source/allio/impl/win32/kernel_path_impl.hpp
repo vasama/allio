@@ -63,12 +63,12 @@ public:
 
 		if (args.path.is_too_long())
 		{
-			return std::unexpected(error::filename_too_long);
+			return vsm::unexpected(error::filename_too_long);
 		}
 
 		if (args.path.empty())
 		{
-			return std::unexpected(error::invalid_path);
+			return vsm::unexpected(error::invalid_path);
 		}
 
 		basic_kernel_path_converter c(context, storage, args);
@@ -92,7 +92,7 @@ private:
 	{
 		if (m_storage.m_dynamic != nullptr)
 		{
-			return std::unexpected(error::filename_too_long);
+			return vsm::unexpected(error::filename_too_long);
 		}
 
 		wchar_t const* const old_beg = m_buffer_pos;
@@ -113,7 +113,7 @@ private:
 
 			if (new_buffer_beg == nullptr)
 			{
-				return std::unexpected(error::not_enough_memory);
+				return vsm::unexpected(error::not_enough_memory);
 			}
 
 			m_storage.m_dynamic.reset(new_buffer_beg);
@@ -330,7 +330,7 @@ private:
 
 			if (is_untrimmed_name(segment_beg, segment_end) || is_device_name(segment_beg, segment_end))
 			{
-				return std::unexpected(error::invalid_path);
+				return vsm::unexpected(error::invalid_path);
 			}
 
 			if (backtrack != 0)
@@ -380,7 +380,7 @@ private:
 					first_segment = false;
 					return push_literal(beg, end);
 				}
-				return std::unexpected(error::invalid_path);
+				return vsm::unexpected(error::invalid_path);
 			}
 		));
 		return {};
@@ -420,26 +420,26 @@ private:
 
 		if (beg == end)
 		{
-			return std::unexpected(error::invalid_current_directory);
+			return vsm::unexpected(error::invalid_current_directory);
 		}
 
 		if (is_separator(*beg))
 		{
 			if (++beg == end || !is_separator(*beg) || ++beg == end)
 			{
-				return std::unexpected(error::invalid_current_directory);
+				return vsm::unexpected(error::invalid_current_directory);
 			}
 
 			if (*beg == '.' || *beg == '?')
 			{
 				if (++beg == end || !is_separator(*beg))
 				{
-					return std::unexpected(error::invalid_current_directory);
+					return vsm::unexpected(error::invalid_current_directory);
 				}
 
 				if (m_reject_local_device_current_directory)
 				{
-					return std::unexpected(error::invalid_current_directory);
+					return vsm::unexpected(error::invalid_current_directory);
 				}
 
 				wchar_t const* const root = L"\\??\\";
@@ -452,7 +452,7 @@ private:
 
 			if (is_separator(*beg))
 			{
-				return std::unexpected(error::invalid_current_directory);
+				return vsm::unexpected(error::invalid_current_directory);
 			}
 
 			wchar_t const* const server_beg = beg;
@@ -460,7 +460,7 @@ private:
 
 			if (beg == end || ++beg == end || is_separator(*beg))
 			{
-				return std::unexpected(error::invalid_current_directory);
+				return vsm::unexpected(error::invalid_current_directory);
 			}
 
 			wchar_t const* const share_beg = beg;
@@ -485,7 +485,7 @@ private:
 
 			if (++beg == end || !is_separator(*beg))
 			{
-				return std::unexpected(error::invalid_current_directory);
+				return vsm::unexpected(error::invalid_current_directory);
 			}
 
 			return current_path
@@ -496,7 +496,7 @@ private:
 			};
 		}
 
-		return std::unexpected(error::invalid_current_directory);
+		return vsm::unexpected(error::invalid_current_directory);
 	}
 
 	static vsm::result<wchar_t> detect_current_drive(path_section<wchar_t> const path)
@@ -518,7 +518,7 @@ private:
 			return *beg;
 		}
 
-		return std::unexpected(error::invalid_current_directory);
+		return vsm::unexpected(error::invalid_current_directory);
 	}
 
 
@@ -562,7 +562,7 @@ private:
 		// Expect at least one non-separator character.
 		if (beg == end || is_separator(*beg))
 		{
-			return std::unexpected(error::invalid_path);
+			return vsm::unexpected(error::invalid_path);
 		}
 
 		Char const* const server_beg = beg;
@@ -571,7 +571,7 @@ private:
 		// Expect exactly one separator and at least one non-separator character.
 		if (beg == end || ++beg == end || is_separator(*beg))
 		{
-			return std::unexpected(error::invalid_path);
+			return vsm::unexpected(error::invalid_path);
 		}
 
 		Char const* const share_beg = beg;
@@ -594,7 +594,7 @@ private:
 		if (m_handle)
 		{
 			// Absolute path relative to handle is not allowed.
-			return std::unexpected(error::invalid_path);
+			return vsm::unexpected(error::invalid_path);
 		}
 
 		// Absolute paths with a local device current directory have unpredictable results.
@@ -618,7 +618,7 @@ private:
 		if (m_handle)
 		{
 			// Drive relative path relative to handle is not allowed.
-			return std::unexpected(error::invalid_path);
+			return vsm::unexpected(error::invalid_path);
 		}
 
 		// Drive relative paths with a local device current directory have unpredictable results.
@@ -652,7 +652,7 @@ private:
 
 			if (classification_on_drive.drive != drive)
 			{
-				return std::unexpected(error::invalid_current_directory);
+				return vsm::unexpected(error::invalid_current_directory);
 			}
 
 			return classification_on_drive;
@@ -677,7 +677,7 @@ private:
 		if (backtrack != 0)
 		{
 			// Handle relative paths cannot backtrack.
-			return std::unexpected(error::invalid_path);
+			return vsm::unexpected(error::invalid_path);
 		}
 
 		return {};

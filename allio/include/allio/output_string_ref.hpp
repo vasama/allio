@@ -137,7 +137,7 @@ private:
 
 		if (size > buffer_size)
 		{
-			return std::unexpected(error::no_buffer_space);
+			return vsm::unexpected(error::no_buffer_space);
 		}
 
 		return buffer{ self.m_context, oversize ? buffer_size : size };
@@ -175,7 +175,7 @@ private:
 		}
 		catch (std::bad_alloc const&)
 		{
-			return std::unexpected(error::not_enough_memory);
+			return vsm::unexpected(error::not_enough_memory);
 		}
 
 		return buffer{ container.data(), container.size() };

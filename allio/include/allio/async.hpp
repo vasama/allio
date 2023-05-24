@@ -331,7 +331,7 @@ public:
 	template<typename E>
 	void set_error(E&& error) && noexcept
 	{
-		detail::execution::set_error(vsm_move(m_receiver), vsm::result<T>(std::unexpected(vsm_forward(error))));
+		detail::execution::set_error(vsm_move(m_receiver), vsm::result<T>(vsm::unexpected(vsm_forward(error))));
 	}
 
 	void allio_detail_set_stopped() && noexcept
@@ -375,7 +375,7 @@ public:
 			std::remove_cvref_t<Receiver>,
 			stdexec::__single_sender_value_t<Sender>>;
 	#endif
-	
+
 		return detail::execution::connect(vsm_move(m_sender), receiver_type(vsm_forward(receiver)));
 	}
 };

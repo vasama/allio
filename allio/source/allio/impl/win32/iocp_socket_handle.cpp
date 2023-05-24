@@ -26,7 +26,7 @@ struct allio::multiplexer_handle_operation_implementation<iocp_multiplexer, Hand
 		{
 			if (!s.args.multiplexable)
 			{
-				return std::unexpected(error::invalid_argument);
+				return vsm::unexpected(error::invalid_argument);
 			}
 
 			return synchronous<Handle>(s.args);
@@ -59,7 +59,7 @@ struct allio::multiplexer_handle_operation_implementation<iocp_multiplexer, stre
 
 			if (!h)
 			{
-				return std::unexpected(error::handle_is_null);
+				return vsm::unexpected(error::handle_is_null);
 			}
 
 			SOCKET const socket = unwrap_socket(h.get_platform_handle());
@@ -72,7 +72,7 @@ struct allio::multiplexer_handle_operation_implementation<iocp_multiplexer, stre
 
 				if (::bind(socket, &bind_addr.addr, addr.size))
 				{
-					return std::unexpected(get_last_socket_error());
+					return vsm::unexpected(get_last_socket_error());
 				}
 			}
 
@@ -85,7 +85,7 @@ struct allio::multiplexer_handle_operation_implementation<iocp_multiplexer, stre
 			{
 				if (error != ERROR_IO_PENDING)
 				{
-					return std::unexpected(socket_error(error));
+					return vsm::unexpected(socket_error(error));
 				}
 			}
 			else if (m.supports_synchronous_completion(h))
@@ -173,12 +173,12 @@ struct allio::multiplexer_handle_operation_implementation<iocp_multiplexer, list
 
 			if (!h)
 			{
-				return std::unexpected(error::handle_is_null);
+				return vsm::unexpected(error::handle_is_null);
 			}
 
 			if (!s.args.multiplexable)
 			{
-				return std::unexpected(error::invalid_argument);
+				return vsm::unexpected(error::invalid_argument);
 			}
 
 			SOCKET const listen_socket = unwrap_socket(h.get_platform_handle());
@@ -194,7 +194,7 @@ struct allio::multiplexer_handle_operation_implementation<iocp_multiplexer, list
 			{
 				if (error != ERROR_IO_PENDING)
 				{
-					return std::unexpected(socket_error(error));
+					return vsm::unexpected(socket_error(error));
 				}
 			}
 			else if (m.supports_synchronous_completion(h))

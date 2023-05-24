@@ -56,7 +56,7 @@ class manual_scheduler
 		class operation : operation_base
 		{
 			Receiver m_receiver;
-		
+
 		public:
 			explicit operation(manual_scheduler& scheduler, auto&& receiver)
 				: operation_base
@@ -82,7 +82,7 @@ class manual_scheduler
 					expected, this,
 					std::memory_order_release, std::memory_order_acquire));
 			}
-			
+
 		private:
 			static void send(operation_base& self)
 			{
@@ -103,7 +103,7 @@ class manual_scheduler
 			: m_scheduler(&scheduler)
 		{
 		}
-	
+
 		template<typename Receiver>
 		operation<std::remove_cvref_t<Receiver>> connect(Receiver&& receiver) const
 		{

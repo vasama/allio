@@ -4,6 +4,8 @@
 
 #include <span>
 
+#include <cstring>
+
 namespace allio {
 
 template<typename Char>

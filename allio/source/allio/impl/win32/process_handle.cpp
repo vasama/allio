@@ -67,14 +67,14 @@ private:
 	{
 		if (m_storage.m_dynamic != nullptr)
 		{
-			return std::unexpected(error::process_arguments_too_long);
+			return vsm::unexpected(error::process_arguments_too_long);
 		}
 
 		wchar_t* const new_buffer_beg = new (std::nothrow) wchar_t[max_command_line_size];
 
 		if (new_buffer_beg == nullptr)
 		{
-			return std::unexpected(error::not_enough_memory);
+			return vsm::unexpected(error::not_enough_memory);
 		}
 
 		m_storage.m_dynamic.reset(new_buffer_beg);
@@ -286,7 +286,7 @@ private:
 		{
 			if (argument.is_too_long())
 			{
-				return std::unexpected(error::invalid_argument);
+				return vsm::unexpected(error::invalid_argument);
 			}
 
 			vsm_try_void(push_argument(argument));
@@ -414,7 +414,7 @@ static vsm::result<wchar_t*> make_command_line(command_line_storage& buffer, std
 
 	if (total_size > 0x7fff)
 	{
-		return std::unexpected(error::process_arguments_too_long);
+		return vsm::unexpected(error::process_arguments_too_long);
 	}
 
 	vsm_try(buffer_beg, buffer.reserve(total_size));
@@ -464,7 +464,7 @@ static vsm::result<process_exit_code> get_process_exit_code(HANDLE const handle)
 	DWORD exit_code;
 	if (!GetExitCodeProcess(handle, &exit_code))
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 	return static_cast<int32_t>(exit_code);
 }
@@ -477,7 +477,7 @@ vsm::result<unique_handle> win32::open_process(process_id const pid, process_han
 
 	if (handle == NULL)
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 
 	return vsm::result<unique_handle>(vsm::result_value, handle);
@@ -513,7 +513,7 @@ vsm::result<process_info> win32::launch_process(input_path_view const path, proc
 		&startup_info,
 		&process_info))
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 
 	unique_handle const thread = unique_handle(process_info.hThread);
@@ -528,7 +528,7 @@ static vsm::result<unique_handle> duplicate_handle(HANDLE const source_process, 
 	if (!DuplicateHandle(source_process, source_handle,
 		GetCurrentProcess(), &target_handle, 0, false, DUPLICATE_SAME_ACCESS))
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 	return vsm::result<unique_handle>(vsm::result_value, target_handle);
 }
@@ -579,7 +579,7 @@ vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_res
 
 	if (h)
 	{
-		return std::unexpected(error::handle_is_not_null);
+		return vsm::unexpected(error::handle_is_not_null);
 	}
 
 	vsm_try(process, win32::open_process(args.pid, args));
@@ -608,7 +608,7 @@ vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_res
 
 	if (h)
 	{
-		return std::unexpected(error::handle_is_not_null);
+		return vsm::unexpected(error::handle_is_not_null);
 	}
 
 	vsm_try(process, win32::launch_process(args.path, args));
@@ -637,12 +637,12 @@ vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_res
 
 	if (!h)
 	{
-		return std::unexpected(error::handle_is_null);
+		return vsm::unexpected(error::handle_is_null);
 	}
 
 	if (h.is_current())
 	{
-		return std::unexpected(error::process_is_current_process);
+		return vsm::unexpected(error::process_is_current_process);
 	}
 
 	if (!h.get_flags()[flags::exited])
@@ -656,7 +656,7 @@ vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_res
 
 		if (!NT_SUCCESS(status) || status == STATUS_TIMEOUT)
 		{
-			return std::unexpected(static_cast<nt_error>(status));
+			return vsm::unexpected(static_cast<nt_error>(status));
 		}
 
 		vsm_try_assign(h.m_exit_code.value, get_process_exit_code(handle));

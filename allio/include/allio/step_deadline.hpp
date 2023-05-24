@@ -28,7 +28,7 @@ public:
 
 		if (now >= end)
 		{
-			return std::unexpected(error::async_operation_timed_out);
+			return vsm::unexpected(error::async_operation_timed_out);
 		}
 
 		return vsm::result<deadline>(vsm::result_value, end - now);

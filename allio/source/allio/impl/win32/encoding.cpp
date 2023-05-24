@@ -79,7 +79,7 @@ vsm::result<size_t> win32::utf8_to_wide(std::basic_string_view<char> const strin
 
 	if (size == 0)
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 
 	return static_cast<size_t>(size);
@@ -101,7 +101,7 @@ vsm::result<size_t> win32::wide_to_utf8(std::basic_string_view<wchar_t> const st
 
 	if (size == 0)
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 
 	return static_cast<size_t>(size);

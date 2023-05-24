@@ -325,7 +325,7 @@ public:
 
 	vsm::result<size_t> read(read_buffers const buffers) const
 	{
-		
+
 	}
 
 	vsm::result<size_t> write(write_buffers const buffers) const

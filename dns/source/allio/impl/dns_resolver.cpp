@@ -294,7 +294,7 @@ static vsm::result<T> read_struct(response_buffer& buffer)
 	vsm::result<T> r(vsm::result_value);
 	if (static_cast<ptrdiff_t>(sizeof(T)) > buffer.end - buffer.pos)
 	{
-		return std::unexpected(malformed_packet);
+		return vsm::unexpected(malformed_packet);
 	}
 	memcpy(&*r, buffer.pos, sizeof(T));
 	buffer.pos += sizeof(T);
@@ -325,7 +325,7 @@ vsm::result<void> dns_resolver::handle_query_result(network_address const& serve
 
 		if ((bitfield & required_bitfield_mask) != required_bitfield_value)
 		{
-			return std::unexpected(unsolicited_packet);
+			return vsm::unexpected(unsolicited_packet);
 		}
 	}
 
@@ -335,12 +335,12 @@ vsm::result<void> dns_resolver::handle_query_result(network_address const& serve
 
 	if (query == nullptr)
 	{
-		return std::unexpected(invalid_response);
+		return vsm::unexpected(invalid_response);
 	}
 
 	if (server_address != query->m_server_address)
 	{
-		return std::unexpected(invalid_response);
+		return vsm::unexpected(invalid_response);
 	}
 
 
@@ -350,7 +350,7 @@ vsm::result<void> dns_resolver::handle_query_result(network_address const& serve
 		// Query packets contain exactly one question each.
 		if (dns_convert(header.question_count) != 1)
 		{
-			return std::unexpected(invalid_response);
+			return vsm::unexpected(invalid_response);
 		}
 
 		domain_name question_name;
@@ -359,14 +359,14 @@ vsm::result<void> dns_resolver::handle_query_result(network_address const& serve
 
 		if (question.question_class != dns_class::in)
 		{
-			return std::unexpected(invalid_response);
+			return vsm::unexpected(invalid_response);
 		}
 
 		//TODO: Check that this record type is actually being resolved by this query.
 
 		if (domain_name != query->m_domain_name)
 		{
-			return std::unexpected(invalid_response);
+			return vsm::unexpected(invalid_response);
 		}
 
 		return question.question_type;
@@ -391,7 +391,7 @@ vsm::result<void> dns_resolver::handle_query_result(network_address const& serve
 
 		if (record.record_class != dns_class::in)
 		{
-			return std::unexpected(invalid_response);
+			return vsm::unexpected(invalid_response);
 		}
 
 		switch (record.record_type)
@@ -411,7 +411,7 @@ vsm::result<void> dns_resolver::handle_query_result(network_address const& serve
 
 		if (record_name == query->m_domain_name)
 		{
-			
+
 		}
 	}
 }

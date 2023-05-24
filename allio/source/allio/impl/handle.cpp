@@ -40,7 +40,7 @@ vsm::result<void> handle::set_native_handle(native_handle_type const handle)
 {
 	if ((handle.flags & flags::not_null) == flags::none)
 	{
-		return std::unexpected(error::invalid_argument);
+		return vsm::unexpected(error::invalid_argument);
 	}
 
 	object_transaction flags_transaction(m_flags.value, handle.flags);

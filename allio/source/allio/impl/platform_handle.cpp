@@ -10,7 +10,7 @@ vsm::result<void> platform_handle::set_native_handle(native_handle_type const ha
 {
 	if (handle.handle == native_platform_handle::null)
 	{
-		return std::unexpected(error::invalid_argument);
+		return vsm::unexpected(error::invalid_argument);
 	}
 
 	object_transaction handle_transaction(m_native_handle.value, handle.handle);

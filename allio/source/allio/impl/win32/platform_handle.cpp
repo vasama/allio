@@ -34,7 +34,7 @@ vsm::result<unique_handle> win32::duplicate_handle(HANDLE const handle)
 	HANDLE duplicate;
 	if (!DuplicateHandle(process, handle, process, &duplicate, 0, false, DUPLICATE_SAME_ACCESS))
 	{
-		return std::unexpected(get_last_error());
+		return vsm::unexpected(get_last_error());
 	}
 
 	return vsm::result<unique_handle>(vsm::result_value, duplicate);
