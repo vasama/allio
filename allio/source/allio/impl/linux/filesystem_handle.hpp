@@ -15,8 +15,12 @@ struct open_parameters
 	int flags;
 	mode_t mode;
 
-	static vsm::result<open_parameters> make(file_parameters const& args);
+	static vsm::result<open_parameters> make(filesystem_handle::open_parameters const& args);
 };
+
+vsm::result<unique_fd> create_file(
+	filesystem_handle const* base, input_path_view path,
+	open_parameters args);
 
 vsm::result<unique_fd> create_file(
 	filesystem_handle const* base, input_path_view path,

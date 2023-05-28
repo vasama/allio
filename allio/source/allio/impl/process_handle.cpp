@@ -9,9 +9,9 @@ vsm::result<void> detail::process_handle_base::block_open(process_id const pid, 
 	return block<io::process_open>(static_cast<process_handle&>(*this), args, pid);
 }
 
-vsm::result<void> detail::process_handle_base::block_launch(input_path_view const path, launch_parameters const& args)
+vsm::result<void> detail::process_handle_base::block_launch(filesystem_handle const* const base, input_path_view const path, launch_parameters const& args)
 {
-	return block<io::process_launch>(static_cast<process_handle&>(*this), args, path);
+	return block<io::process_launch>(static_cast<process_handle&>(*this), args, base, path);
 }
 
 vsm::result<process_exit_code> detail::process_handle_base::block_wait(wait_parameters const& args)

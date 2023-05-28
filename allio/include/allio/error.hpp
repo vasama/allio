@@ -27,6 +27,7 @@ enum class error
 {
 	none,
 
+	unknown_failure,
 	invalid_argument,
 	not_enough_memory,
 	no_buffer_space,

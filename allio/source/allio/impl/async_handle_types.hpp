@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/directory_handle.hpp>
+//#include <allio/directory_handle.hpp>
 #include <allio/file_handle.hpp>
 #include <allio/implementation.hpp>
 #include <allio/path_handle.hpp>

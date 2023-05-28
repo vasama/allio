@@ -65,7 +65,8 @@ struct allio::multiplexer_handle_operation_implementation<iocp_multiplexer, stre
 			SOCKET const socket = unwrap_socket(h.get_platform_handle());
 			vsm_try(addr, socket_address::make(s.args.address));
 
-			/* Socket must be bound before ConnectEx. */ {
+			// Socket must be bound before calling ConnectEx.
+			{
 				socket_address_union bind_addr;
 				memset(&bind_addr, 0, sizeof(bind_addr));
 				bind_addr.addr.sa_family = addr.addr.sa_family;

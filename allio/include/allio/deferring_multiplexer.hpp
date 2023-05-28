@@ -4,6 +4,7 @@
 #include <allio/multiplexer.hpp>
 
 #include <vsm/tag_ptr.hpp>
+#include <vsm/utility.hpp>
 
 namespace allio {
 namespace detail {
@@ -41,10 +42,9 @@ private:
 	async_operation_storage* m_tail;
 
 public:
-	template<typename Callable>
-	vsm::result<void> start(async_operation_storage& operation, Callable&& callable)
+	vsm::result<void> start(async_operation_storage& operation, auto&& callable)
 	{
-		return post_result(operation, static_cast<Callable&&>(callable)());
+		return post_result(operation, vsm_forward(callable)());
 	}
 
 	void post(async_operation_storage& operation, async_operation_status status);

@@ -4,8 +4,7 @@
 #include <allio/win32/detail/unique_handle.hpp>
 #include <allio/win32/platform.hpp>
 
-#include <vsm/assert.h>
-#include <vsm/unique_resource.hpp>
+#include <vsm/utility.hpp>
 
 #include <win32.h>
 
@@ -37,15 +36,16 @@ struct unique_handle_with_flags
 	}
 };
 
-template<std::derived_from<platform_handle> Handle, typename Create>
-vsm::result<void> initialize_platform_handle(Handle& managed_handle, unique_handle&& handle, Create&& create)
+template<std::derived_from<platform_handle> Handle>
+vsm::result<void> initialize_platform_handle(Handle& managed_handle, unique_handle&& handle, auto&& create)
 {
 	return vsm::consume_resources([&](HANDLE const h) -> vsm::result<void>
 	{
-		return managed_handle.set_native_handle(static_cast<Create&&>(create)(wrap_handle(h)));
-	}, static_cast<unique_handle&&>(handle));
+		return managed_handle.set_native_handle(vsm_forward(create)(wrap_handle(h)));
+	}, vsm_move(handle));
 }
 
+#if 0
 template<std::derived_from<platform_handle> Handle>
 vsm::result<void> consume_platform_handle(Handle& managed_handle, handle::native_handle_type const native_handle, unique_handle&& handle, auto&&... args)
 {
@@ -58,10 +58,11 @@ vsm::result<void> consume_platform_handle(Handle& managed_handle, handle::native
 				native_handle,
 				wrap_handle(handle),
 			},
-			static_cast<decltype(args)&&>(args)...
+			vsm_forward(args)...
 		});
-	}, static_cast<unique_handle&&>(handle));
+	}, vsm_move(handle));
 }
+#endif
 
 template<typename Handle>
 vsm::result<unique_handle_with_flags> consume_or_duplicate_handle(Handle&& managed_handle)

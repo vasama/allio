@@ -341,7 +341,12 @@ public:
 	{
 		while (!operation.is_concluded())
 		{
-			vsm_try_discard(multiplexer.pump({ .mode = pump_mode::submit | pump_mode::complete }));
+			vsm_try_discard(multiplexer.pump(
+			{
+				// We're blocking on a single asynchronous I/O operation.
+				// We don't want to run any user handlers in this context.
+				.mode = pump_mode::submit | pump_mode::complete,
+			}));
 		}
 
 		if (std::error_code const error = operation.get_result())

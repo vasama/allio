@@ -23,7 +23,7 @@ vsm::result<void> sync_open(io::parameters_with_result<io::filesystem_open> cons
 		{
 			handle::native_handle_type
 			{
-				file.flags | handle::flags::not_null,
+				handle::flags::not_null | file.flags,
 			},
 			handle,
 		};

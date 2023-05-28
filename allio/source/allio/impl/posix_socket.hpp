@@ -19,6 +19,21 @@
 
 namespace allio {
 
+inline vsm::result<int> get_address_family(network_address_kind const address_kind)
+{
+	switch (address_kind)
+	{
+	case network_address_kind::local:
+		return AF_UNIX;
+
+	case network_address_kind::ipv4:
+		return AF_INET;
+	}
+
+	return vsm::unexpected(error::unsupported_operation);
+}
+
+
 struct socket_address_union
 {
 	union

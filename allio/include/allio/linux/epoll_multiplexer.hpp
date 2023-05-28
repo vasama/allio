@@ -10,7 +10,7 @@ namespace allio::linux {
 
 class epoll_multiplexer final : public deferring_multiplexer
 {
-	detail::unique_fd const m_epoll;
+	unique_fd const m_epoll;
 
 public:
 

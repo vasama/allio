@@ -8,6 +8,9 @@
 
 #include <vsm/assert.h>
 #include <vsm/concepts.hpp>
+#include <vsm/flags.hpp>
+#include <vsm/intrusive/forward_list.hpp>
+#include <vsm/utility.hpp>
 
 #include <atomic>
 #include <bit>
@@ -18,92 +21,121 @@
 #include <allio/linux/detail/undef.i>
 
 struct io_uring_sqe;
+struct io_uring_cqe;
 
 namespace allio::linux {
 
 class io_uring_multiplexer final : public deferring_multiplexer
 {
-	// Left incomplete to prevent arithmetic.
+	/// Submission ring buffer.
+	///
+	/// Each index is a position in the submission ring buffer.
+	///
+	/// The indicies marked with `k` are shared with the kernel.
+	///
+	/// Each index is limited to less than or equal to the next.
+	/// Wraparound is possible, but that does not matter.
+	/// Imagine instead that the indices have infinite precision.
+	///
+	/// @verbatim
+	/// |
+	/// | <- @ref m_sq_k_consume
+	/// |    One after the entry most recently read by the kernel.
+	/// |    That slot can now be reused for another entry.
+	/// |
+	/// | <- @ref m_sq_k_produce
+	/// |    One after the entry most recently submitted to the kernel.
+	/// |
+	/// | <- @ref m_sq_release
+	/// |    One after the entry most recently recorded, and which is now ready for submission.
+	/// |
+	/// | <- @ref m_sq_acquire
+	/// |    Free slot where a new entry can be recorded.
+	/// |
+	/// | <- @ref m_sq_k_consume
+	/// |    The ring buffer wraps around.
+	/// V
+	/// @endverbatim
+
+	/// Completion queue ring buffer
+	///
+	/// @verbatim
+	/// |
+	/// V
+	/// @endverbatim
+
+	// Intentionally incomplete to prevent arithmetic.
 	struct sqe_placeholder;
 	struct cqe_placeholder;
 
-	struct sqe_type
+	enum class flags : uint32_t
 	{
-		static constexpr uint8_t flag_fixed_file                        = 1 << 0;
-		static constexpr uint8_t flag_io_drain                          = 1 << 1;
-		static constexpr uint8_t flag_io_link                           = 1 << 2;
-		static constexpr uint8_t flag_io_hardlink                       = 1 << 3;
-		static constexpr uint8_t flag_async                             = 1 << 4;
-		static constexpr uint8_t flag_buffer_select                     = 1 << 5;
-		static constexpr uint8_t flag_cqe_skip_success                  = 1 << 6;
-
-		uint8_t opcode;
-		uint8_t flags;
-		uint16_t ioprio;
-		int32_t fd;
-		union
-		{
-			uint64_t off;
-			uint64_t addr2;
-			struct
-			{
-				uint32_t cmd_op;
-				uint32_t _pad1;
-			};
-		};
-		union
-		{
-			uint64_t addr;
-			uint64_t splice_off_in;
-		};
-		uint32_t len;
-		uint32_t _op_flags;
-		uint64_t user_data;
-		union
-		{
-			uint16_t buf_index;
-			uint16_t buf_group;
-		};
-		uint16_t personality;
-		union
-		{
-			uint32_t splice_fd_in;
-			int32_t file_index;
-		};
-		union
-		{
-			struct
-			{
-				uint64_t addr3;
-				uint64_t _pad2;
-			};
-		};
+		submit_lock                     = 1 << 0,
+		enter_ext_arg                   = 1 << 1,
+		kernel_thread                   = 1 << 2,
+		auto_submit                     = 1 << 3,
+		submit_handler                  = 1 << 4,
 	};
-	static_assert(sizeof(sqe_type) == 64);
+	vsm_flag_enum_friend(flags);
 
-	struct cqe_type
-	{
-		uint64_t user_data;
-		int32_t res;
-		uint32_t flags;
-	};
-	static_assert(sizeof(cqe_type) == 16);
-
-	struct flags
-	{
-		static constexpr uint32_t submit_lock                           = 1 << 0;
-		static constexpr uint32_t enter_ext_arg                         = 1 << 1;
-		static constexpr uint32_t kernel_thread                         = 1 << 2;
-	};
+	struct io_slot_link : vsm::intrusive::forward_list_link {};
 
 public:
-	class async_operation_storage : public deferring_multiplexer::async_operation_storage
+	class alignas(4) io_data
 	{
-		async_operation_storage* m_next;
-		async_operation_storage* m_prev;
+	protected:
+		io_data() = default;
+		io_data(io_data const&) = default;
+		io_data& operator=(io_data const&) = default;
+		~io_data() = default;
+	};
+
+	class io_data_ref;
+
+	class async_operation_storage
+		: public io_data
+		, public deferring_multiplexer::async_operation_storage
+	{
+	public:
+		using deferring_multiplexer::async_operation_storage::async_operation_storage;
 
 	protected:
-		virtual void io_completed(io_uring_multiplexer& multiplexer, io_slot& slot, int result) = 0;
+		virtual void io_completed(io_uring_multiplexer& multiplexer, io_data_ref data, int result);
+
+	private:
+		friend class io_uring_multiplexer;
+	};
+
+	class io_slot : public io_data, io_slot_link
+	{
+		async_operation_storage* m_operation = nullptr;
+
+	public:
+		void set_handler(async_operation_storage& operation)
+		{
+			m_operation = &operation;
+		}
+
+	private:
+		friend class io_uring_multiplexer;
+	};
+
+private:
+	using io_data_ptr = vsm::tag_ptr<io_data, uintptr_t, 1>;
+
+public:
+	class io_data_ref : io_data_ptr
+	{
+	public:
+		io_data_ref(async_operation_storage& storage)
+			: io_data_ptr(&storage, 0)
+		{
+		}
+
+		io_data_ref(io_slot& slot)
+			: io_data_ptr(&slot, 1)
+		{
+		}
 
 	private:
 		friend class io_uring_multiplexer;
@@ -117,8 +149,10 @@ private:
 		size_t m_size;
 
 	public:
-		mmapping_deleter(size_t const size)
-			: size(size)
+		mmapping_deleter() = default;
+
+		explicit mmapping_deleter(size_t const size)
+			: m_size(size)
 		{
 		}
 
@@ -131,7 +165,7 @@ private:
 		{
 			if (m_size != borrow_value)
 			{
-				release(const_cast<void*>(addr), size);
+				release(const_cast<void*>(addr), m_size);
 			}
 		}
 
@@ -139,95 +173,101 @@ private:
 		static void release(void* addr, size_t size);
 	};
 
-	using unique_mmapping = std::unique_ptr<std::byte, mmapping_deleter>;
+	template<typename T>
+	using unique_mmapping = std::unique_ptr<T, mmapping_deleter>;
+
+	template<typename T = std::byte>
+	static vsm::result<unique_mmapping<T>> mmap(int io_uring, uint64_t offset, size_t size);
 
 
-	detail::unique_fd const m_io_uring;
+	/// @brief Unique owner of the io uring kernel object.
+	unique_fd const m_io_uring;
 
-	unique_mmapping const m_sq_mmap;
-	unique_mmapping const m_cq_mmap;
+	/// @brief Unique owner of the mmapped region containing the submission queue indices.
+	unique_mmapping<std::byte> const m_sq_mmap;
 
-	uint32_t const m_flags;
+	/// @brief Unique owner of the mmapped region containing the completion queue entries.
+	/// @note Null in the case that the kernel supports a single mmap for both queues.
+	unique_mmapping<std::byte> const m_cq_mmap;
 
-	// Sizes of SQE and CQE.
-	uint8_t const m_sqe_size;
-	uint8_t const m_cqe_size;
+	/// @brief Ring of submission queue entries.
+	/// @note Written by user space, read by the kernel.
+	unique_mmapping<sqe_placeholder> const m_sqes;
 
-	// Shifts used for multiplication by the sizes of SQE and CQE.
-	uint8_t const m_sqe_multiply_shift;
-	uint8_t const m_cqe_multiply_shift;
-
-	// One past the newest submission queue entry produced by user space.
-	// Written by user space, read by the kernel.
-	std::atomic_ref<uint32_t> const m_sq_k_produce;
-
-	// One past the newest submission queue entry consumed by the kernel.
-	// The value always trails m_sq_k_produce.
-	// Written by the kernel, read by user space.
-	std::atomic_ref<uint32_t> const m_sq_k_consume;
-
-	// One past the newest completion queue entry produced by the kernel.
-	// Written by the kernel, read by user space.
-	std::atomic_ref<uint32_t> const m_cq_k_produce;
-
-	// One past the newest completion queue entry consumed by user space.
-	// The value always trails m_cq_k_produce.
-	// Written by user space, read by the kernel.
-	std::atomic_ref<uint32_t> const m_cq_k_consume;
-
-	// Describes the io uring dynamic state.
-	// Written by the kernel, read by user space.
-	std::atomic_ref<uint32_t> const m_sq_k_flags;
-
-	// Maps logical SQE index to physical index in m_sqes.
-	// Written by user space, read by user space and the kernel.
-	uint32_t* const m_sq_k_array;
-
-	// Ring of submission queue entries.
-	// Written by user space, read by the kernel.
-	sqe_placeholder* const m_sqes;
-
-	// Ring of completion queue entries.
-	// Written by the kernel, read by user space.
+	/// @brief Ring of completion queue entries.
+	/// @note Written by the kernel, read by user space.
 	cqe_placeholder* const m_cqes;
 
+	flags const m_flags;
+
+	/// @brief Dynamic size of a single @ref io_uring_sqe.
+	uint8_t const m_sqe_size;
+
+	/// @brief Dynamic size of a single @ref io_uring_cqe.
+	uint8_t const m_cqe_size;
+
+	/// @brief Shift used for multiplication by @ref m_sqe_size.
+	uint8_t const m_sqe_multiply_shift;
+
+	/// @brief Shift used for multiplication by @ref m_cqe_size.
+	uint8_t const m_cqe_multiply_shift;
+
+	/// @brief One past the newest submission queue entry produced by user space.
+	/// @note Written by user space, read by the kernel.
+	std::atomic_ref<uint32_t> const m_sq_k_produce;
+
+	/// @brief One past the newest submission queue entry consumed by the kernel.
+	/// @note The value always trails @ref m_sq_k_produce.
+	/// @note Written by the kernel, read by user space.
+	std::atomic_ref<uint32_t> const m_sq_k_consume;
+
+	/// @brief One past the newest completion queue entry produced by the kernel.
+	/// @note Written by the kernel, read by user space.
+	std::atomic_ref<uint32_t> const m_cq_k_produce;
+
+	/// @brief One past the newest completion queue entry consumed by user space.
+	/// @note The value always trails @ref m_cq_k_produce.
+	/// @note Written by user space, read by the kernel.
+	std::atomic_ref<uint32_t> const m_cq_k_consume;
+
+	/// @brief Describes the io uring dynamic state.
+	/// @note Written by the kernel, read by user space.
+	std::atomic_ref<uint32_t> const m_sq_k_flags;
+
+	/// @brief Maps logical SQE index to physical index in @ref m_sqes.
+	/// @note Written by user space, read by user space and the kernel.
+	uint32_t* const m_sq_k_array;
+
+	/// @brief Size of the submission queue buffer.
 	uint32_t const m_sq_size;
+
+	/// @brief Size of the completion queue buffer.
 	uint32_t const m_cq_size;
 
-	//
-	uint32_t m_sq_produce_pending;
+	/// @brief One past the newest submission queue entry ready
+	/// for submission to the kernel via @ref m_sq_k_produce.
+	/// @note The value always trails @ref m_sq_k_consume.
+	uint32_t m_sq_ready;
 
 	uint32_t m_sq_available;
 
 	// Number of free CQEs available.
 	uint32_t m_cq_available;
 
-	// The value always trails m_sq_k_consume.
+	/// @note The value always trails @ref m_sq_k_consume.
 	uint32_t m_sq_acquire;
 
-	// The value always trails m_sq_acquire.
+	/// @note The value always trails @ref m_sq_acquire.
 	uint32_t m_sq_release;
 
-	// The value always trails m_sq_release.
+	/// @note The value always trails @ref m_sq_release.
 	uint32_t m_sq_submit;
 
+	uint32_t m_cq_consume;
 
-	class sqe_index_deleter
-	{
-		io_uring_multiplexer* m_multiplexer;
+	/// @brief List of cancelled I/Os waiting for free SQEs.
+	vsm::intrusive::forward_list<io_slot_link> m_cancel_list;
 
-	public:
-		sqe_index_deleter(io_uring_multiplexer& multiplexer)
-			: m_multiplexer(&multiplexer)
-		{
-		}
-
-		void operator()(uint32_t const sqe_index) const
-		{
-			m_multiplexer->release_temporary_sqe(sqe_index);
-		}
-	};
-	using unique_sqe_index = vsm::unique_resource<uint32_t, sqe_index_deleter>;
 
 public:
 	struct init_options
@@ -240,14 +280,14 @@ public:
 
 	class init_result
 	{
-		detail::unique_fd io_uring;
-		unique_mmapping sq_ring;
-		unique_mmapping cq_ring;
-		unique_mmapping sqes;
+		unique_fd io_uring;
+		unique_mmapping<std::byte> sq_ring;
+		unique_mmapping<std::byte> cq_ring;
+		unique_mmapping<sqe_placeholder> sqes;
 
 		struct
 		{
-			uint32_t flags;
+			io_uring_multiplexer::flags flags;
 			uint8_t sqe_multiply_shift;
 			uint8_t cqe_multiply_shift;
 			uint32_t sq_entries;
@@ -295,94 +335,96 @@ public:
 	vsm::result<statistics> pump(pump_parameters const& args) override;
 
 
-	class submit_context
+	class submission_context
 	{
 		io_uring_multiplexer* m_multiplexer;
-		async_operation_storage* m_operation;
-		uint32_t m_sq_produce_pending;
+		uint32_t m_sq_ready;
 
 	public:
-		vsm::result<void> push(auto&& initialize)
+		explicit submission_context(io_uring_multiplexer& multiplexer)
+			: m_multiplexer(&multiplexer)
+			, m_sq_ready(multiplexer.m_sq_ready)
+		{
+			vsm_assert(!has_flag(std::exchange(m_multiplexer->m_flags, m_multiplexer->m_flags | flags::submit_lock)));
+		}
+
+		submission_context(submission_context const&) = delete;
+		submission_context& operator=(submission_context const&) = delete;
+
+		~submission_context()
+		{
+			vsm_assert(has_flag(std::exchange(m_multiplexer->m_flags, m_multiplexer->m_flags & ~flags::submit_lock)));
+		}
+
+
+		async_result<void> push(io_data_ref const data, std::invocable<io_uring_sqe&> auto&& initialize)
 		{
 			vsm_try(sqe, acquire_sqe());
-
-			static_cast<decltype(initialize)&&>(initialize)(*sqe);
-			auto const sqe_view = reinterpret_cast<sqe_type const*>(sqe);
+			vsm_forward(initialize)(*sqe);
 
 			// Users are not allowed to set the user_data field.
-			vsm_assert(sqe_view->user_data == 0);
-
-			//TODO: Check which flags are safe for users.
-			static constexpr uint8_t user_flags = 0
-				| sqe_type::flag_io_link
-				| sqe_type::flag_io_hardlink
-			;
+			vsm_assert(check_sqe_user_data(*sqe) &&
+				"Use of io_uring_sqe::user_data is not allowed.");
 
 			// Users are not allowed to set certain sensitive flags.
-			vsm_assert((sqe_view->flags & ~user_flags) != 0);
+			vsm_assert(check_sqe_flags(*sqe) &&
+				"Use of some io_uring_sqe::flags is restricted.");
+
+			//TODO: Set user_data
+			//sqe->user_data = reinterpret_pointer_cast<uintptr_t>(data);
 
 			return {};
 		}
 
-		vsm::result<void> push_linked_timeout(deadline const deadline);
+		async_result<void> push_linked_timeout(deadline const deadline);
+
+		async_result<void> commit()
+		{
+			return m_multiplexer->commit_submission(m_sq_ready);
+		}
 
 	private:
-		explicit submit_context(io_uring_multiplexer& multiplexer, async_operation_storage& operation)
-			: m_multiplexer(&multiplexer)
-			, m_operation(&operation)
-			, m_sq_produce_pending(multiplexer.m_sq_produce_pending)
-		{
-			vsm_assert((std::exchange(m_multiplexer->m_flags, m_multiplexer->m_flags | submit_lock) & submit_lock) == 0);
-		}
+		static bool check_sqe_user_data(io_uring_sqe const& sqe) noexcept;
+		static bool check_sqe_flags(io_uring_sqe const& sqe) noexcept;
 
-		submit_context(submit_context const&) = delete;
-		submit_context& operator=(submit_context const&) = delete;
-
-		~submit_context()
-		{
-			vsm_assert((std::exchange(m_multiplexer->m_flags, m_multiplexer->m_flags & ~submit_lock) & submit_lock) != 0);
-		}
-
-
-		vsm::result<io_uring_sqe*> acquire_sqe();
+		async_result<io_uring_sqe*> acquire_sqe();
 
 		friend class io_uring_multiplexer;
 	};
 
-	vsm::result<void> submit(async_operation_storage& operation, auto&& submit)
+	async_result<void> record_io(std::invocable<submission_context&> auto&& record)
 	{
-		submit_context context(*this, operation);
-
-		vsm::result<void> r = static_cast<decltype(submit)&&>(submit)(context);
-
-		if (r)
-		{
-			submit_finalize(context);
-		}
-
-		return r;
+		submission_context context(*this);
+		vsm_try_void(vsm_forward(record)(context));
+		return context.commit();
 	}
 
-	vsm::result<void> push_linked_timeout();
+	async_result<void> record_io(io_data_ref const data, std::invocable<io_uring_sqe&> auto&& initialize)
+	{
+		return record_io([&](submission_context& context) -> async_result<void>
+		{
+			return context.push(data, vsm_forward(initialize));
+		});
+	}
 
+	vsm::result<void> cancel_io(io_data_ref data);
 
 private:
-	io_uring_sqe* get_sqe(uint32_t const index)
+	io_uring_sqe& get_sqe(uint32_t const index)
 	{
-		vsm_assert(index < m_sq_size); // Mask first.
-		return reinterpret_cast<io_uring_sqe*>(
-			reinterpret_cast<std::byte*>(m_sqes) + (index << m_sqe_multiply_shift));
+		vsm_assert(index < m_sq_size);
+		auto const buffer = reinterpret_cast<std::byte*>(m_sqes.get());
+		return *reinterpret_cast<io_uring_sqe*>(buffer + (index << m_sqe_multiply_shift));
 	}
 
-	io_uring_cqe* get_sqe(uint32_t const index)
+	io_uring_cqe& get_cqe(uint32_t const index)
 	{
-		vsm_assert(index < m_cq_size); // Mask first.
-		return reinterpret_cast<io_uring_cqe*>(
-			reinterpret_cast<std::byte*>(m_cqes) + (index << m_cqe_multiply_shift));
+		vsm_assert(index < m_cq_size);
+		auto const buffer = reinterpret_cast<std::byte*>(m_cqes);
+		return *reinterpret_cast<io_uring_cqe*>(buffer + (index << m_cqe_multiply_shift));
 	}
 
-
-	vsm::result<void> submit_finalize();
+	async_result<void> commit_submission(uint32_t sq_ready);
 
 	io_uring_sqe* try_acquire_sqe();
 
@@ -397,6 +439,8 @@ private:
 
 	vsm::result<void> enter(pump_mode mode, deadline deadline);
 };
+
+bool has_io_uring() noexcept;
 
 } // namespace allio::linux
 

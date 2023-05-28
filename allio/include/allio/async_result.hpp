@@ -15,6 +15,7 @@ struct sync_error_parameter
 
 } // namespace detail
 
+
 class async_error_code
 {
 	int m_value;
@@ -53,12 +54,21 @@ public:
 };
 
 template<typename T>
-detail::sync_error_parameter<T&&> sync_error(T&& value)
+using async_result = vsm::result<T, async_error_code>;
+
+
+template<typename T>
+vsm::unexpected<detail::sync_error_parameter<T&&>> sync_error(T&& value)
 {
-	return { static_cast<T&&>(value) };
+	return vsm::unexpected<detail::sync_error_parameter<T&&>>(static_cast<T&&>(value));
 }
 
 template<typename T>
-using async_result = vsm::result<T, async_error_code>;
+async_result<T> sync_result(vsm::result<T>&& result)
+{
+	return result
+		? async_result<T>(vsm_move(result).value())
+		: async_result<T>(sync_error(result.error()));
+}
 
 } // namespace allio

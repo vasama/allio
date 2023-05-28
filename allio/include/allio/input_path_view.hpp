@@ -29,6 +29,11 @@ struct input_path_view : input_string_view
 	{
 	}
 
+	[[nodiscard]] constexpr basic_path_view<char> utf8_path() const
+	{
+		return basic_path_view<char>(utf8_view());
+	}
+
 
 	constexpr input_path_view(basic_path_literal<wchar_t> const path)
 		: input_string_view(path.data(), path.size(), true)
@@ -43,6 +48,11 @@ struct input_path_view : input_string_view
 	constexpr input_path_view(basic_path<wchar_t> const& path)
 		: input_string_view(path.string(), true)
 	{
+	}
+
+	[[nodiscard]] constexpr basic_path_view<wchar_t> wide_path() const
+	{
+		return basic_path_view<wchar_t>(wide_view());
 	}
 };
 

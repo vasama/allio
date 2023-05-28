@@ -90,6 +90,12 @@ enum class path_kind : uint32_t
 };
 vsm_flag_enum(path_kind);
 
+struct input_path
+{
+	filesystem_handle const* base;
+	input_path_view path;
+};
+
 
 class filesystem_handle : public platform_handle
 {

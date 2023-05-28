@@ -2,7 +2,7 @@
 
 using namespace allio;
 
-vsm::result<unique_socket> allio::create_socket(int const address_family, flags const handle_flags)
+vsm::result<unique_socket_with_flags> allio::create_socket(int const address_family, common_socket_handle::create_parameters const& args)
 {
 	int protocol = 0;
 
@@ -21,10 +21,10 @@ vsm::result<unique_socket> allio::create_socket(int const address_family, flags 
 		return vsm::unexpected(get_last_socket_error());
 	}
 
-	return vsm::result<unique_socket>(vsm::result_value, socket);
+	return vsm::result<unique_socket_with_flags>(vsm::result_value, socket, handle_flags::none);
 }
 
-vsm::result<unique_socket> allio::accept_socket(socket_type const listen_socket, socket_address& addr, socket_parameters const& create_args)
+vsm::result<unique_socket_with_flags> allio::accept_socket(socket_type const listen_socket, socket_address& addr, listen_socket_handle::accept_parameters const& args)
 {
 	socket_type const socket = ::accept(socket, &addr.addr, &addr.size);
 
@@ -33,5 +33,5 @@ vsm::result<unique_socket> allio::accept_socket(socket_type const listen_socket,
 		return vsm::unexpected(get_last_socket_error());
 	}
 
-	return vsm::result<unique_socket>(vsm::result_value, socket);
+	return vsm::result<unique_socket_with_flags>(vsm::result_value, socket, handle_flags::none);
 }

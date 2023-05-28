@@ -3,22 +3,35 @@
 #include <allio/impl/linux/api_string.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/filesystem_handle.hpp>
+#include <allio/impl/linux/timeout.hpp>
 
+#include <vsm/lazy.hpp>
 #include <vsm/utility.hpp>
 
 #include <algorithm>
 #include <thread>
 #include <vector>
 
+#include <linux/sched.h>
 #include <poll.h>
+#include <sched.h>
+#include <sys/socket.h>
 #include <sys/syscall.h>
 #include <sys/wait.h>
-#include <spawn.h>
+
+// This header breaks <sys/wait.h>
+#include <linux/wait.h>
 
 #include <allio/linux/detail/undef.i>
 
 using namespace allio;
 using namespace allio::linux;
+
+static pid_t clone3(clone_args* const cl_args, size_t const size)
+{
+	return static_cast<pid_t>(syscall(SYS_clone3, cl_args, size));
+}
+
 
 vsm::result<unique_fd> linux::open_process(pid_t const pid)
 {
@@ -83,11 +96,12 @@ static system_result<void> send_result(int const socket, system_result<raw_proce
 	case static_cast<ssize_t>(-1):
 		return vsm::unexpected(get_last_error());
 
-	default:
-		return vsm::unexpected(/*TBD*/);
-
 	case static_cast<ssize_t>(sizeof(message)):
 		break;
+
+	default:
+		vsm_assert(false && "Communication failure on a local socket.");
+		return vsm::unexpected(static_cast<system_error>(ENOTRECOVERABLE));
 	}
 
 	return {};
@@ -117,11 +131,12 @@ static system_result<raw_process_info> recv_result(int const socket)
 	case static_cast<ssize_t>(-1):
 		return vsm::unexpected(get_last_error());
 
-	default:
-		return vsm::unexpected(/*TBD*/);
-
 	case static_cast<ssize_t>(sizeof(message)):
 		break;
+
+	default:
+		vsm_assert(false && "Communication failure on a local socket.");
+		return vsm::unexpected(static_cast<system_error>(ENOTRECOVERABLE));
 	}
 
 	if (message.error != system_error::none)
@@ -135,7 +150,8 @@ static system_result<raw_process_info> recv_result(int const socket)
 		control_header->cmsg_type != SCM_RIGHTS ||
 		control_header->cmsg_len != CMSG_LEN(sizeof(int)))
 	{
-		return vsm::unexpected(/*TBD*/);
+		vsm_assert(false && "Communication failure on a local socket.");
+		return vsm::unexpected(static_cast<system_error>(ENOTRECOVERABLE));
 	}
 
 	int pid_fd;
@@ -159,8 +175,8 @@ struct create_process_parameters
 	int exec_base;
 	int exec_flags;
 	char const* exec_path;
-	char const* const* exec_argv;
-	char const* const* exec_envp;
+	char* const* exec_argv;
+	char* const* exec_envp;
 
 	int wdir_base;
 	char const* wdir_path;
@@ -198,7 +214,7 @@ static system_result<stream_pair<int>> create_pipe_pair()
 	{
 		return vsm::unexpected(get_last_error());
 	}
-	return system_result<stream_pair>(vsm::result_value, fds[0], fds[1]);
+	return system_result<stream_pair<int>>(vsm::result_value, fds[0], fds[1]);
 }
 
 static system_result<raw_process_info> create_target_process(create_process_parameters const& args)
@@ -216,7 +232,7 @@ static system_result<raw_process_info> create_target_process(create_process_para
 	if (target_pid == 0)
 	{
 		system_error const exec_error = exec_target_process(args);
-		exit_process(write(pipe.write.get(), &exec_error, sizeof(exec_error)) != sizeof(exec_error));
+		exit_process(write(pipe.write, &exec_error, sizeof(exec_error)) != sizeof(exec_error));
 	}
 
 	if (target_pid == -1)
@@ -229,7 +245,7 @@ static system_result<raw_process_info> create_target_process(create_process_para
 		return vsm::unexpected(get_last_error());
 	}
 
-	switch (system_error exec_error; read(pipe.read.get(), &exec_error, sizeof(exec_error)))
+	switch (system_error exec_error; read(pipe.read, &exec_error, sizeof(exec_error)))
 	{
 	case static_cast<ssize_t>(-1):
 		if (system_error const pipe_error = get_last_error(); pipe_error != static_cast<system_error>(EPIPE))
@@ -242,7 +258,8 @@ static system_result<raw_process_info> create_target_process(create_process_para
 		return vsm::unexpected(exec_error);
 
 	default:
-		return vsm::unexpected(/*TBD*/);
+		vsm_assert(false && "Communication failure on a local socket.");
+		return vsm::unexpected(static_cast<system_error>(ENOTRECOVERABLE));
 	}
 
 	return raw_process_info
@@ -259,7 +276,7 @@ static system_result<stream_pair<unique_fd>> create_socket_pair()
 	{
 		return vsm::unexpected(get_last_error());
 	}
-	return vsm::result<socket_pair>(vsm::result_value, fds[0], fds[1]);
+	return system_result<stream_pair<unique_fd>>(vsm::result_value, unique_fd(fds[0]), unique_fd(fds[1]));
 }
 
 static system_result<raw_process_info> create_orphan_process(create_process_parameters const& args)
@@ -273,7 +290,7 @@ static system_result<raw_process_info> create_orphan_process(create_process_para
 
 	if (helper_pid == 0)
 	{
-		exit_process(send_result(sockets.write.get(), create_target_process(args)));
+		exit_process(send_result(sockets.write.get(), create_target_process(args)).has_value());
 	}
 
 	if (helper_pid == -1)
@@ -285,23 +302,19 @@ static system_result<raw_process_info> create_orphan_process(create_process_para
 	{
 		return vsm::unexpected(get_last_error());
 	}
-	else if (wait_status != 0)
+	else if (wait_status != EXIT_SUCCESS)
 	{
-		if (wait_status == 1)
-		{
-			return vsm::unexpected(/*TBD*/);
-		}
-		else
-		{
-			return vsm::unexpected(/*TBD*/);
-		}
+		vsm_assert(false && "Communication failure on a local socket.");
+		return vsm::unexpected(static_cast<system_error>(ENOTRECOVERABLE));
 	}
 
 	return recv_result(sockets.read.get());
 }
 
 
-vsm::result<process_info> linux::launch_process(filesystem_handle const* const base, path_view const path, process_handle::launch_parameters const& args)
+vsm::result<process_info> linux::launch_process(
+	filesystem_handle const* const base, input_path_view const path,
+	process_handle::launch_parameters const& args)
 {
 	create_process_parameters create_args =
 	{
@@ -313,19 +326,30 @@ vsm::result<process_info> linux::launch_process(filesystem_handle const* const b
 	};
 
 	unique_fd exec_fd;
+	api_string_storage wdir_path_storage;
+
 	if (args.working_directory)
 	{
-		auto const& wdir = *args.working_directory;
+		input_path const& wdir = *args.working_directory;
+
 		if (wdir.base != nullptr || !wdir.path.empty())
 		{
-			if (base == nullptr && path.is_relative())
+			// If the executable path is relative its meaning
+			// will change with change of working directory.
+			if (base == nullptr && path.utf8_path().is_relative())
 			{
-				vsm_try_assign(exec_fd, create_file(base, path, ));
+				open_parameters const open_args =
+				{
+					.flags = O_DIRECTORY | O_CLOEXEC,
+					.mode = O_RDONLY,
+				};
+				vsm_try_assign(exec_fd, create_file(base, path, open_args));
+
 				create_args.exec_base = exec_fd.get();
 				create_args.exec_flags |= AT_EMPTY_PATH;
 			}
 
-			if (wdir.base != nullptr && wdir.path.is_relative())
+			if (wdir.base != nullptr && wdir.path.utf8_path().is_relative())
 			{
 				create_args.wdir_base = unwrap_handle(wdir.base->get_platform_handle());
 			}
@@ -337,28 +361,37 @@ vsm::result<process_info> linux::launch_process(filesystem_handle const* const b
 	{
 		if (!exec_fd)
 		{
-			create_args.exec_path = context(path);
+			create_args.exec_path = context(path).data();
 		}
 
-		if (args.arguments)
+		if (!args.arguments.empty())
 		{
-			create_args.exec_argv = context(args.arguments);
+			create_args.exec_argv = const_cast<char* const*>(context(args.arguments));
 		}
 
-		if (args.environment)
+		if (!args.environment.empty())
 		{
-			create_args.exec_envp = context(args.environment);
+			create_args.exec_envp = const_cast<char* const*>(context(args.environment));
 		}
 
 		if (args.working_directory)
 		{
-			create_args.wdir_path = context(args.working_directory);
+			create_args.wdir_path = context(args.working_directory->path).data();
 		}
 	}));
 
 	vsm_try(process, create_orphan_process(create_args));
 
-	return vsm::result<process_info>(vsm::result_value, process.pid_fd, static_cast<process_id>(process.pid));
+//	return vsm::result<process_info>(
+//		vsm::result_value,
+//		unique_fd(process.pid_fd),
+//		static_cast<process_id>(process.pid));
+
+	return vsm_lazy(process_info
+	{
+		.pid_fd = unique_fd(process.pid_fd),
+		.pid = static_cast<process_id>(process.pid),
+	});
 }
 
 #if 0
@@ -436,158 +469,171 @@ vsm::result<unique_child_pid> linux::launch_process(path_view const path, proces
 #endif
 
 
-vsm::result<void> detail::process_handle_base::do_close_sync()
+vsm::result<void> detail::process_handle_base::close_sync(basic_parameters const& args)
 {
-	vsm_assert(*this);
-	if (static_cast<platform_handle const&>(*this))
+	if (!get_flags()[flags::current])
 	{
-		vsm_try_void(platform_handle::do_close_sync());
+		vsm_try_void(platform_handle::close_sync(args));
 	}
-	if ((m_flags & impl_flags::requires_wait) != process_flags::none)
-	{
-		vsm_try_void(close_child_pid(m_pid.value));
-		m_flags.value &= ~impl_flags::requires_wait;
-	}
+
 	m_exit_code.reset();
 	m_pid.reset();
-	m_flags.reset();
+
 	return {};
 }
 
 process_handle detail::process_handle_base::current()
 {
-	return process_handle(native_handle_type
+	static native_handle_type const native =
 	{
+		platform_handle::native_handle_type
 		{
+			handle::native_handle_type
 			{
-				process_handle::flags::current
+				handle_flags(flags::not_null) | flags::current,
 			},
 			native_platform_handle::null,
 		},
 		static_cast<process_id>(getpid()),
-	});
+	};
+
+	process_handle h;
+	vsm_verify(h.set_native_handle(native));
+	return h;
 }
 
 
-template<>
-struct synchronous_operation_implementation<process_handle, io::process_open>
+vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_result<io::process_open> const& args)
 {
-	static vsm::result<void> execute(io::parameters_with_result<io::process_open> const& args)
+	process_handle& h = *args.handle;
+
+	if (h)
 	{
-		process_handle& h = *args.handle;
-
-		if (h)
-		{
-			return vsm::unexpected(error::handle_is_not_null);
-		}
-
-		vsm_try(fd, linux::open_process(pid));
-		return consume_platform_handle(h, {}, vsm_move(fd), pid);
+		return vsm::unexpected(error::handle_is_not_null);
 	}
-};
 
-template<>
-struct synchronous_operation_implementation<process_handle, io::process_launch>
-{
-	static vsm::result<void> execute(io::parameters_with_result<io::process_launch> const& args)
-	{
-		process_handle& h = *args.handle;
+	vsm_try(fd, linux::open_process(args.pid));
 
-		if (!h)
+	return initialize_platform_handle(h, vsm_move(fd),
+		[&](native_platform_handle const handle)
 		{
-			return vsm::unexpected(error::handle_is_null);
-		}
-
-		vsm_try(pid, linux::launch_process(path, args));
-		vsm_try(fd, linux::open_process(pid.get()));
-		return vsm::consume_resources([&](pid_t const pid)
-		{
-			return consume_platform_handle(h, {}, vsm_move(fd), pid, impl_flags::requires_wait);
-		}, vsm_move(pid));
-	}
-};
-
-template<>
-struct synchronous_operation_implementation<process_handle, io::process_wait>
-{
-	static vsm::result<void> execute(io::parameters_with_result<io::process_wait> const& args)
-	{
-		process_handle& h = *args.handle;
-
-		if (!h)
-		{
-			return vsm::unexpected(error::handle_is_null);
-		}
-
-		if (h.is_current())
-		{
-			return vsm::unexpected(error::process_is_current_process);
-		}
-
-		if ((h.m_flags.value & process_flags::exited) == process_flags::none)
-		{
-			int const fd = unwrap_handle(h.get_platform_handle());
-			int wait_options = WEXITED | WSTOPPED;
-
-			if (a.deadline != deadline::never())
+			return process_handle::native_handle_type
 			{
-				if (a.deadline != deadline::instant())
+				platform_handle::native_handle_type
 				{
-					// Use of poll is required in order to specify a timeout.
-
-					vsm_try_void([&]() -> vsm::result<void>
+					handle::native_handle_type
 					{
-						pollfd pfd =
-						{
-							.fd = fd,
-							.events = EPOLLIN,
-						};
+						flags::not_null,
+					},
+					handle,
+				},
+				args.pid,
+			};
+		}
+	);
+}
 
-						int const r = ppoll(&pfd, 1, kernel_timespec(a.deadline), nullptr);
+vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_result<io::process_launch> const& args)
+{
+	process_handle& h = *args.handle;
 
-						if (r == 0)
-						{
-							return vsm::unexpected(error::async_operation_timed_out);
-						}
+	if (!h)
+	{
+		return vsm::unexpected(error::handle_is_null);
+	}
 
-						if (r < 0)
-						{
-							return vsm::unexpected(get_last_error());
-						}
+	vsm_try_bind((fd, pid), linux::launch_process(args.base, args.path, args));
 
-						vsm_assert(pfd.revents == EPOLLIN);
-						return {};
-					}());
-				}
-
-				wait_options |= WNOHANG;
-			}
-
-			allio_TRYS((id_type, id), [&]() -> std::tuple<idtype_t, id_t>
+	return initialize_platform_handle(h, vsm_move(fd),
+		[&](native_platform_handle const handle)
+		{
+			return process_handle::native_handle_type
 			{
-				if ((h.m_flags.value & impl_flags::requires_wait) != process_flags::none)
+				platform_handle::native_handle_type
 				{
-					return { P_PID, h.m_pid.value };
-				}
+					handle::native_handle_type
+					{
+						flags::not_null,
+					},
+					handle,
+				},
+				pid,
+			};
+		}
+	);
+}
 
-				return { P_PIDFD, fd };
-			}());
+vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_result<io::process_wait> const& args)
+{
+	process_handle& h = *args.handle;
 
-			siginfo_t siginfo = {};
-			if (waitid(id_type, id, &siginfo, wait_options) == -1)
+	if (!h)
+	{
+		return vsm::unexpected(error::handle_is_null);
+	}
+
+	if (h.is_current())
+	{
+		return vsm::unexpected(error::process_is_current_process);
+	}
+
+	if (!h.get_flags()[flags::exited])
+	{
+		int const fd = unwrap_handle(h.get_platform_handle());
+		int wait_options = WEXITED | WSTOPPED;
+
+		if (args.deadline != deadline::never())
+		{
+			if (args.deadline != deadline::instant())
 			{
-				return vsm::unexpected(get_last_error());
+				// Use of poll is required in order to specify a timeout.
+
+				vsm_try_void([&]() -> vsm::result<void>
+				{
+					pollfd pfd =
+					{
+						.fd = fd,
+						.events = POLLIN,
+					};
+
+					int const r = ppoll(&pfd, 1, kernel_timeout<timespec>(args.deadline), nullptr);
+
+					if (r == 0)
+					{
+						return vsm::unexpected(error::async_operation_timed_out);
+					}
+
+					if (r < 0)
+					{
+						return vsm::unexpected(get_last_error());
+					}
+
+					vsm_assert(pfd.revents == POLLIN);
+
+					return {};
+				}());
 			}
 
-			h.m_flags.value &= ~impl_flags::requires_wait;
-			h.m_flags.value |= process_flags::exited;
-
-			h.m_exit_code.value = siginfo.si_code == CLD_EXITED ? siginfo.si_status : 0;
+			wait_options |= WNOHANG;
 		}
 
-		*args.result = h.m_exit_code.value;
-		return {};
+		static constexpr auto id_pidfd = static_cast<idtype_t>(P_PIDFD);
+
+		siginfo_t siginfo = {};
+		if (waitid(id_pidfd, h.m_pid.value, &siginfo, wait_options) == -1)
+		{
+			return vsm::unexpected(get_last_error());
+		}
+
+		h.set_flags(h.get_flags() | flags::exited);
+
+		//TODO: Exit code for stopped processes?
+		h.m_exit_code.value = siginfo.si_code == CLD_EXITED ? siginfo.si_status : 0;
 	}
-};
+
+	*args.result = h.m_exit_code.value;
+
+	return {};
+}
 
 allio_handle_implementation(process_handle);

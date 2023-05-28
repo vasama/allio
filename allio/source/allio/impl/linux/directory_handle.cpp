@@ -48,7 +48,7 @@ vsm::result<void> this_process::set_current_directory(input_path_view const path
 	}
 
 	api_string_storage storage;
-	vsm_try(c_string, make_api_string(storage, path));
+	vsm_try(c_string, make_api_c_string(storage, path));
 
 	if (chdir(c_string) == -1)
 	{

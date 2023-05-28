@@ -1,8 +1,7 @@
 #pragma once
 
 #include <allio/detail/api.hpp>
-#include <allio/input_path_view.hpp>
-#include <allio/platform_handle.hpp>
+#include <allio/filesystem_handle.hpp>
 
 #include <vsm/flags.hpp>
 #include <vsm/linear.hpp>
@@ -69,7 +68,7 @@ public:
 		allio_platform_handle_create_parameters(__VA_ARGS__, __VA_ARGS__) \
 		data(::std::span<::allio::input_string_view const>, arguments) \
 		data(::std::span<::allio::input_string_view const>, environment) \
-		data(::std::optional<::allio::input_path_view>, working_directory) \
+		data(::std::optional<::allio::input_path>, working_directory) \
 
 	allio_interface_parameters(allio_process_handle_launch_parameters);
 
@@ -113,7 +112,13 @@ public:
 	template<parameters<launch_parameters> Parameters = launch_parameters::interface>
 	vsm::result<void> launch(input_path_view const path, Parameters const& args = {})
 	{
-		return block_launch(path, args);
+		return block_launch(nullptr, path, args);
+	}
+
+	template<parameters<launch_parameters> Parameters = launch_parameters::interface>
+	vsm::result<void> launch(filesystem_handle const& base, input_path_view const path, Parameters const& args = {})
+	{
+		return block_launch(&base, path, args);
 	}
 
 	template<parameters<wait_parameters> Parameters = wait_parameters::interface>
@@ -141,7 +146,7 @@ public:
 
 protected:
 	vsm::result<void> block_open(process_id pid, open_parameters const& args);
-	vsm::result<void> block_launch(input_path_view path, launch_parameters const& args);
+	vsm::result<void> block_launch(filesystem_handle const* base, input_path_view path, launch_parameters const& args);
 	vsm::result<process_exit_code> block_wait(wait_parameters const& args);
 
 	vsm::result<void> close_sync(basic_parameters const& args);
@@ -190,6 +195,7 @@ struct io::parameters<io::process_launch>
 	using handle_type = process_handle;
 	using result_type = void;
 
+	filesystem_handle const* base;
 	input_path_view path;
 };
 

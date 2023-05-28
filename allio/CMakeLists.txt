@@ -17,6 +17,7 @@ find_package(vsm-box REQUIRED)
 find_package(vsm-core REQUIRED)
 find_package(vsm-flags REQUIRED)
 find_package(vsm-linear REQUIRED)
+find_package(vsm-intrusive REQUIRED)
 find_package(vsm-result REQUIRED)
 find_package(vsm-tag_ptr REQUIRED)
 find_package(vsm-unique_resource REQUIRED)
@@ -118,6 +119,7 @@ vsm_add_library(allio
 		vsm::core
 		vsm::flags
 		vsm::linear
+		vsm::intrusive
 		vsm::result
 		vsm::tag_ptr
 		vsm::unique_resource
@@ -193,7 +195,7 @@ vsm_target_platform_sources(allio Linux
 	source/allio/impl/linux/posix_socket.hpp
 	source/allio/impl/linux/process_handle.cpp
 	source/allio/impl/linux/process_handle.hpp
-	source/allio/impl/linux/sync_byte_io.hpp
+	source/allio/impl/linux/sync_byte_io.cpp
 	source/allio/impl/linux/sync_filesystem_handle.hpp
 	source/allio/impl/linux/timeout.hpp
 	source/allio/impl/linux/unique_fd.cpp

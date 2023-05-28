@@ -168,19 +168,18 @@ public:
 	vsm::result<statistics> pump(pump_parameters const& args) override;
 
 
-	// Attempt to cancel a pending I/O operation described by handle and slot.
-	// A completion event is queued regardless of whether the operation was cancelled.
+	/// @brief Attempt to cancel a pending I/O operation described by handle and slot.
+	/// @note A completion event is queued regardless of whether the operation was cancelled.
 	vsm::result<void> cancel_io(io_slot& slot, native_platform_handle handle);
 
-
-	// Start a wait operation on the specified slot and handle, as if by WaitForSingleObject.
-	// Returns true if the handle was already in a signaled state.
-	// If the function returns true, no completion event is produced for this operation.
+	/// @brief Start a wait operation on the specified slot and handle, as if by WaitForSingleObject.
+	/// @return True if the handle was already in a signaled state.
+	/// @post If the function returns true, no completion event is produced for this operation.
 	vsm::result<bool> start_wait(wait_slot& slot, native_platform_handle handle);
 
-	// Cancel a wait operation started on the specified slot.
-	// Returns true if the operation was cancelled before its completion.
-	// If the function returns true, no completion event is produced for this operation.
+	/// @brief Cancel a wait operation started on the specified slot.
+	/// @return True if the operation was cancelled before its completion.
+	/// @post If the function returns true, no completion event is produced for this operation.
 	vsm::result<bool> cancel_wait(wait_slot& slot);
 
 

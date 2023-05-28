@@ -7,7 +7,9 @@
 using namespace allio;
 using namespace allio::win32;
 
-static vsm::result<size_t> sync_scatter_gather_io(platform_handle const& h, io::scatter_gather_parameters const& args, decltype(win32::NtReadFile) const syscall)
+static vsm::result<size_t> sync_scatter_gather_io(
+	platform_handle const& h, io::scatter_gather_parameters const& args,
+	decltype(win32::NtReadFile) const syscall)
 {
 	if (!h)
 	{

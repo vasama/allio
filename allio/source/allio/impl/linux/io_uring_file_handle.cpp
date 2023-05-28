@@ -11,4 +11,4 @@
 using namespace allio;
 using namespace allio::linux;
 
-allio_handle_multiplexer_implementation(io_uring_multiplexer, file_handle);
+allio_handle_multiplexer_implementation(io_uring_multiplexer, allio::file_handle);

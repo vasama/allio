@@ -4,6 +4,8 @@
 #include <allio/platform_handle.hpp>
 #include <allio/linux/platform.hpp>
 
+#include <allio/impl/linux/error.hpp>
+
 #include <sys/uio.h>
 
 #include <allio/linux/detail/undef.i>
@@ -22,15 +24,17 @@ struct synchronous_operation_implementation<Handle, io::scatter_read_at>
 			return vsm::unexpected(error::handle_is_null);
 		}
 
+		auto const buffers = args.buffers.buffers();
+
 		int const result = preadv(
-			unwrap_handle(h.get_platform_handle()),
-			reinterpret_cast<iovec const*>(args.buffers.data()),
-			static_cast<int>(args.buffers.size()),
+			linux::unwrap_handle(h.get_platform_handle()),
+			reinterpret_cast<iovec const*>(buffers.data()),
+			static_cast<int>(buffers.size()),
 			args.offset);
 
 		if (result == -1)
 		{
-			return vsm::unexpected(get_last_error());
+			return vsm::unexpected(linux::get_last_error());
 		}
 
 		*args.result = static_cast<size_t>(result);
@@ -50,15 +54,17 @@ struct synchronous_operation_implementation<Handle, io::gather_write_at>
 			return vsm::unexpected(error::handle_is_null);
 		}
 
+		auto const buffers = args.buffers.buffers();
+
 		int const result = pwritev(
-			unwrap_handle(h.get_platform_handle()),
-			reinterpret_cast<iovec const*>(args.buffers.data()),
-			static_cast<int>(args.buffers.size()),
+			linux::unwrap_handle(h.get_platform_handle()),
+			reinterpret_cast<iovec const*>(buffers.data()),
+			static_cast<int>(buffers.size()),
 			args.offset);
 
 		if (result == -1)
 		{
-			return vsm::unexpected(get_last_error());
+			return vsm::unexpected(linux::get_last_error());
 		}
 
 		*args.result = static_cast<size_t>(result);

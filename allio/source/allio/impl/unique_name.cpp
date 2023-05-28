@@ -1,5 +1,6 @@
 #include <allio/impl/unique_name.hpp>
 
+#include <cstdint>
 #include <cstdlib>
 
 using namespace allio;

@@ -550,9 +550,9 @@ process_handle detail::process_handle_base::current()
 		static_cast<process_id>(GetCurrentProcessId()),
 	};
 
-	process_handle process;
-	vsm_verify(process.set_native_handle(native));
-	return process;
+	process_handle h;
+	vsm_verify(h.set_native_handle(native));
+	return h;
 }
 
 vsm::result<void> detail::process_handle_base::close_sync(basic_parameters const& args)
@@ -583,6 +583,7 @@ vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_res
 	}
 
 	vsm_try(process, win32::open_process(args.pid, args));
+
 	return initialize_platform_handle(h, vsm_move(process),
 		[&](native_platform_handle const handle)
 		{
@@ -611,8 +612,9 @@ vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_res
 		return vsm::unexpected(error::handle_is_not_null);
 	}
 
-	vsm_try(process, win32::launch_process(args.path, args));
-	return initialize_platform_handle(h, vsm_move(process.handle),
+	vsm_try_bind((process, pid), win32::launch_process(args.path, args));
+
+	return initialize_platform_handle(h, vsm_move(process),
 		[&](native_platform_handle const handle)
 		{
 			return process_handle::native_handle_type
@@ -625,7 +627,7 @@ vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_res
 					},
 					handle,
 				},
-				process.pid,
+				pid,
 			};
 		}
 	);

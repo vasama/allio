@@ -1,18 +1,25 @@
 #pragma once
 
+#include <vsm/assert.h>
+#include <vsm/result.hpp>
+#include <vsm/standard.hpp>
 #include <vsm/unique_resource.hpp>
 
-namespace allio::detail {
+#include <allio/linux/detail/undef.i>
+
+namespace allio::linux {
+
+vsm::result<void> close_fd(int fd) noexcept;
 
 struct fd_deleter
 {
-	static void release(int fd);
-
-	void operator()(int const fd) const
+	void vsm_static_operator_invoke(int const fd) noexcept
 	{
-		release(fd);
+		vsm_verify(close_fd(fd));
 	}
 };
 using unique_fd = vsm::unique_resource<int, fd_deleter, static_cast<int>(-1)>;
 
-} // namespace allio::detail
+} // namespace allio::linux
+
+#include <allio/linux/detail/undef.i>

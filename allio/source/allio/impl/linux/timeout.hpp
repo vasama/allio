@@ -10,17 +10,19 @@ Timespec make_timespec(deadline const deadline)
 	vsm_assert(deadline.is_relative());
 	auto const duration = deadline.relative();
 
-	Timespec timespec;
-	timespec.tv_sec = std::chrono::duration_cast<std::chrono::duration<uint64_t>>(duration).count();
-	timespec.tv_nsec = std::chrono::duration_cast<std::chrono::duration<uint64_t, std::nano>>(duration).count();
-	return timespec;
+	return Timespec
+	{
+		//TODO: Deal with the narrowing conversions.
+		.tv_sec = std::chrono::duration_cast<std::chrono::duration<uint64_t>>(duration).count(),
+		.tv_nsec = std::chrono::duration_cast<std::chrono::duration<uint64_t, std::nano>>(duration).count(),
+	};
 }
 
 template<typename Timespec>
 class kernel_timeout
 {
 	Timespec m_timespec;
-	Timespec const* m_p_timespec;
+	Timespec* m_p_timespec;
 
 public:
 	kernel_timeout()
@@ -32,6 +34,9 @@ public:
 	{
 		set(deadline);
 	}
+
+	kernel_timeout(kernel_timeout const&) = delete;
+	kernel_timeout& operator=(kernel_timeout const&) = delete;
 
 	Timespec* get()
 	{
@@ -58,7 +63,7 @@ public:
 			}
 			else
 			{
-				m_timespec = make_timespec<Timespec>();
+				m_timespec = make_timespec<Timespec>(deadline);
 			}
 			m_p_timespec = &m_timespec;
 		}
@@ -85,6 +90,6 @@ public:
 	{
 		return m_p_timespec;
 	}
-}
+};
 
 } // namespace allio

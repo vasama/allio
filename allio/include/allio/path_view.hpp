@@ -297,7 +297,11 @@ public:
 	}
 
 
-	friend constexpr bool lexically_equivalent(basic_path_view lhs, basic_path_view rhs);
+	friend constexpr bool lexically_equivalent(basic_path_view lhs, basic_path_view rhs)
+	{
+		//TODO: Implement lexically_equivalent
+		return false;
+	}
 
 private:
 	static constexpr bool equal(basic_path_view lhs, basic_path_view rhs);

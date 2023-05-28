@@ -5,6 +5,8 @@
 
 #include <type_traits>
 
+#include <cstdint>
+
 namespace allio::detail {
 
 inline size_t alloca_size(storage_requirements const& requirements)
@@ -21,8 +23,7 @@ inline storage_ptr alloca_data(storage_requirements const& requirements, void* c
 template<typename Callback>
 std::invoke_result_t<Callback&&, storage_ptr> with_alloca(storage_requirements const& requirements, Callback&& callback)
 {
-	return static_cast<Callback&&>(callback)(
-		alloca_data(requirements, vsm_alloca(alloca_size(requirements))));
+	return static_cast<Callback&&>(callback)(alloca_data(requirements, vsm_alloca(alloca_size(requirements))));
 }
 
 } // namespace allio::detail

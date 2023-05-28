@@ -1,10 +1,19 @@
 #include <allio/linux/detail/unique_fd.hpp>
 
+#include <allio/impl/linux/error.hpp>
+
 #include <unistd.h>
 
-using namespace allio;
+#include <allio/linux/detail/undef.i>
 
-void detail::fd_deleter::release(int const fd)
+using namespace allio;
+using namespace allio::linux;
+
+vsm::result<void> linux::close_fd(int const fd) noexcept
 {
-	vsm_verify(::close(fd) != -1);
+	if (::close(fd) == -1)
+	{
+		return vsm::unexpected(get_last_error());
+	}
+	return {};
 }

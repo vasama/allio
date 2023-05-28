@@ -1,14 +1,14 @@
-#include "filesystem_handle.hpp"
+#include <allio/impl/linux/filesystem_handle.hpp>
 
-#include "api_string.hpp"
-#include "error.hpp"
+#include <allio/impl/linux/api_string.hpp>
+#include <allio/impl/linux/error.hpp>
 
 #include <allio/linux/detail/undef.i>
 
 using namespace allio;
 using namespace allio::linux;
 
-vsm::result<open_parameters> open_parameters::make(file_parameters const& args)
+vsm::result<open_parameters> open_parameters::make(filesystem_handle::open_parameters const& args)
 {
 	int flags = O_CLOEXEC;
 	mode_t mode = 0;
@@ -19,12 +19,12 @@ vsm::result<open_parameters> open_parameters::make(file_parameters const& args)
 		break;
 
 	case file_mode::read:
-	case file_mode::attr_read:
+	case file_mode::read_attributes:
 		flags |= O_RDONLY;
 		break;
 
 	case file_mode::write:
-	case file_mode::attr_write:
+	case file_mode::write_attributes:
 		flags |= O_RDWR;
 		break;
 
@@ -56,19 +56,20 @@ vsm::result<open_parameters> open_parameters::make(file_parameters const& args)
 	return open_parameters{ flags, mode };
 }
 
-vsm::result<unique_fd> linux::create_file(filesystem_handle const* const base, path_view const path, file_parameters const& args)
+vsm::result<unique_fd> linux::create_file(
+	filesystem_handle const* const base, input_path_view const path,
+	open_parameters const args)
 {
-	vsm_try(open_args, open_parameters::make(args));
-
-	vsm_try(path_string, api_string::make(path));
+	api_string_storage path_storage;
+	vsm_try(path_string, make_api_c_string(path_storage, path));
 
 	int const result = openat(
 		base != nullptr
 			? unwrap_handle(base->get_platform_handle())
 			: AT_FDCWD,
-		path_string.data(),
-		open_args.flags,
-		open_args.mode);
+		path_string,
+		args.flags,
+		args.mode);
 
 	if (result == -1)
 	{
@@ -76,4 +77,12 @@ vsm::result<unique_fd> linux::create_file(filesystem_handle const* const base, p
 	}
 
 	return vsm::result<unique_fd>(vsm::result_value, result);
+}
+
+vsm::result<unique_fd> linux::create_file(
+	filesystem_handle const* const base, input_path_view const path,
+	filesystem_handle::open_parameters const& args)
+{
+	vsm_try(open_args, open_parameters::make(args));
+	return create_file(base, path, open_args);
 }

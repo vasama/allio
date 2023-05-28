@@ -1,6 +1,7 @@
 #include <allio/impl/linux/platform_handle.hpp>
 
 #include <allio/impl/linux/error.hpp>
+#include <allio/linux/detail/unique_fd.hpp>
 
 #include <unistd.h>
 
@@ -9,13 +10,10 @@
 using namespace allio;
 using namespace allio::linux;
 
-vsm::result<void> platform_handle::close_sync()
+vsm::result<void> platform_handle::close_sync(basic_parameters const& args)
 {
 	vsm_assert(m_native_handle.value != native_platform_handle::null);
-	if (::close(unwrap_handle(m_native_handle.value)) == -1)
-	{
-		return vsm::unexpected(get_last_error());
-	}
+	vsm_try_void(close_fd(unwrap_handle(m_native_handle.value)));
 	m_native_handle = native_platform_handle::null;
 	return {};
 }

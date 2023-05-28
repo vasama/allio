@@ -8,7 +8,7 @@
 namespace allio {
 
 template<std::derived_from<platform_handle> Handle>
-struct allio::multiplexer_handle_implementation<win32::iocp_multiplexer, Handle>
+struct multiplexer_handle_implementation<win32::iocp_multiplexer, Handle>
 {
 	static vsm::result<void> register_handle(win32::iocp_multiplexer& m, Handle const& h)
 	{
@@ -22,7 +22,7 @@ struct allio::multiplexer_handle_implementation<win32::iocp_multiplexer, Handle>
 };
 
 template<std::derived_from<platform_handle> Handle>
-struct allio::multiplexer_handle_operation_implementation<win32::iocp_multiplexer, Handle, io::close>
+struct multiplexer_handle_operation_implementation<win32::iocp_multiplexer, Handle, io::close>
 {
 	static constexpr bool block_synchronous = true;
 

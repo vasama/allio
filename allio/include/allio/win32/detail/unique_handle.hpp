@@ -2,16 +2,18 @@
 
 #include <allio/win32/platform.hpp>
 
+#include <vsm/assert.h>
 #include <vsm/result.hpp>
+#include <vsm/standard.hpp>
 #include <vsm/unique_resource.hpp>
 
 namespace allio::win32 {
 
-vsm::result<void> close_handle(HANDLE handle);
+vsm::result<void> close_handle(HANDLE handle) noexcept;
 
 struct handle_deleter
 {
-	void operator()(HANDLE const handle) const
+	void vsm_static_operator_invoke(HANDLE const handle) noexcept
 	{
 		vsm_verify(close_handle(handle));
 	}
