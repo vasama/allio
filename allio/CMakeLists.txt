@@ -213,7 +213,7 @@ if(MSVC)
 endif()
 
 target_include_directories(allio PUBLIC D:/Code/stdexec/include)
-target_compile_definitions(allio PUBLIC allio_config_unifex=1)
+#target_compile_definitions(allio PUBLIC allio_config_unifex=1)
 target_compile_definitions(allio PUBLIC _SILENCE_CXX23_ALIGNED_UNION_DEPRECATION_WARNING)
 
 add_subdirectory(tools)

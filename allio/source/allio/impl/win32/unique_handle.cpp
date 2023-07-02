@@ -7,7 +7,7 @@
 using namespace allio;
 using namespace allio::win32;
 
-vsm::result<void> win32::close_handle(HANDLE const handle)
+vsm::result<void> win32::close_handle(HANDLE const handle) noexcept
 {
 	if (!CloseHandle(handle))
 	{
