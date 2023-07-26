@@ -1,5 +1,6 @@
 #pragma once
 
+#define allio_config_unifex 1
 #if allio_config_unifex
 #	include <unifex/let_value.hpp>
 #	include <unifex/receiver_concepts.hpp>

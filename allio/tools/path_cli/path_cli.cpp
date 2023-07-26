@@ -1,6 +1,6 @@
 #include <allio/path_view.hpp>
 
-#include "../source/reverse_iterator.hpp"
+#include <allio/test/reverse_iterator.hpp>
 
 #include <filesystem>
 #include <iostream>

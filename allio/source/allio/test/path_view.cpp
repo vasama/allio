@@ -1,6 +1,6 @@
 #include <allio/path_view.hpp>
 
-#include <allio/impl/reverse_iterator.hpp>
+#include <allio/test/reverse_iterator.hpp>
 
 #include <catch2/catch_all.hpp>
 

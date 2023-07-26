@@ -84,19 +84,19 @@ public:
 	void allio_detail_set_stopped() noexcept
 	{
 		vsm_assume(std::holds_alternative<sync_wait_pending_tag>(m_state));
-		m_state.emplace<sync_wait_stopped_tag>();
+		m_state.template emplace<sync_wait_stopped_tag>();
 	}
 
 	void set_value(auto&&... values)
 	{
 		vsm_assume(std::holds_alternative<sync_wait_pending_tag>(m_state));
-		m_state.emplace<Value>(vsm_forward(values)...);
+		m_state.template emplace<Value>(vsm_forward(values)...);
 	}
 
 	void set_error(std::exception_ptr exception) noexcept requires Except
 	{
 		vsm_assume(std::holds_alternative<sync_wait_pending_tag>(m_state));
-		m_state.emplace<std::exception_ptr>(vsm_move(exception));
+		m_state.template emplace<std::exception_ptr>(vsm_move(exception));
 	}
 };
 

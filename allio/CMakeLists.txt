@@ -108,7 +108,6 @@ vsm_add_library(allio
 		source/allio/impl/posix_socket.cpp
 		source/allio/impl/posix_socket.hpp
 		source/allio/impl/process_handle.cpp
-		source/allio/impl/reverse_iterator.hpp
 		source/allio/impl/socket_handle.cpp
 		source/allio/impl/sync_byte_io.hpp
 		source/allio/impl/unique_name.cpp
@@ -131,6 +130,7 @@ vsm_add_library(allio
 		source/allio/test/file_handle.cpp
 		source/allio/test/path_view.cpp
 		source/allio/test/process_handle.cpp
+		source/allio/test/reverse_iterator.hpp
 		source/allio/test/socket_handle.cpp
 )
 

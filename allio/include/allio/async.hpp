@@ -529,7 +529,7 @@ class initialize_handle_sender
 			{
 				receiver receiver(m_handle, vsm_move(user_receiver));
 
-				detail::execution::start(m_variant.emplace<operation_type>(vsm_lazy(
+				detail::execution::start(m_variant.template emplace<operation_type>(vsm_lazy(
 					detail::execution::connect(
 						vsm_move(m_sender.m_sender_factory)(m_handle),
 						vsm_move(receiver))
@@ -572,7 +572,7 @@ public:
 	}
 
 	template<detail::execution::receiver Receiver>
-	typename operation<std::remove_cvref_t<Receiver>> connect(Receiver&& receiver) &&
+	operation<std::remove_cvref_t<Receiver>> connect(Receiver&& receiver) &&
 	{
 		return { vsm_move(*this), vsm_forward(receiver) };
 	}

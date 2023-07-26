@@ -41,7 +41,7 @@ TEST_CASE("stream_socket_handle localhost server & client", "[socket_handle][str
 
 	unique_multiplexer_ptr const multiplexer = create_default_multiplexer().value();
 
-	sync_wait(*multiplexer, [&]() -> unifex::task<void>
+	(void)sync_wait(*multiplexer, [&]() -> unifex::task<void>
 	{
 		listen_socket_handle listen_socket = co_await error_into_except(listen_async(*multiplexer, address));
 		stream_socket_handle server_socket;
@@ -49,29 +49,29 @@ TEST_CASE("stream_socket_handle localhost server & client", "[socket_handle][str
 		co_await unifex::when_all(
 			[&]() -> unifex::task<void>
 			{
-				//stream_socket_handle& socket = server_socket;
-				//
-				//socket = allio_await_move(co_await error_into_except(listen_socket.accept_async())).socket;
-				//socket.set_multiplexer(multiplexer.get());
-				//
-				//int request_data;
-				//REQUIRE(co_await error_into_except(socket.read_async(as_read_buffer(&request_data, 1))) == sizeof(request_data));
-				//
-				//int const reply_data = -request_data;
-				//REQUIRE(co_await error_into_except(socket.write_async(as_write_buffer(&reply_data, 1))) == sizeof(reply_data));
+				stream_socket_handle& socket = server_socket;
+
+				socket = allio_await_move(co_await error_into_except(listen_socket.accept_async())).socket;
+				socket.set_multiplexer(multiplexer.get());
+
+				int request_data;
+				REQUIRE(co_await error_into_except(socket.read_async(as_read_buffer(&request_data, 1))) == sizeof(request_data));
+
+				int const reply_data = -request_data;
+				REQUIRE(co_await error_into_except(socket.write_async(as_write_buffer(&reply_data, 1))) == sizeof(reply_data));
 			}(),
 
 			[&]() -> unifex::task<void>
 			{
-				//stream_socket_handle socket = co_await error_into_except(connect_async(*multiplexer, address));
-				//
-				//int const request_data = 42;
-				//REQUIRE(co_await error_into_except(socket.write_async(as_write_buffer(&request_data, 1))) == sizeof(request_data));
-				//
-				//int reply_data;
-				//REQUIRE(co_await error_into_except(socket.read_async(as_read_buffer(&reply_data, 1))) == sizeof(reply_data));
-				//
-				//REQUIRE(reply_data == -request_data);
+				stream_socket_handle socket = co_await error_into_except(connect_async(*multiplexer, address));
+
+				int const request_data = 42;
+				REQUIRE(co_await error_into_except(socket.write_async(as_write_buffer(&request_data, 1))) == sizeof(request_data));
+
+				int reply_data;
+				REQUIRE(co_await error_into_except(socket.read_async(as_read_buffer(&reply_data, 1))) == sizeof(reply_data));
+
+				REQUIRE(reply_data == -request_data);
 			}()
 		);
 	}()).value();
