@@ -11,7 +11,7 @@ using namespace allio::linux;
 
 vsm::result<unique_multiplexer_ptr> allio::create_default_multiplexer(default_multiplexer_options const& options)
 {
-	if (has_io_uring())
+	if (io_uring_multiplexer::is_supported())
 	{
 		vsm_try(result, io_uring_multiplexer::init(
 		{

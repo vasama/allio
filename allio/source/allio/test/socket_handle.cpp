@@ -17,7 +17,7 @@ using namespace allio;
 #ifdef _MSC_VER
 #	define allio_await_move(...) ::std::move(__VA_ARGS__)
 #else
-#	define allio_await_move(...) __VA_ARGS__
+#	define allio_await_move(...) (__VA_ARGS__)
 #endif
 
 

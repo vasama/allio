@@ -4,7 +4,7 @@
 #define WIN32_H
 
 #if !defined(_WIN32) && !defined(_WIN64)
-#	error We're not on Windows...
+#	error This is not Windows...
 #endif
 
 #ifndef WIN32_FAT_AND_FRIENDLY

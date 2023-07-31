@@ -270,6 +270,9 @@ private:
 
 
 public:
+	static bool is_supported();
+
+
 	struct init_options
 	{
 		uint32_t min_submission_queue_size = 0;
@@ -335,6 +338,32 @@ public:
 	vsm::result<statistics> pump(pump_parameters const& args) override;
 
 
+	class submission_timeout
+	{
+		struct timespec
+		{
+			long long tv_sec;
+			long long tv_nsec;
+		};
+
+		timespec m_timespec;
+
+	public:
+		class reference
+		{
+			submission_timeout const* m_timeout;
+			bool m_absolute;
+
+			friend class submission_timeout;
+		};
+
+		reference set_deadline(deadline const deadline) &
+		{
+			m_timespec = make_timespec(deadline);
+			return { this, deadline.is_absolute() };
+		}
+	};
+
 	class submission_context
 	{
 		io_uring_multiplexer* m_multiplexer;
@@ -376,7 +405,7 @@ public:
 			return {};
 		}
 
-		async_result<void> push_linked_timeout(deadline const deadline);
+		async_result<void> push_linked_timeout(submission_timeout::reference timeout);
 
 		async_result<void> commit()
 		{
@@ -424,6 +453,8 @@ private:
 		return *reinterpret_cast<io_uring_cqe*>(buffer + (index << m_cqe_multiply_shift));
 	}
 
+	bool needs_wakeup() const;
+
 	async_result<void> commit_submission(uint32_t sq_ready);
 
 	io_uring_sqe* try_acquire_sqe();
@@ -439,8 +470,6 @@ private:
 
 	vsm::result<void> enter(pump_mode mode, deadline deadline);
 };
-
-bool has_io_uring() noexcept;
 
 } // namespace allio::linux
 

@@ -170,23 +170,18 @@ vsm::result<multiplexer::statistics> iocp_multiplexer::pump(pump_parameters cons
 	deadline deadline = args.deadline;
 	return gather_statistics([&](statistics& statistics) -> vsm::result<void>
 	{
-		while (true)
+		if (flush)
 		{
-			if (flush)
+			auto const s = deferring_multiplexer::flush();
+			if (s.submitted != 0 || s.completed != 0 || s.concluded != 0)
 			{
-				auto const s = deferring_multiplexer::flush();
-				if (s.submitted != 0 || s.completed != 0 || s.concluded != 0)
-				{
-					//TODO: Gather statistics
-					deadline = deadline::instant();
-				}
+				//TODO: Gather statistics
+				deadline = deadline::instant();
 			}
+		}
 
-			if (!complete)
-			{
-				break;
-			}
-
+		if (complete)
+		{
 			FILE_IO_COMPLETION_INFORMATION entries[16];
 
 			vsm_try(entry_count, [&]() -> vsm::result<size_t>
@@ -260,8 +255,6 @@ vsm::result<multiplexer::statistics> iocp_multiplexer::pump(pump_parameters cons
 
 				vsm_assert(slot->m_operation != nullptr);
 				slot->m_operation->io_completed(*this, *slot);
-
-				deadline = deadline::instant();
 			}
 		}
 

@@ -35,7 +35,7 @@ private:
 	repr_type m_bits;
 
 public:
-	using duration = std::chrono::duration<repr_type, unit_type>;
+	using duration = std::chrono::duration<std::make_signed_t<repr_type>, unit_type>;
 	using time_point = std::chrono::time_point<clock, duration>;
 
 	static constexpr duration max_duration = duration(max_units);
