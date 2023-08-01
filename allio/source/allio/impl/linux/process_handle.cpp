@@ -3,7 +3,7 @@
 #include <allio/impl/linux/api_string.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/filesystem_handle.hpp>
-#include <allio/impl/linux/timeout.hpp>
+#include <allio/linux/timeout.hpp>
 
 #include <vsm/lazy.hpp>
 #include <vsm/utility.hpp>

@@ -56,6 +56,9 @@ struct allio::multiplexer_handle_operation_implementation<io_uring_multiplexer, 
 	{
 		using basic_async_operation_storage::basic_async_operation_storage;
 
+		io_uring_multiplexer::timeout timeout;
+
+
 		vsm::result<void> get_exit_code() const
 		{
 			//TODO: Use waitid to get exit result.
@@ -113,7 +116,7 @@ struct allio::multiplexer_handle_operation_implementation<io_uring_multiplexer, 
 			{
 				if (s.args.deadline != deadline::never())
 				{
-					vsm_try_void(context.push_linked_timeout(s.args.deadline));
+					vsm_try_void(context.push_linked_timeout(s.timeout.set(s.args.deadline)));
 				}
 
 				return context.push(s, [&](io_uring_sqe& sqe)

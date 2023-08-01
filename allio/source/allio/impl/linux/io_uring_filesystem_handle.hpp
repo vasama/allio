@@ -19,6 +19,8 @@ struct multiplexer_handle_operation_implementation<linux::io_uring_multiplexer, 
 		linux::api_string_storage path_storage;
 		linux::open_parameters open_args;
 
+		linux::io_uring_multiplexer::timeout timeout;
+
 		void io_completed(linux::io_uring_multiplexer& m, linux::io_uring_multiplexer::io_data_ref, int const result) override
 		{
 			Handle& h = static_cast<Handle&>(*args.handle);
@@ -76,7 +78,7 @@ struct multiplexer_handle_operation_implementation<linux::io_uring_multiplexer, 
 			{
 				if (!s.args.deadline.is_trivial())
 				{
-					vsm_try_void(context.push_linked_timeout(s.args.deadline));
+					vsm_try_void(context.push_linked_timeout(s.timeout.set(s.args.deadline)));
 				}
 
 				return context.push(s, [&](io_uring_sqe& sqe)

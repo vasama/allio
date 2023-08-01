@@ -127,7 +127,6 @@ vsm::result<unique_socket_with_flags> allio::accept_socket(socket_type const lis
 	return socket_result;
 }
 
-
 // The layout of WSABUF necessitates a copy.
 template<typename T>
 static size_t transform_wsa_buffers(basic_buffers<T> const buffers, WSABUF* const wsa_buffers)

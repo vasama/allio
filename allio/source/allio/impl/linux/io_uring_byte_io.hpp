@@ -27,6 +27,8 @@ class io_uring_scatter_gather_async_operation_storage
 	}
 	m_args;
 
+	io_uring_multiplexer::timeout m_timeout;
+
 public:
 	explicit io_uring_scatter_gather_async_operation_storage(auto const& args, async_operation_listener* const listener)
 		: io_uring_multiplexer::async_operation_storage(listener)
@@ -50,7 +52,7 @@ public:
 		{
 			if (supports_cancellation && !m_args.deadline.is_trivial())
 			{
-				vsm_try_void(ctx.push_linked_timeout(m_args.deadline));
+				vsm_try_void(ctx.push_linked_timeout(m_timeout.set(m_args.deadline)));
 			}
 
 			return ctx.push(*this, [&](io_uring_sqe& sqe)

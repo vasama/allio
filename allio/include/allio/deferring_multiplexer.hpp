@@ -56,6 +56,7 @@ protected:
 	~deferring_multiplexer() = default;
 
 	[[nodiscard]] statistics flush();
+	[[nodiscard]] bool flush(statistics& statistics);
 
 private:
 	vsm::result<void> post_result(async_operation_storage& operation, vsm::result<void> const result)

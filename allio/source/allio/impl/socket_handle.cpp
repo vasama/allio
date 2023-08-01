@@ -14,14 +14,14 @@ vsm::result<void> detail::stream_socket_handle_base::block_connect(network_addre
 }
 
 
-vsm::result<size_t> detail::packet_socket_handle_base::block_read(packet_read_descriptors const descriptors, packet_io_parameters const& args)
+vsm::result<packet_read_result> detail::packet_socket_handle_base::block_read(read_buffers const buffers, packet_io_parameters const& args)
 {
-	return block<io::packet_scatter_read>(static_cast<packet_socket_handle&>(*this), args, descriptors);
+	return block<io::packet_scatter_read>(static_cast<packet_socket_handle&>(*this), args, buffers);
 }
 
-vsm::result<size_t> detail::packet_socket_handle_base::block_write(packet_write_descriptors const descriptors, packet_io_parameters const& args)
+vsm::result<size_t> detail::packet_socket_handle_base::block_write(write_buffers const buffers, network_address const& address, packet_io_parameters const& args)
 {
-	return block<io::packet_gather_write>(static_cast<packet_socket_handle&>(*this), args, descriptors);
+	return block<io::packet_gather_write>(static_cast<packet_socket_handle&>(*this), args, buffers, &address);
 }
 
 

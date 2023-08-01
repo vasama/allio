@@ -3,6 +3,7 @@
 #include <allio/deferring_multiplexer.hpp>
 #include <allio/detail/api.hpp>
 #include <allio/linux/detail/unique_fd.hpp>
+#include <allio/linux/timeout.hpp>
 #include <allio/multiplexer.hpp>
 #include <allio/platform_handle.hpp>
 
@@ -338,7 +339,7 @@ public:
 	vsm::result<statistics> pump(pump_parameters const& args) override;
 
 
-	class submission_timeout
+	class timeout
 	{
 		struct timespec
 		{
@@ -351,17 +352,28 @@ public:
 	public:
 		class reference
 		{
-			submission_timeout const* m_timeout;
+			timeout const* m_timeout;
 			bool m_absolute;
 
-			friend class submission_timeout;
+		public:
+			explicit reference(timeout const& timeout, bool const absolute)
+				: m_timeout(&timeout)
+				, m_absolute(absolute)
+			{
+			}
+
+		private:
+			friend class io_uring_multiplexer;
 		};
 
-		reference set_deadline(deadline const deadline) &
+		reference set(deadline const deadline) &
 		{
-			m_timespec = make_timespec(deadline);
-			return { this, deadline.is_absolute() };
+			m_timespec = make_timespec<timespec>(deadline);
+			return reference(*this, deadline.is_absolute());
 		}
+
+	private:
+		friend class io_uring_multiplexer;
 	};
 
 	class submission_context
@@ -405,7 +417,7 @@ public:
 			return {};
 		}
 
-		async_result<void> push_linked_timeout(submission_timeout::reference timeout);
+		async_result<void> push_linked_timeout(timeout::reference timeout);
 
 		async_result<void> commit()
 		{

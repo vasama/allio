@@ -1,10 +1,8 @@
 #include <allio/linux/io_uring_multiplexer.hpp>
 
 #include <allio/implementation.hpp>
-
 #include <allio/impl/async_handle_types.hpp>
 #include <allio/impl/linux/error.hpp>
-#include <allio/impl/linux/timeout.hpp>
 
 #include <vsm/assert.h>
 #include <vsm/tag_ptr.hpp>
@@ -427,17 +425,20 @@ bool io_uring_multiplexer::needs_wakeup() const
 	return (m_sq_k_flags.load(std::memory_order_acquire) & IORING_SQ_NEED_WAKEUP) != 0;
 }
 
-async_result<void> io_uring_multiplexer::submission_context::push_linked_timeout(submission_timeout::reference const timeout)
+async_result<void> io_uring_multiplexer::submission_context::push_linked_timeout(timeout::reference const timeout)
 {
 	#if __cpp_lib_is_layout_compatible
-	static_assert(std::is_layout_compatible_v<submission_timeout::timespec, __kernel_timespec>);
+	static_assert(std::is_layout_compatible_v<timeout::timespec, __kernel_timespec>);
+	#else
+	static_assert(sizeof(timeout::timespec) == sizeof(__kernel_timespec));
+	static_assert(alignof(timeout::timespec) == alignof(__kernel_timespec));
 	#endif
 
 	vsm_try(sqe, acquire_sqe());
 
 	sqe->opcode = IORING_OP_LINK_TIMEOUT;
 	sqe->flags = IOSQE_IO_LINK;
-	sqe->addr = reinterpret_cast<uintptr_t>(&deadline);
+	sqe->addr = reinterpret_cast<uintptr_t>(&timeout.m_timeout->m_timespec);
 	sqe->len = 1;
 	sqe->timeout_flags = timeout.m_absolute ? IORING_TIMEOUT_ABS : 0;
 
@@ -450,24 +451,27 @@ async_result<void> io_uring_multiplexer::commit_submission(uint32_t const sq_rel
 
 	m_sq_release = sq_release;
 
-	if (vsm::any_flags(m_flags, flags::kernel_thread))
-	{
-		m_sq_k_produce.store(sq_release, std::memory_order_release);
+	m_sq_k_produce.store(sq_release, std::memory_order_release);
 
-		if (vsm::any_flags(m_flags, flags::auto_submit) && needs_wakeup())
-		{
-			io_uring_enter(m_io_uring.get(), 0, 0, IORING_ENTER_SQ_WAKEUP, nullptr, 0);
-		}
-	}
-	else if (vsm::any_flags(m_flags, flags::auto_submit))
+	if (vsm::any_flags(m_flags, flags::auto_submit))
 	{
-		//TODO: auto submit
-		//return enter_submit(sq_release);
+		if (vsm::any_flags(m_flags, flags::kernel_thread))
+		{
+			if (needs_wakeup())
+			{
+				io_uring_enter(m_io_uring.get(), 0, 0, IORING_ENTER_SQ_WAKEUP, nullptr, 0);
+			}
+		}
+		else
+		{
+			//TODO: enter
+		}
 	}
 
 	return {};
 }
 
+#if 0
 uint32_t io_uring_multiplexer::reap_submission_queue()
 {
 	//uint32_t const sq_produce = m_sq_produce;
@@ -484,6 +488,7 @@ uint32_t io_uring_multiplexer::reap_submission_queue()
 
 	//return sq_release - std::exchange(m_sq_submit, sq_release);
 }
+#endif
 
 uint32_t io_uring_multiplexer::reap_completion_queue()
 {
@@ -535,10 +540,21 @@ uint32_t io_uring_multiplexer::reap_completion_queue()
 	return cq_produce - cq_consume;
 }
 
+static vsm::result<void> partial_result(auto&& operation)
+{
+	bool made_progress = false;
+	auto r = vsm_forward(operation)(made_progress);
+	if (!r && !made_progress)
+	{
+		return r;
+	}
+	return {};
+}
+
 vsm::result<multiplexer::statistics> io_uring_multiplexer::pump(pump_parameters const& args)
 {
-	deadline deadline = args.deadline;
-	return gather_statistics([&](statistics& statistics) -> vsm::result<void>
+	multiplexer::statistics statistics = {};
+	vsm_try_void(partial_result([&](bool& made_progress) -> vsm::result<void>
 	{
 		bool enter_needed = false;
 		bool enter_wanted = false;
@@ -547,27 +563,21 @@ vsm::result<multiplexer::statistics> io_uring_multiplexer::pump(pump_parameters 
 		unsigned int enter_min_complete = 0;
 		unsigned int enter_flags = 0;
 
+		//TODO: Always reap submission queue?
+
+		// Invoke any pending user listeners.
 		if (vsm::any_flags(args.mode, pump_mode::flush))
 		{
-			auto const s = deferring_multiplexer::flush();
-
-			if (s.submitted != 0 || s.completed != 0 || s.concluded != 0)
-			{
-				//TODO: Gather statistics
-				deadline = deadline::instant();
-			}
+			made_progress |= deferring_multiplexer::flush(statistics);
 		}
 
 		// Submit previously recorded SQEs.
 		if (vsm::any_flags(args.mode, pump_mode::submit))
 		{
-			if (!vsm::any_flags(m_flags, flags::kernel_thread))
+			if (vsm::any_flags(m_flags, flags::kernel_thread))
 			{
-				enter_wanted = true;
-			}
-			else
-			{
-				uint32_t const new_submission_count = reap_submission_queue_async();
+				//TODO: Reap submission queue.
+				//uint32_t const new_submission_count = reap_submission_queue_async();
 
 				if (!vsm::any_flags(m_flags, flags::auto_submit))
 				{
@@ -582,8 +592,16 @@ vsm::result<multiplexer::statistics> io_uring_multiplexer::pump(pump_parameters 
 					enter_flags |= IORING_ENTER_SQ_WAKEUP;
 				}
 			}
+			else
+			{
+				enter_wanted = true;
+
+				// Submit as many as are available.
+				enter_to_submit = static_cast<unsigned int>(-1);
+			}
 		}
 
+		// Handle completed CQEs.
 		if (vsm::any_flags(args.mode, pump_mode::complete))
 		{
 			uint32_t const new_completion_count = reap_completion_queue();
@@ -592,6 +610,7 @@ vsm::result<multiplexer::statistics> io_uring_multiplexer::pump(pump_parameters 
 			{
 				enter_wanted = true;
 
+				// Wait for at least one completion.
 				enter_min_complete = 1;
 
 				// Get completions from the ring.
@@ -599,13 +618,17 @@ vsm::result<multiplexer::statistics> io_uring_multiplexer::pump(pump_parameters 
 			}
 		}
 
-		if (enter_wanted)
+		if (enter_needed || enter_wanted && !made_progress)
 		{
 			__kernel_timespec enter_timespec;
 			io_uring_getevents_arg enter_arg = {};
 			io_uring_getevents_arg* p_enter_arg = nullptr;
 
-			if (args.deadline != deadline::never())
+			if (made_progress)
+			{
+				enter_min_complete = 0;
+			}
+			else if (args.deadline != deadline::never())
 			{
 				if (args.deadline == deadline::instant())
 				{
@@ -614,7 +637,7 @@ vsm::result<multiplexer::statistics> io_uring_multiplexer::pump(pump_parameters 
 				else if (vsm::any_flags(m_flags, flags::enter_ext_arg))
 				{
 					enter_flags |= IORING_ENTER_EXT_ARG;
-					enter_timespec = make_timespec<decltype(enter_timespec)>(args.deadline);
+					enter_timespec = make_timespec<__kernel_timespec>(args.deadline);
 					enter_arg.ts = reinterpret_cast<uintptr_t>(&enter_timespec);
 					p_enter_arg = &enter_arg;
 				}
@@ -645,8 +668,13 @@ vsm::result<multiplexer::statistics> io_uring_multiplexer::pump(pump_parameters 
 				//m_sq_produce = new_sq_produce;
 			}
 		}
-	});
 
+		return {};
+	}));
+	return statistics;
+
+
+	#if 0
 	return gather_statistics([&](statistics& statistics) -> vsm::result<void>
 	{
 		bool need_enter = false;
@@ -741,6 +769,7 @@ vsm::result<multiplexer::statistics> io_uring_multiplexer::pump(pump_parameters 
 
 		return {};
 	});
+	#endif
 }
 
 allio_type_id(io_uring_multiplexer);

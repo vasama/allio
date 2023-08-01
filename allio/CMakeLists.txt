@@ -77,6 +77,7 @@ vsm_add_library(allio
 
 		include/allio/linux/io_uring_multiplexer.hpp
 		include/allio/linux/platform.hpp
+		include/allio/linux/timeout.hpp
 		include/allio/linux/detail/path.hpp
 		include/allio/linux/detail/path_view.hpp
 		include/allio/linux/detail/undef.i
@@ -197,7 +198,6 @@ vsm_target_platform_sources(allio Linux
 	source/allio/impl/linux/process_handle.hpp
 	source/allio/impl/linux/sync_byte_io.cpp
 	source/allio/impl/linux/sync_filesystem_handle.hpp
-	source/allio/impl/linux/timeout.hpp
 	source/allio/impl/linux/unique_fd.cpp
 )
 
