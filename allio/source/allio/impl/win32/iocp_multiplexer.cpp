@@ -238,11 +238,6 @@ vsm::result<multiplexer::statistics> iocp_multiplexer::pump(pump_parameters cons
 				return num_entries_removed;
 			}());
 
-			if (entry_count == 0)
-			{
-				break;
-			}
-
 			for (auto const& entry : std::span(entries, entry_count))
 			{
 				io_slot* const slot = static_cast<io_status_block*>(

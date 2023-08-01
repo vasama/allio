@@ -129,13 +129,11 @@ vsm::result<unique_socket_with_flags> allio::accept_socket(socket_type const lis
 
 // The layout of WSABUF necessitates a copy.
 template<typename T>
-static size_t transform_wsa_buffers(basic_buffers<T> const buffers, WSABUF* const wsa_buffers)
+static void transform_wsa_buffers(basic_buffers<T> const buffers, WSABUF* const wsa_buffers)
 {
-	size_t packet_size = 0;
 	std::transform(buffers.begin(), buffers.end(), wsa_buffers,
 		[&](basic_buffer<T> const buffer) -> WSABUF
 		{
-			packet_size += buffer.size();
 			return WSABUF
 			{
 				.len = static_cast<uint32_t>(buffer.size()),
@@ -143,10 +141,8 @@ static size_t transform_wsa_buffers(basic_buffers<T> const buffers, WSABUF* cons
 			};
 		}
 	);
-	return packet_size;
 }
 
-//TODO: Instead of allocating, perform multiple I/O calls.
 vsm::result<void> allio::packet_scatter_read(io::parameters_with_result<io::packet_scatter_read> const& args)
 {
 	packet_socket_handle const& h = *args.handle;
@@ -158,60 +154,30 @@ vsm::result<void> allio::packet_scatter_read(io::parameters_with_result<io::pack
 
 	SOCKET const socket = unwrap_socket(h.get_platform_handle());
 
+	read_buffers const buffers = args.buffers;
+
 	detail::dynamic_buffer<WSABUF, 64> wsa_buffers_storage;
+	vsm_try(wsa_buffers, wsa_buffers_storage.reserve(buffers.size()));
+	transform_wsa_buffers(buffers, wsa_buffers);
 
-	size_t packets_transferred = 0;
-	for (packet_read_descriptor const& descriptor : args.descriptors)
+	socket_address_union addr;
+
+	WSAMSG message =
 	{
-		auto r = [&]() -> vsm::result<void>
-		{
-			read_buffers const buffers = descriptor.buffers;
-			vsm_try(wsa_buffers, wsa_buffers_storage.reserve(buffers.size()));
+		.name = &addr.addr,
+		.namelen = sizeof(addr),
+		.lpBuffers = wsa_buffers,
+		.dwBufferCount = static_cast<uint32_t>(buffers.size()),
+	};
 
-			(void)transform_wsa_buffers(buffers, wsa_buffers);
-
-			socket_address_union addr;
-			//WSACMSGHDR control_header;
-
-			WSAMSG message =
-			{
-				.name = &addr.addr,
-				.namelen = sizeof(addr),
-				.lpBuffers = wsa_buffers,
-				.dwBufferCount = static_cast<uint32_t>(buffers.size()),
-				//.Control =
-				//{
-				//	.len = sizeof(control_header),
-				//	.buf = (CHAR*)&control_header,
-				//},
-			};
-
-			DWORD transferred;
-			if (DWORD const error = wsa_recv_msg(socket, &message, &transferred))
-			{
-				return vsm::unexpected(static_cast<socket_error>(error));
-			}
-
-			*descriptor.result =
-			{
-				.packet_size = transferred,
-				.address = addr.get_network_address(),
-			};
-
-			return {};
-		}();
-
-		if (!r)
-		{
-			if (packets_transferred != 0)
-			{
-				break;
-			}
-
-			return r;
-		}
+	DWORD transferred;
+	if (DWORD const error = wsa_recv_msg(socket, &message, &transferred))
+	{
+		return vsm::unexpected(static_cast<socket_error>(error));
 	}
-	*args.result = packets_transferred;
+	
+	args.result->packet_size = transferred;
+	args.result->address = addr.get_network_address();
 
 	return {};
 }
@@ -227,50 +193,28 @@ vsm::result<void> allio::packet_gather_write(io::parameters_with_result<io::pack
 
 	SOCKET const socket = unwrap_socket(h.get_platform_handle());
 
+	write_buffers const buffers = args.buffers;
+	vsm_try(addr, socket_address::make(*args.address));
+
 	detail::dynamic_buffer<WSABUF, 64> wsa_buffers_storage;
+	vsm_try(wsa_buffers, wsa_buffers_storage.reserve(buffers.size()));
+	transform_wsa_buffers(buffers, wsa_buffers);
 
-	size_t packets_transferred = 0;
-	for (packet_write_descriptor const& descriptor : args.descriptors)
+	WSAMSG message =
 	{
-		auto r = [&]() -> vsm::result<void>
-		{
-			write_buffers const buffers = descriptor.buffers;
-			vsm_try(wsa_buffers, wsa_buffers_storage.reserve(buffers.size()));
-			vsm_try(addr, socket_address::make(*descriptor.address));
+		.name = &addr.addr,
+		.namelen = addr.size,
+		.lpBuffers = wsa_buffers,
+		.dwBufferCount = static_cast<uint32_t>(buffers.size()),
+	};
 
-			size_t const packet_size = transform_wsa_buffers(buffers, wsa_buffers);
-
-			WSAMSG message =
-			{
-				.name = &addr.addr,
-				.namelen = addr.size,
-				.lpBuffers = wsa_buffers,
-				.dwBufferCount = static_cast<uint32_t>(buffers.size()),
-			};
-
-			DWORD transferred;
-			if (DWORD const error = wsa_send_msg(socket, &message, &transferred))
-			{
-				return vsm::unexpected(static_cast<socket_error>(error));
-			}
-
-			//TODO: Is there any reason why a datagram sendmsg would transfer fewer bytes than requested?
-			vsm_assert(transferred == packet_size);
-
-			return {};
-		}();
-
-		if (!r)
-		{
-			if (packets_transferred != 0)
-			{
-				break;
-			}
-
-			return r;
-		}
+	DWORD transferred;
+	if (DWORD const error = wsa_send_msg(socket, &message, &transferred))
+	{
+		return vsm::unexpected(static_cast<socket_error>(error));
 	}
-	*args.result = packets_transferred;
+
+	*args.result = transferred;
 
 	return {};
 }
