@@ -113,6 +113,14 @@ struct multiplexer_handle_operation_translation<M, H, O, 1>
 		}
 		else
 		{
+			if constexpr (requires { implementation::block_synchronous; })
+			{
+				if constexpr (implementation::block_synchronous)
+				{
+					return synchronous_operation_translation<H, O>::execute(a);
+				}
+			}
+
 			if constexpr (requires { implementation::may_block_synchronous; })
 			{
 				if (implementation::may_block_synchronous(static_cast<M&>(m), static_cast<parameters_type const&>(a)))

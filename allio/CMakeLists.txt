@@ -196,9 +196,12 @@ vsm_target_platform_sources(allio Linux
 	source/allio/impl/linux/posix_socket.hpp
 	source/allio/impl/linux/process_handle.cpp
 	source/allio/impl/linux/process_handle.hpp
+	source/allio/impl/linux/stat.hpp
 	source/allio/impl/linux/sync_byte_io.cpp
 	source/allio/impl/linux/sync_filesystem_handle.hpp
 	source/allio/impl/linux/unique_fd.cpp
+	source/allio/impl/linux/version.cpp
+	source/allio/impl/linux/version.hpp
 )
 
 target_compile_definitions(allio_test

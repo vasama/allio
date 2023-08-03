@@ -114,7 +114,7 @@ bool io_uring_multiplexer::is_supported()
 	static constexpr uint8_t supported_flag = 0x01;
 
 	static constinit uint8_t storage = 0;
-	auto const reference = std::atomic_ref(storage);
+	auto const reference = vsm::atomic_ref(storage);
 
 	auto value = reference.load(std::memory_order::acquire);
 	if (value == 0)
@@ -253,24 +253,37 @@ io_uring_multiplexer::io_uring_multiplexer(init_result&& resources)
 		vsm_move(resources.io_uring)))
 	, m_sq_mmap(vsm_move(resources.sq_ring))
 	, m_cq_mmap(vsm_move(resources.cq_ring))
+	, m_sqes(vsm_move(resources.sqes))
+	, m_cqes(reinterpret_cast<cqe_placeholder*>(m_cq_mmap.get() + resources.params.cq_off.cqes))
+
 	, m_flags(resources.params.flags)
 	, m_sqe_size(1 << resources.params.sqe_multiply_shift)
 	, m_cqe_size(1 << resources.params.cqe_multiply_shift)
 	, m_sqe_multiply_shift(resources.params.sqe_multiply_shift)
 	, m_cqe_multiply_shift(resources.params.cqe_multiply_shift)
+
 	, m_sq_k_produce(*reinterpret_cast<uint32_t*>(m_sq_mmap.get() + resources.params.sq_off.tail))
 	, m_sq_k_consume(*reinterpret_cast<uint32_t*>(m_sq_mmap.get() + resources.params.sq_off.head))
-	, m_sq_k_flags(*reinterpret_cast<uint32_t*>(m_sq_mmap.get() + resources.params.sq_off.flags))
 	, m_sq_k_array(reinterpret_cast<uint32_t*>(m_sq_mmap.get() + resources.params.sq_off.array))
-	, m_cq_k_consume(*reinterpret_cast<uint32_t*>(m_cq_mmap.get() + resources.params.cq_off.head))
 	, m_cq_k_produce(*reinterpret_cast<uint32_t*>(m_cq_mmap.get() + resources.params.cq_off.tail))
-	, m_sqes(vsm_move(resources.sqes))
-	, m_cqes(reinterpret_cast<cqe_placeholder*>(m_cq_mmap.get() + resources.params.cq_off.cqes))
+	, m_cq_k_consume(*reinterpret_cast<uint32_t*>(m_cq_mmap.get() + resources.params.cq_off.head))
+	, m_k_flags(*reinterpret_cast<uint32_t*>(m_sq_mmap.get() + resources.params.sq_off.flags))
+
 	, m_sq_size(resources.params.sq_entries)
+	, m_sq_available(m_sq_size)
+	, m_sq_acquire(m_sq_k_consume.load(std::memory_order_relaxed))
+	//, m_sq_ready(m_sq_acquire)
+	, m_sq_release(m_sq_acquire)
+
 	, m_cq_size(resources.params.cq_entries)
-	, m_sq_acquire(m_sq_k_consume.load(std::memory_order_relaxed) - m_sq_size)
-	, m_sq_submit(m_sq_release)
+	, m_cq_available(m_cq_size)
+	, m_cq_consume(m_cq_k_produce.load(std::memory_order_relaxed))
 {
+	printf("m_sq_k_produce=%u\n", m_sq_k_produce.load(std::memory_order_relaxed));
+	printf("m_sq_k_consume=%u\n", m_sq_k_consume.load(std::memory_order_relaxed));
+	printf("m_cq_k_produce=%u\n", m_cq_k_produce.load(std::memory_order_relaxed));
+	printf("m_cq_k_consume=%u\n", m_cq_k_consume.load(std::memory_order_relaxed));
+
 	for (size_t i = 0; i < m_sq_size; ++i)
 	{
 		m_sq_k_array[m_sq_acquire + i & m_sq_size - 1] = i;
@@ -335,7 +348,7 @@ vsm::result<void> io_uring_multiplexer::commit_user_sqe(uint32_t const sqe_index
 
 vsm::result<void> io_uring_multiplexer::cancel_io(io_data_ref const data)
 {
-	vsm_assert(!vsm::has_flag(m_flags, flags::submission_lock));
+	vsm_assert(!vsm::any_flags(m_flags, flags::submit_lock));
 
 	//TODO: Implement io_uring_multiplexer::cancel_io.
 
@@ -422,30 +435,65 @@ void io_uring_multiplexer::release_cqe()
 
 bool io_uring_multiplexer::needs_wakeup() const
 {
-	return (m_sq_k_flags.load(std::memory_order_acquire) & IORING_SQ_NEED_WAKEUP) != 0;
+	return (m_k_flags.load(std::memory_order_acquire) & IORING_SQ_NEED_WAKEUP) != 0;
 }
 
 async_result<void> io_uring_multiplexer::submission_context::push_linked_timeout(timeout::reference const timeout)
 {
-	#if __cpp_lib_is_layout_compatible
+#if __cpp_lib_is_layout_compatible
 	static_assert(std::is_layout_compatible_v<timeout::timespec, __kernel_timespec>);
-	#else
+#else
 	static_assert(sizeof(timeout::timespec) == sizeof(__kernel_timespec));
 	static_assert(alignof(timeout::timespec) == alignof(__kernel_timespec));
-	#endif
+#endif
 
-	vsm_try(sqe, acquire_sqe());
+	//TODO: Make sure linked timeouts never produce a CQE.
 
-	sqe->opcode = IORING_OP_LINK_TIMEOUT;
-	sqe->flags = IOSQE_IO_LINK;
-	sqe->addr = reinterpret_cast<uintptr_t>(&timeout.m_timeout->m_timespec);
-	sqe->len = 1;
-	sqe->timeout_flags = timeout.m_absolute ? IORING_TIMEOUT_ABS : 0;
+	if (m_sq_acquire == m_multiplexer->m_sq_consume)
+	{
+		return vsm::unexpected(error::too_many_concurrent_async_operations);
+	}
+	io_uring_sqe& sqe = m_multiplexer->get_sqe(m_sq_acquire++ & m_multiplexer->m_sq_size - 1);
+
+	sqe.opcode = IORING_OP_LINK_TIMEOUT;
+	sqe.flags = IOSQE_IO_LINK;
+	sqe.addr = reinterpret_cast<uintptr_t>(&timeout.m_timeout->m_timespec);
+	sqe.len = 1;
+	sqe.timeout_flags = timeout.m_absolute ? IORING_TIMEOUT_ABS : 0;
 
 	return {};
 }
 
-async_result<void> io_uring_multiplexer::commit_submission(uint32_t const sq_release)
+bool io_uring_multiplexer::submission_context::check_sqe_flags(io_uring_sqe const& sqe) noexcept
+{
+	return true; //TODO
+}
+
+bool io_uring_multiplexer::submission_context::check_sqe_user_data(io_uring_sqe const& sqe, io_data_ref const data) noexcept
+{
+	return sqe.user_data == reinterpret_pointer_cast<uintptr_t>(data);
+}
+
+async_result<io_uring_sqe*> io_uring_multiplexer::submission_context::acquire_sqe(io_data_ref const data)
+{
+	if (m_cq_available == 0)
+	{
+		return vsm::unexpected(error::too_many_concurrent_async_operations);
+	}
+
+	if (m_sq_acquire == m_multiplexer->m_sq_consume)
+	{
+		return vsm::unexpected(error::too_many_concurrent_async_operations);
+	}
+
+	--m_cq_available;
+	io_uring_sqe& sqe = m_multiplexer->get_sqe(m_sq_acquire++ & m_multiplexer->m_sq_size - 1);
+	sqe.user_data = reinterpret_pointer_cast<uintptr_t>(data);
+
+	return &sqe;
+}
+
+async_result<void> io_uring_multiplexer::commit_submission()
 {
 	//TODO: Assert sq_release <= ?
 
@@ -492,16 +540,19 @@ uint32_t io_uring_multiplexer::reap_submission_queue()
 
 uint32_t io_uring_multiplexer::reap_completion_queue()
 {
+	puts("    > reap_completion_queue"); fflush(stdout);
+
 	uint32_t const cq_consume = m_cq_consume;
 
 	// One after the last completion queue entry produced by the kernel.
 	uint32_t const cq_produce = m_cq_k_produce.load(std::memory_order_acquire);
 
+	size_t loops = 0;
 	if (cq_produce != m_cq_consume)
 	{
 		uint32_t const cq_mask = m_cq_size - 1;
 
-		for (uint32_t cq_offset = cq_consume; cq_offset != cq_produce; ++cq_offset)
+		for (uint32_t cq_offset = cq_consume; cq_offset != cq_produce; ++cq_offset, ++loops)
 		{
 			io_uring_cqe const& cqe = get_cqe(cq_offset & cq_mask);
 
@@ -536,7 +587,9 @@ uint32_t io_uring_multiplexer::reap_completion_queue()
 		m_cq_k_consume.store(cq_produce, std::memory_order_release);
 		m_cq_consume = cq_produce;
 	}
+	printf("      loops=%llu\n", (unsigned long long)loops);
 
+	puts("    < reap_completion_queue"); fflush(stdout);
 	return cq_produce - cq_consume;
 }
 
@@ -553,6 +606,8 @@ static vsm::result<void> partial_result(auto&& operation)
 
 vsm::result<multiplexer::statistics> io_uring_multiplexer::pump(pump_parameters const& args)
 {
+	puts("pump");
+
 	multiplexer::statistics statistics = {};
 	vsm_try_void(partial_result([&](bool& made_progress) -> vsm::result<void>
 	{
@@ -565,12 +620,14 @@ vsm::result<multiplexer::statistics> io_uring_multiplexer::pump(pump_parameters 
 
 		//TODO: Always reap submission queue?
 
+		puts("  flush"); fflush(stdout);
 		// Invoke any pending user listeners.
 		if (vsm::any_flags(args.mode, pump_mode::flush))
 		{
 			made_progress |= deferring_multiplexer::flush(statistics);
 		}
 
+		puts("  submit"); fflush(stdout);
 		// Submit previously recorded SQEs.
 		if (vsm::any_flags(args.mode, pump_mode::submit))
 		{
@@ -601,6 +658,7 @@ vsm::result<multiplexer::statistics> io_uring_multiplexer::pump(pump_parameters 
 			}
 		}
 
+		puts("  complete"); fflush(stdout);
 		// Handle completed CQEs.
 		if (vsm::any_flags(args.mode, pump_mode::complete))
 		{
@@ -618,6 +676,7 @@ vsm::result<multiplexer::statistics> io_uring_multiplexer::pump(pump_parameters 
 			}
 		}
 
+		puts("  enter"); fflush(stdout);
 		if (enter_needed || enter_wanted && !made_progress)
 		{
 			__kernel_timespec enter_timespec;
@@ -647,6 +706,7 @@ vsm::result<multiplexer::statistics> io_uring_multiplexer::pump(pump_parameters 
 				}
 			}
 
+			printf("  enter %08x %u %u", enter_to_submit, enter_min_complete, enter_flags); fflush(stdout);
 			int const enter_consumed = io_uring_enter(
 				m_io_uring.get(),
 				enter_to_submit,
@@ -654,6 +714,7 @@ vsm::result<multiplexer::statistics> io_uring_multiplexer::pump(pump_parameters 
 				enter_flags,
 				p_enter_arg,
 				sizeof(enter_arg));
+			printf(" -> %d\n", enter_consumed); fflush(stdout);
 
 			if (enter_consumed == -1)
 			{
@@ -668,6 +729,8 @@ vsm::result<multiplexer::statistics> io_uring_multiplexer::pump(pump_parameters 
 				//m_sq_produce = new_sq_produce;
 			}
 		}
+
+		puts("  done"); fflush(stdout);
 
 		return {};
 	}));

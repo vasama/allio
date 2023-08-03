@@ -36,6 +36,7 @@ enum class error
 	async_operation_not_in_progress,
 	async_operation_timed_out,
 	unsupported_operation,
+	unsupported_encoding,
 	unsupported_multiplexer_handle_relation,
 	unsupported_asynchronous_operation,
 	too_many_concurrent_async_operations,

@@ -3,7 +3,7 @@
 #include <allio/detail/api.hpp>
 #include <allio/multiplexer.hpp>
 
-#include <atomic>
+#include <vsm/atomic.hpp>
 
 namespace allio {
 
@@ -28,7 +28,7 @@ private:
 	multiplexer_handle_relation_provider const* m_relation_provider;
 	manual_event* m_wait_event;
 
-	std::atomic<async_operation_storage*> m_defer_head;
+	vsm::atomic<async_operation_storage*> m_defer_head;
 
 public:
 	struct init_options

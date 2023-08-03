@@ -565,33 +565,6 @@ static vsm::result<void> query_directory_file(HANDLE const handle, directory_str
 }
 
 
-//TODO: Move to some shared header.
-static vsm::result<size_t> copy_string(std::wstring_view const string, output_string_ref const output)
-{
-	bool const c_string = output.is_c_string();
-
-	if (output.is_wide())
-	{
-		size_t const wide_size = string.size();
-		size_t const wide_buffer_size = wide_size + c_string;
-		vsm_try(buffer, output.resize_wide(wide_buffer_size));
-		buffer[wide_buffer_size - 1] = L'\0';
-		memcpy(buffer.data(), string.data(), wide_size * sizeof(wchar_t));
-		return wide_size;
-	}
-	else
-	{
-		//TODO: Improve the encoding API and transcode into preallocated buffer if available.
-		vsm_try(utf8_size, wide_to_utf8(string));
-		size_t const utf8_buffer_size = utf8_size + c_string;
-		vsm_try(buffer, output.resize_utf8(utf8_buffer_size));
-		buffer[utf8_buffer_size - 1] = '\0';
-		vsm_verify(wide_to_utf8(string, buffer));
-		return utf8_size;
-	}
-}
-
-
 static vsm::result<void> sync_open_directory_stream(directory_stream_handle& h, unique_handle_with_flags&& directory)
 {
 	return initialize_platform_handle(h, vsm_move(directory.handle),

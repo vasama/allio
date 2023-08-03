@@ -8,6 +8,7 @@
 #include <allio/parameters.hpp>
 #include <allio/untyped_parameter.hpp>
 
+#include <vsm/atomic.hpp>
 #include <vsm/flags.hpp>
 #include <vsm/result.hpp>
 
@@ -83,7 +84,7 @@ public:
 class async_operation
 {
 	async_operation_listener* m_listener;
-	std::atomic<async_operation_status> m_status;
+	vsm::atomic<async_operation_status> m_status;
 	std::error_code m_result;
 
 public:

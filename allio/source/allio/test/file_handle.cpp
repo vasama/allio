@@ -80,7 +80,8 @@ TEST_CASE("file_handle::read_at", "[file_handle]")
 {
 	path const file_path = get_temp_file_path("allio-test-file");
 
-	unique_multiplexer_ptr const multiplexer = generate_multiplexer();
+	//unique_multiplexer_ptr const multiplexer = generate_multiplexer();
+	unique_multiplexer_ptr const multiplexer = create_default_multiplexer().value();
 	bool const multiplexable = multiplexer != nullptr;
 
 	write_file_content(file_path, "allio");
