@@ -165,5 +165,5 @@ DWORD win32::wsa_recv_msg(
 	LPWSAMSG const message,
 	LPOVERLAPPED const overlapped)
 {
-	return wsa_send_msg(socket, message, nullptr, overlapped);
+	return wsa_recv_msg(socket, message, nullptr, overlapped);
 }
