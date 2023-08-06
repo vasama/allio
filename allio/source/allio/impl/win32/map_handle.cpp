@@ -14,14 +14,20 @@ std::span<page_level const> allio::get_supported_page_levels()
 
 	static auto const levels = []() -> supported_page_levels
 	{
+		supported_page_levels levels;
+
 		SYSTEM_INFO system_info;
 		GetSystemInfo(&system_info);
 
-		size_t const small_page_size = system_info.dwPageSize;
-		size_t const large_page_size = GetLargePageMinimum();
-		vsm_assert(small_page_size <= large_page_size);
+		levels.try_push_back(get_page_level(system_info.dwPageSize));
 
-		return { small_page_size, large_page_size };
+		if (size_t const large_page_size = GetLargePageMinimum())
+		{
+			vsm_assert(system_info.dwPageSize < large_page_size);
+			levels.push_back(get_page_level(large_page_size));
+		}
+
+		return levels;
 	}();
 
 	return levels;
@@ -32,7 +38,7 @@ static vsm::result<ULONG> get_page_protection(page_access const access)
 {
 	switch (access)
 	{
-	case page_access::none;
+	case page_access::none:
 		return PAGE_NOACCESS;
 
 	case page_access::read:

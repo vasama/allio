@@ -159,6 +159,7 @@ vsm_target_platform_sources(allio Windows
 	source/allio/impl/win32/kernel_path.hpp
 	source/allio/impl/win32/kernel_path_impl.hpp
 	source/allio/impl/win32/kernel_path_old.hpp
+	source/allio/impl/win32/map_handle.cpp
 	source/allio/impl/win32/nt_error.cpp
 	source/allio/impl/win32/peb.cpp
 	source/allio/impl/win32/peb.hpp
@@ -190,6 +191,7 @@ vsm_target_platform_sources(allio Linux
 	source/allio/impl/linux/io_uring_platform_handle.hpp
 	source/allio/impl/linux/io_uring_process_handle.cpp
 	source/allio/impl/linux/io_uring_socket_handle.cpp
+	source/allio/impl/linux/map_handle.cpp
 	source/allio/impl/linux/platform_handle.cpp
 	source/allio/impl/linux/platform_handle.hpp
 	source/allio/impl/linux/posix_socket.cpp

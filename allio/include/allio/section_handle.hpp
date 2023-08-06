@@ -3,6 +3,13 @@
 #include <allio/file_handle.hpp>
 
 namespace allio {
+
+namespace io {
+
+struct create_section;
+
+} // namespace io
+
 namespace detail {
 
 class section_handle_base : public platform_handle
@@ -10,7 +17,7 @@ class section_handle_base : public platform_handle
 	using final_handle_type = final_handle<section_handle_base>;
 
 public:
-	using base_type = filesystem_handle;
+	using base_type = platform_handle;
 
 
 	#define allio_section_handle_create_parameters(type, data, ...) \
@@ -18,7 +25,7 @@ public:
 		allio_platform_handle_create_parameters(__VA_ARGS__, __VA_ARGS__) \
 		data(::allio::file_handle*, backing, nullptr) \
 
-	allio_interface_parameters(allio_section_handle_create_parameters)
+	allio_interface_parameters(allio_section_handle_create_parameters);
 
 
 	template<parameters<create_parameters> P = create_parameters::interface>

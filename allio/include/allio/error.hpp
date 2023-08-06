@@ -39,6 +39,7 @@ enum class error
 	unsupported_encoding,
 	unsupported_multiplexer_handle_relation,
 	unsupported_asynchronous_operation,
+	unsupported_page_level,
 	too_many_concurrent_async_operations,
 	handle_is_null,
 	handle_is_not_null,

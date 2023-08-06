@@ -6,6 +6,8 @@ namespace allio {
 
 enum class page_access : uint8_t
 {
+	none                                = 0,
+
 	read                                = 1 << 0,
 	write                               = 1 << 1,
 	execute                             = 1 << 2,
@@ -37,7 +39,7 @@ enum class page_level : uint8_t
 
 inline page_level get_page_level(size_t const size)
 {
-	vsm_assert(size > 1 && vsm::math::is_power_of_two(size));
+	vsm_assert(size > 1 && size & size - 1 == 0);
 	return static_cast<page_level>(std::countr_zero(size));
 }
 
@@ -50,9 +52,16 @@ inline size_t get_page_size(page_level const level)
 std::span<page_level const> get_supported_page_levels();
 
 
+namespace io {
+
+struct map;
+
+} // namespace io
+
+
 namespace detail {
 
-class map_handle_base : handle
+class map_handle_base : public handle
 {
 	using final_handle_type = final_handle<map_handle_base>;
 
@@ -65,11 +74,11 @@ public:
 
 	#define allio_map_handle_map_parameters(type, data, ...) \
 		type(allio::map_handle, map_parameters) \
-		data(::uintptr_t, preferred_address, nullptr) \
+		data(::uintptr_t, preferred_address, 0) \
 		data(::allio::page_access, access, ::allio::page_access::read_write) \
 		data(::allio::page_level, page_level, ::allio::page_level::default_level) \
 
-	allio_interface_parameters(allio_map_handle_map_parameters)
+	allio_interface_parameters(allio_map_handle_map_parameters);
 
 
 	[[nodiscard]] void* base() const
@@ -100,7 +109,7 @@ protected:
 
 vsm::result<final_handle<map_handle_base>> block_map(
 	section_handle const& section,
-	file_offset const offset,
+	file_size const offset,
 	size_t const size,
 	map_handle_base::map_parameters const& args);
 
@@ -113,7 +122,7 @@ vsm::result<final_handle<map_handle_base>> block_map_anonymous(
 using map_handle = final_handle<detail::map_handle_base>;
 
 template<parameters<map_handle::map_parameters> P = map_handle::map_parameters::interface>
-vsm::result<map_handle> map(section_handle const& section, file_offset const offset, size_t const size, P const& args = {})
+vsm::result<map_handle> map(section_handle const& section, file_size const offset, size_t const size, P const& args = {})
 {
 	return detail::block_map(section, offset, size, args);
 }
