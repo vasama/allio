@@ -15,52 +15,39 @@ enum class page_access : uint8_t
 vsm_flag_enum(page_access);
 
 
-enum class page_size : uint8_t
+enum class page_level : uint8_t
 {
-	automatic                           = 0,
-	smallest                            = 1,
-	largest                             = 2,
-	exact                               = 3,
+	default_level                       = 0,
 
-	_4KB                                = 1 << 2,
-	_64KB                               = 1 << 3,
-	_2MB                                = 1 << 4,
-	_512MB                              = 1 << 5,
-	_1GB                                = 1 << 6,
-
-	any = automatic | _4KB | _64KB | _2MB | _512MB | _1GB,
-
-	mode_mask = automatic | smallest | largest | exact,
-	size_mask = _4KB | _64KB | _2MB | _512MB | _1GB,
-
-#if vsm_arch_x86
-#	define vsm_detail_page_size_x86(x) x
-#else
-#	define vsm_detail_page_size_x86(x) 0
-#endif
-
-#if vsm_arch_arm
-#	define vsm_detail_page_size_arm(x) x
-#else
-#	define vsm_detail_page_size_arm(x) 0
-#endif
-
-	x86_4KB                             = vsm_detail_page_size_x86(_4KB),
-	x86_2MB                             = vsm_detail_page_size_x86(_2MB),
-	x86_1GB                             = vsm_detail_page_size_x86(_1GB),
-
-	arm_4KB                             = vsm_detail_page_size_arm(_4KB),
-	arm_64KB                            = vsm_detail_page_size_arm(_64KB),
-	arm_2MB                             = vsm_detail_page_size_arm(_2MB),
-	arm_512MB                           = vsm_detail_page_size_arm(_512MB),
-	arm_1GB                             = vsm_detail_page_size_arm(_1GB),
-
-#undef vsm_detail_page_size_x86
-#undef vsm_detail_page_size_arm
+	_4KiB                               = 12,
+	_16KiB                              = 14,
+	_64KiB                              = 16,
+	_512KiB                             = 19,
+	_1MiB                               = 20,
+	_2MiB                               = 21,
+	_8MiB                               = 23,
+	_16MiB                              = 24,
+	_32MiB                              = 25,
+	_256MiB                             = 28,
+	_512MiB                             = 29,
+	_1GiB                               = 30,
+	_2GiB                               = 31,
+	_16GiB                              = 34,
 };
-vsm_flag_enum(page_size);
 
-page_size get_supported_page_sizes();
+inline page_level get_page_level(size_t const size)
+{
+	vsm_assert(size > 1 && vsm::math::is_power_of_two(size));
+	return static_cast<page_level>(std::countr_zero(size));
+}
+
+inline size_t get_page_size(page_level const level)
+{
+	vsm_assert(level != page_level::default_level);
+	return static_cast<size_t>(1) << static_cast<uint8_t>(level);
+}
+
+std::span<page_level const> get_supported_page_levels();
 
 
 namespace detail {
@@ -80,7 +67,7 @@ public:
 		type(allio::map_handle, map_parameters) \
 		data(::uintptr_t, preferred_address, nullptr) \
 		data(::allio::page_access, access, ::allio::page_access::read_write) \
-		data(::allio::page_size, page_size, ::allio::page_size::any) \
+		data(::allio::page_level, page_level, ::allio::page_level::default_level) \
 
 	allio_interface_parameters(allio_map_handle_map_parameters)
 

@@ -1,20 +1,102 @@
 #include <allio/map_handle.hpp>
 
+#include <allio/directory_handle.hpp>
+#include <allio/impl/bounded_vector.hpp>
+#include <allio/linux/detail/unique_fd.hpp>
+
 #include <vsm/defer.hpp>
+
+#include <unistd.h>
 
 #include <allio/linux/detail/undef.i>
 
 using namespace allio;
 using namespace allio::linux;
 
-page_size allio::get_supported_page_sizes()
+template<size_t MaxSize>
+using supported_page_levels = bounded_vector<page_level, MaxSize>;
+
+static vsm::result<supported_page_levels<2>> get_supported_huge_page_levels()
 {
-	static page_size const value = []() -> page_size
+	supported_page_levels<2> levels;
+
+#if 0
+	vsm_try(directory, open_directory("/sys/kernel/mm/hugepages"));
+
+	directory_stream_buffer stream_buffer;
+
+	while (true)
 	{
-		//TODO: Read 
-		return page_size::_4KB;
+		vsm_try(stream, directory.read(stream_buffer));
+
+		if (!stream)
+		{
+			break;
+		}
+
+		for (directory_entry const entry : stream)
+		{
+			std::string_view name = entry.name.utf8_view();
+
+			static constexpr std::string_view prefix = "hugepages-";
+			if (!name.starts_with(prefix))
+			{
+				return vsm::unexpected(allio::unknown_error);
+			}
+			name.remove_prefix(prefix);
+
+			static constexpr std::string_view suffix = "kB";
+			if (!name.starts_with(suffix))
+			{
+				return vsm::unexpected(allio::unknown_error);
+			}
+			name.remove_prefix(suffix);
+
+			vsm_try(page_size, vsm::from_chars<size_t>(name));
+
+			if (!vsm::math::is_power_of_two(page_size))
+			{
+				return vsm::unexpected(allio::unknown_error);
+			}
+
+			if (page_size > static_cast<size_t>(-1) / 1024)
+			{
+				return vsm::unexpected(allio::unknown_error);
+			}
+
+			if (!levels.push_back(get_page_level(page_size * 1024)))
+			{
+				return vsm::unexpected(allio::unknown_error);
+			}
+		}
+	}
+
+	std::ranges::sort(levels);
+#endif
+
+	return levels;
+}
+
+std::span<page_level const> allio::get_supported_page_levels()
+{
+	static auto const levels = []() -> supported_page_levels<3>
+	{
+		supported_page_levels<3> levels;
+
+		size_t const small_page_size = sysconf(PAGE_SIZE);
+		levels.push_back(get_page_level(small_page_size));
+
+		if (auto r = get_supported_huge_page_levels())
+		{
+			std::span const huge_levels = *r;
+			vsm_assert(huge_levels.front() != levels.front());
+			levels.append_range(huge_levels);
+		}
+
+		return levels;
 	}();
-	return value;
+
+	return levels;
 }
 
 
@@ -36,35 +118,23 @@ static int get_page_protection(page_access const access)
 	return p;
 }
 
-static vsm::result<int> get_page_size_flags(page_size const size)
+static int get_page_level_flags(page_level const level)
 {
-	switch (size)
+	if (level == page_level::default_level)
 	{
-	case page_size::default_size:
-	case page_size::smallest:
 		return 0;
-
-	case page_size::largest:
-		//TODO: Select based on /sys/kernel/mm/hugepages?
-		return MAP_HUGETLB;
-
-#if vsm_arch_x86
-	case page_size::x86_4KB:
-		return 0;
-
-	case page_size::x86_2MB:
-		return MAP_HUGETLB;
-
-	case page_size::x86_2MB:
-		return MAP_HUGETLB | MAP_HUGE_2MB;
-
-	case page_size::x86_2MB:
-		return MAP_HUGETLB | MAP_HUGE_1GB;
-#endif
 	}
 
-	return vsm::unexpected(unsupported_operation);
+	auto const supported_levels = get_supported_page_levels();
+	
+	if (level == supported_levels.front())
+	{
+		return 0;
+	}
+	
+	return MAP_HUGETLB | std::to_underlying(level) << MAP_HUGE_SHIFT;
 }
+
 
 vsm::result<void> detail::map_handle_base::sync_impl(io::parameters_with_result<io::map> const& args)
 {
@@ -83,7 +153,7 @@ vsm::result<void> detail::map_handle_base::sync_impl(io::parameters_with_result<
 		return vsm::unexpected(error::invalid_argument);
 	}
 
-	int flags = MAP_SHARED_VALIDATE | page_size_flags;
+	int flags = MAP_SHARED_VALIDATE | page_level_flags;
 	int fd = -1;
 
 	if (sh.get_flags()[section_handle::impl_flags::anonymous])
@@ -95,8 +165,7 @@ vsm::result<void> detail::map_handle_base::sync_impl(io::parameters_with_result<
 		fd = unwrap_handle(sh.get_platform_handle());
 	}
 
-	vsm_try(page_size_flags, get_page_size_flags(args.page_size));
-	flags |= page_size_flags;
+	flags |= get_page_level_flags(args.page_level);
 
 	if (args.address != static_cast<uintptr_t>(0))
 	{

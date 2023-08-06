@@ -1,64 +1,30 @@
 #include <allio/map_handle.hpp>
 
+#include <allio/impl/bounded_vector.hpp>
+#include <allio/impl/win32/kernel.hpp>
+
+#include <win32.h>
+
 using namespace allio;
 using namespace allio::win32;
 
-page_size allio::get_supported_page_sizes()
+std::span<page_level const> allio::get_supported_page_levels()
 {
-	static page_size const value = []() -> page_size
+	using supported_page_levels = bounded_vector<page_level, 2>;
+
+	static auto const levels = []() -> supported_page_levels
 	{
-		size_t const size = GetLargePageMinimum();
+		SYSTEM_INFO system_info;
+		GetSystemInfo(&system_info);
 
-		switch (size)
-		{
-		case 2 * 1024 * 1024:
-			return page_size::_4KB | page_size::_2MB;
-		}
-		
-		static_assert(vsm_arch_x86,
-			"Defaults for other architectures require investigation.");
+		size_t const small_page_size = system_info.dwPageSize;
+		size_t const large_page_size = GetLargePageMinimum();
+		vsm_assert(small_page_size <= large_page_size);
 
-		return page_size::_4KB;
+		return { small_page_size, large_page_size };
 	}();
-	return value;
-}
 
-vsm::result<page_size> select_page_size(page_size const flags)
-{
-	auto const mode = flags | page_size::mode_mask;
-
-	if (mode == page_size::exact)
-	{
-		page_size const size = flags & page_size::size_mask;
-
-		if (vsm::math::is_power_of_two(std::to_underlying(size)))
-		{
-			return size;
-		}
-		else
-		{
-			return vsm::unexpected(error::invalid_argument);
-		}
-	}
-	else
-	{
-		page_size const size = flags & get_supported_page_sizes();
-
-		if (size == page_size(0))
-		{
-			return vsm::unexpected(error::unsupported_page_size);
-		}
-
-		if (mode == page_size::largest)
-		{
-			static constexpr auto b = vsm::math::high_bit<std::underlying_t<page_size>>;
-			return static_cast<page_size>(b >> std::countr_zero(std::to_underlying(size)));
-		}
-		else
-		{
-			return static_cast<page_size>(1 << std::countr_zero(std::to_underlying(size)));
-		}
-	}
+	return levels;
 }
 
 
@@ -88,30 +54,28 @@ static vsm::result<ULONG> get_page_protection(page_access const access)
 	return vsm::unexpected(error::unsupported_operation);
 }
 
-static vsm::result<ULONG> get_page_size_allocation_type(page_size const size)
+static vsm::result<ULONG> get_page_level_allocation_type(page_level const level)
 {
-
-	switch (size)
+	if (level == page_level::default_level)
 	{
-	case page_size::automatic:
-	case page_size::smallest:
 		return 0;
-
-	case page_size::largest:
-		//TODO: Select depending on section, privileges, support?
-		return MEM_LARGE_PAGES;
-
-#if vsm_arch_x86
-	case page_size::x86_4KB:
-		return 0;
-
-	case page_size::x86_2MB:
-		return MEM_LARGE_PAGES;
-#endif
 	}
 
-	return vsm::unexpected(error::unsupported_operation);
+	auto const supported_levels = get_supported_page_levels();
+
+	if (level == supported_levels.front())
+	{
+		return 0;
+	}
+
+	if (supported_levels.size() > 0 && level == supported_levels.back())
+	{
+		return MEM_LARGE_PAGES;
+	}
+
+	return vsm::unexpected(error::unsupported_page_level);
 }
+
 
 vsm::result<void> detail::map_handle_base::sync_impl(io::parameters_with_result<io::map> const& args)
 {
@@ -131,9 +95,9 @@ vsm::result<void> detail::map_handle_base::sync_impl(io::parameters_with_result<
 	}
 
 	vsm_try(page_protection, get_page_protection(args.access));
-	vsm_try(page_size_allocation_type, get_page_size_allocation_type(args.page_size));
 
-	ULONG const allocation_type = page_size_allocation_type;
+	vsm_try(page_level_allocation_type, get_page_level_allocation_type(args.page_level));
+	ULONG const allocation_type = page_level_allocation_type;
 
 	LARGE_INTEGER section_offset;
 	LARGE_INTEGER* const p_section_offset = [&]() -> LARGE_INTEGER*

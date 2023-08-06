@@ -127,7 +127,7 @@ public:
 		allio_platform_handle_create_parameters(__VA_ARGS__, __VA_ARGS__) \
 		data(::allio::file_mode,            mode,           ::allio::file_mode::read) \
 		data(::allio::file_creation,        creation,       ::allio::file_creation::open_existing) \
-		data(::allio::file_creation,        creation,       ::allio::file_sharing::all) \
+		data(::allio::file_sharing,         sharing,        ::allio::file_sharing::all) \
 		data(::allio::file_caching,         caching,        ::allio::file_caching::none) \
 		data(::allio::file_flags,           flags,          ::allio::file_flags::none) \
 
