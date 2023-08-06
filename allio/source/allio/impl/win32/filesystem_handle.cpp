@@ -28,10 +28,7 @@ static vsm::result<open_info> make_open_info(filesystem_handle::open_parameters 
 	open_info info =
 	{
 		.desired_access = SYNCHRONIZE,
-		.attributes = 0,
-		.share_access = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
 		.create_disposition = FILE_OPEN,
-		.create_options = 0,
 	};
 
 	if (args.multiplexable)
@@ -104,6 +101,22 @@ static vsm::result<open_info> make_open_info(filesystem_handle::open_parameters 
 	case file_creation::replace_existing:
 		info.create_disposition = FILE_SUPERSEDE;
 		break;
+	}
+
+	// Sharing
+	{
+		if (vsm::any_flags(args.sharing, file_sharing::unlink))
+		{
+			info.share_access |= FILE_SHARE_DELETE;
+		}
+		if (vsm::any_flags(args.sharing, file_sharing::read))
+		{
+			info.share_access |= FILE_SHARE_READ;
+		}
+		if (vsm::any_flags(args.sharing, file_sharing::write))
+		{
+			info.share_access |= FILE_SHARE_WRITE;
+		}
 	}
 
 	switch (kind)

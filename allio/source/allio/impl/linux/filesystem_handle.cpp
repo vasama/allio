@@ -11,8 +11,10 @@ using namespace allio::linux;
 
 vsm::result<open_parameters> open_parameters::make(filesystem_handle::open_parameters const& args)
 {
-	int flags = O_CLOEXEC;
-	mode_t mode = 0;
+	open_parameters info =
+	{
+		.flags = O_CLOEXEC,
+	};
 
 	switch (args.mode)
 	{
@@ -21,12 +23,12 @@ vsm::result<open_parameters> open_parameters::make(filesystem_handle::open_param
 
 	case file_mode::read:
 	case file_mode::read_attributes:
-		flags |= O_RDONLY;
+		info.flags |= O_RDONLY;
 		break;
 
 	case file_mode::write:
 	case file_mode::write_attributes:
-		flags |= O_RDWR;
+		info.flags |= O_RDWR;
 		break;
 
 	default:
@@ -39,22 +41,28 @@ vsm::result<open_parameters> open_parameters::make(filesystem_handle::open_param
 		break;
 
 	case file_creation::create_only:
-		flags |= O_CREAT | O_EXCL;
+		info.flags |= O_CREAT | O_EXCL;
 		break;
 
 	case file_creation::open_or_create:
-		flags |= O_CREAT;
+		info.flags |= O_CREAT;
 		break;
 
 	case file_creation::truncate_existing:
-		flags |= O_CREAT | O_TRUNC;
+		info.flags |= O_CREAT | O_TRUNC;
 		break;
 
 	default:
 		vsm::unexpected(error::unsupported_operation);
 	}
 
-	return open_parameters{ flags, mode };
+	// Linux does not provide file sharing restrictions.
+	if (!vsm::all_flags(args.sharing, file_sharing::all))
+	{
+		return vsm::unexpected(error::unsupported_operation);
+	}
+
+	return info;
 }
 
 vsm::result<unique_fd> linux::create_file(

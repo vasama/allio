@@ -495,19 +495,19 @@ async_result<io_uring_sqe*> io_uring_multiplexer::submission_context::acquire_sq
 
 async_result<void> io_uring_multiplexer::commit_submission()
 {
-	//TODO: Assert sq_release <= ?
-
-	m_sq_release = sq_release;
-
-	m_sq_k_produce.store(sq_release, std::memory_order_release);
-
 	if (vsm::any_flags(m_flags, flags::auto_submit))
 	{
+		uint32_t const sq_offset = m_sq_acquire;
+		m_sq_release = sq_offset;
+
+		m_sq_k_produce.store(sq_offset, std::memory_order_release);
+
 		if (vsm::any_flags(m_flags, flags::kernel_thread))
 		{
 			if (needs_wakeup())
 			{
-				io_uring_enter(m_io_uring.get(), 0, 0, IORING_ENTER_SQ_WAKEUP, nullptr, 0);
+				// There should be no reason for this call to fail given a valid io uring fd.
+				vsm_verify(io_uring_enter(m_io_uring.get(), 0, 0, IORING_ENTER_SQ_WAKEUP, nullptr, 0) != -1);
 			}
 		}
 		else
@@ -631,6 +631,14 @@ vsm::result<multiplexer::statistics> io_uring_multiplexer::pump(pump_parameters 
 		// Submit previously recorded SQEs.
 		if (vsm::any_flags(args.mode, pump_mode::submit))
 		{
+			if (!vsm::any_flags(m_flags, flags::auto_submit))
+			{
+				uint32_t const sq_offset = m_sq_acquire;
+				m_sq_release = sq_offset;
+
+				m_sq_k_produce.store(sq_offset, std::memory_order_release);
+			}
+
 			if (vsm::any_flags(m_flags, flags::kernel_thread))
 			{
 				//TODO: Reap submission queue.

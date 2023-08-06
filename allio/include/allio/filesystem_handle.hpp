@@ -53,6 +53,18 @@ enum class file_creation : uint8_t
 	replace_existing,
 };
 
+/// @brief Controls sharing of the file by other handles.
+/// @note File sharing restrictions may not be available on all platforms.
+enum class file_sharing : uint8_t
+{
+	unlink                              = 1 << 0,
+	read                                = 1 << 1,
+	write                               = 1 << 2,
+
+	all = unlink | read | write,
+};
+vsm_flag_enum(file_sharing);
+
 enum class file_caching : uint8_t
 {
 	unchanged                                               = 0,
@@ -115,6 +127,7 @@ public:
 		allio_platform_handle_create_parameters(__VA_ARGS__, __VA_ARGS__) \
 		data(::allio::file_mode,            mode,           ::allio::file_mode::read) \
 		data(::allio::file_creation,        creation,       ::allio::file_creation::open_existing) \
+		data(::allio::file_creation,        creation,       ::allio::file_sharing::all) \
 		data(::allio::file_caching,         caching,        ::allio::file_caching::none) \
 		data(::allio::file_flags,           flags,          ::allio::file_flags::none) \
 
