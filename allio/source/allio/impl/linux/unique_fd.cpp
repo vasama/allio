@@ -9,7 +9,7 @@
 using namespace allio;
 using namespace allio::linux;
 
-vsm::result<void> linux::close_fd(int const fd) noexcept
+vsm::result<void> detail::close_fd(int const fd) noexcept
 {
 	if (::close(fd) == -1)
 	{

@@ -28,6 +28,16 @@ public:
 		return m_size;
 	}
 
+	T& front()
+	{
+		return reinterpret_cast<T*>(m_storage)[0];
+	}
+
+	T const& front() const
+	{
+		return reinterpret_cast<T const*>(m_storage)[0];
+	}
+
 	T* data()
 	{
 		return reinterpret_cast<T*>(m_storage);

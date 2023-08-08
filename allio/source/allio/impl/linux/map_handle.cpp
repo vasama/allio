@@ -2,15 +2,19 @@
 
 #include <allio/directory_handle.hpp>
 #include <allio/impl/bounded_vector.hpp>
+#include <allio/impl/linux/error.hpp>
 #include <allio/linux/detail/unique_fd.hpp>
+#include <allio/linux/platform.hpp>
 
 #include <vsm/defer.hpp>
 
+#include <sys/mman.h>
 #include <unistd.h>
 
 #include <allio/linux/detail/undef.i>
 
 using namespace allio;
+using namespace allio::detail;
 using namespace allio::linux;
 
 template<size_t MaxSize>
@@ -83,7 +87,7 @@ std::span<page_level const> allio::get_supported_page_levels()
 	{
 		supported_page_levels<3> levels;
 
-		size_t const small_page_size = sysconf(PAGE_SIZE);
+		size_t const small_page_size = sysconf(_SC_PAGE_SIZE);
 		levels.push_back(get_page_level(small_page_size));
 
 		if (auto r = get_supported_huge_page_levels())
@@ -126,13 +130,34 @@ static int get_page_level_flags(page_level const level)
 	}
 
 	auto const supported_levels = get_supported_page_levels();
-	
+
 	if (level == supported_levels.front())
 	{
 		return 0;
 	}
-	
+
 	return MAP_HUGETLB | std::to_underlying(level) << MAP_HUGE_SHIFT;
+}
+
+
+vsm::result<void> map_handle_base::set_page_access(void* const base, size_t const size, page_access const access)
+{
+	if (!*this)
+	{
+		return vsm::unexpected(error::handle_is_null);
+	}
+
+	if (!check_address_range(base, size))
+	{
+		return vsm::unexpected(error::invalid_address);
+	}
+
+	if (mprotect(base, size, get_page_protection(access)) == -1)
+	{
+		return vsm::unexpected(get_last_error());
+	}
+
+	return {};
 }
 
 
@@ -145,61 +170,91 @@ vsm::result<void> detail::map_handle_base::sync_impl(io::parameters_with_result<
 		return vsm::unexpected(error::handle_is_not_null);
 	}
 
-	vsm_assert(args.section != nullptr);
-	section_handle const& sh = *args.section;
 
-	if (!sh)
-	{
-		return vsm::unexpected(error::invalid_argument);
-	}
-
-	int flags = MAP_SHARED_VALIDATE | page_level_flags;
+	int flags = MAP_SHARED_VALIDATE;
 	int fd = -1;
 
-	if (sh.get_flags()[section_handle::impl_flags::anonymous])
+
+	if (args.section != nullptr)
 	{
-		flags |= MAP_ANONYMOUS;
+		section_handle const& sh = *args.section;
+
+		if (!sh)
+		{
+			return vsm::unexpected(error::invalid_argument);
+		}
+
+		fd = unwrap_handle(sh.get_platform_handle());
 	}
 	else
 	{
-		fd = unwrap_handle(sh.get_platform_handle());
+		if (args.offset != 0)
+		{
+			return vsm::unexpected(error::invalid_argument);
+		}
+
+		flags |= MAP_ANONYMOUS;
 	}
 
-	flags |= get_page_level_flags(args.page_level);
+	void* const requested_address = reinterpret_cast<void*>(args.address);
 
-	if (args.address != static_cast<uintptr_t>(0))
+	if (requested_address != nullptr)
 	{
 		flags |= MAP_FIXED_NOREPLACE;
 	}
 
-	void* address = mmap(
-		reinterpret_cast<void*>(args.address),
-		size,
+	flags |= get_page_level_flags(args.page_level);
+
+
+	void* base = mmap(
+		requested_address,
+		args.size,
 		get_page_protection(args.access),
 		flags,
 		fd,
 		args.offset);
 
-	if (address == MAP_FAILED)
+	if (base == MAP_FAILED)
 	{
 		return vsm::unexpected(get_last_error());
 	}
 
 	vsm_defer
 	{
-		if (address != nullptr)
+		if (base != nullptr)
 		{
-			munmap(address, args.size);
+			vsm_verify(munmap(base, args.size) != -1);
 		}
 	};
 
-	if (args.address != nullptr && address != args.address)
+	if (requested_address != nullptr && base != requested_address)
 	{
-		return vsm::unexpected(error::address_not_available);
+		return vsm::unexpected(error::virtual_address_not_available);
 	}
 
-	h.m_base.value = std::exchange(address, nullptr);
+
+	h.m_base.value = std::exchange(base, nullptr);
 	h.m_size.value = args.size;
+
+	return {};
+}
+
+vsm::result<void> detail::map_handle_base::sync_impl(io::parameters_with_result<io::close> const& args)
+{
+	map_handle& h = static_cast<map_handle&>(*args.handle);
+
+	if (!h)
+	{
+		return vsm::unexpected(error::handle_is_null);
+	}
+
+	if (munmap(h.m_base.value, h.m_size.value) == -1)
+	{
+		return vsm::unexpected(get_last_error());
+	}
+
+	h.m_base.value = nullptr;
+	h.m_size.value = 0;
 
 	return {};
 }

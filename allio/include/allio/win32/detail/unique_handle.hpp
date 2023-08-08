@@ -7,7 +7,7 @@
 #include <vsm/standard.hpp>
 #include <vsm/unique_resource.hpp>
 
-namespace allio::win32 {
+namespace allio::win32::detail {
 
 vsm::result<void> close_handle(HANDLE handle) noexcept;
 
@@ -20,4 +20,4 @@ struct handle_deleter
 };
 using unique_handle = vsm::unique_resource<HANDLE, handle_deleter, static_cast<HANDLE>(NULL)>;
 
-} // namespace allio::win32
+} // namespace allio::win32::detail

@@ -1,87 +1,24 @@
 #include <allio/file_handle_async.hpp>
 
-#include <allio/default_multiplexer.hpp>
-#include <allio/sync_wait.hpp>
-
+#include <allio/test/filesystem.hpp>
+#include <allio/test/multiplexer.hpp>
 #include <allio/test/task.hpp>
+#include <allio/sync_wait.hpp>
 
 #include <catch2/catch_all.hpp>
 
-#include <filesystem>
 #include <string>
 #include <vector>
 
-#include <cstdio>
 #include <cstring>
 
 using namespace allio;
-
-namespace {
-
-struct file_deleter
-{
-	void operator()(FILE* const file) const
-	{
-		fclose(file);
-	}
-};
-using unique_file = std::unique_ptr<FILE, file_deleter>;
-
-} // namespace
-
-static path get_temp_file_path(std::string_view const filename)
-{
-	return path((std::filesystem::temp_directory_path() / filename).string());
-}
-
-static unique_file open_file(path const& path, bool const write = false)
-{
-	FILE* const file = fopen(path.string().c_str(), write ? "wb" : "rb");
-	REQUIRE(file != nullptr);
-	return unique_file(file);
-}
-
-static void check_file_content(path const& path, std::string_view const content)
-{
-	auto const file = open_file(path);
-
-	std::string buffer;
-	buffer.resize(content.size());
-
-	REQUIRE(fread(buffer.data(), content.size(), 1, file.get()) == 1);
-	REQUIRE(buffer == content);
-}
-
-static void write_file_content(path const& path, std::string_view const content)
-{
-	auto const file = open_file(path, true);
-	REQUIRE(fwrite(content.data(), content.size(), 1, file.get()) == 1);
-}
-
-static void maybe_set_multiplexer(unique_multiplexer_ptr const& multiplexer, auto& handle)
-{
-	if (GENERATE(0, 1))
-	{
-		CAPTURE("Bound multiplexer");
-		handle.set_multiplexer(multiplexer.get()).value();
-	}
-}
-
-static unique_multiplexer_ptr generate_multiplexer(bool const required = false)
-{
-	if (required || GENERATE(0, 1))
-	{
-		return create_default_multiplexer().value();
-	}
-	return nullptr;
-}
 
 TEST_CASE("file_handle::read_at", "[file_handle]")
 {
 	path const file_path = get_temp_file_path("allio-test-file");
 
-	//unique_multiplexer_ptr const multiplexer = generate_multiplexer();
-	unique_multiplexer_ptr const multiplexer = create_default_multiplexer().value();
+	unique_multiplexer_ptr const multiplexer = generate_multiplexer();
 	bool const multiplexable = multiplexer != nullptr;
 
 	write_file_content(file_path, "allio");

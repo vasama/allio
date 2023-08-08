@@ -18,11 +18,11 @@ struct open_parameters
 	static vsm::result<open_parameters> make(filesystem_handle::open_parameters const& args);
 };
 
-vsm::result<unique_fd> create_file(
+vsm::result<detail::unique_fd> create_file(
 	filesystem_handle const* base, input_path_view path,
 	open_parameters args);
 
-vsm::result<unique_fd> create_file(
+vsm::result<detail::unique_fd> create_file(
 	filesystem_handle const* base, input_path_view path,
 	filesystem_handle::open_parameters const& args);
 

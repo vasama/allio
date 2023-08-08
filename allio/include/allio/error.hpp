@@ -49,6 +49,8 @@ enum class error
 	invalid_path,
 	invalid_current_directory,
 	directory_stream_at_end,
+	virtual_address_not_available,
+	invalid_address,
 };
 
 inline std::error_code make_error_code(error const error)

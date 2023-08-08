@@ -405,6 +405,58 @@ extern NTSTATUS(NTAPI* NtQueryFullAttributesFile)(
 	_In_ POBJECT_ATTRIBUTES ObjectAttributes,
 	_Out_ PFILE_NETWORK_OPEN_INFORMATION FileInformation);
 
+extern NTSTATUS(NTAPI* NtAllocateVirtualMemory)(
+	_In_ HANDLE ProcessHandle,
+	_Inout_ PVOID* BaseAddress,
+	_In_ ULONG_PTR ZeroBits,
+	_Inout_ PSIZE_T RegionSize,
+	_In_ ULONG AllocationType,
+	_In_ ULONG Protect);
+
+extern NTSTATUS(NTAPI* NtFreeVirtualMemory)(
+	_In_ HANDLE ProcessHandle,
+	_Inout_ PVOID* BaseAddress,
+	_Inout_ PSIZE_T RegionSize,
+	_In_ ULONG FreeType);
+
+extern NTSTATUS(NTAPI* NtProtectVirtualMemory)(
+	_In_ HANDLE ProcessHandle,
+	_Inout_ PVOID* BaseAddress,
+	_Inout_ PSIZE_T RegionSize,
+	_In_ ULONG NewProtect,
+	_Out_ PULONG OldProtect);
+
+extern NTSTATUS(NTAPI* NtOpenSection)(
+	_Out_ PHANDLE SectionHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_ POBJECT_ATTRIBUTES ObjectAttributes);
+
+extern NTSTATUS(NTAPI* NtCreateSection)(
+	_Out_ PHANDLE SectionHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_opt_ PLARGE_INTEGER MaximumSize,
+	_In_ ULONG SectionPageProtection,
+	_In_ ULONG AllocationAttributes,
+	_In_opt_ HANDLE FileHandle);
+
+extern NTSTATUS(NTAPI* NtMapViewOfSection)(
+	_In_ HANDLE SectionHandle
+	_In_ HANDLE ProcessHandle,
+	_Inout_ PVOID* BaseAddress,
+	_In_ ULONG_PTR ZeroBits,
+	_In_ SIZE_T CommitSize,
+	_Inout_opt_ PLARGE_INTEGER SectionOffset,
+	_In_opt_ PSIZE_T RegionSize,
+	_In_ SECTION_INHERIT InheritDisposition,
+	_In_ ULONG AllocationType,
+	_In_ ULONG Protect);
+
+extern NTSTATUS(NTAPI* NtUnmapViewOfSection)(
+	_In_ HANDLE ProcessHandle,
+	_In_opt_ PVOID BaseAddress);
+
+
 inline TEB* NtCurrentTeb()
 {
 #ifdef _WIN64

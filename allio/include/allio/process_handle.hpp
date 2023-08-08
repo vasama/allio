@@ -35,8 +35,9 @@ class process_handle_base : public platform_handle
 	vsm::linear<process_id> m_pid;
 
 public:
-	using base_type = platform_handle;
 	struct implementation;
+
+	using base_type = platform_handle;
 
 	struct native_handle_type : platform_handle::native_handle_type
 	{
@@ -83,7 +84,7 @@ public:
 	{
 		return
 		{
-			platform_handle::get_native_handle(),
+			base_type::get_native_handle(),
 			m_pid.value,
 			m_exit_code.value,
 		};

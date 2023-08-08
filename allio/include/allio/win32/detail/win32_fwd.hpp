@@ -3,7 +3,7 @@
 struct _IO_STATUS_BLOCK;
 struct _OVERLAPPED;
 
-namespace allio::win32 {
+namespace allio::detail {
 
 using NTSTATUS = long;
 using HANDLE = void*;
@@ -30,4 +30,4 @@ struct win32_type_traits<OVERLAPPED>
 	static constexpr size_t size = sizeof(uintptr_t) * 3 + 8;
 };
 
-} // namespace allio::win32
+} // namespace allio::detail

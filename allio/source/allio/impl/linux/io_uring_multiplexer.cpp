@@ -31,6 +31,7 @@
 #include <allio/linux/detail/undef.i>
 
 using namespace allio;
+using namespace allio::detail;
 using namespace allio::linux;
 
 allio_extern_async_handle_multiplexer_relations(io_uring_multiplexer);

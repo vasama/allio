@@ -25,6 +25,7 @@
 #include <allio/linux/detail/undef.i>
 
 using namespace allio;
+using namespace allio::detail;
 using namespace allio::linux;
 
 static pid_t clone3(clone_args* const cl_args, size_t const size)

@@ -15,7 +15,7 @@ struct platform_handle::implementation : base_type::implementation {};
 namespace linux {
 
 template<std::derived_from<platform_handle> Handle>
-vsm::result<void> initialize_platform_handle(Handle& managed_handle, unique_fd&& fd, auto&& create)
+vsm::result<void> initialize_platform_handle(Handle& managed_handle, detail::unique_fd&& fd, auto&& create)
 {
 	return vsm::consume_resources([&](int const h) -> vsm::result<void>
 	{

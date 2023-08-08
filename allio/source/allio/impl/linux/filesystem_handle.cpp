@@ -7,6 +7,7 @@
 #include <allio/linux/detail/undef.i>
 
 using namespace allio;
+using namespace allio::detail;
 using namespace allio::linux;
 
 vsm::result<open_parameters> open_parameters::make(filesystem_handle::open_parameters const& args)

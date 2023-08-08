@@ -183,7 +183,7 @@ private:
 
 
 	/// @brief Unique owner of the io uring kernel object.
-	unique_fd m_io_uring;
+	detail::unique_fd m_io_uring;
 
 	/// @brief Unique owner of the mmapped region containing the submission queue indices.
 	unique_mmapping<std::byte> m_sq_mmap;
@@ -298,7 +298,7 @@ public:
 
 	class init_result
 	{
-		unique_fd io_uring;
+		detail::unique_fd io_uring;
 		unique_mmapping<std::byte> sq_ring;
 		unique_mmapping<std::byte> cq_ring;
 		unique_mmapping<sqe_placeholder> sqes;
@@ -401,7 +401,7 @@ public:
 		explicit submission_context(io_uring_multiplexer& multiplexer)
 			: m_multiplexer(&multiplexer)
 			, m_sq_acquire(multiplexer.m_sq_acquire)
-			, m_cq_cq_available(multiplexer.m_cq_available)
+			, m_cq_available(multiplexer.m_cq_available)
 		{
 			vsm_assert(!vsm::any_flags(std::exchange(m_multiplexer->m_flags, m_multiplexer->m_flags | flags::submit_lock), flags::submit_lock));
 		}

@@ -1,0 +1,31 @@
+#pragma once
+
+#include <vsm/assert.h>
+#include <vsm/result.hpp>
+#include <vsm/standard.hpp>
+#include <vsm/unique_resource.hpp>
+
+#include <allio/linux/detail/undef.i>
+
+namespace vsm::linux::detail {
+
+vsm::result<void> close_mapping(void* base, size_t size) noexcept;
+
+struct mapping
+{
+	void* base;
+	size_t size;
+};
+
+struct mapping_deleter
+{
+	void vsm_static_operator_invoke(mapping const mapping) noexcept
+	{
+		vsm_verify(close_mapping(mapping.base, mapping.size));
+	}
+};
+using unique_mapping = vsm::unique_resource<mapping, mapping_deleter, mapping{}>;
+
+} // namespace vsm::linux::detail
+
+#include <allio/linux/detail/undef.i>

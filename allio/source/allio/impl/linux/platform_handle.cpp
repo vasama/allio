@@ -8,6 +8,7 @@
 #include <allio/linux/detail/undef.i>
 
 using namespace allio;
+using namespace allio::detail;
 using namespace allio::linux;
 
 vsm::result<void> platform_handle::close_sync(basic_parameters const& args)

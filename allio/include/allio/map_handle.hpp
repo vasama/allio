@@ -4,60 +4,11 @@
 
 namespace allio {
 
-enum class page_access : uint8_t
-{
-	none                                = 0,
-
-	read                                = 1 << 0,
-	write                               = 1 << 1,
-	execute                             = 1 << 2,
-
-	read_write = read | write,
-};
-vsm_flag_enum(page_access);
-
-
-enum class page_level : uint8_t
-{
-	default_level                       = 0,
-
-	_4KiB                               = 12,
-	_16KiB                              = 14,
-	_64KiB                              = 16,
-	_512KiB                             = 19,
-	_1MiB                               = 20,
-	_2MiB                               = 21,
-	_8MiB                               = 23,
-	_16MiB                              = 24,
-	_32MiB                              = 25,
-	_256MiB                             = 28,
-	_512MiB                             = 29,
-	_1GiB                               = 30,
-	_2GiB                               = 31,
-	_16GiB                              = 34,
-};
-
-inline page_level get_page_level(size_t const size)
-{
-	vsm_assert(size > 1 && size & size - 1 == 0);
-	return static_cast<page_level>(std::countr_zero(size));
-}
-
-inline size_t get_page_size(page_level const level)
-{
-	vsm_assert(level != page_level::default_level);
-	return static_cast<size_t>(1) << static_cast<uint8_t>(level);
-}
-
-std::span<page_level const> get_supported_page_levels();
-
-
 namespace io {
 
 struct map;
 
 } // namespace io
-
 
 namespace detail {
 
@@ -69,27 +20,72 @@ class map_handle_base : public handle
 	vsm::linear<size_t> m_size;
 
 public:
+	struct implementation;
+
 	using base_type = handle;
+
+	struct native_handle_type : base_type::native_handle_type
+	{
+		void* base;
+		size_t size;
+	};
 
 
 	#define allio_map_handle_map_parameters(type, data, ...) \
 		type(allio::map_handle, map_parameters) \
-		data(::uintptr_t, preferred_address, 0) \
-		data(::allio::page_access, access, ::allio::page_access::read_write) \
-		data(::allio::page_level, page_level, ::allio::page_level::default_level) \
+		data(::allio::section_handle const*,    section,        nullptr) \
+		data(::allio::file_size,                offset,         0) \
+		data(::uintptr_t,                       address,        0) \
+		data(::allio::page_access,              access,         ::allio::page_access::read_write) \
+		data(::allio::page_level,               page_level,     ::allio::page_level::default_level) \
 
 	allio_interface_parameters(allio_map_handle_map_parameters);
 
 
+	constexpr map_handle_base()
+		: base_type(type_of<final_handle_type>())
+	{
+	}
+
+
+	native_handle_type get_native_handle() const
+	{
+		return
+		{
+			base_type::get_native_handle(),
+			m_base.value,
+			m_size.value,
+		};
+	}
+
+
+	[[nodiscard]] page_level get_page_level() const
+	{
+		vsm_assert(*this);
+		//TODO: Implement map_handle::get_page_level.
+		return {};
+	}
+
+	[[nodiscard]] size_t get_page_size() const
+	{
+		return allio::get_page_size(get_page_level());
+	}
+
+
 	[[nodiscard]] void* base() const
 	{
+		vsm_assert(*this);
 		return m_base.value;
 	}
 
 	[[nodiscard]] size_t size() const
 	{
+		vsm_assert(*this);
 		return m_size.value;
 	}
+
+
+	vsm::result<void> set_page_access(void* base, size_t size, page_access access);
 
 
 	template<parameters<map_parameters> P = map_parameters::interface>
@@ -99,12 +95,16 @@ public:
 	}
 
 private:
+	bool check_address_range(void* base, size_t size) const;
+
 	vsm::result<void> block_map(section_handle const& section, file_size const offset, size_t const size, map_parameters const& args);
+	vsm::result<void> block_close();
 
 protected:
 	using base_type::sync_impl;
 
 	static vsm::result<void> sync_impl(io::parameters_with_result<io::map> const& args);
+	static vsm::result<void> sync_impl(io::parameters_with_result<io::close> const& args);
 };
 
 vsm::result<final_handle<map_handle_base>> block_map(
@@ -134,5 +134,56 @@ vsm::result<map_handle> map_anonymous(size_t const size, P const& args = {})
 }
 
 allio_detail_api extern allio_handle_implementation(map_handle);
+
+
+template<typename T>
+class map_span
+{
+	static_assert(std::is_trivially_copyable_v<T>);
+
+	map_handle m_handle;
+
+public:
+	explicit map_span(map_handle handle)
+		: m_handle(vsm_move(handle))
+	{
+	}
+
+	[[nodiscard]] T* data() const
+	{
+		return reinterpret_cast<T*>(m_handle.base());
+	}
+
+	[[nodiscard]] size_t size() const
+	{
+		return m_handle.size() / sizeof(T);
+	}
+
+	[[nodiscard]] T& operator[](size_t const offset) const
+	{
+		return data()[offset];
+	}
+
+	[[nodiscard]] T* begin() const
+	{
+		return data();
+	}
+
+	[[nodiscard]] T* end() const
+	{
+		return data() + size();
+	}
+};
+
+
+template<>
+struct io::parameters<io::map>
+	: map_handle::map_parameters
+{
+	using handle_type = map_handle;
+	using result_type = void;
+
+	size_t size;
+};
 
 } // namespace allio

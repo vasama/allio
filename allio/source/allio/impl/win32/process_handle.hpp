@@ -1,3 +1,5 @@
+#pragma once
+
 #include <allio/process_handle.hpp>
 
 #include <allio/impl/win32/platform_handle.hpp>

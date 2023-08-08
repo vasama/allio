@@ -5,9 +5,7 @@
 #include <vsm/standard.hpp>
 #include <vsm/unique_resource.hpp>
 
-#include <allio/linux/detail/undef.i>
-
-namespace allio::linux {
+namespace allio::detail {
 
 vsm::result<void> close_fd(int fd) noexcept;
 
@@ -20,6 +18,4 @@ struct fd_deleter
 };
 using unique_fd = vsm::unique_resource<int, fd_deleter, static_cast<int>(-1)>;
 
-} // namespace allio::linux
-
-#include <allio/linux/detail/undef.i>
+} // namespace allio::detail
