@@ -42,6 +42,7 @@ public:
 	allio_interface_parameters(allio_map_handle_map_parameters);
 
 
+	//TODO: This should be protected, along with all other similar ones.
 	constexpr map_handle_base()
 		: base_type(type_of<final_handle_type>())
 	{
@@ -94,8 +95,12 @@ public:
 		return block_map(section, offset, size, args);
 	}
 
+protected:
+	vsm::result<void> set_native_handle(native_handle_type handle);
+	vsm::result<native_handle_type> release_native_handle();
+
 private:
-	bool check_address_range(void* base, size_t size) const;
+	bool check_address_range(void const* base, size_t size) const;
 
 	vsm::result<void> block_map(section_handle const& section, file_size const offset, size_t const size, map_parameters const& args);
 	vsm::result<void> block_close();

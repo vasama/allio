@@ -7,6 +7,7 @@
 #include <allio/impl/win32/kernel_path.hpp>
 #include <allio/win32/nt_error.hpp>
 
+#include <vsm/lazy.hpp>
 #include <vsm/utility.hpp>
 
 #include <algorithm>
@@ -15,6 +16,7 @@
 #include <win32.h>
 
 using namespace allio;
+using namespace allio::detail;
 using namespace allio::win32;
 
 namespace {
@@ -518,7 +520,11 @@ vsm::result<process_info> win32::launch_process(input_path_view const path, proc
 
 	unique_handle const thread = unique_handle(process_info.hThread);
 
-	return vsm::result<win32::process_info>(vsm::result_value, process_info.hProcess, static_cast<process_id>(process_info.dwProcessId));
+	return vsm_lazy(win32::process_info
+	{
+		unique_handle(process_info.hProcess),
+		static_cast<process_id>(process_info.dwProcessId),
+	});
 }
 
 #if 0

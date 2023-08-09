@@ -4,7 +4,7 @@
 
 namespace allio {
 
-struct detail::process_handle_base::implementation : base_type::implementation
+struct detail::map_handle_base::implementation : base_type::implementation
 {
 	allio_handle_implementation_flags
 	(

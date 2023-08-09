@@ -290,6 +290,13 @@ struct _PEB
 }
 typedef PEB, *PPEB;
 
+enum _SECTION_INHERIT
+{
+	ViewShare = 1,
+	ViewUnmap = 2,
+}
+typedef SECTION_INHERIT;
+
 extern ULONG(NTAPI* RtlNtStatusToDosError)(
 	_In_ NTSTATUS Status);
 
@@ -441,7 +448,7 @@ extern NTSTATUS(NTAPI* NtCreateSection)(
 	_In_opt_ HANDLE FileHandle);
 
 extern NTSTATUS(NTAPI* NtMapViewOfSection)(
-	_In_ HANDLE SectionHandle
+	_In_ HANDLE SectionHandle,
 	_In_ HANDLE ProcessHandle,
 	_Inout_ PVOID* BaseAddress,
 	_In_ ULONG_PTR ZeroBits,

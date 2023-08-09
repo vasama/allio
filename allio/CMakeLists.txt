@@ -56,6 +56,7 @@ vsm_add_library(allio
 		include/allio/network.hpp
 		include/allio/output_path_ref.hpp
 		include/allio/output_string_ref.hpp
+		include/allio/packet_socket_handle.hpp
 		include/allio/parameters.hpp
 		include/allio/path.hpp
 		include/allio/path_handle.hpp
@@ -66,6 +67,7 @@ vsm_add_library(allio
 		include/allio/section_handle.hpp
 		include/allio/socket_handle.hpp
 		include/allio/socket_handle_async.hpp
+		include/allio/stream_socket_handle.hpp
 		include/allio/step_deadline.hpp
 		include/allio/storage.hpp
 		include/allio/synchronized_multiplexer.hpp
@@ -103,12 +105,14 @@ vsm_add_library(allio
 		source/allio/impl/handle.cpp
 		source/allio/impl/implementation.cpp
 		source/allio/impl/manual_multiplexer.cpp
+		source/allio/impl/map_handle.cpp
 		source/allio/impl/multiplexer.cpp
 		source/allio/impl/object_transaction.hpp
 		source/allio/impl/platform_handle.cpp
 		source/allio/impl/posix_socket.cpp
 		source/allio/impl/posix_socket.hpp
 		source/allio/impl/process_handle.cpp
+		source/allio/impl/section_handle.cpp
 		source/allio/impl/socket_handle.cpp
 		source/allio/impl/sync_byte_io.hpp
 		source/allio/impl/unique_name.cpp
@@ -169,6 +173,8 @@ vsm_target_platform_sources(allio Windows
 	source/allio/impl/win32/posix_socket.hpp
 	source/allio/impl/win32/process_handle.cpp
 	source/allio/impl/win32/process_handle.hpp
+	source/allio/impl/win32/section_handle.cpp
+	source/allio/impl/win32/section_handle.hpp
 	source/allio/impl/win32/sync_byte_io.cpp
 	source/allio/impl/win32/sync_filesystem_handle.hpp
 	source/allio/impl/win32/unique_handle.cpp
@@ -198,6 +204,7 @@ vsm_target_platform_sources(allio Linux
 	source/allio/impl/linux/posix_socket.hpp
 	source/allio/impl/linux/process_handle.cpp
 	source/allio/impl/linux/process_handle.hpp
+	source/allio/impl/linux/section_handle.cpp
 	source/allio/impl/linux/stat.hpp
 	source/allio/impl/linux/sync_byte_io.cpp
 	source/allio/impl/linux/sync_filesystem_handle.hpp

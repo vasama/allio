@@ -39,7 +39,7 @@ public:
 
 	using base_type = platform_handle;
 
-	struct native_handle_type : platform_handle::native_handle_type
+	struct native_handle_type : base_type::native_handle_type
 	{
 		process_id pid;
 		process_exit_code exit_code;
@@ -52,7 +52,7 @@ public:
 	);
 
 	using async_operations = type_list_cat<
-		platform_handle::async_operations,
+		base_type::async_operations,
 		type_list<
 			io::process_open,
 			io::process_launch,
@@ -146,15 +146,17 @@ public:
 	static final_handle_type current();
 
 protected:
-	vsm::result<void> block_open(process_id pid, open_parameters const& args);
-	vsm::result<void> block_launch(filesystem_handle const* base, input_path_view path, launch_parameters const& args);
-	vsm::result<process_exit_code> block_wait(wait_parameters const& args);
-
 	vsm::result<void> close_sync(basic_parameters const& args);
 
 	vsm::result<void> set_native_handle(native_handle_type handle);
 	vsm::result<native_handle_type> release_native_handle();
 
+private:
+	vsm::result<void> block_open(process_id pid, open_parameters const& args);
+	vsm::result<void> block_launch(filesystem_handle const* base, input_path_view path, launch_parameters const& args);
+	vsm::result<process_exit_code> block_wait(wait_parameters const& args);
+
+protected:
 	using base_type::sync_impl;
 
 	static vsm::result<void> sync_impl(io::parameters_with_result<io::process_open> const& args);

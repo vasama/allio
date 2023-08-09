@@ -1,15 +1,20 @@
 #include <allio/section_handle.hpp>
 
-#include <vsm/out_resource.hpp>
-
 #include <allio/impl/win32/kernel.hpp>
+#include <allio/impl/win32/platform_handle.hpp>
+#include <allio/win32/detail/unique_handle.hpp>
+#include <allio/win32/nt_error.hpp>
+#include <allio/win32/platform.hpp>
+
+#include <vsm/out_resource.hpp>
 
 #include <win32.h>
 
 using namespace allio;
+using namespace allio::detail;
 using namespace allio::win32;
 
-vsm::result<void> detail::section_handle_base::sync_impl(io::parameters_with_result<io::section_create> const& args)
+vsm::result<void> detail::section_handle_base::sync_impl(io::parameters_with_result<io::create_section> const& args)
 {
 	section_handle& h = *args.handle;
 
@@ -31,16 +36,17 @@ vsm::result<void> detail::section_handle_base::sync_impl(io::parameters_with_res
 		return vsm::unexpected(error::invalid_argument);
 	}
 
-	LARGE_INTEGER const maximum_size =
+	LARGE_INTEGER maximum_size =
 	{
-		.QuadPart = args.maximum_size,
+		//TODO: Maybe use a checked cast.
+		.QuadPart = static_cast<decltype(LARGE_INTEGER::QuadPart)>(args.maximum_size),
 	};
 
 
 	unique_handle section;
 
 	NTSTATUS const status = NtCreateSection(
-		out_resource(section),
+		vsm::out_resource(section),
 		SECTION_ALL_ACCESS, //TODO: Access
 		nullptr, // ObjectAttributes
 		&maximum_size,
@@ -63,8 +69,8 @@ vsm::result<void> detail::section_handle_base::sync_impl(io::parameters_with_res
 				{
 					handle::flags::not_null,
 				},
-				wrap_handle(handle),
-			}
+				handle,
+			};
 		}
 	);
 }

@@ -24,7 +24,7 @@ namespace win32 {
 
 struct unique_handle_with_flags
 {
-	unique_handle handle;
+	detail::unique_handle handle;
 	handle_flags flags;
 
 	unique_handle_with_flags() = default;
@@ -37,7 +37,7 @@ struct unique_handle_with_flags
 };
 
 template<std::derived_from<platform_handle> Handle>
-vsm::result<void> initialize_platform_handle(Handle& managed_handle, unique_handle&& handle, auto&& create)
+vsm::result<void> initialize_platform_handle(Handle& managed_handle, detail::unique_handle&& handle, auto&& create)
 {
 	return vsm::consume_resources([&](HANDLE const h) -> vsm::result<void>
 	{
@@ -82,9 +82,9 @@ vsm::result<unique_handle_with_flags> consume_or_duplicate_handle(Handle&& manag
 }
 
 
-handle_flags set_multiplexable_completion_modes(HANDLE handle);
+handle_flags set_multiplexable_completion_modes(detail::HANDLE handle);
 
-vsm::result<unique_handle> duplicate_handle(HANDLE handle);
+vsm::result<detail::unique_handle> duplicate_handle(detail::HANDLE handle);
 
 } // namespace win32
 } // namespace allio

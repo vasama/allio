@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+
 struct _IO_STATUS_BLOCK;
 struct _OVERLAPPED;
 

@@ -58,8 +58,8 @@ struct basic_kernel_path
 namespace win32 {
 
 using kernel_path_storage = detail::kernel_path_impl::basic_kernel_path_storage<unique_peb_lock>;
-using kernel_path_parameters = detail::kernel_path_impl::basic_kernel_path_parameters<HANDLE>;
-using kernel_path = detail::kernel_path_impl::basic_kernel_path<HANDLE>;
+using kernel_path_parameters = detail::kernel_path_impl::basic_kernel_path_parameters<detail::HANDLE>;
+using kernel_path = detail::kernel_path_impl::basic_kernel_path<detail::HANDLE>;
 
 vsm::result<kernel_path> make_kernel_path(kernel_path_storage& storage, kernel_path_parameters const& args);
 

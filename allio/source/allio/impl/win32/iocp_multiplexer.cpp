@@ -19,6 +19,7 @@
 #include <span>
 
 using namespace allio;
+using namespace allio::detail;
 using namespace allio::win32;
 
 static vsm::result<void> set_waitable_timer(HANDLE const handle, deadline const deadline)

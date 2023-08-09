@@ -74,7 +74,7 @@ static directory_stream_entry const* next_entry(directory_stream_entry const* co
 }
 
 
-directory_entry detail::directory_entry_view::get_entry(directory_stream_native_handle const handle)
+directory_entry directory_entry_view::get_entry(directory_stream_native_handle const handle)
 {
 	vsm_assert(handle != directory_stream_native_handle::end);
 	directory_stream_entry const* const entry = unwrap_stream(handle);
@@ -87,7 +87,7 @@ directory_entry detail::directory_entry_view::get_entry(directory_stream_native_
 	};
 }
 
-directory_stream_native_handle detail::directory_stream_iterator::advance(directory_stream_native_handle const handle)
+directory_stream_native_handle directory_stream_iterator::advance(directory_stream_native_handle const handle)
 {
 	return wrap_stream(next_entry(unwrap_stream(handle)));
 }

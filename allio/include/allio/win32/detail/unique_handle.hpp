@@ -1,13 +1,13 @@
 #pragma once
 
-#include <allio/win32/platform.hpp>
+#include <allio/win32/detail/win32_fwd.hpp>
 
 #include <vsm/assert.h>
 #include <vsm/result.hpp>
 #include <vsm/standard.hpp>
 #include <vsm/unique_resource.hpp>
 
-namespace allio::win32::detail {
+namespace allio::detail {
 
 vsm::result<void> close_handle(HANDLE handle) noexcept;
 
@@ -20,4 +20,4 @@ struct handle_deleter
 };
 using unique_handle = vsm::unique_resource<HANDLE, handle_deleter, static_cast<HANDLE>(NULL)>;
 
-} // namespace allio::win32::detail
+} // namespace allio::detail

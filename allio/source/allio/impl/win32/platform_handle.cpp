@@ -5,6 +5,7 @@
 #include <win32.h>
 
 using namespace allio;
+using namespace allio::detail;
 using namespace allio::win32;
 
 vsm::result<void> platform_handle::close_sync(basic_parameters const& args)

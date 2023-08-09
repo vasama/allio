@@ -22,12 +22,12 @@ class iocp_multiplexer final : public deferring_multiplexer
 	template<size_t Size>
 	class object_cache
 	{
-		unique_handle m_objects[Size];
+		detail::unique_handle m_objects[Size];
 		std::bitset<Size> m_mask;
 
 	public:
-		HANDLE try_acquire();
-		bool try_release(HANDLE handle);
+		detail::HANDLE try_acquire();
+		bool try_release(detail::HANDLE handle);
 	};
 
 public:
@@ -69,8 +69,8 @@ private:
 	template<typename T>
 	class basic_io_slot_storage
 	{
-		static constexpr size_t buffer_size = win32_type_traits<T>::size;
-		static_assert(buffer_size >= win32_type_traits<IO_STATUS_BLOCK>::size);
+		static constexpr size_t buffer_size = detail::win32_type_traits<T>::size;
+		static_assert(buffer_size >= detail::win32_type_traits<detail::IO_STATUS_BLOCK>::size);
 		std::byte m_buffer alignas(uintptr_t) [buffer_size];
 
 	public:
@@ -105,10 +105,10 @@ private:
 	class wait_data
 	{
 	public:
-		NTSTATUS Status;
+		detail::NTSTATUS Status;
 
 	private:
-		HANDLE wait_packet;
+		detail::HANDLE wait_packet;
 
 		friend class iocp_multiplexer;
 	};
@@ -116,24 +116,24 @@ private:
 	class timeout_data
 	{
 	public:
-		NTSTATUS Status;
+		detail::NTSTATUS Status;
 
 	private:
-		HANDLE waitable_timer;
-		HANDLE wait_packet;
+		detail::HANDLE waitable_timer;
+		detail::HANDLE wait_packet;
 
 		friend class iocp_multiplexer;
 	};
 
 public:
-	using io_status_block = basic_io_slot<IO_STATUS_BLOCK>;
-	using overlapped = basic_io_slot<OVERLAPPED>;
+	using io_status_block = basic_io_slot<detail::IO_STATUS_BLOCK>;
+	using overlapped = basic_io_slot<detail::OVERLAPPED>;
 
 	using wait_slot = basic_io_slot<wait_data>;
 	using timeout_slot = basic_io_slot<timeout_data>;
 
 private:
-	unique_handle const m_completion_port;
+	detail::unique_handle const m_completion_port;
 
 	object_cache<8> m_wait_packet_cache;
 
@@ -144,7 +144,7 @@ public:
 
 	class init_result
 	{
-		unique_handle completion_port;
+		detail::unique_handle completion_port;
 		friend class iocp_multiplexer;
 	};
 
@@ -201,15 +201,15 @@ private:
 		{
 		}
 
-		void operator()(HANDLE const handle) const
+		void operator()(detail::HANDLE const handle) const
 		{
 			m_multiplexer->release_wait_packet(handle);
 		}
 	};
-	using unique_wait_packet = vsm::unique_resource<HANDLE, wait_packet_deleter, NULL>;
+	using unique_wait_packet = vsm::unique_resource<detail::HANDLE, wait_packet_deleter, NULL>;
 
 	vsm::result<unique_wait_packet> acquire_wait_packet();
-	void release_wait_packet(HANDLE handle);
+	void release_wait_packet(detail::HANDLE handle);
 
 
 	typedef void io_completion_callback(iocp_multiplexer& multiplexer, io_slot& slot);

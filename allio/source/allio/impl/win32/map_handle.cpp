@@ -1,11 +1,16 @@
 #include <allio/impl/win32/map_handle.hpp>
 
+#include <allio/win32/nt_error.hpp>
+#include <allio/win32/platform.hpp>
 #include <allio/impl/bounded_vector.hpp>
 #include <allio/impl/win32/kernel.hpp>
+
+#include <vsm/defer.hpp>
 
 #include <win32.h>
 
 using namespace allio;
+using namespace allio::detail;
 using namespace allio::win32;
 
 std::span<page_level const> allio::get_supported_page_levels()
@@ -83,18 +88,18 @@ static vsm::result<ULONG> get_page_level_allocation_type(page_level const level)
 }
 
 
-static vsm::result<void> close_mapping(void* const base, size_t const size, bool const has_backing_section)
+static vsm::result<void> close_mapping(void* base, size_t size, bool const has_backing_section)
 {
 	HANDLE const process = GetCurrentProcess();
 
 	NTSTATUS const status = has_backing_section
 		? NtUnmapViewOfSection(
 			process,
-			h.m_base.value)
+			base)
 		: NtFreeVirtualMemory(
 			process,
-			h.m_base.value,
-			h.m_size.value,
+			&base,
+			&size,
 			MEM_RELEASE);
 
 	if (!NT_SUCCESS(status))
@@ -156,7 +161,7 @@ vsm::result<void> detail::map_handle_base::sync_impl(io::parameters_with_result<
 
 	ULONG allocation_type = 0;
 
-	handle::flags handle_flags = {};
+	handle_flags handle_flags = {};
 
 
 	bool const has_backing_section = args.section != nullptr;
@@ -212,8 +217,8 @@ vsm::result<void> detail::map_handle_base::sync_impl(io::parameters_with_result<
 		: NtAllocateVirtualMemory(
 			process,
 			&base,
-			0 // ZeroBits
-			&view_size,
+			0, // ZeroBits
+			&size,
 			allocation_type,
 			page_protection);
 
@@ -235,7 +240,7 @@ vsm::result<void> detail::map_handle_base::sync_impl(io::parameters_with_result<
 		{
 			handle::native_handle_type
 			{
-				handle::flags::not_null | handle_flags
+				handle_flags | flags::not_null,
 			},
 			base,
 			size,
