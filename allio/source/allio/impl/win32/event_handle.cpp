@@ -54,7 +54,7 @@ vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::ev
 	}
 
 	handle_flags h_flags = {};
-	bool manual_reset = false;
+	bool manual_reset = true;
 
 	if (args.auto_reset)
 	{
