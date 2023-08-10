@@ -92,7 +92,7 @@ struct allio::multiplexer_handle_operation_implementation<io_uring_multiplexer, 
 				return vsm::unexpected(error::handle_is_null);
 			}
 
-			if (h.get_flags()[process_handle::flags::current])
+			if (h.is_current())
 			{
 				return vsm::unexpected(error::process_is_current_process);
 			}

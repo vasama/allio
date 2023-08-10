@@ -7,7 +7,6 @@
 
 #include <allio/impl/win32/iocp_platform_handle.hpp>
 
-
 using namespace allio;
 using namespace allio::win32;
 
@@ -63,11 +62,12 @@ struct allio::multiplexer_handle_operation_implementation<iocp_multiplexer, proc
 		{
 			set_result(NT_SUCCESS(slot->Status)
 				? vsm::as_error_code(handle_success())
-				: std::error_code(nt_error(slot->Status)));
+				: std::error_code(static_cast<nt_error>(slot->Status)));
 			m.post(*this, async_operation_status::concluded);
 		}
 	};
 
+	//TODO: Implement deadline.
 	static vsm::result<void> start(iocp_multiplexer& m, async_operation_storage& s)
 	{
 		return m.start(s, [&]() -> async_result<void>
@@ -86,11 +86,13 @@ struct allio::multiplexer_handle_operation_implementation<iocp_multiplexer, proc
 
 			s.slot.set_handler(s);
 			vsm_try(completed, m.start_wait(s.slot, h.get_platform_handle()));
+
 			if (completed)
 			{
 				s.set_result(vsm::as_error_code(s.handle_success()));
 				m.post(s, async_operation_status::concluded);
 			}
+
 			return {};
 		});
 	}
@@ -98,11 +100,13 @@ struct allio::multiplexer_handle_operation_implementation<iocp_multiplexer, proc
 	static vsm::result<void> cancel(iocp_multiplexer& m, async_operation_storage& s)
 	{
 		vsm_try(cancelled, m.cancel_wait(s.slot));
+
 		if (cancelled)
 		{
 			s.set_result(error::async_operation_cancelled);
 			m.post(s, async_operation_status::concluded);
 		}
+
 		return {};
 	}
 };

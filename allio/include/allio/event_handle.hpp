@@ -21,11 +21,27 @@ class event_handle_base : public platform_handle
 public:
 	using base_type = platform_handle;
 
+	allio_handle_flags
+	(
+		auto_reset,
+	);
+
+	//TODO: Allow asynchronous reset?
+	//      It is implementable asynchronously using io_uring...
+	using async_operations = type_list_cat<
+		base_type::async_operations,
+		type_list<
+			io::event_create,
+			io::event_wait
+		>
+	>;
+
 
 	#define allio_event_handle_create_parameters(type, data, ...) \
 		type(allio::event_handle, create_parameters) \
 		allio_platform_handle_create_parameters(__VA_ARGS__, __VA_ARGS__) \
 		data(bool, auto_reset, false) \
+		data(bool, signal, false) \
 
 	allio_interface_parameters(allio_event_handle_create_parameters);
 
@@ -38,14 +54,25 @@ public:
 		return block_create(args);
 	}
 
+	/// @brief Wait for the event object to become signaled.
+	/// @note Internally synchronized with @ref signal.
 	template<parameters<wait_parameters> P = wait_parameters::interface>
 	vsm::result<void> wait(P const& args = {}) const
 	{
 		return block_wait(args);
 	}
 
-	vsm::result<void> signal() const;
+	/// @brief Reset the event object. This has no effect on any currently waiting threads,
+	///        but any new waiters will be blocked until the event object is signaled again.
+	///        Behaves the same whether or not the event object is currently signaled.
+	/// @note Internally synchronized with @ref signal.
 	vsm::result<void> reset() const;
+
+	/// @brief Signal the event object. This causes any waiting threads to be woken up.
+	/// @note Internally synchronized with @ref wait and @ref reset.
+	///       In particular this means that signal, and signal alone,
+	///       may be called concurrently with @ref wait or @ref reset.
+	vsm::result<void> signal() const;
 
 protected:
 	constexpr event_handle_base()
@@ -74,7 +101,7 @@ vsm::result<final_handle<event_handle_base>> block_create_event(event_handle_bas
 using event_handle = final_handle<detail::event_handle_base>;
 
 
-template<parameters<detail::event_handle_base> P = detail::event_handle_base::interface>
+template<parameters<event_handle::create_parameters> P = event_handle::create_parameters::interface>
 vsm::result<event_handle> create_event(P const& args = {})
 {
 	return detail::block_create_event(args);

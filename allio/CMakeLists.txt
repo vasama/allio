@@ -42,6 +42,7 @@ vsm_add_library(allio
 		include/allio/directory_handle.hpp
 		include/allio/directory_handle_async.hpp
 		include/allio/dynamic_storage.hpp
+		include/allio/event_handle.hpp
 		include/allio/filesystem.hpp
 		include/allio/filesystem_handle.hpp
 		include/allio/file_handle.hpp
@@ -100,6 +101,7 @@ vsm_add_library(allio
 		source/allio/impl/deferring_multiplexer.cpp
 		#source/allio/impl/directory_handle.cpp
 		source/allio/impl/error.cpp
+		source/allio/impl/event_handle.cpp
 		source/allio/impl/filesystem_handle.cpp
 		source/allio/impl/file_handle.cpp
 		source/allio/impl/handle.cpp
@@ -146,10 +148,12 @@ vsm_target_platform_sources(allio Windows
 	source/allio/impl/win32/encoding.cpp
 	source/allio/impl/win32/encoding.hpp
 	source/allio/impl/win32/error.hpp
+	source/allio/impl/win32/event_handle.cpp
 	source/allio/impl/win32/filesystem_handle.cpp
 	source/allio/impl/win32/filesystem_handle.hpp
 	source/allio/impl/win32/file_handle.cpp
 	source/allio/impl/win32/iocp_byte_io.hpp
+	source/allio/impl/win32/iocp_event_handle.cpp
 	source/allio/impl/win32/iocp_directory_handle.cpp
 	source/allio/impl/win32/iocp_filesystem_handle.hpp
 	source/allio/impl/win32/iocp_file_handle.cpp
@@ -174,7 +178,6 @@ vsm_target_platform_sources(allio Windows
 	source/allio/impl/win32/process_handle.cpp
 	source/allio/impl/win32/process_handle.hpp
 	source/allio/impl/win32/section_handle.cpp
-	source/allio/impl/win32/section_handle.hpp
 	source/allio/impl/win32/sync_byte_io.cpp
 	source/allio/impl/win32/sync_filesystem_handle.hpp
 	source/allio/impl/win32/unique_handle.cpp
@@ -187,10 +190,12 @@ vsm_target_platform_sources(allio Linux
 	source/allio/impl/linux/default_multiplexer.cpp
 	#source/allio/impl/linux/directory_handle.cpp
 	source/allio/impl/linux/error.hpp
+	source/allio/impl/linux/event_handle.cpp
 	source/allio/impl/linux/filesystem_handle.cpp
 	source/allio/impl/linux/filesystem_handle.hpp
 	source/allio/impl/linux/file_handle.cpp
 	source/allio/impl/linux/io_uring_byte_io.hpp
+	source/allio/impl/linux/io_uring_event_handle.cpp
 	source/allio/impl/linux/io_uring_filesystem_handle.hpp
 	source/allio/impl/linux/io_uring_file_handle.cpp
 	source/allio/impl/linux/io_uring_multiplexer.cpp
