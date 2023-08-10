@@ -3,6 +3,8 @@
 #include <allio/impl/linux/error.hpp>
 #include <allio/linux/detail/unique_fd.hpp>
 
+#include <vsm/lazy.hpp>
+
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -10,7 +12,7 @@
 
 namespace allio::linux {
 
-inline vsm::result<unique_fd> dup(int const old_fd, int new_fd, int const flags)
+inline vsm::result<detail::unique_fd> dup(int const old_fd, int new_fd, int const flags)
 {
 	vsm_assert((flags & ~O_CLOEXEC) == 0);
 
@@ -32,7 +34,7 @@ inline vsm::result<unique_fd> dup(int const old_fd, int new_fd, int const flags)
 		return vsm::unexpected(get_last_error());
 	}
 
-	return vsm::result<unique_fd>(result_value, new_fd);
+	return vsm_lazy(detail::unique_fd(new_fd));
 }
 
 } // namespace allio::linux

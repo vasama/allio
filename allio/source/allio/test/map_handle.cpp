@@ -103,7 +103,7 @@ TEST_CASE("file section and mapping", "[section_handle][map_handle]")
 	write_file_content(file_path, "check");
 	{
 		file_handle const file = open_file(file_path).value();
-		section_handle const section = create_section(file, 5).value();
+		section_handle const section = section_create(file, 5).value();
 		map_handle const map = map_section(section, 0, 5).value();
 
 		REQUIRE(map.size() >= 5);

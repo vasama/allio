@@ -14,7 +14,7 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-vsm::result<void> detail::section_handle_base::sync_impl(io::parameters_with_result<io::create_section> const& args)
+vsm::result<void> detail::section_handle_base::sync_impl(io::parameters_with_result<io::section_create> const& args)
 {
 	section_handle& h = *args.handle;
 

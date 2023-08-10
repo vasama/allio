@@ -134,6 +134,7 @@ vsm_add_library(allio
 	TEST_SOURCES
 		#source/allio/test/win32/kernel_path.cpp
 		source/allio/test/directory_handle.cpp
+		source/allio/test/event_handle.cpp
 		source/allio/test/file_handle.cpp
 		source/allio/test/path_view.cpp
 		source/allio/test/process_handle.cpp

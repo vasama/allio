@@ -1,6 +1,8 @@
 #include <allio/section_handle.hpp>
 
 #include <allio/impl/linux/dup.hpp>
+#include <allio/impl/linux/platform_handle.hpp>
+#include <allio/linux/platform.hpp>
 
 #include <allio/linux/detail/undef.i>
 
@@ -34,7 +36,7 @@ vsm::result<void> detail::section_handle_base::sync_impl(io::parameters_with_res
 	//      value category information to avoid dup on rvalues.
 	//      This is probably useful in some other places as well.
 	vsm_try(file, linux::dup(
-		unwrap_handle(args.file->get_platform_handle()),
+		unwrap_handle(backing_file.get_platform_handle()),
 		-1,
 		O_CLOEXEC));
 

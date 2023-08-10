@@ -6,7 +6,7 @@
 
 namespace allio::linux {
 
-vsm::result<void> reset_event(int const fd);
+vsm::result<bool> reset_event(int fd);
 
 } // namespace allio::linux
 

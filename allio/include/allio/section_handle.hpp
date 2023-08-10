@@ -7,7 +7,7 @@ namespace allio {
 
 namespace io {
 
-struct create_section;
+struct section_create;
 
 } // namespace io
 
@@ -50,7 +50,7 @@ private:
 protected:
 	using base_type::sync_impl;
 
-	static vsm::result<void> sync_impl(io::parameters_with_result<io::create_section> const& args);
+	static vsm::result<void> sync_impl(io::parameters_with_result<io::section_create> const& args);
 
 	template<typename H, typename O>
 	friend vsm::result<void> allio::synchronous(io::parameters_with_result<O> const& args);
@@ -65,7 +65,7 @@ vsm::result<final_handle<section_handle_base>> block_create_section(
 using section_handle = final_handle<detail::section_handle_base>;
 
 template<parameters<section_handle::create_parameters> P = section_handle::create_parameters::interface>
-vsm::result<section_handle> create_section(file_size const maximum_size, P const& args = {})
+vsm::result<section_handle> section_create(file_size const maximum_size, P const& args = {})
 {
 	return detail::block_create_section(maximum_size, args);
 }
@@ -74,7 +74,7 @@ allio_detail_api extern allio_handle_implementation(section_handle);
 
 
 template<>
-struct io::parameters<io::create_section>
+struct io::parameters<io::section_create>
 	: section_handle::create_parameters
 {
 	using handle_type = section_handle;

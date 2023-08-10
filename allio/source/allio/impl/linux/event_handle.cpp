@@ -1,8 +1,13 @@
-#include <allio/event_handle.hpp>
+#include <allio/impl/linux/event_handle.hpp>
 
+#include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/platform_handle.hpp>
+#include <allio/linux/timeout.hpp>
 
-#include <win32.h>
+#include <sys/eventfd.h>
+#include <poll.h>
+
+#include <allio/linux/detail/undef.i>
 
 using namespace allio;
 using namespace allio::detail;
@@ -12,8 +17,8 @@ vsm::result<bool> linux::reset_event(int const fd)
 {
 	eventfd_t value;
 
-	int const r = evetfd_read(
-		unwrap_handle(h.get_platform_handle()),
+	int const r = eventfd_read(
+		fd,
 		&value);
 
 	if (r == -1)
@@ -66,14 +71,14 @@ vsm::result<void> event_handle_base::reset() const
 	}
 
 	return vsm::discard_value(
-		reset_event(unwrap_handle(h.get_platform_handle()))
+		reset_event(unwrap_handle(get_platform_handle()))
 	);
 }
 
 
 vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::event_create> const& args)
 {
-	event_handle const& h = *args.handle;
+	event_handle& h = *args.handle;
 
 	if (h)
 	{
@@ -87,11 +92,11 @@ vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::ev
 		h_flags |= event_handle::flags::auto_reset;
 	}
 
-	int const fd = eventfd(
+	int const event = eventfd(
 		args.signal ? 1 : 0,
 		EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE);
 
-	if (fd == -1)
+	if (event == -1)
 	{
 		return vsm::unexpected(get_last_error());
 	}
@@ -120,20 +125,20 @@ vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::ev
 		return vsm::unexpected(error::handle_is_not_null);
 	}
 
-	int const fd = unwrap_handle(h.get_platform_handle());
+	int const event = unwrap_handle(h.get_platform_handle());
 
 	// Poll the event fd for a non-zero value without resetting it.
 	{
-		pollfd pfd =
+		pollfd fd =
 		{
-			.fd = fd,
+			.fd = event,
 			.events = POLLIN,
 		};
 
 		int const result = ppoll(
-			&pfd,
+			&fd,
 			1,
-			kernel_timeout(args.deadline),
+			kernel_timeout<timespec>(args.deadline),
 			nullptr);
 
 		if (result == -1)
@@ -143,15 +148,15 @@ vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::ev
 
 		if (result == 0)
 		{
-			return vsm::unexpected(error::timeout);
+			return vsm::unexpected(error::async_operation_timed_out);
 		}
 
 		vsm_assert(fd.revents == POLLIN);
 	}
 
-	if (get_flags()[event_handle::flags::auto_reset])
+	if (h.get_flags()[event_handle::flags::auto_reset])
 	{
-		vsm_try(reset, reset_event(fd));
+		vsm_try(reset, reset_event(event));
 
 		// After just polling, the counter must be non-zero.
 		// The only case where it would not be is due to a race with reset.

@@ -34,6 +34,7 @@ enum class error
 	filename_too_long,
 	async_operation_cancelled,
 	async_operation_not_in_progress,
+	//TODO: Rename. Not necessarily asynchronous.
 	async_operation_timed_out,
 	unsupported_operation,
 	unsupported_encoding,
