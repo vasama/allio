@@ -2,11 +2,13 @@
 
 #include <vsm/defer.hpp>
 
+#include <atomic>
+
 #include <signal.h>
 
 using namespace allio;
 
-static thread_local  tls_last_signum;
+static thread_local int tls_last_signum;
 
 static void handler(int const signum, siginfo_t*, void*)
 {
@@ -19,14 +21,10 @@ static void handler(int const signum, siginfo_t*, void*)
 
 bool allio::capture_signal(signal const signal, vsm::function_view<void()> const callback)
 {
+	// No others have been needed so far.
 	vsm_assert(signal == signal::access_violation);
-	int const signum = SIGSEGV;
 
-	struct sigaction const new_action =
-	{
-		.sa_sigaction = handler,
-		.sa_flags = SA_SIGINFO,
-	};
+	int const signum = SIGSEGV;
 
 	tls_last_signum = -1;
 	std::atomic_signal_fence(std::memory_order_release);
@@ -34,6 +32,11 @@ bool allio::capture_signal(signal const signal, vsm::function_view<void()> const
 	// Scope of the signal handler override.
 	{
 		struct sigaction old_action;
+		struct sigaction const new_action =
+		{
+			.sa_sigaction = handler,
+			.sa_flags = SA_SIGINFO,
+		};
 		sigaction(signum, &new_action, &old_action);
 
 		vsm_defer

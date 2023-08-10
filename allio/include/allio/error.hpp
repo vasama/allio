@@ -11,6 +11,7 @@ struct error_category final : std::error_category
 {
 	char const* name() const noexcept override;
 	std::string message(int const code) const override;
+	std::error_condition default_error_condition(int code) const noexcept override;
 };
 
 allio_detail_api extern const error_category error_category_instance;

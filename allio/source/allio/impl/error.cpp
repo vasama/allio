@@ -41,4 +41,15 @@ std::string detail::error_category::message(int const code) const
 	return std::string(string, string_size);
 }
 
+std::error_condition detail::error_category::default_error_condition(int const code) const noexcept
+{
+	switch (static_cast<error>(code))
+	{
+	case error::async_operation_timed_out:
+		return std::error_condition(std::errc::timed_out);
+	}
+	
+	return std::error_condition(code , *this);
+}
+
 detail::error_category const detail::error_category_instance;

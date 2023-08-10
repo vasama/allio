@@ -7,8 +7,6 @@
 
 using namespace allio;
 
-//TODO: Use signal handler to test read and write access.
-
 TEST_CASE("anonymous mapping", "[map_handle]")
 {
 	static constexpr size_t KiB = 1024;
@@ -69,7 +67,7 @@ TEST_CASE("anonymous mapping", "[map_handle]")
 		[=](char const x) { return x == fill_char_1; }));
 }
 
-TEST_CASE("mapping page access", "[map_handle]")
+TEST_CASE("map_handle page access", "[map_handle]")
 {
 	map_handle map = map_anonymous(1,
 	{

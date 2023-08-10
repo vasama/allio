@@ -11,9 +11,11 @@ vsm::result<void> map_handle_base::set_native_handle(native_handle_type const ha
 {
 	object_transaction base_transaction(m_base.value, handle.base);
 	object_transaction size_transaction(m_size.value, handle.size);
+	object_transaction page_level_transaction(m_page_level.value, handle.page_level);
 	vsm_try_void(base_type::set_native_handle(handle));
 	base_transaction.commit();
 	size_transaction.commit();
+	page_level_transaction.commit();
 
 	return {};
 }
@@ -28,6 +30,7 @@ vsm::result<map_handle_base::native_handle_type> map_handle_base::release_native
 		vsm_move(base_handle),
 		std::exchange(m_base.value, nullptr),
 		std::exchange(m_size.value, 0),
+		std::exchange(m_page_level.value, {}),
 	};
 }
 

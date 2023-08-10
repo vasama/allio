@@ -107,6 +107,12 @@ vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::ev
 		return vsm::unexpected(static_cast<nt_error>(status));
 	}
 
+	//TODO: Check for STATUS_TIMEOUT in other places where it might be missing.
+	if (status == STATUS_TIMEOUT)
+	{
+		return vsm::unexpected(error::async_operation_timed_out);
+	}
+
 	return {};
 }
 

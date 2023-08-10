@@ -18,6 +18,7 @@ class map_handle_base : public handle
 
 	vsm::linear<void*> m_base;
 	vsm::linear<size_t> m_size;
+	vsm::linear<page_level> m_page_level;
 
 public:
 	struct implementation;
@@ -28,6 +29,7 @@ public:
 	{
 		void* base;
 		size_t size;
+		page_level page_level;
 	};
 
 
@@ -49,6 +51,7 @@ public:
 			base_type::get_native_handle(),
 			m_base.value,
 			m_size.value,
+			m_page_level.value,
 		};
 	}
 
@@ -56,7 +59,7 @@ public:
 	[[nodiscard]] page_level get_page_level() const
 	{
 		vsm_assert(*this);
-		//TODO: Implement map_handle::get_page_level.
+		return m_page_level.value;
 		return {};
 	}
 

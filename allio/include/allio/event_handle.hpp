@@ -13,7 +13,6 @@ struct event_wait;
 
 namespace detail {
 
-//TODO: Is there a better name for this than event?
 class event_handle_base : public platform_handle
 {
 	using final_handle_type = final_handle<event_handle_base>;

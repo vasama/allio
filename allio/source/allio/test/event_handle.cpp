@@ -22,6 +22,7 @@ static vsm::result<bool> unwrap_timeout(vsm::result<void> const& r)
 		return false;
 	}
 	
+	puts(r.error().message().c_str());
 	return vsm::unexpected(r.error());
 }
 
@@ -57,15 +58,19 @@ static bool maybe_reset(event_handle const& event)
 
 TEST_CASE("event_handle", "[event_handle]")
 {
+	bool const auto_reset = GENERATE(false, true);
+	bool is_signaled = GENERATE(false, true);
+
 	auto event = create_event(
 	{
-		.auto_reset = GENERATE(false, true),
+		.auto_reset = auto_reset,
+		.signal = is_signaled,
 	}).value();
 
 	// Wait 1.
 	{
 		auto const t = maybe_signal_thread(event);
-		bool const is_signaled = static_cast<bool>(t);
+		is_signaled |= static_cast<bool>(t);
 
 		bool const r = unwrap_timeout(event.wait(
 		{
@@ -77,10 +82,10 @@ TEST_CASE("event_handle", "[event_handle]")
 
 	// Wait 2.
 	{
-		bool const is_reset = maybe_reset(event);
+		is_signaled &= !maybe_reset(event);
 
 		auto const t = maybe_signal_thread(event);
-		bool const is_signaled = static_cast<bool>(t) || !is_reset;
+		is_signaled |= static_cast<bool>(t);
 
 		bool const r = unwrap_timeout(event.wait(
 		{

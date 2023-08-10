@@ -225,6 +225,9 @@ TEST_CASE("path_view standard compliance 1", "[path_view]")
 
 
 #ifdef __GLIBCXX__
+	// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=106452
+	// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=106461
+
 	//TODO: Constrain this workaround only to earlier versions once libstdc++ is fixed.
 	// libstdc++ incorrectly handles paths starting with multiple slashes.
 
