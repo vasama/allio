@@ -20,12 +20,6 @@ public:
 	>;
 
 
-	constexpr usb_stream_handle_base()
-		: base_type(type_of<final_handle_type>())
-	{
-	}
-
-
 	vsm::result<void> read(read_buffers buffers, deadline deadline = {});
 	vsm::result<void> read(read_buffer const buffer, deadline const deadline = {})
 	{
@@ -43,6 +37,9 @@ public:
 
 	basic_sender<io::stream_gather_write> write_async(write_buffers buffers, deadline deadline = {});
 	basic_sender<io::stream_gather_write> write_async(write_buffer buffer, deadline deadline = {});
+
+protected:
+	using base_type::base_type;
 };
 
 } // namespace detail

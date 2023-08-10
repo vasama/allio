@@ -179,12 +179,6 @@ public:
 	using get_name_parameters = basic_parameters;
 
 
-	constexpr directory_handle_base()
-		: base_type(type_of<final_handle_type>())
-	{
-	}
-
-
 	template<parameters<open_parameters> P = open_parameters::interface>
 	vsm::result<void> open(input_path_view const path, P const& args = {})
 	{
@@ -216,11 +210,13 @@ public:
 
 	vsm::result<file_attributes> get_attributes(directory_entry_view entry) const;
 
+protected:
+	using base_type::base_type;
+
 private:
 	vsm::result<void> block_open(filesystem_handle const* base, input_path_view path, open_parameters const& args);
 
 	vsm::result<directory_stream_view> block_read(std::span<std::byte> buffer, read_parameters const& args);
-
 
 protected:
 	using base_type::sync_impl;

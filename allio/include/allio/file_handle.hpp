@@ -26,12 +26,6 @@ public:
 	using byte_io_parameters = basic_parameters;
 
 
-	constexpr file_handle_base()
-		: base_type(type_of<final_handle_type>())
-	{
-	}
-
-
 	template<parameters<open_parameters> P = open_parameters::interface>
 	vsm::result<void> open(input_path_view const path, P const& args = {})
 	{
@@ -96,6 +90,9 @@ public:
 
 	template<parameters<file_handle_base::byte_io_parameters> P = byte_io_parameters::interface>
 	basic_sender<io::gather_write_at> write_at_async(file_size offset, write_buffers buffers, P const& args = {}) const;
+
+protected:
+	using base_type::base_type;
 
 private:
 	vsm::result<void> block_open(filesystem_handle const* base, input_path_view path, open_parameters const& args);

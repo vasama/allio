@@ -75,10 +75,7 @@ public:
 	vsm::result<void> signal() const;
 
 protected:
-	constexpr event_handle_base()
-		: base_type(type_of<final_handle_type>())
-	{
-	}
+	using base_type::base_type;
 
 private:
 	vsm::result<void> block_create(create_parameters const& args);

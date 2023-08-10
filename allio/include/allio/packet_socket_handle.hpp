@@ -61,12 +61,6 @@ public:
 	using packet_io_parameters = basic_parameters;
 
 
-	constexpr packet_socket_handle_base()
-		: base_type(type_of<final_handle_type>())
-	{
-	}
-
-
 	template<parameters<packet_socket_handle_base::packet_io_parameters> P = packet_io_parameters>
 	vsm::result<packet_read_result> read(read_buffer const buffer, P const& args = {})
 	{
@@ -90,6 +84,9 @@ public:
 	{
 		return block_write(buffers, address, args);
 	}
+
+protected:
+	using base_type::base_type;
 
 private:
 	vsm::result<packet_read_result> block_read(read_buffers buffers, packet_io_parameters const& args);

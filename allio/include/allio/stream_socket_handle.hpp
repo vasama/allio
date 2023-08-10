@@ -33,12 +33,6 @@ public:
 	using byte_io_parameters = basic_parameters;
 
 
-	constexpr stream_socket_handle_base()
-		: base_type(type_of<final_handle_type>())
-	{
-	}
-
-
 	template<parameters<connect_parameters> Parameters = connect_parameters::interface>
 	vsm::result<void> connect(network_address const& address, Parameters const& args = {})
 	{
@@ -85,6 +79,9 @@ public:
 
 	template<parameters<stream_socket_handle_base::byte_io_parameters> Parameters = byte_io_parameters::interface>
 	basic_sender<io::stream_gather_write> write_async(write_buffer buffer, Parameters const& args = {});
+
+protected:
+	using base_type::base_type;
 
 private:
 	vsm::result<void> block_connect(network_address const& address, connect_parameters const& args);

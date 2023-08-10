@@ -74,12 +74,6 @@ public:
 	allio_interface_parameters(allio_process_handle_launch_parameters);
 
 
-	constexpr process_handle_base()
-		: base_type(type_of<final_handle_type>())
-	{
-	}
-
-
 	native_handle_type get_native_handle() const
 	{
 		return
@@ -146,6 +140,8 @@ public:
 	static final_handle_type current();
 
 protected:
+	using base_type::base_type;
+
 	vsm::result<void> close_sync(basic_parameters const& args);
 
 	vsm::result<void> set_native_handle(native_handle_type handle);

@@ -6,7 +6,7 @@
 
 #include <catch2/catch_all.hpp>
 
-#include <jthread>
+#include <thread>
 
 using namespace allio;
 
@@ -59,7 +59,7 @@ TEST_CASE("event_handle", "[event_handle]")
 {
 	auto event = create_event(
 	{
-		.auto_reset = GENERATE(0, 1),
+		.auto_reset = GENERATE(false, true),
 	}).value();
 
 	// Wait 1.

@@ -58,6 +58,7 @@ public:
 
 	constexpr bool is_relative() const
 	{
+		//TODO: VS complains about arithmetic overflow here.
 		return m_bits - 1 < absolute_flag - 1;
 	}
 

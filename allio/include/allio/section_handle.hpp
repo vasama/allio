@@ -32,17 +32,14 @@ public:
 #endif
 
 
-	constexpr section_handle_base()
-		: base_type(type_of<final_handle_type>())
-	{
-	}
-
-
 	template<parameters<create_parameters> P = create_parameters::interface>
 	vsm::result<void> create(file_size const maximum_size, P const& args = {})
 	{
 		return block_create(maximum_size, args);
 	}
+
+protected:
+	using base_type::base_type;
 
 private:
 	vsm::result<void> block_create(file_size maximum_size, create_parameters const& args);

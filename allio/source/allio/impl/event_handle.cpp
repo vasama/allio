@@ -12,3 +12,11 @@ vsm::result<void> event_handle_base::block_wait(wait_parameters const& args) con
 {
 	return block<io::event_wait>(static_cast<event_handle const&>(*this), args);
 }
+
+
+vsm::result<event_handle> detail::block_create_event(event_handle::create_parameters const& args)
+{
+	vsm::result<event_handle> r(vsm::result_value);
+	vsm_try_void(r->create(args));
+	return r;
+}

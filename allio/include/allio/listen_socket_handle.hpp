@@ -49,12 +49,6 @@ public:
 	using accept_parameters = common_socket_handle::create_parameters;
 
 
-	constexpr listen_socket_handle_base()
-		: base_type(type_of<final_handle_type>())
-	{
-	}
-
-
 	template<parameters<listen_parameters> Parameters = listen_parameters::interface>
 	vsm::result<void> listen(network_address const& address, Parameters const& args = {})
 	{
@@ -73,6 +67,9 @@ public:
 
 	template<parameters<listen_socket_handle_base::accept_parameters> Parameters = accept_parameters::interface>
 	basic_sender<io::socket_accept> accept_async(Parameters const& args = {}) const;
+
+protected:
+	using base_type::base_type;
 
 private:
 	vsm::result<void> block_listen(network_address const& address, listen_parameters const& args);

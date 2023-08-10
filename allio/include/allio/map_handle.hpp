@@ -42,13 +42,6 @@ public:
 	allio_interface_parameters(allio_map_handle_map_parameters);
 
 
-	//TODO: This should be protected, along with all other similar ones.
-	constexpr map_handle_base()
-		: base_type(type_of<final_handle_type>())
-	{
-	}
-
-
 	native_handle_type get_native_handle() const
 	{
 		return
@@ -96,6 +89,8 @@ public:
 	}
 
 protected:
+	using base_type::base_type;
+
 	vsm::result<void> set_native_handle(native_handle_type handle);
 	vsm::result<native_handle_type> release_native_handle();
 

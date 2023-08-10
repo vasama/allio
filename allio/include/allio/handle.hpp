@@ -429,7 +429,10 @@ template<typename Handle>
 class final_handle final : public Handle
 {
 public:
-	using Handle::Handle;
+	constexpr final_handle()
+		: Handle(type_of<final_handle>())
+	{
+	}
 
 	final_handle(final_handle&& source) noexcept = default;
 
