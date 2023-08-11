@@ -36,10 +36,23 @@ public:
 	>;
 
 
+	enum class reset_mode : uint8_t
+	{
+		/// @brief In manual reset mode, once signaled, an event object remains
+		///        signaled until manually reset using @ref reset.
+		manual_reset,
+
+		/// @brief In automatic reset mode an event object automatically becomes
+		///        unsignaled having been observed in the signaled state by a waiter.
+		auto_reset,
+	};
+
+	using enum reset_mode;
+
+
 	#define allio_event_handle_create_parameters(type, data, ...) \
 		type(allio::event_handle, create_parameters) \
 		allio_platform_handle_create_parameters(__VA_ARGS__, __VA_ARGS__) \
-		data(bool, auto_reset, false) \
 		data(bool, signal, false) \
 
 	allio_interface_parameters(allio_event_handle_create_parameters);
@@ -48,9 +61,9 @@ public:
 
 
 	template<parameters<create_parameters> P = create_parameters::interface>
-	vsm::result<void> create(P const& args = {})
+	vsm::result<void> create(reset_mode const reset_mode, P const& args = {})
 	{
-		return block_create(args);
+		return block_create(reset_mode, args);
 	}
 
 	/// @brief Wait for the event object to become signaled.
@@ -77,7 +90,7 @@ protected:
 	using base_type::base_type;
 
 private:
-	vsm::result<void> block_create(create_parameters const& args);
+	vsm::result<void> block_create(reset_mode reset_mode, create_parameters const& args);
 	vsm::result<void> block_wait(wait_parameters const& args) const;
 
 protected:
@@ -90,7 +103,9 @@ protected:
 	friend vsm::result<void> allio::synchronous(io::parameters_with_result<O> const& args);
 };
 
-vsm::result<final_handle<event_handle_base>> block_create_event(event_handle_base::create_parameters const& args);
+vsm::result<final_handle<event_handle_base>> block_create_event(
+	event_handle_base::reset_mode reset_mode,
+	event_handle_base::create_parameters const& args);
 
 } // namespace detail
 
@@ -98,9 +113,9 @@ using event_handle = final_handle<detail::event_handle_base>;
 
 
 template<parameters<event_handle::create_parameters> P = event_handle::create_parameters::interface>
-vsm::result<event_handle> create_event(P const& args = {})
+vsm::result<event_handle> create_event(event_handle::reset_mode const reset_mode, P const& args = {})
 {
-	return detail::block_create_event(args);
+	return detail::block_create_event(reset_mode, args);
 }
 
 
@@ -110,6 +125,8 @@ struct io::parameters<io::event_create>
 {
 	using handle_type = event_handle;
 	using result_type = void;
+
+	event_handle::reset_mode reset_mode;
 };
 
 template<>

@@ -273,7 +273,7 @@ vsm::result<void> this_process::set_current_directory(input_path_view const path
 	}
 }
 
-vsm::result<directory_handle> open_current_directory()
+vsm::result<directory_handle> this_process::open_current_directory()
 {
 	unique_peb_lock lock;
 

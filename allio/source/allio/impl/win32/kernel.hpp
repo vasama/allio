@@ -500,7 +500,7 @@ NTSTATUS io_cancel(HANDLE handle, IO_STATUS_BLOCK* isb);
 
 class kernel_timeout
 {
-	using duration = std::chrono::duration<uint64_t, std::ratio<1, 10000000>>;
+	using duration = std::chrono::duration<uint64_t, std::ratio<1, 10'000'000>>;
 
 	LARGE_INTEGER m_timeout;
 	LARGE_INTEGER* m_p_timeout;
@@ -538,11 +538,16 @@ public:
 		}
 		else
 		{
-			m_timeout.QuadPart =
-				deadline == allio::deadline::instant()
-					? 0
-					: static_cast<uint64_t>(-static_cast<int64_t>(
-						std::chrono::duration_cast<duration>(deadline.relative()).count()));
+			if (deadline == allio::deadline::instant())
+			{
+				m_timeout.QuadPart = 0;
+			}
+			else
+			{
+				//TODO: Potential UB here due to the negation. Think hard about this.
+				auto const d = std::chrono::duration_cast<duration>(deadline.relative());
+				m_timeout.QuadPart = -static_cast<int64_t>(d.count());
+			}
 			m_p_timeout = &m_timeout;
 		}
 	}

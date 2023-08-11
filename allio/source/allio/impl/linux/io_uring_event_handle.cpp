@@ -4,6 +4,7 @@
 #include <allio/implementation.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/linux/platform.hpp>
+#include <allio/step_deadline.hpp>
 
 #include <allio/impl/linux/io_uring_platform_handle.hpp>
 
@@ -40,61 +41,24 @@ struct allio::multiplexer_handle_operation_implementation<io_uring_multiplexer, 
 	{
 		using basic_async_operation_storage::basic_async_operation_storage;
 
+		step_deadline absolute_deadline;
 		io_uring_multiplexer::timeout timeout;
 
-		#if 0
-		eventfd_t value;
-		#endif
+		io_uring_multiplexer::io_slot read_slot;
+		eventfd_t read_value;
 
 
-		void io_completed(io_uring_multiplexer& m, io_uring_multiplexer::io_data_ref, int const result) override
+		vsm::result<void> submit_io(io_uring_multiplexer& m)
 		{
-			if (result >= 0)
-			{
-				vsm_assert(result == POLLIN);
-
-				event_handle const& h = *args.handle;
-
-				if (h.get_flags()[event_handle::flags::auto_reset])
-				{
-					set_result(vsm::as_error_code(vsm::discard_value(
-						reset_event(unwrap_handle(h.get_platform_handle()))
-					)));
-				}
-				else
-				{
-					set_result(std::error_code());
-				}
-			}
-			else
-			{
-				set_result(static_cast<system_error>(result));
-			}
-
-			m.post(*this, async_operation_status::concluded);
-		}
-	};
-
-	//TODO: Implement deadline.
-	static vsm::result<void> start(io_uring_multiplexer& m, async_operation_storage& s)
-	{
-		return m.start(s, [&]() -> async_result<void>
-		{
-			event_handle const& h = *s.args.handle;
-
-			if (!h)
-			{
-				return vsm::unexpected(error::handle_is_null);
-			}
-			
 			return m.record_io([&](io_uring_multiplexer::submission_context& context) -> async_result<void>
 			{
-				if (s.args.deadline != deadline::never())
+				vsm_try_void(relative_deadline, absolute_deadline.step());
+
+				if (relative_deadline != deadline::never())
 				{
-					vsm_try_void(context.push_linked_timeout(s.timeout.set(s.args.deadline)));
+					vsm_try_void(context.push_linked_timeout(s.timeout.set(relative_deadline)));
 				}
 
-				#if 0
 				int const event = unwrap_handle(h.get_platform_handle());
 				bool const auto_reset = h.get_flags()[event_handle::flags::auto_reset];
 
@@ -115,24 +79,91 @@ struct allio::multiplexer_handle_operation_implementation<io_uring_multiplexer, 
 					vsm_try_void(context.push(s, [&](io_uring_sqe& sqe)
 					{
 						sqe.opcode = IORING_OP_READ;
-						sqe.addr = &s.value;
+						sqe.addr = &s.read_value;
 						sqe.fd = event;
-						sqe.len = sizeof(s.value);
+						sqe.len = sizeof(s.read_value);
 						sqe.flags = IOSQE_IO_LINK;
 					}));
 				}
 
 				return {};
-				#endif
-
-				//TODO: Use a linked read after the poll instead?
-				return context.push(s, [&](io_uring_sqe& sqe)
-				{
-					sqe.opcode = IORING_OP_POLL_ADD;
-					sqe.fd = unwrap_handle(h.get_platform_handle());
-					sqe.poll_events = POLLIN;
-				});
 			});
+		}
+
+		vsm::result<void> cancel_io(io_uring_multiplexer& m)
+		{
+			
+		}
+
+		void io_completed(io_uring_multiplexer& m, io_uring_multiplexer::io_data_ref const slot, int const result) override
+		{
+			if (slot == *this)
+			{
+				if (result >= 0)
+				{
+					vsm_assert(result == POLLIN);
+
+					if (!h.get_flags()[event_handle::flags::auto_reset])
+					{
+						set_result(std::error_code());
+						m.post(*this, async_operation_status::concluded);
+					}
+				}
+				else
+				{
+					set_result(static_cast<system_error>(result));
+					m.post(*this, async_operation_status::concluded);
+				}
+			}
+			else
+			{
+				if (result >= 0)
+				{
+					vsm_assert(result == sizeof(read_value));
+					vsm_assert(read_value != 0);
+
+					set_result(std::error_code());
+					m.post(*this, async_operation_status::concluded);
+				}
+				else
+				{
+					if (result == EAGAIN)
+					{
+						auto const r = submit_io(m);
+
+						if (!r)
+						{
+							//TODO: Is it reasonable that this return a busy error
+							//      when the io uring submission queue is full?
+							set_result(r.error());
+							m.post(*this, async_operation_status::concluded);
+						}
+					}
+					else
+					{
+						set_result(static_cast<system_error>(result));
+						m.post(*this, async_operation_status::concluded);
+					}
+				}
+			}
+		}
+	};
+
+	//TODO: Implement deadline.
+	static vsm::result<void> start(io_uring_multiplexer& m, async_operation_storage& s)
+	{
+		return m.start(s, [&]() -> async_result<void>
+		{
+			event_handle const& h = *s.args.handle;
+
+			if (!h)
+			{
+				return vsm::unexpected(error::handle_is_null);
+			}
+
+			s.absolute_deadline = s.args.deadline;
+
+			return s.start_wait(m);
 		});
 	}
 

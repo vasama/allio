@@ -14,8 +14,13 @@ public:
 	{
 	}
 
-	vsm::result<deadline> step()
+	vsm::result<deadline> step() &
 	{
+		if (m_deadline.is_trivial())
+		{
+			return m_deadline;
+		}
+
 		if (m_deadline.is_relative())
 		{
 			deadline const step = m_deadline;

@@ -56,7 +56,7 @@ vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::ev
 	handle_flags h_flags = {};
 	bool manual_reset = true;
 
-	if (args.auto_reset)
+	if (args.reset_mode == event_handle::auto_reset)
 	{
 		manual_reset = false;
 		h_flags |= event_handle::flags::auto_reset;
@@ -108,6 +108,7 @@ vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::ev
 	}
 
 	//TODO: Check for STATUS_TIMEOUT in other places where it might be missing.
+	//TODO: Replace NT_SUCCESS with one that checks for non-zero for debug purposes.
 	if (status == STATUS_TIMEOUT)
 	{
 		return vsm::unexpected(error::async_operation_timed_out);

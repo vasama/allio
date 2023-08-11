@@ -22,9 +22,7 @@ find_package(vsm-result REQUIRED)
 find_package(vsm-tag_ptr REQUIRED)
 find_package(vsm-unique_resource REQUIRED)
 
-vsm_add_library(allio
-	EXPORT_ALIAS allio
-
+vsm_add_library2(allio
 	HEADERS
 		include/allio/detail/any_handle.hpp
 		include/allio/detail/api.hpp
@@ -99,7 +97,7 @@ vsm_add_library(allio
 		source/allio/impl/async_handle_types.hpp
 		source/allio/impl/default_multiplexer.cpp
 		source/allio/impl/deferring_multiplexer.cpp
-		#source/allio/impl/directory_handle.cpp
+		source/allio/impl/directory_handle.cpp
 		source/allio/impl/error.cpp
 		source/allio/impl/event_handle.cpp
 		source/allio/impl/filesystem_handle.cpp
@@ -132,16 +130,110 @@ vsm_add_library(allio
 		unifex
 
 	TEST_SOURCES
-		#source/allio/test/win32/kernel_path.cpp
 		source/allio/test/directory_handle.cpp
 		source/allio/test/event_handle.cpp
 		source/allio/test/file_handle.cpp
+		source/allio/test/filesystem.hpp
+		source/allio/test/map_handle.cpp
+		source/allio/test/multiplexer.hpp
 		source/allio/test/path_view.cpp
 		source/allio/test/process_handle.cpp
 		source/allio/test/reverse_iterator.hpp
+		source/allio/test/signal.hpp
 		source/allio/test/socket_handle.cpp
 )
 
+vsm_configure(allio
+	PLATFORM Windows
+
+	SOURCES
+		source/allio/impl/win32/default_multiplexer.cpp
+		source/allio/impl/win32/directory_handle.cpp
+		source/allio/impl/win32/directory_handle.hpp
+		source/allio/impl/win32/encoding.cpp
+		source/allio/impl/win32/encoding.hpp
+		source/allio/impl/win32/error.hpp
+		source/allio/impl/win32/event_handle.cpp
+		source/allio/impl/win32/filesystem_handle.cpp
+		source/allio/impl/win32/filesystem_handle.hpp
+		source/allio/impl/win32/file_handle.cpp
+		source/allio/impl/win32/iocp_byte_io.hpp
+		source/allio/impl/win32/iocp_event_handle.cpp
+		source/allio/impl/win32/iocp_directory_handle.cpp
+		source/allio/impl/win32/iocp_filesystem_handle.hpp
+		source/allio/impl/win32/iocp_file_handle.cpp
+		source/allio/impl/win32/iocp_multiplexer.cpp
+		source/allio/impl/win32/iocp_platform_handle.hpp
+		source/allio/impl/win32/iocp_process_handle.cpp
+		source/allio/impl/win32/iocp_socket_handle.cpp
+		source/allio/impl/win32/kernel.cpp
+		source/allio/impl/win32/kernel.hpp
+		source/allio/impl/win32/kernel_path.cpp
+		source/allio/impl/win32/kernel_path.hpp
+		source/allio/impl/win32/kernel_path_impl.hpp
+		source/allio/impl/win32/kernel_path_old.hpp
+		source/allio/impl/win32/map_handle.cpp
+		source/allio/impl/win32/nt_error.cpp
+		source/allio/impl/win32/peb.cpp
+		source/allio/impl/win32/peb.hpp
+		source/allio/impl/win32/platform_handle.cpp
+		source/allio/impl/win32/platform_handle.hpp
+		source/allio/impl/win32/posix_socket.cpp
+		source/allio/impl/win32/posix_socket.hpp
+		source/allio/impl/win32/process_handle.cpp
+		source/allio/impl/win32/process_handle.hpp
+		source/allio/impl/win32/section_handle.cpp
+		source/allio/impl/win32/sync_byte_io.cpp
+		source/allio/impl/win32/sync_filesystem_handle.hpp
+		source/allio/impl/win32/unique_handle.cpp
+		source/allio/impl/win32/wsa_ex.cpp
+		source/allio/impl/win32/wsa_ex.hpp
+
+	TEST_SOURCES
+		source/allio/test/win32/kernel_path.cpp
+		source/allio/test/win32/signal.cpp
+)
+
+vsm_configure(allio
+	PLATFORM Linux
+
+	SOURCES
+		source/allio/impl/linux/api_string.hpp
+		source/allio/impl/linux/default_multiplexer.cpp
+		#source/allio/impl/linux/directory_handle.cpp
+		source/allio/impl/linux/error.hpp
+		source/allio/impl/linux/event_handle.cpp
+		source/allio/impl/linux/filesystem_handle.cpp
+		source/allio/impl/linux/filesystem_handle.hpp
+		source/allio/impl/linux/file_handle.cpp
+		source/allio/impl/linux/io_uring_byte_io.hpp
+		source/allio/impl/linux/io_uring_event_handle.cpp
+		source/allio/impl/linux/io_uring_filesystem_handle.hpp
+		source/allio/impl/linux/io_uring_file_handle.cpp
+		source/allio/impl/linux/io_uring_multiplexer.cpp
+		source/allio/impl/linux/io_uring_platform_handle.hpp
+		source/allio/impl/linux/io_uring_process_handle.cpp
+		source/allio/impl/linux/io_uring_socket_handle.cpp
+		source/allio/impl/linux/map_handle.cpp
+		source/allio/impl/linux/platform_handle.cpp
+		source/allio/impl/linux/platform_handle.hpp
+		source/allio/impl/linux/posix_socket.cpp
+		source/allio/impl/linux/posix_socket.hpp
+		source/allio/impl/linux/process_handle.cpp
+		source/allio/impl/linux/process_handle.hpp
+		source/allio/impl/linux/section_handle.cpp
+		source/allio/impl/linux/stat.hpp
+		source/allio/impl/linux/sync_byte_io.cpp
+		source/allio/impl/linux/sync_filesystem_handle.hpp
+		source/allio/impl/linux/unique_fd.cpp
+		source/allio/impl/linux/version.cpp
+		source/allio/impl/linux/version.hpp
+
+	TEST_SOURCES
+		source/allio/test/linux/signal.cpp
+)
+
+if(DEFINE NOT_DEFINED)
 vsm_target_platform_sources(allio Windows
 	source/allio/impl/win32/default_multiplexer.cpp
 	source/allio/impl/win32/directory_handle.cpp
@@ -218,6 +310,7 @@ vsm_target_platform_sources(allio Linux
 	source/allio/impl/linux/version.cpp
 	source/allio/impl/linux/version.hpp
 )
+endif()
 
 target_compile_definitions(allio_test
 	PRIVATE

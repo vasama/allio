@@ -286,6 +286,8 @@ allio_detail_api extern allio_handle_implementation(directory_handle);
 
 namespace this_process {
 
+//TODO: Maybe move the non-handle functions to some directory.hpp or process.hpp?
+
 vsm::result<size_t> get_current_directory(output_path_ref output);
 
 template<typename Path = path>
@@ -303,5 +305,4 @@ vsm::result<directory_handle> open_current_directory();
 //TODO: open_current_directory_async(multiplexer& multiplexer);
 
 } // namespace this_process
-
 } // namespace allio

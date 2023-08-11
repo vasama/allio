@@ -22,30 +22,6 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-static vsm::result<void> set_waitable_timer(HANDLE const handle, deadline const deadline)
-{
-	if (!SetWaitableTimer(
-		handle,
-		kernel_timeout(deadline),
-		0,
-		nullptr,
-		nullptr,
-		false))
-	{
-		return vsm::unexpected(get_last_error());
-	}
-	return {};
-}
-
-static vsm::result<void> cancel_waitable_timer(HANDLE const handle)
-{
-	if (!CancelWaitableTimer(handle))
-	{
-		return vsm::unexpected(get_last_error());
-	}
-	return {};
-}
-
 static vsm::result<bool> associate_wait_packet(
 	HANDLE const wait_packet,
 	HANDLE const completion_port,

@@ -7,91 +7,163 @@
 #include <catch2/catch_all.hpp>
 
 #include <thread>
+#include <vector>
 
 using namespace allio;
 
-static vsm::result<bool> unwrap_timeout(vsm::result<void> const& r)
+static vsm::result<bool> wait(event_handle const& event, deadline const deadline)
 {
+	auto const r = event.wait(
+	{
+		.deadline = deadline,
+	});
+
 	if (r)
 	{
 		return true;
 	}
 
-	if (r.error().default_error_condition() == std::error_condition(std::errc::timed_out))
+	if (r.error().default_error_condition() == std::errc::timed_out)
 	{
 		return false;
 	}
-	
-	puts(r.error().message().c_str());
+
 	return vsm::unexpected(r.error());
 }
 
-static std::jthread signal_thread(event_handle const& event)
+
+TEST_CASE("basic signaling", "[event_handle]")
 {
-	return std::jthread([&event]()
+	bool const manual_reset = GENERATE(0, 1);
+	bool is_signaled = GENERATE(0, 1);
+
+	event_handle const event = create_event(
+		manual_reset ? event_handle::manual_reset : event_handle::auto_reset,
+	{
+		.signal = is_signaled,
+	}).value();
+
+	auto const wait = [&]()
+	{
+		return ::wait(event, deadline::instant());
+	};
+
+	if (GENERATE(0, 1))
+	{
+		event.signal().value();
+		is_signaled = true;
+	}
+
+	REQUIRE(wait() == is_signaled);
+	is_signaled &= manual_reset;
+
+	REQUIRE(wait() == is_signaled);
+	is_signaled &= manual_reset;
+
+	event.reset().value();
+	is_signaled = false;
+
+	REQUIRE(wait() == is_signaled);
+	is_signaled &= manual_reset;
+
+	if (GENERATE(0, 1))
+	{
+		event.signal().value();
+		is_signaled = true;
+	}
+
+	REQUIRE(wait() == is_signaled);
+	is_signaled &= manual_reset;
+
+	REQUIRE(wait() == is_signaled);
+	is_signaled &= manual_reset;
+}
+
+TEST_CASE("concurrent signaling", "[event_handle]")
+{
+	event_handle const event = create_event(event_handle::manual_reset).value();
+
+	std::jthread const signal_thread([&]()
 	{
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		event.signal().value();
 	});
+
+	REQUIRE(wait(event, std::chrono::milliseconds(1000)));
 }
 
-static std::optional<std::jthread> maybe_signal_thread(event_handle const& event)
+TEST_CASE("concurrent fighting", "[event_handle]")
 {
-	if (GENERATE(0, 1))
+	//TODO: Pick thread count based on CPU count.
+	static constexpr size_t const thread_count = 4;
+	static constexpr size_t const signal_count = 100'000;
+
+	event_handle const event = create_event(event_handle::auto_reset).value();
+
+	std::vector<std::jthread> wait_threads;
+	std::vector<std::jthread> reset_threads;
+	vsm::atomic<bool> observed = false;
+
+	vsm::atomic<bool> stop_requested = false;
+	vsm::atomic<size_t> stop_acknowledged = 0;
+	vsm::atomic<size_t> signals_observed = 0;
+
+	// Create waiting threads.
+	for (size_t i = 0; i < thread_count; ++i)
 	{
-		return signal_thread(event);
-	}
-
-	return std::nullopt;
-}
-
-static bool maybe_reset(event_handle const& event)
-{
-	if (GENERATE(0, 1))
-	{
-		event.reset().value();
-		return true;
-	}
-
-	return event.get_flags()[event_handle::flags::auto_reset];
-}
-
-TEST_CASE("event_handle", "[event_handle]")
-{
-	bool const auto_reset = GENERATE(false, true);
-	bool is_signaled = GENERATE(false, true);
-
-	auto event = create_event(
-	{
-		.auto_reset = auto_reset,
-		.signal = is_signaled,
-	}).value();
-
-	// Wait 1.
-	{
-		auto const t = maybe_signal_thread(event);
-		is_signaled |= static_cast<bool>(t);
-
-		bool const r = unwrap_timeout(event.wait(
+		wait_threads.push_back(std::jthread([&]()
 		{
-			.deadline = deadline(std::chrono::milliseconds(10)),
-		})).value();
+			size_t count = 0;
 
-		REQUIRE(r == is_signaled);
+			while (true)
+			{
+				event.wait().value();
+
+				if (stop_requested.load(std::memory_order_acquire))
+				{
+					break;
+				}
+
+				observed.store(true, std::memory_order_release);
+				++count;
+			}
+
+			(void)signals_observed.fetch_add(count, std::memory_order_release);
+			(void)stop_acknowledged.fetch_add(1, std::memory_order_release);
+		}));
 	}
 
-	// Wait 2.
+	// Create resetting threads.
+	for (size_t i = 0; i < thread_count; ++i)
 	{
-		is_signaled &= !maybe_reset(event);
-
-		auto const t = maybe_signal_thread(event);
-		is_signaled |= static_cast<bool>(t);
-
-		bool const r = unwrap_timeout(event.wait(
+		reset_threads.push_back(std::jthread([&]()
 		{
-			.deadline = deadline(std::chrono::milliseconds(10)),
-		})).value();
-
-		REQUIRE(r == is_signaled);
+			while (!stop_requested.load(std::memory_order_acquire))
+			{
+				event.reset().value();
+				std::this_thread::yield();
+			}
+		}));
 	}
+
+	// Signal the event in a loop, waiting for confirmation each time.
+	for (size_t i = 0; i < signal_count; ++i)
+	{
+		event.signal().value();
+		while (!observed.load(std::memory_order_acquire))
+		{
+			std::this_thread::yield();
+		}
+		observed.store(false, std::memory_order_release);
+	}
+
+	// Request and wait for all the threads to stop.
+	stop_requested.store(true, std::memory_order_release);
+	while (stop_acknowledged.load(std::memory_order_acquire) < thread_count)
+	{
+		event.signal().value();
+		std::this_thread::yield();
+	}
+
+	REQUIRE(signals_observed.load(std::memory_order_acquire) == signal_count);
 }

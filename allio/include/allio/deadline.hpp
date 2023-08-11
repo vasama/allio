@@ -50,8 +50,22 @@ public:
 	{
 	}
 
+	template<typename Repr, typename Unit>
+	constexpr deadline(std::chrono::duration<Repr, Unit> const relative)
+		requires std::convertible_to<std::chrono::duration<Repr, Unit>, duration>
+		: deadline(static_cast<duration>(relative))
+	{
+	}
+
 	constexpr deadline(time_point const absolute)
 		: deadline(absolute_flag, units_since_epoch(absolute))
+	{
+	}
+
+	template<typename Clock, typename Duration>
+	constexpr deadline(std::chrono::time_point<Clock, Duration> const relative)
+		requires std::convertible_to<std::chrono::time_point<Clock, Duration>, time_point>
+	: deadline(static_cast<duration>(time_point))
 	{
 	}
 
