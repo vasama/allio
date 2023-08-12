@@ -63,9 +63,9 @@ public:
 	}
 
 	template<typename Clock, typename Duration>
-	constexpr deadline(std::chrono::time_point<Clock, Duration> const relative)
+	constexpr deadline(std::chrono::time_point<Clock, Duration> const absolute)
 		requires std::convertible_to<std::chrono::time_point<Clock, Duration>, time_point>
-	: deadline(static_cast<duration>(time_point))
+		: deadline(static_cast<duration>(absolute))
 	{
 	}
 

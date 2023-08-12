@@ -209,7 +209,7 @@ vsm_configure(allio
 		source/allio/impl/linux/filesystem_handle.hpp
 		source/allio/impl/linux/file_handle.cpp
 		source/allio/impl/linux/io_uring_byte_io.hpp
-		source/allio/impl/linux/io_uring_event_handle.cpp
+		# source/allio/impl/linux/io_uring_event_handle.cpp
 		source/allio/impl/linux/io_uring_filesystem_handle.hpp
 		source/allio/impl/linux/io_uring_file_handle.cpp
 		source/allio/impl/linux/io_uring_multiplexer.cpp

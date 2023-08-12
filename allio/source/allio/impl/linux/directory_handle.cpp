@@ -4,6 +4,12 @@
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/filesystem_handle.hpp>
 
+#include <vsm/standard.hpp>
+
+#include <bit>
+#include <memory>
+
+#include <dirent.h>
 #include <sys/syscall.h>
 
 #include <allio/linux/detail/undef.i>
@@ -11,6 +17,19 @@
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::linux;
+
+namespace {
+
+struct linux_dirent64
+{
+	ino64_t d_ino;
+	off64_t d_off;
+	unsigned short d_reclen;
+	unsigned char d_type;
+	char d_name[];
+};
+
+} // namespace
 
 static ssize_t getdents64(int const fd, linux_dirent64* const dirent, size_t count)
 {
@@ -29,10 +48,7 @@ using directory_stream_entry = linux_dirent64;
 
 static file_kind get_entry_kind(directory_stream_entry const& entry)
 {
-	char const d_type = *reinterpret_cast<char const*>(
-		reinterpret_cast<std::byte const*>(&entry) + (entry.d_reclen - 1));
-
-	switch (d_type)
+	switch (entry.d_type)
 	{
 	case DT_BLK:
 		return file_kind::block_device;
@@ -61,9 +77,19 @@ static file_kind get_entry_kind(directory_stream_entry const& entry)
 
 static std::string_view get_entry_name(directory_stream_entry const& entry)
 {
-	size_t const size = entry.d_reclen - offsetof(linux_dirent64, d_name) - 2;
-	vsm_assert(size == strlen(entry.d_name));
-	return std::string_view(entry.d_name, size);
+	static constexpr size_t name_offset = offsetof(directory_stream_entry, d_name);
+
+	size_t name_size = entry.d_reclen - name_offset;
+
+	// Scan backwards to discard any padding zeros.
+	while (name_size > 0 && entry.d_name[name_size - 1] == '\0')
+	{
+		--name_size;
+	}
+
+	vsm_assert(name_size == strlen(entry.d_name));
+
+	return std::string_view(entry.d_name, name_size);
 }
 
 
@@ -97,14 +123,14 @@ directory_entry directory_entry_view::get_entry(directory_stream_native_handle c
 	return
 	{
 		.kind = get_entry_kind(entry),
-		.node_id = entry.d_ino,
+		.node_id = std::bit_cast<file_id_64>(entry.d_ino),
 		.name = input_string_view(get_entry_name(entry)),
 	};
 }
 
 directory_stream_native_handle directory_stream_iterator::advance(directory_stream_native_handle const handle)
 {
-	return wrap_stream(next_entry(unwrap_stream));
+	return wrap_stream(next_entry(unwrap_stream(handle)));
 }
 
 
@@ -135,10 +161,10 @@ static directory_stream_entry* create_entry_list(std::span<std::byte> const buff
 	auto const get_entry = [&](size_t const offset) -> directory_stream_entry*
 	{
 		vsm_assert(offset < buffer.size());
-		return reinterpret_cast<linux_dirent64*>(buffer.data() + offset);
+		return reinterpret_cast<directory_stream_entry*>(buffer.data() + offset);
 	};
 
-	using offset_type = decltype(linux_dirent64::d_off);
+	using offset_type = decltype(directory_stream_entry::d_off);
 
 	// d_off of an imaginary entry at index -1.
 	// Holds both absolute and relative offset of the first entry.
@@ -149,7 +175,7 @@ static directory_stream_entry* create_entry_list(std::span<std::byte> const buff
 
 	for (size_t offset = 0; offset < size;)
 	{
-		directory_entry_view& entry = *get_entry(offset);
+		directory_stream_entry& entry = *get_entry(offset);
 	
 		if (!discard_entry(entry))
 		{
@@ -185,7 +211,7 @@ vsm::result<void> directory_handle_base::sync_impl(io::parameters_with_result<io
 		return vsm::unexpected(error::handle_is_not_null);
 	}
 
-	vsm_try(open_args, open_parameters::make(args));
+	vsm_try(open_args, linux::open_parameters::make(args));
 	open_args.flags |= O_DIRECTORY;
 
 	vsm_try(h_fd, create_file(args.base, args.path, open_args));
@@ -220,7 +246,7 @@ vsm::result<void> directory_handle_base::sync_impl(io::parameters_with_result<io
 
 	ssize_t const count = getdents64(
 		unwrap_handle(h.get_platform_handle()),
-		reinterpret_cast<linux_dirent64*>(buffer.data()),
+		reinterpret_cast<directory_stream_entry*>(buffer.data()),
 		buffer.size());
 
 	if (count == -1)
@@ -230,7 +256,7 @@ vsm::result<void> directory_handle_base::sync_impl(io::parameters_with_result<io
 
 	// Create the iterable entry list by linking the entries together
 	// with relative offsets and discarding . and .. entries.
-	directory_entry_const const* const entry = create_entry_list(buffer, count);
+	directory_stream_entry const* const entry = create_entry_list(buffer, count);
 
 	*args.result = directory_stream_view(wrap_stream(entry));
 	return {};
@@ -243,7 +269,7 @@ vsm::result<size_t> this_process::get_current_directory(output_path_ref const ou
 {
 	if (output.is_wide())
 	{
-		return vsm::unexpected(error::wide_string_not_supported);
+		return vsm::unexpected(error::unsupported_encoding);
 	}
 
 	char const* const c_string = getcwd(nullptr, 0);
@@ -255,12 +281,12 @@ vsm::result<size_t> this_process::get_current_directory(output_path_ref const ou
 
 	struct cwd_deleter
 	{
-		void operator()(char const* const c_string) const
+		void vsm_static_operator_invoke(char const* const c_string)
 		{
-			free(c_string);
+			free(const_cast<void*>(static_cast<void const*>(c_string)));
 		}
 	};
-	unique_ptr<char const*, cwd_deleter> const unique_c_string(c_string);
+	std::unique_ptr<char const, cwd_deleter> const unique_c_string(c_string);
 
 	size_t const string_size = std::strlen(c_string);
 	size_t const output_size = string_size + output.is_c_string();
@@ -273,9 +299,9 @@ vsm::result<size_t> this_process::get_current_directory(output_path_ref const ou
 
 vsm::result<void> this_process::set_current_directory(input_path_view const path)
 {
-	if (output.is_wide())
+	if (path.is_wide())
 	{
-		return vsm::unexpected(error::wide_string_not_supported);
+		return vsm::unexpected(error::unsupported_encoding);
 	}
 
 	api_string_storage storage;

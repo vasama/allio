@@ -10,6 +10,7 @@
 
 #include <linux/io_uring.h>
 #include <poll.h>
+#include <sys/eventfd.h>
 
 #include <allio/linux/detail/undef.i>
 
@@ -48,21 +49,23 @@ struct allio::multiplexer_handle_operation_implementation<io_uring_multiplexer, 
 		eventfd_t read_value;
 
 
-		vsm::result<void> submit_io(io_uring_multiplexer& m)
+		async_result<void> submit_io(io_uring_multiplexer& m)
 		{
+			event_handle const& h = *args.handle;
+
 			return m.record_io([&](io_uring_multiplexer::submission_context& context) -> async_result<void>
 			{
-				vsm_try_void(relative_deadline, absolute_deadline.step());
+				vsm_try(relative_deadline, absolute_deadline.step());
 
 				if (relative_deadline != deadline::never())
 				{
-					vsm_try_void(context.push_linked_timeout(s.timeout.set(relative_deadline)));
+					vsm_try_void(context.push_linked_timeout(timeout.set(relative_deadline)));
 				}
 
 				int const event = unwrap_handle(h.get_platform_handle());
 				bool const auto_reset = h.get_flags()[event_handle::flags::auto_reset];
 
-				vsm_try_void(context.push(s, [&](io_uring_sqe& sqe)
+				vsm_try_void(context.push(*this, [&](io_uring_sqe& sqe)
 				{
 					sqe.opcode = IORING_OP_POLL_ADD;
 					sqe.fd = event;
@@ -76,12 +79,12 @@ struct allio::multiplexer_handle_operation_implementation<io_uring_multiplexer, 
 
 				if (auto_reset)
 				{
-					vsm_try_void(context.push(s, [&](io_uring_sqe& sqe)
+					vsm_try_void(context.push(*this, [&](io_uring_sqe& sqe)
 					{
 						sqe.opcode = IORING_OP_READ;
-						sqe.addr = &s.read_value;
+						sqe.addr = reinterpret_cast<uintptr_t>(&read_value);
 						sqe.fd = event;
-						sqe.len = sizeof(s.read_value);
+						sqe.len = sizeof(read_value);
 						sqe.flags = IOSQE_IO_LINK;
 					}));
 				}

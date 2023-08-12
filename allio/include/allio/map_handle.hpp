@@ -29,7 +29,7 @@ public:
 	{
 		void* base;
 		size_t size;
-		page_level page_level;
+		allio::page_level page_level;
 	};
 
 

@@ -1,5 +1,6 @@
 #include <allio/file_handle.hpp>
 
+#include <allio/impl/linux/filesystem_handle.hpp>
 #include <allio/impl/sync_byte_io.hpp>
 
 #include <allio/linux/detail/undef.i>

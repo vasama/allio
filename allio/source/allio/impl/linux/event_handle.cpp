@@ -5,8 +5,8 @@
 #include <allio/linux/timeout.hpp>
 #include <allio/step_deadline.hpp>
 
-#include <sys/eventfd.h>
 #include <poll.h>
+#include <sys/eventfd.h>
 
 #include <allio/linux/detail/undef.i>
 
