@@ -8,10 +8,9 @@ namespace allio::win32 {
 
 enum class open_kind
 {
-	file                                = 1 << 0,
-	directory                           = 1 << 1,
+	file,
+	directory,
 };
-vsm_flag_enum(open_kind);
 
 vsm::result<unique_handle_with_flags> create_file(
 	filesystem_handle const* hint, file_id_128 const& id,

@@ -16,6 +16,7 @@ FetchContent_MakeAvailable(unifex)
 find_package(vsm-box REQUIRED)
 find_package(vsm-core REQUIRED)
 find_package(vsm-flags REQUIRED)
+find_package(vsm-function REQUIRED)
 find_package(vsm-linear REQUIRED)
 find_package(vsm-intrusive REQUIRED)
 find_package(vsm-result REQUIRED)
@@ -122,6 +123,7 @@ vsm_add_library2(allio
 		vsm::box
 		vsm::core
 		vsm::flags
+		vsm::function
 		vsm::linear
 		vsm::intrusive
 		vsm::result
