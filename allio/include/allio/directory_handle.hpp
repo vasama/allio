@@ -199,13 +199,13 @@ public:
 
 
 	template<parameters<read_parameters> P = read_parameters::interface>
-	vsm::result<directory_stream_view> read(std::span<std::byte> const buffer, P const& args = {})
+	vsm::result<directory_stream_view> read(std::span<std::byte> const buffer, P const& args = {}) const
 	{
 		return block_read(buffer, args);
 	}
 
 	template<parameters<directory_handle_base::read_parameters> P = read_parameters::interface>
-	basic_sender<io::directory_read> read_async(std::span<std::byte> buffer, P const& args = {});
+	basic_sender<io::directory_read> read_async(std::span<std::byte> buffer, P const& args = {}) const;
 
 
 	vsm::result<file_attributes> get_attributes(directory_entry_view entry) const;
@@ -216,7 +216,7 @@ protected:
 private:
 	vsm::result<void> block_open(filesystem_handle const* base, input_path_view path, open_parameters const& args);
 
-	vsm::result<directory_stream_view> block_read(std::span<std::byte> buffer, read_parameters const& args);
+	vsm::result<directory_stream_view> block_read(std::span<std::byte> buffer, read_parameters const& args) const;
 
 protected:
 	using base_type::sync_impl;
@@ -275,7 +275,7 @@ template<>
 struct io::parameters<io::directory_read>
 	: directory_handle::read_parameters
 {
-	using handle_type = directory_handle;
+	using handle_type = directory_handle const;
 	using result_type = directory_stream_view;
 
 	std::span<std::byte> buffer;
