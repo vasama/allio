@@ -16,12 +16,13 @@ using namespace allio;
 
 TEST_CASE("file_handle::read_at", "[file_handle]")
 {
-	path const file_path = get_temp_file_path("allio-test-file");
+	path const file_path = test::get_temp_file_path("allio-test-file");
 
-	unique_multiplexer_ptr const multiplexer = generate_multiplexer();
+	//unique_multiplexer_ptr const multiplexer = test::generate_multiplexer();
+	unique_multiplexer_ptr const multiplexer = create_default_multiplexer().value();
 	bool const multiplexable = multiplexer != nullptr;
 
-	write_file_content(file_path, "allio");
+	test::write_file_content(file_path, "allio");
 	{
 		file_handle file;
 		file.set_multiplexer(multiplexer.get()).value();
@@ -35,12 +36,12 @@ TEST_CASE("file_handle::read_at", "[file_handle]")
 
 TEST_CASE("file_handle::write_at", "[file_handle]")
 {
-	path const file_path = get_temp_file_path("allio-test-file");
+	path const file_path = test::get_temp_file_path("allio-test-file");
 
-	unique_multiplexer_ptr const multiplexer = generate_multiplexer();
+	unique_multiplexer_ptr const multiplexer = test::generate_multiplexer();
 	bool const multiplexable = multiplexer != nullptr;
 
-	write_file_content(file_path, "trash");
+	test::write_file_content(file_path, "trash");
 	{
 		file_handle file;
 		file.set_multiplexer(multiplexer.get()).value();
@@ -48,16 +49,16 @@ TEST_CASE("file_handle::write_at", "[file_handle]")
 
 		REQUIRE(file.write_at(0, as_write_buffer("allio", 5)).value() == 5);
 	}
-	check_file_content(file_path, "allio");
+	test::check_file_content(file_path, "allio");
 }
 
 TEST_CASE("file_handle::read_at_async", "[file_handle]")
 {
-	path const file_path = get_temp_file_path("allio-test-file");
+	path const file_path = test::get_temp_file_path("allio-test-file");
 
-	unique_multiplexer_ptr const multiplexer = generate_multiplexer(true);
+	unique_multiplexer_ptr const multiplexer = test::generate_multiplexer(true);
 
-	write_file_content(file_path, "allio");
+	test::write_file_content(file_path, "allio");
 	sync_wait(*multiplexer, [&]() -> detail::execution::task<void>
 	{
 		file_handle file = co_await error_into_except(open_file_async(*multiplexer, file_path));
@@ -70,11 +71,11 @@ TEST_CASE("file_handle::read_at_async", "[file_handle]")
 
 TEST_CASE("file_handle::write_at_async", "[file_handle]")
 {
-	path const file_path = get_temp_file_path("allio-test-file");
+	path const file_path = test::get_temp_file_path("allio-test-file");
 
-	unique_multiplexer_ptr const multiplexer = generate_multiplexer(true);
+	unique_multiplexer_ptr const multiplexer = test::generate_multiplexer(true);
 
-	write_file_content(file_path, "trash");
+	test::write_file_content(file_path, "trash");
 	sync_wait(*multiplexer, [&]() -> detail::execution::task<void>
 	{
 		file_handle file = co_await error_into_except(open_file_async(*multiplexer, file_path,
@@ -84,13 +85,12 @@ TEST_CASE("file_handle::write_at_async", "[file_handle]")
 
 		co_await error_into_except(file.write_at_async(0, as_write_buffer("allio", 5)));
 	}());
-	check_file_content(file_path, "allio");
+	test::check_file_content(file_path, "allio");
 }
 
 TEST_CASE("file_handle::write_at with many vectors", "[file_handle]")
 {
-	//static constexpr size_t buffer_count = 0xFFFF;
-	static constexpr size_t buffer_count = 0x1;
+	static constexpr size_t buffer_count = 0xFFFF;
 
 	std::string data_write_buffer;
 	data_write_buffer.resize(buffer_count);
@@ -122,9 +122,9 @@ TEST_CASE("file_handle::write_at with many vectors", "[file_handle]")
 	}
 
 
-	path const file_path = get_temp_file_path("allio-test-file");
+	path const file_path = test::get_temp_file_path("allio-test-file");
 
-	unique_multiplexer_ptr const multiplexer = generate_multiplexer(true);
+	unique_multiplexer_ptr const multiplexer = test::generate_multiplexer(true);
 
 	file_handle file;
 	file.set_multiplexer(multiplexer.get()).value();

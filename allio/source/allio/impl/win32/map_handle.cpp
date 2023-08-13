@@ -1,8 +1,7 @@
-#include <allio/impl/win32/map_handle.hpp>
+#include <allio/map_handle.hpp>
 
 #include <allio/win32/nt_error.hpp>
 #include <allio/win32/platform.hpp>
-#include <allio/impl/bounded_vector.hpp>
 #include <allio/impl/win32/kernel.hpp>
 
 #include <vsm/defer.hpp>
@@ -13,52 +12,26 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-std::span<page_level const> allio::get_supported_page_levels()
+static vsm::result<ULONG> get_page_protection(protection const protection)
 {
-	using supported_page_levels = bounded_vector<page_level, 2>;
-
-	static auto const levels = []() -> supported_page_levels
+	switch (protection)
 	{
-		supported_page_levels levels;
-
-		SYSTEM_INFO system_info;
-		GetSystemInfo(&system_info);
-
-		levels.try_push_back(get_page_level(system_info.dwPageSize));
-
-		if (size_t const large_page_size = GetLargePageMinimum())
-		{
-			vsm_assert(system_info.dwPageSize < large_page_size);
-			levels.push_back(get_page_level(large_page_size));
-		}
-
-		return levels;
-	}();
-
-	return levels;
-}
-
-
-static vsm::result<ULONG> get_page_protection(page_access const access)
-{
-	switch (access)
-	{
-	case page_access::none:
+	case protection::none:
 		return PAGE_NOACCESS;
 
-	case page_access::read:
+	case protection::read:
 		return PAGE_READONLY;
 
-	case page_access::read | page_access::write:
+	case protection::read | protection::write:
 		return PAGE_READWRITE;
 
-	case page_access::execute:
+	case protection::execute:
 		return PAGE_EXECUTE;
 
-	case page_access::execute | page_access::read:
+	case protection::execute | protection::read:
 		return PAGE_EXECUTE_READ;
 
-	case page_access::execute | page_access::read | page_access::write:
+	case protection::execute | protection::read | protection::write:
 		return PAGE_EXECUTE_READWRITE;
 	}
 	
@@ -67,11 +40,6 @@ static vsm::result<ULONG> get_page_protection(page_access const access)
 
 static vsm::result<ULONG> get_page_level_allocation_type(page_level const level)
 {
-	if (level == page_level::default_level)
-	{
-		return 0;
-	}
-
 	auto const supported_levels = get_supported_page_levels();
 
 	if (level == supported_levels.front())
@@ -79,28 +47,41 @@ static vsm::result<ULONG> get_page_level_allocation_type(page_level const level)
 		return 0;
 	}
 
-	if (supported_levels.size() > 0 && level == supported_levels.back())
+	if (supported_levels.size() > 1)
 	{
-		return MEM_LARGE_PAGES;
+		// Windows only supports two paging levels.
+		vsm_assert(supported_levels.size() == 2);
+
+		if (level == supported_levels.back())
+		{
+			return MEM_LARGE_PAGES;
+		}
 	}
 
 	return vsm::unexpected(error::unsupported_page_level);
 }
 
-
 static vsm::result<void> close_mapping(void* base, size_t size, bool const has_backing_section)
 {
-	HANDLE const process = GetCurrentProcess();
+	NTSTATUS const status = [&]() -> NTSTATUS
+	{
+		HANDLE const process = GetCurrentProcess();
 
-	NTSTATUS const status = has_backing_section
-		? NtUnmapViewOfSection(
-			process,
-			base)
-		: NtFreeVirtualMemory(
-			process,
-			&base,
-			&size,
-			MEM_RELEASE);
+		if (has_backing_section)
+		{
+			return NtUnmapViewOfSection(
+				process,
+				base);
+		}
+		else
+		{
+			return NtFreeVirtualMemory(
+				process,
+				&base,
+				&size,
+				MEM_RELEASE);
+		}
+	}();
 
 	if (!NT_SUCCESS(status))
 	{
@@ -111,7 +92,75 @@ static vsm::result<void> close_mapping(void* base, size_t size, bool const has_b
 }
 
 
-vsm::result<void> map_handle_base::set_page_access(void* const base, size_t const size, page_access const access)
+/// @return Maximum protection available on the section object.
+static protection get_section_access(section_handle const& section)
+{
+	return section
+		? section.get_protection()
+		// Page file backed memory can use any protection.
+		: protection::read_write | protection::execute;
+}
+
+vsm::result<void> map_handle_base::block_commit(void* base, size_t size, commit_parameters const& args) const
+{
+	if (!*this)
+	{
+		return vsm::unexpected(error::handle_is_null);
+	}
+
+	if (m_section)
+	{
+		return vsm::unexpected(error::unsupported_operation);
+	}
+
+	if (!check_address_range(base, size))
+	{
+		return vsm::unexpected(error::invalid_address);
+	}
+
+	vsm_try(protection, [&]() -> vsm::result<protection>
+	{
+		protection const section_access = get_section_access(m_section);
+
+		if (args.protection)
+		{
+			protection const protection = *args.protection;
+
+			if (!vsm::all_flags(section_access, protection))
+			{
+				return vsm::unexpected(error::invalid_argument);
+			}
+
+			return protection;
+		}
+
+		return section_access & protection::read_write;
+	}());
+
+	vsm_try(page_protection, get_page_protection(protection));
+
+	NTSTATUS const status = NtAllocateVirtualMemory(
+		GetCurrentProcess(),
+		&base,
+		0, // ZeroBits,
+		&size,
+		MEM_COMMIT,
+		page_protection);
+
+	if (!NT_SUCCESS(status))
+	{
+		return vsm::unexpected(static_cast<nt_error>(status));
+	}
+
+	return {};
+}
+
+vsm::result<void> map_handle_base::decommit(void* base, size_t size) const
+{
+	return vsm::unexpected(error::unsupported_operation);
+}
+
+vsm::result<void> map_handle_base::set_protection(void* base, size_t size, protection const protection) const
 {
 	if (!*this)
 	{
@@ -123,17 +172,20 @@ vsm::result<void> map_handle_base::set_page_access(void* const base, size_t cons
 		return vsm::unexpected(error::invalid_address);
 	}
 
-	vsm_try(protection, get_page_protection(access));
+	if (!vsm::all_flags(get_section_access(m_section), protection))
+	{
+		return vsm::unexpected(error::invalid_argument);
+	}
 
-	void* area_base = base;
-	size_t area_size = size;
+	vsm_try(new_page_protection, get_page_protection(protection));
 
+	ULONG old_page_protection;
 	NTSTATUS const status = NtProtectVirtualMemory(
 		GetCurrentProcess(),
-		&area_base,
-		&area_size,
-		protection,
-		nullptr);
+		&base,
+		&size,
+		new_page_protection,
+		&old_page_protection);
 
 	if (!NT_SUCCESS(status))
 	{
@@ -144,8 +196,11 @@ vsm::result<void> map_handle_base::set_page_access(void* const base, size_t cons
 }
 
 
-vsm::result<void> detail::map_handle_base::sync_impl(io::parameters_with_result<io::map> const& args)
+vsm::result<void> map_handle_base::sync_impl(io::parameters_with_result<io::map> const& args)
 {
+	vsm_try_void(kernel_init());
+
+
 	map_handle& h = *args.handle;
 
 	if (h)
@@ -154,35 +209,19 @@ vsm::result<void> detail::map_handle_base::sync_impl(io::parameters_with_result<
 	}
 
 
-	HANDLE section = NULL;
+	section_handle const* const p_section = nullptr;
+
+	if (p_section != nullptr && !*args.section)
+	{
+		return vsm::unexpected(error::invalid_argument);
+	}
 
 	LARGE_INTEGER section_offset;
 	LARGE_INTEGER* p_section_offset = nullptr;
 
-	ULONG allocation_type = 0;
-
-	handle_flags handle_flags = {};
-
-
-	bool const has_backing_section = args.section != nullptr;
-
-	if (has_backing_section)
+	if (file_size const offset = args.section_offset)
 	{
-		section_handle const& sh = *args.section;
-
-		if (!sh)
-		{
-			return vsm::unexpected(error::invalid_argument);
-		}
-
-		section = unwrap_handle(sh.get_platform_handle());
-
-		handle_flags |= map_handle::implementation::flags::backing_section;
-	}
-
-	if (file_size const offset = args.offset)
-	{
-		if (!has_backing_section)
+		if (p_section == nullptr)
 		{
 			return vsm::unexpected(error::invalid_argument);
 		}
@@ -191,36 +230,63 @@ vsm::result<void> detail::map_handle_base::sync_impl(io::parameters_with_result<
 		p_section_offset = &section_offset;
 	}
 
-	vsm_try(page_level_allocation_type, get_page_level_allocation_type(args.page_level));
-	allocation_type |= page_level_allocation_type;
+	page_level const page_level = args.page_level
+		? *args.page_level
+		: get_default_page_level();
 
-	vsm_try(page_protection, get_page_protection(args.access));
+	vsm_try(page_protection, get_page_protection(args.protection));
+	vsm_try(allocation_type, get_page_level_allocation_type(page_level));
+
+	allocation_type |= MEM_RESERVE;
+
+	if (args.commit)
+	{
+		if (p_section == nullptr)
+		{
+			allocation_type |= MEM_COMMIT;
+		}
+	}
 
 	void* base = reinterpret_cast<void*>(args.address);
 	size_t size = args.size;
 
+	section_handle section;
 
-	HANDLE const process = GetCurrentProcess();
+	if (p_section != nullptr)
+	{
+		vsm_try_void(section.duplicate(*args.section));
+	}
 
-	NTSTATUS const status = has_backing_section
-		? NtMapViewOfSection(
-			section,
-			process,
-			&base,
-			0, // ZeroBits
-			size,
-			p_section_offset,
-			&size,
-			ViewUnmap,
-			allocation_type,
-			page_protection)
-		: NtAllocateVirtualMemory(
-			process,
-			&base,
-			0, // ZeroBits
-			&size,
-			allocation_type,
-			page_protection);
+
+	NTSTATUS const status = [&]() -> NTSTATUS
+	{
+		HANDLE const process = GetCurrentProcess();
+
+		if (p_section != nullptr)
+		{
+			return NtMapViewOfSection(
+				unwrap_handle(section.get_platform_handle()),
+				process,
+				&base,
+				0, // ZeroBits
+				size,
+				p_section_offset,
+				&size,
+				ViewUnmap,
+				allocation_type,
+				page_protection);
+		}
+		else
+		{
+			return NtAllocateVirtualMemory(
+				process,
+				&base,
+				0, // ZeroBits
+				&size,
+				allocation_type,
+				page_protection);
+		}
+	}();
 
 	if (!NT_SUCCESS(status))
 	{
@@ -231,28 +297,24 @@ vsm::result<void> detail::map_handle_base::sync_impl(io::parameters_with_result<
 	{
 		if (base != nullptr)
 		{
-			vsm_verify(close_mapping(base, size, has_backing_section));
+			vsm_verify(close_mapping(base, size, p_section != nullptr));
 		}
 	};
 
-	vsm_try_void(h.set_native_handle(
-		map_handle::native_handle_type
-		{
-			handle::native_handle_type
-			{
-				handle_flags | flags::not_null,
-			},
-			base,
-			size,
-		}
-	));
 
-	base = nullptr;
+	h.base_type::set_native_handle(
+	{
+		flags::not_null,
+	});
+	h.m_section = vsm_move(section);
+	h.m_base.value = std::exchange(base, nullptr);
+	h.m_size.value = size;
+	h.m_page_level.value = page_level;
 
 	return {};
 }
 
-vsm::result<void> detail::map_handle_base::sync_impl(io::parameters_with_result<io::close> const& args)
+vsm::result<void> map_handle_base::sync_impl(io::parameters_with_result<io::close> const& args)
 {
 	map_handle& h = static_cast<map_handle&>(*args.handle);
 
@@ -261,10 +323,17 @@ vsm::result<void> detail::map_handle_base::sync_impl(io::parameters_with_result<
 		return vsm::unexpected(error::handle_is_null);
 	}
 
-	vsm_try(native, h.release_native_handle());
+	vsm_try_void(close_mapping(
+		h.m_base.value,
+		h.m_size.value,
+		static_cast<bool>(h.m_section)));
 
-	return close_mapping(
-		native.base,
-		native.size,
-		native.flags[map_handle::implementation::flags::backing_section]);
+	if (h.m_section)
+	{
+		unrecoverable(h.m_section.close());
+	}
+
+	return {};
 }
+
+allio_handle_implementation(map_handle);

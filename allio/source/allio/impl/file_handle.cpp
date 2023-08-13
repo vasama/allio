@@ -5,18 +5,19 @@
 #include "unique_name.hpp"
 
 using namespace allio;
+using namespace allio::detail;
 
-vsm::result<void> detail::file_handle_base::block_open(filesystem_handle const* const base, input_path_view const path, open_parameters const& args)
+vsm::result<void> file_handle_base::block_open(filesystem_handle const* const base, input_path_view const path, open_parameters const& args)
 {
 	return block<io::filesystem_open>(static_cast<file_handle&>(*this), args, base, path);
 }
 
-vsm::result<size_t> detail::file_handle_base::block_read_at(file_size const offset, read_buffers const buffers, byte_io_parameters const& args) const
+vsm::result<size_t> file_handle_base::block_read_at(file_size const offset, read_buffers const buffers, byte_io_parameters const& args) const
 {
 	return block<io::scatter_read_at>(static_cast<file_handle const&>(*this), args, offset, buffers);
 }
 
-vsm::result<size_t> detail::file_handle_base::block_write_at(file_size const offset, write_buffers const buffers, byte_io_parameters const& args) const
+vsm::result<size_t> file_handle_base::block_write_at(file_size const offset, write_buffers const buffers, byte_io_parameters const& args) const
 {
 	return block<io::gather_write_at>(static_cast<file_handle const&>(*this), args, offset, buffers);
 }

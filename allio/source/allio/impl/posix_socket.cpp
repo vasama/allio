@@ -7,6 +7,7 @@
 #include <allio/linux/detail/undef.i>
 
 using namespace allio;
+using namespace allio::detail;
 
 network_address socket_address_union::get_network_address() const
 {
@@ -156,12 +157,12 @@ static vsm::result<void> sync_create_socket(io::parameters_with_result<io::socke
 }
 
 
-vsm::result<void> detail::stream_socket_handle_base::sync_impl(io::parameters_with_result<io::socket_create> const& args)
+vsm::result<void> stream_socket_handle_base::sync_impl(io::parameters_with_result<io::socket_create> const& args)
 {
 	return sync_create_socket<stream_socket_handle>(args);
 }
 
-vsm::result<void> detail::stream_socket_handle_base::sync_impl(io::parameters_with_result<io::socket_connect> const& args)
+vsm::result<void> stream_socket_handle_base::sync_impl(io::parameters_with_result<io::socket_connect> const& args)
 {
 	stream_socket_handle& h = *args.handle;
 
@@ -179,12 +180,12 @@ vsm::result<void> detail::stream_socket_handle_base::sync_impl(io::parameters_wi
 	return {};
 }
 
-vsm::result<void> detail::stream_socket_handle_base::sync_impl(io::parameters_with_result<io::stream_scatter_read> const& args)
+vsm::result<void> stream_socket_handle_base::sync_impl(io::parameters_with_result<io::stream_scatter_read> const& args)
 {
 	return args.produce(sync_scatter_read(static_cast<platform_handle const&>(*args.handle), args));
 }
 
-vsm::result<void> detail::stream_socket_handle_base::sync_impl(io::parameters_with_result<io::stream_gather_write> const& args)
+vsm::result<void> stream_socket_handle_base::sync_impl(io::parameters_with_result<io::stream_gather_write> const& args)
 {
 	return args.produce(sync_gather_write(static_cast<platform_handle const&>(*args.handle), args));
 }
@@ -192,17 +193,17 @@ vsm::result<void> detail::stream_socket_handle_base::sync_impl(io::parameters_wi
 allio_handle_implementation(stream_socket_handle);
 
 
-vsm::result<void> detail::packet_socket_handle_base::sync_impl(io::parameters_with_result<io::socket_create> const& args)
+vsm::result<void> packet_socket_handle_base::sync_impl(io::parameters_with_result<io::socket_create> const& args)
 {
 	return sync_create_socket<packet_socket_handle>(args);
 }
 
-vsm::result<void> detail::packet_socket_handle_base::sync_impl(io::parameters_with_result<io::packet_scatter_read> const& args)
+vsm::result<void> packet_socket_handle_base::sync_impl(io::parameters_with_result<io::packet_scatter_read> const& args)
 {
 	return packet_scatter_read(args);
 }
 
-vsm::result<void> detail::packet_socket_handle_base::sync_impl(io::parameters_with_result<io::packet_gather_write> const& args)
+vsm::result<void> packet_socket_handle_base::sync_impl(io::parameters_with_result<io::packet_gather_write> const& args)
 {
 	return packet_gather_write(args);
 }
@@ -210,12 +211,12 @@ vsm::result<void> detail::packet_socket_handle_base::sync_impl(io::parameters_wi
 allio_handle_implementation(packet_socket_handle);
 
 
-vsm::result<void> detail::listen_socket_handle_base::sync_impl(io::parameters_with_result<io::socket_create> const& args)
+vsm::result<void> listen_socket_handle_base::sync_impl(io::parameters_with_result<io::socket_create> const& args)
 {
 	return sync_create_socket<listen_socket_handle>(args);
 }
 
-vsm::result<void> detail::listen_socket_handle_base::sync_impl(io::parameters_with_result<io::socket_listen> const& args)
+vsm::result<void> listen_socket_handle_base::sync_impl(io::parameters_with_result<io::socket_listen> const& args)
 {
 	listen_socket_handle& h = *args.handle;
 
@@ -227,7 +228,7 @@ vsm::result<void> detail::listen_socket_handle_base::sync_impl(io::parameters_wi
 	return listen_socket(unwrap_socket(h.get_platform_handle()), args.address, args);
 }
 
-vsm::result<void> detail::listen_socket_handle_base::sync_impl(io::parameters_with_result<io::socket_accept> const& args)
+vsm::result<void> listen_socket_handle_base::sync_impl(io::parameters_with_result<io::socket_accept> const& args)
 {
 	listen_socket_handle const& h = *args.handle;
 

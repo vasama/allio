@@ -1,36 +1,38 @@
 #include <allio/map_handle.hpp>
 
-#include <allio/impl/object_transaction.hpp>
-
 #include <vsm/utility.hpp>
 
 using namespace allio;
 using namespace allio::detail;
 
-vsm::result<void> map_handle_base::set_native_handle(native_handle_type const handle)
+bool map_handle_base::check_native_handle(native_handle_type const& handle)
 {
-	object_transaction base_transaction(m_base.value, handle.base);
-	object_transaction size_transaction(m_size.value, handle.size);
-	object_transaction page_level_transaction(m_page_level.value, handle.page_level);
-	vsm_try_void(base_type::set_native_handle(handle));
-	base_transaction.commit();
-	size_transaction.commit();
-	page_level_transaction.commit();
-
-	return {};
+	return base_type::check_native_handle(handle);
 }
 
-vsm::result<map_handle_base::native_handle_type> map_handle_base::release_native_handle()
+void map_handle_base::set_native_handle(native_handle_type const& handle)
 {
-	vsm_try(base_handle, base_type::release_native_handle());
+	base_type::set_native_handle(handle);
 
-	return vsm::result<native_handle_type>
+	if (handle.section.flags[flags::not_null])
 	{
-		vsm::result_value,
-		vsm_move(base_handle),
-		std::exchange(m_base.value, nullptr),
-		std::exchange(m_size.value, 0),
-		std::exchange(m_page_level.value, {}),
+		vsm_verify(m_section.set_native_handle(handle.section));
+	}
+
+	m_base.value = handle.base;
+	m_size.value = handle.size;
+	m_page_level.value = handle.page_level;
+}
+
+map_handle_base::native_handle_type map_handle_base::release_native_handle()
+{
+	return
+	{
+		base_type::release_native_handle(),
+		m_section.release_native_handle(unchecked_tag()),
+		m_base.release(),
+		m_size.release(),
+		m_page_level.release(),
 	};
 }
 
@@ -46,3 +48,36 @@ bool map_handle_base::check_address_range(void const* const range_base, size_t c
 		std::less_equal<>()(valid_beg, range_beg) &&
 		std::less_equal<>()(range_end, valid_end);
 }
+
+
+vsm::result<void> map_handle_base::block_map(size_t const size, map_parameters const& args)
+{
+	return block<io::map>(static_cast<map_handle&>(*this), args, size);
+}
+
+
+#if 0
+vsm::result<map_handle> block_map_section(section_handle const& section, file_size const offset, size_t const size, map_handle::basic_map_parameters const& args)
+{
+	vsm::result<map_handle> r(vsm::result_value);
+	vsm_try_void(r->map(size, map_handle::map_parameters
+	{
+		&section,
+		offset,
+		args,
+	}));
+	return r;
+}
+
+vsm::result<map_handle> block_map_anonymous(size_t const size, map_handle::basic_map_parameters const& args)
+{
+	vsm::result<map_handle> r(vsm::result_value);
+	vsm_try_void(r->map(size, map_handle::map_parameters
+	{
+		nullptr,
+		0,
+		args,
+	}));
+	return r;
+}
+#endif

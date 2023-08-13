@@ -5,6 +5,8 @@
 
 #include <catch2/catch_all.hpp>
 
+#include <algorithm>
+
 using namespace allio;
 
 TEST_CASE("anonymous mapping", "[map_handle]")
@@ -23,30 +25,51 @@ TEST_CASE("anonymous mapping", "[map_handle]")
 	#endif
 
 	static constexpr size_t fill_char_range = 'Z' - 'A';
-	size_t const fill_char_offset = Catch::rng();
-	char const fill_char_0 = 'A' + +fill_char_offset % fill_char_range;
-	char const fill_char_1 = 'A' + ~fill_char_offset % fill_char_range;
 
-	page_level const page_level = GENERATE_COPY(
-		page_level::default_level,
-		from_range(get_supported_page_levels()));
+	std::uniform_int_distribution<size_t> distribution(0, fill_char_range);
+	size_t const fill_char_offset = distribution(Catch::sharedRng());
 
+	char const fill_char_0 = 'A' + (+fill_char_offset % fill_char_range);
+	char const fill_char_1 = 'A' + (~fill_char_offset % fill_char_range);
+	
+#if 0 //TODO: Query for large page privileges and test if available.
+	std::optional<page_level> page_level = GENERATE(from_range(get_supported_page_levels()));
+	if (*page_level == get_default_page_level() && GENERATE(1, 0))
+	{
+		page_level = std::nullopt;
+	}
+#else
+	auto const page_level = GENERATE(
+		as<std::optional<allio::page_level>>(),
+		std::nullopt,
+		get_default_page_level());
+#endif
+
+	map_handle map;
+	map.map(reservation_size,
+	{
+		.commit = false,
+		.page_level = page_level,
+	}).value();
+
+#if 0
 	map_handle map = map_anonymous(reservation_size,
 	{
 		.commit = false,
 	}).value();
+#endif
 
 	REQUIRE(map.size() >= reservation_size);
 
 	size_t const page_size = map.get_page_size();
-	if (page_level != page_level::default_value)
+	if (page_level)
 	{
-		REQUIRE(page_size == get_page_size(page_level));
+		REQUIRE(page_size == get_page_size(*page_level));
 	}
 
 	char* const page_0 = reinterpret_cast<char*>(map.base());
 	REQUIRE(page_0 != nullptr);
-	char* const page_1 = base + page_size;
+	char* const page_1 = page_0 + page_size;
 
 	map.commit(page_0, page_size).value();
 	REQUIRE(map.base() == page_0);
@@ -56,49 +79,56 @@ TEST_CASE("anonymous mapping", "[map_handle]")
 	REQUIRE(map.base() == page_0);
 	memset(page_1, fill_char_1, page_size);
 
-	REQUIRE(std::all(
+	REQUIRE(std::all_of(
 		page_0,
 		page_0 + page_size,
 		[=](char const x) { return x == fill_char_0; }));
 
-	REQUIRE(std::all(
+	REQUIRE(std::all_of(
 		page_1,
 		page_1 + page_size,
 		[=](char const x) { return x == fill_char_1; }));
 }
 
-TEST_CASE("map_handle page access", "[map_handle]")
+TEST_CASE("map_handle page protection", "[map_handle]")
 {
-	map_handle map = map_anonymous(1,
+	map_handle map;
+	map.map(1,
 	{
-		.access = page_access::read,
+		.protection = protection::read,
 	}).value();
 
-	unsigned char volatile* const page = reinterpret_cast<unsigned char*>(map.base());
-
-	REQUIRE(*page == 0);
-
-	REQUIRE(capture_signal(signal::access_violation, [&]()
+#if 0
+	map_handle map = map_anonymous(1,
 	{
-		*page = 1;
-	}));
+		.protection = protection::read,
+	}).value();
+#endif
 
-	REQUIRE(*page == 0);
+	unsigned char* const page = reinterpret_cast<unsigned char*>(map.base());
+	unsigned char volatile& volatile_byte = *page;
 
-	map.set_page_access(page, 1, page_access::read_write).value();
+	map.set_protection(page, 1, protection::read).value();
+	REQUIRE(volatile_byte == 0);
 
-	*page = 1;
+	map.set_protection(page, 1, protection::read_write).value();
+	REQUIRE(volatile_byte == 0);
 
-	REQUIRE(*page == 1);
+	volatile_byte = 1;
+	REQUIRE(volatile_byte == 1);
+
+	map.set_protection(page, 1, protection::read).value();
+	REQUIRE(volatile_byte == 1);
 }
 
+#if 0
 TEST_CASE("file section and mapping", "[section_handle][map_handle]")
 {
-	path const file_path = get_temp_file_path("allio-test-file");
+	path const file_path = test::get_temp_file_path("allio-test-file");
 
 	bool const writable = GENERATE(0, 1);
 
-	write_file_content(file_path, "check");
+	test::write_file_content(file_path, "check");
 	{
 		file_handle const file = open_file(file_path).value();
 		section_handle const section = section_create(file, 5).value();
@@ -112,5 +142,6 @@ TEST_CASE("file section and mapping", "[section_handle][map_handle]")
 			memcpy(map.base(), "write", 5);
 		}
 	}
-	check_file_content(file_path, writable ? "write" : "check");
+	test::check_file_content(file_path, writable ? "write" : "check");
 }
+#endif

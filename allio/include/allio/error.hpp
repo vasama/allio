@@ -4,8 +4,26 @@
 
 #include <vsm/result.hpp>
 
+#include <source_location>
+
+extern "C"
+void allio_unrecoverable_error(std::error_code error, std::source_location location);
+
 namespace allio {
 namespace detail {
+
+void unrecoverable_error_default(std::error_code error, std::source_location location);
+void unrecoverable_error(std::error_code error, std::source_location location = std::source_location::current());
+
+template<typename T>
+void unrecoverable(vsm::result<T> const& e, std::source_location const location = std::source_location::current())
+{
+	if (!e)
+	{
+		unrecoverable_error(e.error(), location);
+	}
+}
+
 
 struct error_category final : std::error_category
 {
@@ -59,6 +77,7 @@ inline std::error_code make_error_code(error const error)
 {
 	return std::error_code(static_cast<int>(error), detail::error_category_instance);
 }
+
 
 } // namespace allio
 

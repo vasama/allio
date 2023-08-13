@@ -46,6 +46,7 @@ vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::ev
 {
 	vsm_try_void(kernel_init());
 
+
 	event_handle& h = *args.handle;
 
 	if (h)

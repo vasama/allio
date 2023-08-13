@@ -103,6 +103,7 @@ vsm::result<iocp_multiplexer::init_result> iocp_multiplexer::init(init_options c
 {
 	vsm_try_void(kernel_init());
 
+
 	vsm_try(completion_port, [&]() -> vsm::result<unique_handle>
 	{
 		HANDLE const completion_port = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 1);
@@ -139,6 +140,51 @@ vsm::result<multiplexer_handle_relation const*> iocp_multiplexer::find_handle_re
 	return static_multiplexer_handle_relation_provider<iocp_multiplexer, async_handle_types>::find_handle_relation(handle_type);
 }
 
+static vsm::result<size_t> remove_io_completions(
+	HANDLE const completion_port,
+	std::span<FILE_IO_COMPLETION_INFORMATION> const entries,
+	deadline const deadline)
+{
+	NTSTATUS status;
+	ULONG num_entries_removed;
+
+	if (entries.size() == 1)
+	{
+		FILE_IO_COMPLETION_INFORMATION& entry = entries.front();
+
+		status = NtRemoveIoCompletion(
+			completion_port,
+			&entry.KeyContext,
+			&entry.ApcContext,
+			&entry.IoStatusBlock,
+			kernel_timeout(deadline));
+
+		num_entries_removed = 1;
+	}
+	else
+	{
+		status = NtRemoveIoCompletionEx(
+			completion_port,
+			entries.data(),
+			entries.size(),
+			&num_entries_removed,
+			kernel_timeout(deadline),
+			false);
+	}
+
+	if (!NT_SUCCESS(status))
+	{
+		return vsm::unexpected(static_cast<nt_error>(status));
+	}
+	
+	if (status == STATUS_TIMEOUT)
+	{
+		return 0;
+	}
+
+	return num_entries_removed;
+}
+
 vsm::result<multiplexer::statistics> iocp_multiplexer::pump(pump_parameters const& args)
 {
 	bool const complete = (args.mode & pump_mode::complete) != pump_mode::none;
@@ -149,10 +195,8 @@ vsm::result<multiplexer::statistics> iocp_multiplexer::pump(pump_parameters cons
 	{
 		if (flush)
 		{
-			auto const s = deferring_multiplexer::flush();
-			if (s.submitted != 0 || s.completed != 0 || s.concluded != 0)
+			if (deferring_multiplexer::flush(statistics))
 			{
-				//TODO: Gather statistics
 				deadline = deadline::instant();
 			}
 		}
@@ -161,6 +205,7 @@ vsm::result<multiplexer::statistics> iocp_multiplexer::pump(pump_parameters cons
 		{
 			FILE_IO_COMPLETION_INFORMATION entries[16];
 
+#if 0
 			vsm_try(entry_count, [&]() -> vsm::result<size_t>
 			{
 				using pair_type = std::pair<NTSTATUS, ULONG>;
@@ -214,6 +259,10 @@ vsm::result<multiplexer::statistics> iocp_multiplexer::pump(pump_parameters cons
 
 				return num_entries_removed;
 			}());
+#endif
+
+			//TODO: Pass more than one depending on how many operations have been submitted.
+			vsm_try(entry_count, remove_io_completions(m_completion_port.get(), std::span(entries, 1), deadline));
 
 			for (auto const& entry : std::span(entries, entry_count))
 			{

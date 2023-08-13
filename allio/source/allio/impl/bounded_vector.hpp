@@ -1,6 +1,9 @@
 #pragma once
 
+#include <vsm/utility.hpp>
+
 #include <initializer_list>
+#include <memory>
 
 namespace allio {
 
@@ -46,6 +49,18 @@ public:
 	T const* data() const
 	{
 		return reinterpret_cast<T const*>(m_storage);
+	}
+
+	T& operator[](size_t const index)
+	{
+		vsm_assert(index < MaxSize);
+		return reinterpret_cast<T*>(m_storage)[index];
+	}
+
+	T const& operator[](size_t const index) const
+	{
+		vsm_assert(index < MaxSize);
+		return reinterpret_cast<T const*>(m_storage)[index];
 	}
 
 	template<std::convertible_to<T> U = T>

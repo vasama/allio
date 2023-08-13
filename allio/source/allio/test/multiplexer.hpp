@@ -6,7 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
-namespace allio {
+namespace allio::test {
 
 inline void maybe_set_multiplexer(unique_multiplexer_ptr const& multiplexer, auto& handle)
 {
@@ -26,4 +26,4 @@ inline unique_multiplexer_ptr generate_multiplexer(bool const required = false)
 	return nullptr;
 }
 
-} // namespace allio
+} // namespace allio::test

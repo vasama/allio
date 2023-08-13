@@ -15,6 +15,7 @@ class package(ConanFile):
 		"vsm_function/0.1",
 		"vsm_intrusive/0.1",
 		"vsm_linear/0.1",
+		"vsm_optional/0.1",
 		"vsm_result/0.1",
 		"vsm_tag_ptr/0.1",
 		"vsm_unique_resource/0.1"

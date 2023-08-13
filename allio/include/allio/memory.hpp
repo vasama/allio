@@ -10,7 +10,7 @@
 
 namespace allio {
 
-enum class page_access : uint8_t
+enum class protection : uint8_t
 {
 	none                                = 0,
 
@@ -20,13 +20,11 @@ enum class page_access : uint8_t
 
 	read_write = read | write,
 };
-vsm_flag_enum(page_access);
+vsm_flag_enum(protection);
 
 
 enum class page_level : uint8_t
 {
-	default_level                       = 0,
-
 	_4KiB                               = 12,
 	_16KiB                              = 14,
 	_64KiB                              = 16,
@@ -45,18 +43,26 @@ enum class page_level : uint8_t
 
 inline page_level get_page_level(size_t const size)
 {
-	vsm_assert(size > 1 && size & size - 1 == 0);
+	vsm_assert(size > 1 && (size & size - 1) == 0);
 	return static_cast<page_level>(std::countr_zero(size));
 }
 
 inline size_t get_page_size(page_level const level)
 {
-	vsm_assert(level != page_level::default_level);
 	return static_cast<size_t>(1) << static_cast<uint8_t>(level);
 }
 
-/// @return Array of supported paging levels.
-/// @post @retval.size() > 0
+/// @return The default paging level for the platform.
+/// @note No additional privileges are required for 
+page_level get_default_page_level();
+
+/// @return Array of paging levels supported by the platform.
+///         The array is non-empty and sorted in ascending order.
+/// @note Support for a paging level does not guarantee that creating mappings at
+///       such a paging level will succeed, as additional privileges may be required.
 std::span<page_level const> get_supported_page_levels();
+
+
+size_t get_allocation_granularity(page_level level);
 
 } // namespace allio

@@ -2,6 +2,8 @@
 
 #include <allio/section_handle.hpp>
 
+#include <optional>
+
 namespace allio {
 
 namespace io {
@@ -16,39 +18,63 @@ class map_handle_base : public handle
 {
 	using final_handle_type = final_handle<map_handle_base>;
 
+	section_handle m_section;
 	vsm::linear<void*> m_base;
 	vsm::linear<size_t> m_size;
 	vsm::linear<page_level> m_page_level;
 
 public:
-	struct implementation;
-
 	using base_type = handle;
 
 	struct native_handle_type : base_type::native_handle_type
 	{
+		section_handle::native_handle_type section;
+
 		void* base;
 		size_t size;
+
 		allio::page_level page_level;
 	};
+	
+	using async_operations = type_list_cat<
+		base_type::async_operations,
+		type_list<
+			io::map
+		>
+	>;
 
+
+	//TODO: Use optional with sentinel for page_level.
+	#define allio_map_handle_basic_map_parameters(type, data, ...) \
+		type(allio::detail::map_handle_base, basic_map_parameters) \
+		data(::uintptr_t,                               address,            0) \
+		data(bool,                                      commit,             true) \
+		data(::allio::protection,                       protection,         ::allio::protection::read_write) \
+		data(::std::optional<::allio::page_level>,      page_level) \
+
+	allio_interface_parameters(allio_map_handle_basic_map_parameters);
 
 	#define allio_map_handle_map_parameters(type, data, ...) \
-		type(allio::map_handle, map_parameters) \
-		data(::allio::section_handle const*,    section,        nullptr) \
-		data(::allio::file_size,                offset,         0) \
-		data(::uintptr_t,                       address,        0) \
-		data(::allio::page_access,              access,         ::allio::page_access::read_write) \
-		data(::allio::page_level,               page_level,     ::allio::page_level::default_level) \
+		type(allio::detail::map_handle_base, map_parameters) \
+		data(::allio::section_handle const*,            section,            nullptr) \
+		data(::allio::file_size,                        section_offset,     0) \
+		allio_map_handle_basic_map_parameters(__VA_ARGS__, __VA_ARGS__) \
 
 	allio_interface_parameters(allio_map_handle_map_parameters);
 
+	#define allio_map_handle_commit_parameters(type, data, ...) \
+		type(allio::detail::map_handle_base, commit_parameters) \
+		data(::std::optional<::allio::protection>,      protection) \
 
-	native_handle_type get_native_handle() const
+	allio_interface_parameters(allio_map_handle_commit_parameters);
+
+
+	[[nodiscard]] native_handle_type get_native_handle() const
 	{
 		return
 		{
 			base_type::get_native_handle(),
+			m_section.get_native_handle(),
 			m_base.value,
 			m_size.value,
 			m_page_level.value,
@@ -56,16 +82,9 @@ public:
 	}
 
 
-	[[nodiscard]] page_level get_page_level() const
+	[[nodiscard]] section_handle const& get_section() const
 	{
-		vsm_assert(*this);
-		return m_page_level.value;
-		return {};
-	}
-
-	[[nodiscard]] size_t get_page_size() const
-	{
-		return allio::get_page_size(get_page_level());
+		return m_section;
 	}
 
 
@@ -82,26 +101,46 @@ public:
 	}
 
 
-	vsm::result<void> set_page_access(void* base, size_t size, page_access access);
+	[[nodiscard]] page_level get_page_level() const
+	{
+		vsm_assert(*this);
+		return m_page_level.value;
+	}
+
+	[[nodiscard]] size_t get_page_size() const
+	{
+		return allio::get_page_size(get_page_level());
+	}
 
 
 	template<parameters<map_parameters> P = map_parameters::interface>
-	vsm::result<void> map(section_handle const& section, file_size const offset, size_t const size, P const& args = {})
+	vsm::result<void> map(size_t const size, P const& args = {})
 	{
-		return block_map(section, offset, size, args);
+		return block_map(size, args);
 	}
+
+	template<parameters<map_parameters> P = map_parameters::interface>
+	vsm::result<void> commit(void* const base, size_t const size, P const& args = {}) const
+	{
+		return block_commit(base, size, args);
+	}
+
+	vsm::result<void> decommit(void* base, size_t size) const;
+
+	vsm::result<void> set_protection(void* base, size_t size, protection protection) const;
 
 protected:
 	using base_type::base_type;
 
-	vsm::result<void> set_native_handle(native_handle_type handle);
-	vsm::result<native_handle_type> release_native_handle();
+	static bool check_native_handle(native_handle_type const& handle);
+	void set_native_handle(native_handle_type const& handle);
+	native_handle_type release_native_handle();
 
 private:
 	bool check_address_range(void const* base, size_t size) const;
 
-	vsm::result<void> block_map(section_handle const& section, file_size const offset, size_t const size, map_parameters const& args);
-	vsm::result<void> block_close();
+	vsm::result<void> block_map(size_t size, map_parameters const& args);
+	vsm::result<void> block_commit(void* base, size_t size, commit_parameters const& args) const;
 
 protected:
 	using base_type::sync_impl;
@@ -110,27 +149,27 @@ protected:
 	static vsm::result<void> sync_impl(io::parameters_with_result<io::close> const& args);
 };
 
-vsm::result<final_handle<map_handle_base>> block_map(
+vsm::result<final_handle<map_handle_base>> block_map_section(
 	section_handle const& section,
 	file_size const offset,
 	size_t const size,
-	map_handle_base::map_parameters const& args);
+	map_handle_base::basic_map_parameters const& args);
 
 vsm::result<final_handle<map_handle_base>> block_map_anonymous(
 	size_t const size,
-	map_handle_base::map_parameters const& args);
+	map_handle_base::basic_map_parameters const& args);
 
 } // namespace detail
 
 using map_handle = final_handle<detail::map_handle_base>;
 
-template<parameters<map_handle::map_parameters> P = map_handle::map_parameters::interface>
-vsm::result<map_handle> map(section_handle const& section, file_size const offset, size_t const size, P const& args = {})
+template<parameters<map_handle::basic_map_parameters> P = map_handle::basic_map_parameters::interface>
+vsm::result<map_handle> map_section(section_handle const& section, file_size const offset, size_t const size, P const& args = {})
 {
-	return detail::block_map(section, offset, size, args);
+	return detail::block_map_section(section, offset, size, args);
 }
 
-template<parameters<map_handle::map_parameters> P = map_handle::map_parameters::interface>
+template<parameters<map_handle::basic_map_parameters> P = map_handle::basic_map_parameters::interface>
 vsm::result<map_handle> map_anonymous(size_t const size, P const& args = {})
 {
 	return detail::block_map_anonymous(size, args);

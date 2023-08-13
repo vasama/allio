@@ -19,6 +19,7 @@ find_package(vsm-flags REQUIRED)
 find_package(vsm-function REQUIRED)
 find_package(vsm-linear REQUIRED)
 find_package(vsm-intrusive REQUIRED)
+find_package(vsm-optional REQUIRED)
 find_package(vsm-result REQUIRED)
 find_package(vsm-tag_ptr REQUIRED)
 find_package(vsm-unique_resource REQUIRED)
@@ -63,6 +64,7 @@ vsm_add_library2(allio
 		include/allio/path_literal.hpp
 		include/allio/path_view.hpp
 		include/allio/platform_handle.hpp
+		include/allio/platform.hpp
 		include/allio/process_handle.hpp
 		include/allio/section_handle.hpp
 		include/allio/socket_handle.hpp
@@ -108,7 +110,6 @@ vsm_add_library2(allio
 		source/allio/impl/manual_multiplexer.cpp
 		source/allio/impl/map_handle.cpp
 		source/allio/impl/multiplexer.cpp
-		source/allio/impl/object_transaction.hpp
 		source/allio/impl/platform_handle.cpp
 		source/allio/impl/posix_socket.cpp
 		source/allio/impl/posix_socket.hpp
@@ -126,6 +127,7 @@ vsm_add_library2(allio
 		vsm::function
 		vsm::linear
 		vsm::intrusive
+		vsm::optional
 		vsm::result
 		vsm::tag_ptr
 		vsm::unique_resource
@@ -154,6 +156,7 @@ vsm_configure(allio
 		source/allio/impl/win32/directory_handle.hpp
 		source/allio/impl/win32/encoding.cpp
 		source/allio/impl/win32/encoding.hpp
+		source/allio/impl/win32/error.cpp
 		source/allio/impl/win32/error.hpp
 		source/allio/impl/win32/event_handle.cpp
 		source/allio/impl/win32/filesystem_handle.cpp
@@ -175,11 +178,13 @@ vsm_configure(allio
 		source/allio/impl/win32/kernel_path_impl.hpp
 		source/allio/impl/win32/kernel_path_old.hpp
 		source/allio/impl/win32/map_handle.cpp
+		source/allio/impl/win32/memory.cpp
 		source/allio/impl/win32/nt_error.cpp
 		source/allio/impl/win32/peb.cpp
 		source/allio/impl/win32/peb.hpp
 		source/allio/impl/win32/platform_handle.cpp
 		source/allio/impl/win32/platform_handle.hpp
+		source/allio/impl/win32/platform.cpp
 		source/allio/impl/win32/posix_socket.cpp
 		source/allio/impl/win32/posix_socket.hpp
 		source/allio/impl/win32/process_handle.cpp
@@ -203,6 +208,7 @@ vsm_configure(allio
 		source/allio/impl/linux/api_string.hpp
 		source/allio/impl/linux/default_multiplexer.cpp
 		source/allio/impl/linux/directory_handle.cpp
+		source/allio/impl/linux/error.cpp
 		source/allio/impl/linux/error.hpp
 		source/allio/impl/linux/event_handle.cpp
 		source/allio/impl/linux/filesystem_handle.cpp
@@ -217,8 +223,10 @@ vsm_configure(allio
 		source/allio/impl/linux/io_uring_process_handle.cpp
 		source/allio/impl/linux/io_uring_socket_handle.cpp
 		source/allio/impl/linux/map_handle.cpp
+		source/allio/impl/linux/memory.cpp
 		source/allio/impl/linux/platform_handle.cpp
 		source/allio/impl/linux/platform_handle.hpp
+		source/allio/impl/linux/platform.cpp
 		source/allio/impl/linux/posix_socket.cpp
 		source/allio/impl/linux/posix_socket.hpp
 		source/allio/impl/linux/process_handle.cpp

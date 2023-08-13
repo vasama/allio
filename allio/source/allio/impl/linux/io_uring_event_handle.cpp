@@ -130,7 +130,7 @@ struct allio::multiplexer_handle_operation_implementation<io_uring_multiplexer, 
 				}
 				else
 				{
-					if (result == EAGAIN)
+					if (result == -EAGAIN)
 					{
 						auto const r = submit_io(m);
 
@@ -144,7 +144,7 @@ struct allio::multiplexer_handle_operation_implementation<io_uring_multiplexer, 
 					}
 					else
 					{
-						set_result(static_cast<system_error>(result));
+						set_result(static_cast<system_error>(-result));
 						m.post(*this, async_operation_status::concluded);
 					}
 				}

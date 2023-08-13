@@ -10,16 +10,6 @@
 
 namespace allio {
 
-#if 0
-struct detail::process_handle_base::implementation : base_type::implementation
-{
-	allio_handle_implementation_flags
-	(
-		requires_wait,
-	);
-};
-#endif
-
 namespace linux {
 
 struct process_info

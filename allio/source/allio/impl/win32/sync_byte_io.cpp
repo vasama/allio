@@ -16,8 +16,6 @@ static vsm::result<size_t> sync_scatter_gather_io(
 		return vsm::unexpected(error::handle_is_null);
 	}
 
-	vsm_try_void(kernel_init());
-
 	HANDLE const handle = unwrap_handle(h.get_platform_handle());
 	file_size offset = args.offset;
 

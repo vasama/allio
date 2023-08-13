@@ -470,7 +470,21 @@ vsm::result<unique_child_pid> linux::launch_process(path_view const path, proces
 #endif
 
 
-vsm::result<void> detail::process_handle_base::close_sync(basic_parameters const& args)
+vsm::result<void> process_handle_base::sync_impl(io::parameters_with_result<io::close> const& args)
+{
+	platform_handle& h = *args.handle;
+	vsm_assert(h);
+	
+	vsm_try_void(base_type::sync_impl(args));
+
+	h.m_pid.reset();
+	h.m_exit_code.reset();
+	
+	return {};
+}
+
+#if 0
+vsm::result<void> process_handle_base::close_sync(basic_parameters const& args)
 {
 	if (!get_flags()[flags::current])
 	{
@@ -482,8 +496,9 @@ vsm::result<void> detail::process_handle_base::close_sync(basic_parameters const
 
 	return {};
 }
+#endif
 
-process_handle detail::process_handle_base::current()
+process_handle process_handle_base::current()
 {
 	static native_handle_type const native =
 	{
@@ -504,7 +519,7 @@ process_handle detail::process_handle_base::current()
 }
 
 
-vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_result<io::process_open> const& args)
+vsm::result<void> process_handle_base::sync_impl(io::parameters_with_result<io::process_open> const& args)
 {
 	process_handle& h = *args.handle;
 
@@ -534,7 +549,7 @@ vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_res
 	);
 }
 
-vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_result<io::process_launch> const& args)
+vsm::result<void> process_handle_base::sync_impl(io::parameters_with_result<io::process_launch> const& args)
 {
 	process_handle& h = *args.handle;
 
@@ -564,7 +579,7 @@ vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_res
 	);
 }
 
-vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_result<io::process_wait> const& args)
+vsm::result<void> process_handle_base::sync_impl(io::parameters_with_result<io::process_wait> const& args)
 {
 	process_handle& h = *args.handle;
 

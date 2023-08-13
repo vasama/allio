@@ -26,6 +26,12 @@ using namespace allio::win32;
 	X(NtCancelWaitCompletionPacket,             ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtQueryDirectoryFileEx,                   ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtQueryFullAttributesFile,                ntdll       __VA_OPT__(, __VA_ARGS__)) \
+	X(NtAllocateVirtualMemory,                  ntdll       __VA_OPT__(, __VA_ARGS__)) \
+	X(NtFreeVirtualMemory,                      ntdll       __VA_OPT__(, __VA_ARGS__)) \
+	X(NtProtectVirtualMemory,                   ntdll       __VA_OPT__(, __VA_ARGS__)) \
+	X(NtCreateSection,                          ntdll       __VA_OPT__(, __VA_ARGS__)) \
+	X(NtMapViewOfSection,                       ntdll       __VA_OPT__(, __VA_ARGS__)) \
+	X(NtUnmapViewOfSection,                     ntdll       __VA_OPT__(, __VA_ARGS__)) \
 
 #define allio_x_entry(syscall, ...) \
 	decltype(win32::syscall) win32::syscall = nullptr;

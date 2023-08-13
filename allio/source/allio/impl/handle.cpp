@@ -1,7 +1,5 @@
 #include <allio/handle.hpp>
 
-#include <allio/impl/object_transaction.hpp>
-
 using namespace allio;
 
 vsm::result<void> handle::set_multiplexer(multiplexer* const multiplexer, multiplexer_handle_relation_provider const* const relation_provider)
@@ -36,33 +34,20 @@ vsm::result<void> handle::set_multiplexer(multiplexer* const multiplexer, multip
 	return {};
 }
 
-vsm::result<void> handle::set_native_handle(native_handle_type const handle)
+bool handle::check_native_handle(native_handle_type const& handle)
 {
-	if ((handle.flags & flags::not_null) == flags::none)
-	{
-		return vsm::unexpected(error::invalid_argument);
-	}
-
-	object_transaction flags_transaction(m_flags.value, handle.flags);
-	if (get_multiplexer() != nullptr)
-	{
-		vsm_try_void(register_handle());
-	}
-	flags_transaction.commit();
-
-	return {};
+	return handle.flags[flags::not_null];
 }
 
-vsm::result<handle::native_handle_type> handle::release_native_handle()
+void handle::set_native_handle(native_handle_type const& handle)
 {
-	if (get_multiplexer() != nullptr)
-	{
-		vsm_try_void(deregister_handle());
-	}
+	m_flags.value = handle.flags;
+}
 
-	return vsm::result<native_handle_type>
+handle::native_handle_type handle::release_native_handle()
+{
+	return
 	{
-		vsm::result_value,
-		std::exchange(m_flags.value, flags::none),
+		m_flags.release(),
 	};
 }

@@ -1,45 +1,42 @@
 #include <allio/process_handle.hpp>
 
-#include <allio/impl/object_transaction.hpp>
-
 using namespace allio;
+using namespace allio::detail;
 
-vsm::result<void> detail::process_handle_base::block_open(process_id const pid, open_parameters const& args)
+vsm::result<void> process_handle_base::block_open(process_id const pid, open_parameters const& args)
 {
 	return block<io::process_open>(static_cast<process_handle&>(*this), args, pid);
 }
 
-vsm::result<void> detail::process_handle_base::block_launch(filesystem_handle const* const base, input_path_view const path, launch_parameters const& args)
+vsm::result<void> process_handle_base::block_launch(filesystem_handle const* const base, input_path_view const path, launch_parameters const& args)
 {
 	return block<io::process_launch>(static_cast<process_handle&>(*this), args, base, path);
 }
 
-vsm::result<process_exit_code> detail::process_handle_base::block_wait(wait_parameters const& args)
+vsm::result<process_exit_code> process_handle_base::block_wait(wait_parameters const& args)
 {
 	return block<io::process_wait>(static_cast<process_handle&>(*this), args);
 }
 
-vsm::result<void> detail::process_handle_base::set_native_handle(native_handle_type const handle)
+bool process_handle_base::check_native_handle(native_handle_type const& handle)
 {
-	object_transaction pid_transaction(m_pid.value, handle.pid);
-	object_transaction exit_code_transaction(m_exit_code.value, handle.exit_code);
-	vsm_try_void(base_type::set_native_handle(handle));
-	pid_transaction.commit();
-	exit_code_transaction.commit();
-
-	return {};
+	return base_type::check_native_handle(handle);
 }
 
-vsm::result<process_handle::native_handle_type> detail::process_handle_base::release_native_handle()
+void process_handle_base::set_native_handle(native_handle_type const& handle)
 {
-	vsm_try(base_handle, base_type::release_native_handle());
+	base_type::set_native_handle(handle);
+	m_pid.value = handle.pid;
+	m_exit_code.value = handle.exit_code;
+}
 
-	return vsm::result<native_handle_type>
+process_handle::native_handle_type process_handle_base::release_native_handle()
+{
+	return
 	{
-		vsm::result_value,
-		base_handle,
-		std::exchange(m_pid.value, 0),
-		std::exchange(m_exit_code.value, 0),
+		base_type::release_native_handle(),
+		m_pid.release(),
+		m_exit_code.release(),
 	};
 }
 

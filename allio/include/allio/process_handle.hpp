@@ -27,6 +27,102 @@ using process_exit_code = int32_t;
 
 namespace detail {
 
+class process_handle_impl : public platform_handle
+{
+	struct open_tag;
+	struct launch_tag;
+	struct wait_tag;
+	struct duplicate_handle_tag;
+
+	template<typename B>
+	struct sync_interface
+	{
+		template<parameters<process_handle_impl::open_parameters> Parameters = process_handle_impl::open_parameters::interface>
+		vsm::result<void> open(process_id const pid, Parameters const& args = {})
+		{
+			return B::execute<open_tag>(args, pid);
+		}
+	
+		template<parameters<process_handle_impl::launch_parameters> Parameters = process_handle_impl::launch_parameters::interface>
+		vsm::result<void> launch(input_path_view const path, Parameters const& args = {})
+		{
+			return B::execute<launch_tag>(args, nullptr, path);
+		}
+	
+		template<parameters<process_handle_impl::launch_parameters> Parameters = process_handle_impl::launch_parameters::interface>
+		vsm::result<void> launch(filesystem_handle const& base, input_path_view const path, Parameters const& args = {})
+		{
+			return B::execute<launch_tag>(args, &base, path);
+		}
+	
+		template<parameters<process_handle_impl::wait_parameters> Parameters = process_handle_impl::wait_parameters::interface>
+		vsm::result<process_exit_code> wait(Parameters const& args = {})
+		{
+			return B::execute<wait_tag>(args);
+		}
+	};
+
+	template<typename B>
+	struct async_interface
+	{
+		template<parameters<process_handle_impl::wait_parameters> Parameters = process_handle_impl::wait_parameters::interface>
+		basic_sender<wait_tag> wait_async(Parameters const& args = {})
+		{
+			return B::execute<wait_tag>(args);
+		}
+	};
+
+
+	vsm::linear<process_id> m_pid;
+	vsm::linear<process_exit_code> m_exit_code;
+
+public:
+	using base_type = platform_handle;
+	
+	struct native_handle_type : base_type::native_handle_type
+	{
+		process_id m_pid;
+		process_exit_code exit_code;
+	};
+	
+	allio_handle_flags
+	(
+		current,
+		exited,
+	);
+	
+	using async_operations = type_list_cat<
+		base_type::async_operations,
+		type_list<wait_tag>
+	>;
+
+
+	[[nodiscard]] native_handle_type get_native_handle() const
+	{
+		return
+		{
+			base_type::get_native_handle(),
+			m_pid.value,
+			m_exit_code.value,
+		};
+	}
+
+
+	[[nodiscard]] process_id get_process_id() const
+	{
+		vsm_assert(*this);
+		return m_pid.value;
+	}
+
+	[[nodiscard]] bool is_current() const
+	{
+		vsm_assert(*this);
+		return get_flags()[flags::current];
+	}
+
+};
+
+
 class process_handle_base : public platform_handle
 {
 	using final_handle_type = final_handle<process_handle_base>;
@@ -50,7 +146,7 @@ public:
 		current,
 		exited,
 	);
-
+	
 	using async_operations = type_list_cat<
 		base_type::async_operations,
 		type_list<
@@ -74,7 +170,7 @@ public:
 	allio_interface_parameters(allio_process_handle_launch_parameters);
 
 
-	native_handle_type get_native_handle() const
+	[[nodiscard]] native_handle_type get_native_handle() const
 	{
 		return
 		{
@@ -85,13 +181,13 @@ public:
 	}
 
 
-	process_id get_process_id() const
+	[[nodiscard]] process_id get_process_id() const
 	{
 		vsm_assert(*this);
 		return m_pid.value;
 	}
 
-	bool is_current() const
+	[[nodiscard]] bool is_current() const
 	{
 		vsm_assert(*this);
 		return get_flags()[flags::current];
@@ -124,15 +220,14 @@ public:
 
 #if 0
 	template<std::derived_from<platform_handle> Handle>
-	vsm::result<Handle> duplicate_handle(typename Handle::native_handle_type native_handle) const
+	vsm::result<Handle> duplicate_handle(typename Handle::native_handle_type handle) const
 	{
-		vsm::result<Handle> handle_result(vsm::result_value);
-		vsm_try_void(duplicate_handle_internal(native_handle.handle, [&](native_platform_handle const handle)
-		{
-			native_handle.handle = handle;
-			return handle_result->set_native_handle(native_handle);
-		}));
-		return handle_result;
+		platform_handle::native_handle_type const& platform_handle = handle;
+		vsm_try(new_handle, duplicate_handle_internal(platform_handle.handle));
+
+		vsm::result<Handle> r(vsm::result_value);
+		vsm_verify(r->set_native_handle(new_handle));
+		return r;
 	}
 #endif
 
@@ -142,10 +237,13 @@ public:
 protected:
 	using base_type::base_type;
 
-	vsm::result<void> close_sync(basic_parameters const& args);
+	//vsm::result<void> close_sync(basic_parameters const& args);
 
-	vsm::result<void> set_native_handle(native_handle_type handle);
-	vsm::result<native_handle_type> release_native_handle();
+
+	static bool check_native_handle(native_handle_type const& handle);
+	void set_native_handle(native_handle_type const& handle);
+
+	native_handle_type release_native_handle();
 
 private:
 	vsm::result<void> block_open(process_id pid, open_parameters const& args);
@@ -158,9 +256,13 @@ protected:
 	static vsm::result<void> sync_impl(io::parameters_with_result<io::process_open> const& args);
 	static vsm::result<void> sync_impl(io::parameters_with_result<io::process_launch> const& args);
 	static vsm::result<void> sync_impl(io::parameters_with_result<io::process_wait> const& args);
+	static vsm::result<void> sync_impl(io::parameters_with_result<io::close> const& args);
 
 	template<typename H, typename O>
 	friend vsm::result<void> allio::synchronous(io::parameters_with_result<O> const& args);
+	
+	//TODO: Use a CPO to enable duplication of non-platform handles like TLS socket handles?
+	vsm::result<native_platform_handle> duplicate_handle(native_platform_handle handle) const;
 
 #if 0
 	vsm::result<void> duplicate_handle_internal(native_platform_handle handle,

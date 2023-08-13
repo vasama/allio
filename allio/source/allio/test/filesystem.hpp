@@ -7,7 +7,7 @@
 
 #include <cstdio>
 
-namespace allio {
+namespace allio::test {
 
 struct file_deleter
 {
@@ -47,4 +47,4 @@ inline void write_file_content(path const& path, std::string_view const content)
 	REQUIRE(fwrite(content.data(), content.size(), 1, file.get()) == 1);
 }
 
-} // namespace allio
+} // namespace allio::test

@@ -17,19 +17,25 @@ class section_handle_base : public platform_handle
 {
 	using final_handle_type = final_handle<section_handle_base>;
 
+	vsm::linear<protection> m_protection;
+
 public:
 	using base_type = platform_handle;
 
 
-	using create_parameters = basic_parameters;
-
-#if 0
 	#define allio_section_handle_create_parameters(type, data, ...) \
 		type(allio::section_handle, create_parameters) \
 		allio_platform_handle_create_parameters(__VA_ARGS__, __VA_ARGS__) \
+		data(::allio::protection, protection, ::allio::protection::read_write) \
 
 	allio_interface_parameters(allio_section_handle_create_parameters);
-#endif
+
+
+	[[nodicard]] protection get_protection() const
+	{
+		vsm_assert(*this);
+		return m_protection.value;
+	}
 
 
 	template<parameters<create_parameters> P = create_parameters::interface>

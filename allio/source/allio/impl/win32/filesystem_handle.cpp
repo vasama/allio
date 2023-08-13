@@ -140,6 +140,7 @@ static vsm::result<unique_handle_with_flags> create_file(HANDLE const root_handl
 {
 	vsm_try_void(kernel_init());
 
+
 	OBJECT_ATTRIBUTES object_attributes = {};
 	object_attributes.Length = sizeof(object_attributes);
 	object_attributes.RootDirectory = root_handle;

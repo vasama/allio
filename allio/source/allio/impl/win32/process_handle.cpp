@@ -541,7 +541,7 @@ static vsm::result<unique_handle> duplicate_handle(HANDLE const source_process, 
 #endif
 
 
-process_handle detail::process_handle_base::current()
+process_handle process_handle_base::current()
 {
 	static native_handle_type const native =
 	{
@@ -561,15 +561,30 @@ process_handle detail::process_handle_base::current()
 	return h;
 }
 
-vsm::result<void> detail::process_handle_base::close_sync(basic_parameters const& args)
+
+vsm::result<void> process_handle_base::sync_impl(io::parameters_with_result<io::close> const& args)
+{
+	process_handle& h = static_cast<process_handle&>(*args.handle);
+	vsm_assert(h);
+	
+	vsm_try_void(base_type::sync_impl(args));
+
+	h.m_pid.reset();
+	h.m_exit_code.reset();
+	
+	return {};
+}
+
+#if 0
+vsm::result<void> process_handle_base::close_sync(basic_parameters const& args)
 {
 	if (get_flags()[implementation::flags::pseudo_handle])
 	{
-		vsm_try_discard(platform_handle::release_native_handle());
+		(void)base_type::release_native_handle();
 	}
 	else
 	{
-		vsm_try_void(platform_handle::close_sync(args));
+		vsm_try_void(base_type::close_sync(args));
 	}
 
 	m_exit_code.reset();
@@ -577,11 +592,13 @@ vsm::result<void> detail::process_handle_base::close_sync(basic_parameters const
 
 	return {};
 }
+#endif
 
 
-vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_result<io::process_open> const& args)
+vsm::result<void> process_handle_base::sync_impl(io::parameters_with_result<io::process_open> const& args)
 {
 	vsm_try_void(kernel_init());
+
 
 	process_handle& h = *args.handle;
 
@@ -611,9 +628,10 @@ vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_res
 	);
 }
 
-vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_result<io::process_launch> const& args)
+vsm::result<void> process_handle_base::sync_impl(io::parameters_with_result<io::process_launch> const& args)
 {
 	vsm_try_void(kernel_init());
+
 
 	process_handle& h = *args.handle;
 
@@ -643,7 +661,7 @@ vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_res
 	);
 }
 
-vsm::result<void> detail::process_handle_base::sync_impl(io::parameters_with_result<io::process_wait> const& args)
+vsm::result<void> process_handle_base::sync_impl(io::parameters_with_result<io::process_wait> const& args)
 {
 	process_handle& h = *args.handle;
 

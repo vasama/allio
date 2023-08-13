@@ -24,6 +24,22 @@ struct close;
 
 } // namespace io
 
+template<>
+struct io::parameters<io::flush>
+	: basic_parameters
+{
+	using handle_type = handle;
+	using result_type = void;
+};
+
+template<>
+struct io::parameters<io::close>
+	: basic_parameters
+{
+	using handle_type = handle;
+	using result_type = void;
+};
+
 
 namespace detail {
 
@@ -50,13 +66,13 @@ public:
 	constexpr handle_flags& operator=(handle_flags const&) & = default;
 
 
-	constexpr bool operator[](detail::handle_flags_enum auto const index)
+	[[nodiscard]] constexpr bool operator[](detail::handle_flags_enum auto const index) const
 	{
 		return m_flags & convert_index(index);
 	}
 
 
-	constexpr handle_flags operator~() const
+	[[nodiscard]] constexpr handle_flags operator~() const
 	{
 		return handle_flags(~m_flags);
 	}
@@ -79,30 +95,22 @@ public:
 		return *this;
 	}
 
-	friend constexpr handle_flags operator&(handle_flags const& lhs, handle_flags const& rhs)
+	[[nodiscard]] friend constexpr handle_flags operator&(handle_flags const& lhs, handle_flags const& rhs)
 	{
 		return handle_flags(lhs.m_flags & rhs.m_flags);
 	}
 
-	friend constexpr handle_flags operator|(handle_flags const& lhs, handle_flags const& rhs)
+	[[nodiscard]] friend constexpr handle_flags operator|(handle_flags const& lhs, handle_flags const& rhs)
 	{
 		return handle_flags(lhs.m_flags | rhs.m_flags);
 	}
 
-	friend constexpr handle_flags operator^(handle_flags const& lhs, handle_flags const& rhs)
+	[[nodiscard]] friend constexpr handle_flags operator^(handle_flags const& lhs, handle_flags const& rhs)
 	{
 		return handle_flags(lhs.m_flags ^ rhs.m_flags);
 	}
 
-	bool operator==(handle_flags const&) const = default;
-
-
-#if 0
-	friend constexpr handle_flags operator|(detail::handle_flags_enum auto const lhs, detail::handle_flags_enum auto const rhs)
-	{
-		return handle_flags(convert_index(lhs) | convert_index(rhs));
-	}
-#endif
+	[[nodiscard]] bool operator==(handle_flags const&) const = default;
 
 private:
 	explicit constexpr handle_flags(uint32_t const flags)
@@ -110,7 +118,7 @@ private:
 	{
 	}
 
-	static constexpr uint32_t convert_index(detail::handle_flags_enum auto const index)
+	[[nodiscard]] static constexpr uint32_t convert_index(detail::handle_flags_enum auto const index)
 	{
 		return (static_cast<uint32_t>(1) << decltype(index)::allio_detail_handle_flags_base_count) << static_cast<uint32_t>(index);
 	}
@@ -315,8 +323,6 @@ public:
 	}
 
 protected:
-	static constexpr size_t flag_base = 0;
-
 	explicit constexpr handle(type_id<handle> const type)
 		: m_synchronous_operations(type.get_object())
 	{
@@ -331,10 +337,12 @@ protected:
 		m_flags = flags;
 	}
 
+#if 0
 	vsm::result<void> flush_sync(basic_parameters const& args)
 	{
 		return {};
 	}
+#endif
 
 	vsm::result<void> set_multiplexer(multiplexer* multiplexer, multiplexer_handle_relation_provider const* relation_provider);
 
@@ -352,9 +360,26 @@ protected:
 		return {};
 	}
 
-	vsm::result<void> set_native_handle(native_handle_type handle);
-	vsm::result<native_handle_type> release_native_handle();
+	struct unchecked_tag {};
 
+	static bool check_native_handle(native_handle_type const& handle);
+	void set_native_handle(native_handle_type const& handle);
+	native_handle_type release_native_handle();
+
+protected:
+	static vsm::result<void> sync_impl(io::parameters_with_result<io::flush> const& args)
+	{
+		return {};
+	}
+
+	static vsm::result<void> sync_impl(io::parameters_with_result<io::close> const& args)
+	{
+		args.handle->m_flags.reset();
+
+		return {};
+	}
+
+private:
 	friend class multiplexer;
 
 	template<typename>
@@ -408,26 +433,11 @@ vsm::result<typename io::parameters<Operation>::result_type> block(Handle& handl
 }
 
 
-template<>
-struct io::parameters<io::flush>
-	: basic_parameters
-{
-	using handle_type = handle;
-	using result_type = void;
-};
-
-template<>
-struct io::parameters<io::close>
-	: basic_parameters
-{
-	using handle_type = handle;
-	using result_type = void;
-};
-
-
 template<typename Handle>
 class final_handle final : public Handle
 {
+	static_assert(std::is_trivially_copyable_v<typename Handle::native_handle_type>);
+
 public:
 	constexpr final_handle()
 		: Handle(type_of<final_handle>())
@@ -440,9 +450,11 @@ public:
 	{
 		if (*this)
 		{
-			close_unchecked();
+			detail::unrecoverable(close());
 		}
+
 		Handle::operator=(static_cast<Handle&&>(source));
+
 		return *this;
 	}
 
@@ -450,7 +462,7 @@ public:
 	{
 		if (*this)
 		{
-			close_unchecked();
+			detail::unrecoverable(close());
 		}
 	}
 
@@ -461,7 +473,15 @@ public:
 		{
 			return vsm::unexpected(error::handle_is_not_null);
 		}
-		return Handle::set_native_handle(handle);
+
+		if (!Handle::check_native_handle(handle))
+		{
+			return vsm::unexpected(error::invalid_argument);
+		}
+
+		Handle::set_native_handle(handle);
+
+		return {};
 	}
 
 	vsm::result<typename Handle::native_handle_type> release_native_handle()
@@ -470,6 +490,12 @@ public:
 		{
 			return vsm::unexpected(error::handle_is_null);
 		}
+
+		return Handle::release_native_handle();
+	}
+
+	typename Handle::native_handle_type release_native_handle(handle::unchecked_tag)
+	{
 		return Handle::release_native_handle();
 	}
 
@@ -484,10 +510,28 @@ public:
 		return block<io::close>(*this, args);
 	}
 
-private:
-	void close_unchecked()
+
+	vsm::result<void> duplicate(final_handle const& handle)
 	{
-		vsm_verify(close());
+		if (*this)
+		{
+			return vsm::unexpected(error::handle_is_not_null);
+		}
+
+		vsm_try(new_handle, Handle::duplicate(Handle::get_native_handle()));
+		Handle::set_native_handle(new_handle);
+
+		return {};
+	}
+
+	vsm::result<final_handle> duplicate() const
+	{
+		vsm::result<final_handle> r(vsm::result_value);
+
+		vsm_try(new_handle, Handle::duplicate(Handle::get_native_handle()));
+		r->Handle::set_native_handle(new_handle);
+
+		return r;
 	}
 
 protected:
@@ -495,12 +539,24 @@ protected:
 
 	static vsm::result<void> sync_impl(io::parameters_with_result<io::flush> const& args)
 	{
-		return static_cast<final_handle*>(args.handle)->Handle::flush_sync(args);
+		if (!*args.handle)
+		{
+			return vsm::unexpected(error::handle_is_null);
+		}
+	
+		return Handle::sync_impl(args);
+		//return static_cast<final_handle*>(args.handle)->Handle::flush_sync(args);
 	}
 
 	static vsm::result<void> sync_impl(io::parameters_with_result<io::close> const& args)
 	{
-		return static_cast<final_handle*>(args.handle)->Handle::close_sync(args);
+		if (!*args.handle)
+		{
+			return vsm::unexpected(error::handle_is_null);
+		}
+	
+		return Handle::sync_impl(args);
+		//return static_cast<final_handle*>(args.handle)->Handle::close_sync(args);
 	}
 
 	template<typename H, typename O>
@@ -514,6 +570,12 @@ struct type_id_traits<final_handle<Handle>> : type_id_traits<Handle>
 	{
 		return &detail::synchronous_operations<final_handle<Handle>>::operations;
 	}
+};
+
+
+template<typename Handle, typename Multiplexer>
+class basic_async_handle
+{
 };
 
 

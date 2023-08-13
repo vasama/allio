@@ -4,6 +4,11 @@
 
 using namespace allio;
 
+void detail::unrecoverable_error_default(std::error_code const error, std::source_location const location)
+{
+	std::abort();
+}
+
 char const* detail::error_category::name() const noexcept
 {
 	return "allio";
@@ -38,6 +43,7 @@ std::string detail::error_category::message(int const code) const
 	char string[64];
 	int const string_size = sprintf(string,
 		"Unrecognized error code: %08" PRIX32, static_cast<uint32_t>(code));
+
 	return std::string(string, string_size);
 }
 

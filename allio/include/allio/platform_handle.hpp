@@ -1,15 +1,9 @@
 #pragma once
 
 #include <allio/handle.hpp>
-
-#include <cstdint>
+#include <allio/platform.hpp>
 
 namespace allio {
-
-enum class native_platform_handle : uintptr_t
-{
-	null = 0
-};
 
 class platform_handle : public handle
 {
@@ -33,12 +27,12 @@ public:
 	allio_interface_parameters(allio_platform_handle_create_parameters);
 
 
-	native_platform_handle get_platform_handle() const
+	[[nodiscard]] native_platform_handle get_platform_handle() const
 	{
 		return m_native_handle.value;
 	}
 
-	native_handle_type get_native_handle() const
+	[[nodiscard]] native_handle_type get_native_handle() const
 	{
 		return
 		{
@@ -57,10 +51,27 @@ protected:
 	platform_handle& operator=(platform_handle&&) = default;
 	~platform_handle() = default;
 
-	vsm::result<void> set_native_handle(native_handle_type handle);
-	vsm::result<native_handle_type> release_native_handle();
+	static bool check_native_handle(native_handle_type const& handle);
+	void set_native_handle(native_handle_type const& handle);
+	native_handle_type release_native_handle();
 
-	vsm::result<void> close_sync(basic_parameters const& args);
+	template<std::derived_from<native_handle_type> NativeHandle>
+	static vsm::result<NativeHandle> duplicate(NativeHandle handle)
+	{
+		native_handle_type& h = handle;
+		vsm_try_assign(h.handle, duplicate(h.handle));
+		return handle;
+	}
+
+	//vsm::result<void> close_sync(basic_parameters const& args);
+
+private:
+	static vsm::result<native_platform_handle> duplicate(native_platform_handle handle);
+
+protected:
+	using base_type::sync_impl;
+
+	static vsm::result<void> sync_impl(io::parameters_with_result<io::close> const& args);
 };
 
 } // namespace allio
