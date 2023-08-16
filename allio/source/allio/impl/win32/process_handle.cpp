@@ -5,7 +5,7 @@
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/kernel_path.hpp>
-#include <allio/win32/nt_error.hpp>
+#include <allio/win32/kernel_error.hpp>
 
 #include <vsm/lazy.hpp>
 #include <vsm/utility.hpp>
@@ -684,7 +684,7 @@ vsm::result<void> process_handle_base::sync_impl(io::parameters_with_result<io::
 
 		if (!NT_SUCCESS(status) || status == STATUS_TIMEOUT)
 		{
-			return vsm::unexpected(static_cast<nt_error>(status));
+			return vsm::unexpected(static_cast<kernel_error>(status));
 		}
 
 		vsm_try_assign(h.m_exit_code.value, get_process_exit_code(handle));

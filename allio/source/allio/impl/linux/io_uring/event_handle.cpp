@@ -11,7 +11,7 @@ namespace allio {
 using namespace linux;
 
 template<>
-struct async_handle_impl<io_uring_multiplexer, detail::event_handle_impl>
+struct async_handle_impl<io_uring_multiplexer, detail::_event_handle>
 {
 	static vsm::result<void> attach(event_handle const& h, context& c) noexcept
 	{
@@ -25,9 +25,9 @@ struct async_handle_impl<io_uring_multiplexer, detail::event_handle_impl>
 };
 
 template<>
-struct async_operation_impl<io_uring_multiplexer, detail::event_handle_impl, event_handle::wait_tag>
+struct async_operation_impl<io_uring_multiplexer, detail::_event_handle, event_handle::wait_tag>
 {
-	using storage = async_operation_storage<io_uring_multiplexer, detail::event_handle_impl, event_handle::wait_tag>;
+	using storage = async_operation_storage<io_uring_multiplexer, detail::_event_handle, event_handle::wait_tag>;
 
 	static vsm::result<void> submit(io_uring_multiplexer& m, storage& s) noexcept
 	{

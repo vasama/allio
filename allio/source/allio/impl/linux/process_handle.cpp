@@ -18,9 +18,7 @@
 #include <sys/socket.h>
 #include <sys/syscall.h>
 #include <sys/wait.h>
-
-// This header breaks <sys/wait.h>
-#include <linux/wait.h>
+#include <linux/wait.h> // This header breaks <sys/wait.h>
 
 #include <allio/linux/detail/undef.i>
 
@@ -28,22 +26,11 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::linux;
 
+namespace {
+
 static pid_t clone3(clone_args* const cl_args, size_t const size)
 {
 	return static_cast<pid_t>(syscall(SYS_clone3, cl_args, size));
-}
-
-
-vsm::result<unique_fd> linux::open_process(pid_t const pid)
-{
-	unsigned flags = 0;
-
-	int const fd = syscall(SYS_pidfd_open, pid, flags);
-	if (fd == -1)
-	{
-		return vsm::unexpected(get_last_error());
-	}
-	return vsm::result<unique_fd>(vsm::result_value, fd);
 }
 
 
@@ -312,9 +299,24 @@ static system_result<raw_process_info> create_orphan_process(create_process_para
 	return recv_result(sockets.read.get());
 }
 
+} // namespace
+
+
+vsm::result<unique_fd> linux::open_process(pid_t const pid)
+{
+	unsigned flags = 0;
+
+	int const fd = syscall(SYS_pidfd_open, pid, flags);
+	if (fd == -1)
+	{
+		return vsm::unexpected(get_last_error());
+	}
+	return vsm::result<unique_fd>(vsm::result_value, fd);
+}
 
 vsm::result<process_info> linux::launch_process(
-	filesystem_handle const* const base, input_path_view const path,
+	filesystem_handle const* const base,
+	input_path_view const path,
 	process_handle::launch_parameters const& args)
 {
 	create_process_parameters create_args =
@@ -336,7 +338,7 @@ vsm::result<process_info> linux::launch_process(
 		if (wdir.base != nullptr || !wdir.path.empty())
 		{
 			// If the executable path is relative its meaning
-			// will change with change of working directory.
+			// would change with change of working directory.
 			if (base == nullptr && path.utf8_path().is_relative())
 			{
 				open_parameters const open_args =
@@ -344,6 +346,8 @@ vsm::result<process_info> linux::launch_process(
 					.flags = O_DIRECTORY | O_CLOEXEC,
 					.mode = O_RDONLY,
 				};
+
+				// Open the executable file to deal with the change of working directory.
 				vsm_try_assign(exec_fd, create_file(base, path, open_args));
 
 				create_args.exec_base = exec_fd.get();
@@ -383,17 +387,13 @@ vsm::result<process_info> linux::launch_process(
 
 	vsm_try(process, create_orphan_process(create_args));
 
-//	return vsm::result<process_info>(
-//		vsm::result_value,
-//		unique_fd(process.pid_fd),
-//		static_cast<process_id>(process.pid));
-
 	return vsm_lazy(process_info
 	{
 		.pid_fd = unique_fd(process.pid_fd),
 		.pid = static_cast<process_id>(process.pid),
 	});
 }
+
 
 #if 0
 static vsm::result<unique_fd> open_current_directory()
@@ -404,68 +404,6 @@ static vsm::result<unique_fd> open_current_directory()
 		return vsm::unexpected(get_last_error());
 	}
 	return vsm::result<unique_fd>(vsm::result_value, fd);
-}
-#endif
-
-#if 0
-vsm::result<process_info> linux::launch_process(filesystem_handle const* const base, path_view const path, process_handle::launch_parameters const& args)
-{
-	vsm_try(api_path, api_string::make(path));
-	vsm_try(api_argv, api_strings::make(args.arguments));
-	vsm_try(api_envp, api_strings::make(args.environment));
-
-	create_process_parameters create_args =
-	{
-		.dir_fd = base != nullptr
-			? unwrap_handle(base->get_platform_handle())
-			: AT_FDCWD,
-		.path = api_path,
-		.argv = api_argv,
-		.envp = api_envp,
-	};
-
-	unique_fd current_dir_fd;
-	api_string wdir_string;
-
-	if (args.working_directory)
-	{
-		if (base == nullptr && path.is_relative())
-		{
-			vsm_try_assign(current_dir_fd, open_current_directory());
-			create_args.dir_fd = current_dir_fd.get();
-		}
-		vsm_try_assign(create_args.wdir, wdir_string.set(*args.working_directory));
-	}
-
-	vsm_try(process, create_orphan_process(create_args));
-	return vsm::result<process_info>(vsm::result_value, process.pid_fd, static_cast<process_id>(process.pid));
-
-	//auto const r = create_orphan_process(create_args);
-	//if (!r)
-	//{
-	//	return vsm::unexpected(std::error_code(r.error(), std::system_category()));
-	//}
-	//return vsm::result<process_info>(vsm::result_value, r->pid_fd, static_cast<process_id>(r->pid));
-}
-#endif
-
-#if 0
-vsm::result<unique_child_pid> linux::launch_process(path_view const path, process_parameters const& args)
-{
-	pid_t pid;
-
-	if (int const error = posix_spawn(
-		&pid,
-		api_string(path),
-		nullptr,
-		nullptr,
-		api_strings(args.arguments),
-		api_strings(args.environment)))
-	{
-		return vsm::unexpected(std::error_code(error, std::system_category()));
-	}
-
-	return vsm::result<unique_child_pid>(vsm::result_value, pid);
 }
 #endif
 
@@ -482,21 +420,6 @@ vsm::result<void> process_handle_base::sync_impl(io::parameters_with_result<io::
 	
 	return {};
 }
-
-#if 0
-vsm::result<void> process_handle_base::close_sync(basic_parameters const& args)
-{
-	if (!get_flags()[flags::current])
-	{
-		vsm_try_void(platform_handle::close_sync(args));
-	}
-
-	m_exit_code.reset();
-	m_pid.reset();
-
-	return {};
-}
-#endif
 
 process_handle process_handle_base::current()
 {

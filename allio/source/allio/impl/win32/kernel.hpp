@@ -297,6 +297,14 @@ enum _SECTION_INHERIT
 }
 typedef SECTION_INHERIT;
 
+enum _EVENT_TYPE
+{
+	NotificationEvent,
+	SynchronizationEvent
+}
+typedef EVENT_TYPE;
+
+
 extern ULONG(NTAPI* RtlNtStatusToDosError)(
 	_In_ NTSTATUS Status);
 
@@ -462,6 +470,21 @@ extern NTSTATUS(NTAPI* NtMapViewOfSection)(
 extern NTSTATUS(NTAPI* NtUnmapViewOfSection)(
 	_In_ HANDLE ProcessHandle,
 	_In_opt_ PVOID BaseAddress);
+
+extern NTSTATUS(NTAPI* NtCreateEvent)(
+	_Out_ PHANDLE EventHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_ EVENT_TYPE EventType,
+	_In_ BOOLEAN InitialState);
+
+extern NTSTATUS(NTAPI* NtSetEvent)(
+	_In_ HANDLE EventHandle,
+	_Out_opt_ PLONG PreviousState);
+
+extern NTSTATUS(NTAPI* NtResetEvent)(
+	_In_ HANDLE EventHandle,
+	_Out_opt_ PLONG PreviousState);
 
 
 inline TEB* NtCurrentTeb()

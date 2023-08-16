@@ -3,7 +3,7 @@
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/platform_handle.hpp>
-#include <allio/win32/nt_error.hpp>
+#include <allio/win32/kernel_error.hpp>
 
 #include <win32.h>
 
@@ -11,38 +11,46 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-vsm::result<void> event_handle_base::reset() const
+vsm::result<void> _event_handle::reset() const
 {
 	if (!*this)
 	{
 		return vsm::unexpected(error::handle_is_null);
 	}
 
-	if (!ResetEvent(unwrap_handle(get_platform_handle())))
+	NTSTATUS const status = NtResetEvent(
+		unwrap_handle(get_platform_handle()),
+		nullptr);
+
+	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
 	return {};
 }
 
-vsm::result<void> event_handle_base::signal() const
+vsm::result<void> _event_handle::signal() const
 {
 	if (!*this)
 	{
 		return vsm::unexpected(error::handle_is_null);
 	}
 
-	if (!SetEvent(unwrap_handle(get_platform_handle())))
+	NTSTATUS const status = NtSetEvent(
+		unwrap_handle(get_platform_handle()),
+		nullptr);
+
+	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
 	return {};
 }
 
 
-vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::event_create> const& args)
+vsm::result<void> _event_handle::sync_impl(io::parameters_with_result<io::event_create> const& args)
 {
 	vsm_try_void(kernel_init());
 
@@ -89,7 +97,7 @@ vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::ev
 	);
 }
 
-vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::event_wait> const& args)
+vsm::result<void> _event_handle::sync_impl(io::parameters_with_result<io::event_wait> const& args)
 {
 	event_handle const& h = *args.handle;
 
@@ -103,16 +111,16 @@ vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::ev
 		false,
 		kernel_timeout(args.deadline));
 
-	if (!NT_SUCCESS(status))
-	{
-		return vsm::unexpected(static_cast<nt_error>(status));
-	}
-
 	//TODO: Check for STATUS_TIMEOUT in other places where it might be missing.
 	//TODO: Replace NT_SUCCESS with one that checks for non-zero for debug purposes.
 	if (status == STATUS_TIMEOUT)
 	{
 		return vsm::unexpected(error::async_operation_timed_out);
+	}
+
+	if (!NT_SUCCESS(status))
+	{
+		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
 	return {};

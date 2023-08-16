@@ -1,6 +1,6 @@
 #include <allio/map_handle.hpp>
 
-#include <allio/win32/nt_error.hpp>
+#include <allio/win32/kernel_error.hpp>
 #include <allio/win32/platform.hpp>
 #include <allio/impl/win32/kernel.hpp>
 
@@ -85,7 +85,7 @@ static vsm::result<void> close_mapping(void* base, size_t size, bool const has_b
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
 	return {};
@@ -149,7 +149,7 @@ vsm::result<void> map_handle_base::block_commit(void* base, size_t size, commit_
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
 	return {};
@@ -189,7 +189,7 @@ vsm::result<void> map_handle_base::set_protection(void* base, size_t size, prote
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
 	return {};
@@ -290,7 +290,7 @@ vsm::result<void> map_handle_base::sync_impl(io::parameters_with_result<io::map>
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
 	vsm_defer

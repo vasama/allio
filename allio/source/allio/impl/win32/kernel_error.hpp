@@ -1,7 +1,6 @@
 #pragma once
 
-//TODO: Rename nt_errot to kernel_error.
-#include <allio/win32/nt_error.hpp>
+#include <allio/win32/kernel_error.hpp>
 
 namespace allio::win32 {
 

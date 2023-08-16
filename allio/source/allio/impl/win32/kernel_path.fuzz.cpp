@@ -1,7 +1,7 @@
 #include <allio/impl/win32/kernel_path.hpp>
 
 #include <allio/impl/win32/kernel.hpp>
-#include <allio/win32/nt_error.hpp>
+#include <allio/win32/kernel_error.hpp>
 
 #include <string>
 
@@ -58,7 +58,7 @@ static vsm::result<kernel_path> rtl_convert_path(rtl_kernel_path_storage& storag
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
 	UNICODE_STRING const rtl_kernel_path =

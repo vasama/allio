@@ -3,7 +3,7 @@
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/platform_handle.hpp>
 #include <allio/win32/detail/unique_handle.hpp>
-#include <allio/win32/nt_error.hpp>
+#include <allio/win32/kernel_error.hpp>
 #include <allio/win32/platform.hpp>
 
 #include <vsm/out_resource.hpp>
@@ -56,7 +56,7 @@ vsm::result<void> section_handle_base::sync_impl(io::parameters_with_result<io::
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
 

@@ -4,7 +4,7 @@
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/peb.hpp>
 #include <allio/impl/win32/sync_filesystem_handle.hpp>
-#include <allio/win32/nt_error.hpp>
+#include <allio/win32/kernel_error.hpp>
 
 #include <vsm/utility.hpp>
 
@@ -187,7 +187,7 @@ static vsm::result<void> query_directory_file(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
 	return {};
@@ -222,7 +222,7 @@ vsm::result<void> directory_handle_base::sync_impl(io::parameters_with_result<io
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
 	return {};
@@ -255,7 +255,7 @@ static vsm::result<void> set_current_directory_impl(std::wstring_view const path
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
 	return {};

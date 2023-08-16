@@ -1,9 +1,9 @@
 #pragma once
 
 #include <allio/detail/api.hpp>
-#include <allio/multiplexer.hpp>
+//#include <allio/multiplexer.hpp>
 
-#include <vsm/platfornm.h>
+#include <vsm/platform.h>
 #include <vsm/preprocessor.h>
 
 #include vsm_pp_include(allio/vsm_os/default_multiplexer.hpp)

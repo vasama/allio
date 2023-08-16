@@ -1,10 +1,9 @@
 #include <allio/impl/win32/filesystem_handle.hpp>
 
-#include <allio/win32/nt_error.hpp>
-
 #include <allio/impl/win32/encoding.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/kernel_path.hpp>
+#include <allio/win32/kernel_error.hpp>
 
 using namespace allio;
 using namespace allio::win32;
@@ -172,7 +171,7 @@ static vsm::result<unique_handle_with_flags> create_file(HANDLE const root_handl
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(nt_error(status));
+		return vsm::unexpected(kernel_error(status));
 	}
 
 	handle_flags handle_flags = info.handle_flags;
@@ -301,7 +300,7 @@ static vsm::result<file_name_information_ptr> query_file_name_information(HANDLE
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<nt_error>(status));
+		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
 	return r;

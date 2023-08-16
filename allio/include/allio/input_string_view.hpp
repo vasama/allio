@@ -8,6 +8,13 @@
 
 namespace allio {
 
+//TODO: Rename to any_string_view.
+//TODO: Add more encoding support:
+//      * Narrow execution encoding
+//      * Wide execution encoding
+//      * UTF8 encoding
+//      * UTF16 encoding
+//      * UTF32 encoding
 class input_string_view
 {
 	// String size exceeded maximum.

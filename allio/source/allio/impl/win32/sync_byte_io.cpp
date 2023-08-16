@@ -1,7 +1,7 @@
 #include <allio/impl/sync_byte_io.hpp>
 
 #include <allio/impl/win32/kernel.hpp>
-#include <allio/win32/nt_error.hpp>
+#include <allio/win32/kernel_error.hpp>
 #include <allio/win32/platform.hpp>
 
 using namespace allio;
@@ -50,7 +50,7 @@ static vsm::result<size_t> sync_scatter_gather_io(
 				break;
 			}
 
-			return vsm::unexpected(static_cast<nt_error>(status));
+			return vsm::unexpected(static_cast<kernel_error>(status));
 		}
 
 		transferred += io_status_block.Information;
