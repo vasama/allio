@@ -15,8 +15,7 @@ namespace detail {
 void unrecoverable_error_default(std::error_code error, std::source_location location);
 void unrecoverable_error(std::error_code error, std::source_location location = std::source_location::current());
 
-template<typename T>
-void unrecoverable(vsm::result<T> const& e, std::source_location const location = std::source_location::current())
+inline void unrecoverable(vsm::result<void> const& e, std::source_location const location = std::source_location::current())
 {
 	if (!e)
 	{

@@ -572,13 +572,6 @@ struct type_id_traits<final_handle<Handle>> : type_id_traits<Handle>
 	}
 };
 
-
-template<typename Handle, typename Multiplexer>
-class basic_async_handle
-{
-};
-
-
 #define allio_handle_implementation(H) \
 	template struct ::allio::detail::synchronous_operations<H>
 

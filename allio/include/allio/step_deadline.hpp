@@ -28,7 +28,7 @@ public:
 			return step;
 		}
 
-		auto const now = deadline::clock().now();
+		auto const now = deadline::clock::now();
 		auto const end = m_deadline.absolute();
 
 		if (now >= end)

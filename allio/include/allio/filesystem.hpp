@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vsm/flags.hpp>
+
 #include <bit>
 #include <compare>
 
@@ -10,6 +12,7 @@ namespace allio {
 
 using file_size = uint64_t;
 
+//TODO: Use std::chrono
 enum class file_time : uint64_t {};
 
 

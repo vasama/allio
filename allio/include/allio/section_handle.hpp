@@ -31,7 +31,7 @@ public:
 	allio_interface_parameters(allio_section_handle_create_parameters);
 
 
-	[[nodicard]] protection get_protection() const
+	[[nodiscard]] protection get_protection() const
 	{
 		vsm_assert(*this);
 		return m_protection.value;
