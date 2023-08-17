@@ -75,31 +75,31 @@ protected:
 		}
 	};
 
-	template<typename H>
-	struct async_interface : base_type::async_interface<H>
+	template<typename M, typename H>
+	struct async_interface : base_type::async_interface<M, H>
 	{
 		template<parameters<packet_io_parameters> P = packet_io_parameters::interface>
-		basic_sender<scatter_read_t> read_async(read_buffers const buffers, P const& args = {}) const
+		basic_sender<M, H, scatter_read_t> read_async(read_buffers const buffers, P const& args = {}) const
 		{
-			return basic_sender<scatter_read_t>(static_cast<H const&>(*this), args, buffers);
+			return basic_sender<M, H, scatter_read_t>(static_cast<H const&>(*this), args, buffers);
 		}
 
 		template<parameters<packet_io_parameters> P = packet_io_parameters::interface>
-		basic_sender<scatter_read_t> read_async(read_buffer const buffer, P const& args = {}) const
+		basic_sender<M, H, scatter_read_t> read_async(read_buffer const buffer, P const& args = {}) const
 		{
-			return basic_sender<scatter_read_t>(static_cast<H const&>(*this), args, buffer);
+			return basic_sender<M, H, scatter_read_t>(static_cast<H const&>(*this), args, buffer);
 		}
 
 		template<parameters<packet_io_parameters> P = packet_io_parameters::interface>
-		basic_sender<gather_write_t> write_async(write_buffers const buffers, network_address const& address, P const& args = {}) const
+		basic_sender<M, H, gather_write_t> write_async(write_buffers const buffers, network_address const& address, P const& args = {}) const
 		{
-			return basic_sender<gather_write_t>(static_cast<H const&>(*this), args, buffers, address);
+			return basic_sender<M, H, gather_write_t>(static_cast<H const&>(*this), args, buffers, address);
 		}
 		
 		template<parameters<packet_io_parameters> P = packet_io_parameters::interface>
-		basic_sender<gather_write_t> write_async(write_buffer const buffer, network_address const& address, P const& args = {}) const
+		basic_sender<M, H, gather_write_t> write_async(write_buffer const buffer, network_address const& address, P const& args = {}) const
 		{
-			return basic_sender<gather_write_t>(static_cast<H const&>(*this), args, buffer, address);
+			return basic_sender<M, H, gather_write_t>(static_cast<H const&>(*this), args, buffer, address);
 		}
 	};
 };

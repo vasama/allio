@@ -173,11 +173,11 @@ protected:
 		vsm::result<directory_stream_view> read(read_buffer const buffer, P const& args = {}) const;
 	};
 
-	template<typename H>
-	struct async_interface : base_type::async_interface<H>
+	template<typename M, typename H>
+	struct async_interface : base_type::async_interface<M, H>
 	{
 		template<parameters<read_parameters> P = read_parameters::interface>
-		basic_sender<read_t> read_async(read_buffer const buffer, P const& args = {}) const;
+		basic_sender<M, H, read_t> read_async(read_buffer const buffer, P const& args = {}) const;
 	};
 };
 

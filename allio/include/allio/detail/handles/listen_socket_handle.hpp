@@ -42,14 +42,14 @@ protected:
 		vsm::result<accept_result> accept(P const& args = {}) const;
 	};
 
-	template<typename H>
-	struct async_interface : base_type::async_interface<H>
+	template<typename M, typename H>
+	struct async_interface : base_type::async_interface<M, H>
 	{
 		template<parameters<listen_parameters> P = listen_parameters::interface>
-		basic_sender<listen_t> listen_async(network_address const& address, P const& args = {}) &;
+		basic_sender<M, H, listen_t> listen_async(network_address const& address, P const& args = {}) &;
 		
 		template<parameters<accept_parameters> P = accept_parameters::interface>
-		basic_sender<accept_t> accept_async(P const& args = {}) const;
+		basic_sender<M, H, accept_t> accept_async(P const& args = {}) const;
 	};
 };
 

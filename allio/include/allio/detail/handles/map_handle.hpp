@@ -106,7 +106,7 @@ protected:
 
 	explicit _map_handle(native_handle_type const& native)
 		: base_type(native)
-		, m_section(unchecked_t(), native.section)
+		, m_section(private_t(), native.section)
 		, m_base(native.base)
 		, m_size(native.size)
 		, m_page_level(native.page_level)

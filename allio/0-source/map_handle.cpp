@@ -29,7 +29,7 @@ map_handle_base::native_handle_type map_handle_base::release_native_handle()
 	return
 	{
 		base_type::release_native_handle(),
-		m_section.release_native_handle(unchecked_t()),
+		m_section.release_native_handle(private_t()),
 		m_base.release(),
 		m_size.release(),
 		m_page_level.release(),

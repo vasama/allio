@@ -51,23 +51,23 @@ protected:
 		vsm::result<size_t> write(write_buffer const buffer, P const& args = {}) const;
 	};
 	
-	template<typename H>
-	struct async_interface : base_type::async_interface<H>
+	template<typename M, typename H>
+	struct async_interface : base_type::async_interface<M, H>
 	{
 		template<parameters<connect_parameters> P = connect_parameters::interface>
-		basic_sender<connect_t> connect_async(network_address const& address, P const& args = {}) &;
+		basic_sender<M, H, connect_t> connect_async(network_address const& address, P const& args = {}) &;
 	
 		template<parameters<byte_io_parameters> P = byte_io_parameters::interface>
-		basic_sender<scatter_read_t> read_async(read_buffers const buffers, P const& args = {}) const;
+		basic_sender<M, H, scatter_read_t> read_async(read_buffers const buffers, P const& args = {}) const;
 
 		template<parameters<byte_io_parameters> P = byte_io_parameters::interface>
-		basic_sender<scatter_read_t> read_async(read_buffer const buffer, P const& args = {}) const;
+		basic_sender<M, H, scatter_read_t> read_async(read_buffer const buffer, P const& args = {}) const;
 
 		template<parameters<byte_io_parameters> P = byte_io_parameters::interface>
-		basic_sender<gather_write_t> write_async(write_buffers const buffers, P const& args = {}) const;
+		basic_sender<M, H, gather_write_t> write_async(write_buffers const buffers, P const& args = {}) const;
 
 		template<parameters<byte_io_parameters> P = byte_io_parameters::interface>
-		basic_sender<gather_write_t> write_async(write_buffer const buffer, P const& args = {}) const;
+		basic_sender<M, H, gather_write_t> write_async(write_buffer const buffer, P const& args = {}) const;
 	};
 };
 

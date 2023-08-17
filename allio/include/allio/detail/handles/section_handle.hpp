@@ -49,7 +49,7 @@ public:
 protected:
 	allio_detail_default_lifetime(_section_handle);
 
-	_section_handle(unchecked_t, native_handle_type const& native)
+	_section_handle(private_t, native_handle_type const& native)
 		: base_type(native)
 		, m_protection(native.protection)
 	{

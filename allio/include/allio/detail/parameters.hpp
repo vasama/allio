@@ -76,6 +76,7 @@ allio_interface_parameters(allio_no_parameters);
 
 #define allio_deadline_parameters(type, data, ...) \
 	type(allio, deadline_parameters) \
+	data(::allio::deadline, deadline, ::allio::deadline::never()) \
 
 allio_interface_parameters(allio_deadline_parameters);
 

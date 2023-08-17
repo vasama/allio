@@ -106,6 +106,6 @@ inline constexpr handle_flags handle_flags::none = handle_flags(0);
 	allio_detail_handle_flags(base_type, __VA_ARGS__)
 
 #define allio_handle_implementation_flags(...) \
-	allio_detail_handle_flags(base_type::implementation, __VA_ARGS__)
+	allio_detail_handle_flags(base_type::impl_type, __VA_ARGS__)
 
 } // namespace allio

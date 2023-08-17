@@ -14,8 +14,18 @@ private:
 	vsm::linear<native_platform_handle> m_native_handle;
 
 public:
+	struct impl_type;
+
+
+	#define allio_platform_handle_create_parameters(type, data, ...) \
+		type(allio::detail::platform_handle, create_parameters) \
+		data(bool, multiplexable, false) \
+
+	allio_interface_parameters(allio_platform_handle_create_parameters);
+
+
 	struct duplicate_t;
-	struct duplicate_parameters {};
+	using duplicate_parameters = no_parameters;
 
 
 	struct native_handle_type : base_type::native_handle_type
@@ -41,7 +51,7 @@ public:
 protected:
 	allio_detail_default_lifetime(platform_handle);
 	
-	platform_handle(native_handle_type const& native)
+	explicit platform_handle(native_handle_type const& native)
 		: base_type(native)
 		, m_native_handle(native.native_handle)
 	{

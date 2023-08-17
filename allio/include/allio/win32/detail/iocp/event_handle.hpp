@@ -1,7 +1,7 @@
 #pragma once
 
 #include <allio/handles/event_handle.hpp>
-#include <allio/win32/iocp/multiplexer.hpp>
+#include <allio/win32/detail/iocp/multiplexer.hpp>
 
 #include <allio/win32/wait_packet.hpp>
 

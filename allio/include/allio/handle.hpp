@@ -1,7 +1,7 @@
 #pragma once
 
-#include <allio/async_io.hpp>
 #include <allio/detail/api.hpp>
+#include <allio/detail/async_io.hpp>
 #include <allio/detail/handle_flags.hpp>
 #include <allio/detail/parameters.hpp>
 #include <allio/detail/type_list.hpp>
@@ -17,6 +17,10 @@
 namespace allio {
 namespace detail {
 
+template<typename M, typename H, typename O>
+class basic_sender;
+
+
 struct handle_base
 {
 	using async_operations = type_list<>;
@@ -28,7 +32,7 @@ struct handle_base
 		static constexpr uint32_t allio_detail_handle_flags_flag_limit = 16;
 	};
 
-	struct implementation
+	struct impl_type
 	{
 		struct flags : handle_flags
 		{
@@ -99,12 +103,12 @@ public:
 		data(bool, multiplexable, false) \
 
 protected:
-	struct unchecked_t {};
+	struct private_t {};
 
 
 	allio_detail_default_lifetime(handle);
 
-	handle(unchecked_t, native_handle_type const& native)
+	explicit handle(native_handle_type const& native)
 		: m_flags(native.flags)
 	{
 	}
@@ -121,6 +125,18 @@ protected:
 	}
 
 
+	template<std::derived_from<handle> H>
+	static vsm::result<void> _initialize(H& h, auto&& initializer)
+	{
+		if (*this)
+		{
+			return vsm::unexpected(error::handle_is_not_null);
+		}
+
+		return h._initialize(vsm_forward(initializer));
+	}
+
+
 	template<typename H>
 	struct sync_interface
 	{
@@ -128,11 +144,11 @@ protected:
 		vsm::result<void> close(P const& args = {});
 	};
 
-	template<typename H>
+	template<typename M, typename H>
 	struct async_interface
 	{
-		//template<parameters<close_parameters> P = close_parameters::interface>
-		//basic_sender<close_t> close(P const& args = {});
+		template<parameters<close_parameters> P = close_parameters::interface>
+		detail::basic_sender<M, H, close_t> close(P const& args = {});
 	};
 };
 
@@ -149,7 +165,7 @@ allio_detail_export
 template<typename H>
 class basic_handle final
 	: public H
-	, public H::template sync_interface<basic_handle>
+	, public H::template sync_interface<basic_handle<H>>
 {
 	template<typename M>
 	using async_handle_type = basic_async_handle<H, M>;
@@ -259,6 +275,14 @@ public:
 #endif
 
 private:
+	vsm::result<void> _initialize(auto&& initializer)
+	{
+		return vsm_forward(initializer)(*this);
+	}
+
+
+	friend class handle;
+
 	template<typename, typename>
 	friend class basic_async_handle;
 };
@@ -267,16 +291,16 @@ allio_detail_export
 template<typename H, typename M>
 class basic_async_handle final
 	: public H
-	, public H::template sync_interface<basic_async_handle>
-	, public H::template async_interface<basic_async_handle>
+	, public H::template sync_interface<basic_async_handle<H, M>>
+	, public H::template async_interface<M, basic_async_handle<H, M>>
 {
 	using handle_type = basic_handle<H>;
-	using multiplexer_handle_type = async_handle_storage<M, H>;
+	using multiplexer_handle_type = detail::async_handle_storage<M, H>;
 
-	static_assert(std::is_default_constructible_v<multiplexer_context_type>);
-	static_assert(std::is_nothrow_move_assignable_v<multiplexer_context_type>);
+	static_assert(std::is_default_constructible_v<multiplexer_handle_type>);
+	static_assert(std::is_nothrow_move_assignable_v<multiplexer_handle_type>);
 
-	multiplexer_context_type m_context;
+	multiplexer_handle_type m_context;
 
 public:
 	using base_type = H;
@@ -290,7 +314,7 @@ public:
 	{
 		if (*this)
 		{
-			unrecoverable(close());
+			unrecoverable(this->close());
 		}
 
 		H::operator=(vsm_move(other));
@@ -303,7 +327,7 @@ public:
 	{
 		if (*this)
 		{
-			unrecoverable(close());
+			unrecoverable(this->close());
 		}
 	}
 
@@ -321,13 +345,13 @@ public:
 			return vsm::unexpected(error::invalid_argument);
 		}
 
-		handle_type handle(unchecked_t(), native);
+		handle_type handle(private_t(), native);
 		auto const r = attach_multiplexer_impl(vsm_move(handle), multiplexer);
 
 		if (!r)
 		{
 			// On failure the user's native handle should not be consumed.
-			handle.release_native_handle(unchecked_t());
+			handle.release_native_handle(private_t());
 		}
 
 		return {};
@@ -341,12 +365,12 @@ public:
 		}
 
 		vsm::result<basic_async_handle> r(vsm::result_value);
-		handle_type handle(unchecked_t(), native);
+		handle_type handle(private_t(), native);
 		auto const r2 = r->attach_multiplexer(handle, multiplexer);
 		if (!r2)
 		{
 			// On failure the user's native handle should not be consumed.
-			handle.release_native_handle(unchecked_t());
+			handle.release_native_handle(private_t());
 		}
 		return r;
 	}
@@ -384,8 +408,15 @@ public:
 
 
 private:
+	vsm::result<void> _initialize(auto&& initializer)
+	{
+		handle_type h;
+		vsm_try_void(vsm_forward(initializer)(h));
+		return attach_multiplexer_impl(h);
+	}
+
 	vsm::result<void> attach_multiplexer_impl(
-		handle_type&& handle,
+		handle_type& handle,
 		std::convertible_to<multiplexer_handle_type> auto&& multiplexer) &
 	{
 		vsm_try_void(M::attach_handle(
@@ -407,11 +438,15 @@ private:
 		return {};
 	}
 
+
+	friend class handle;
+
 	template<typename>
 	friend class basic_handle;
 };
 
 
+#if 0
 allio_detail_export
 template<typename Operation>
 struct io_operation_traits;
@@ -424,136 +459,6 @@ using io_handle_type = typename io_operation_traits<Operation>::handle_type;
 template<typename Operation>
 using io_result_type = typename io_operation_traits<Operation>::result_type;
 
-
-template<typename Operation>
-struct io_parameters
-	: io_operation_traits<Operation>
-	: io_operation_traits<Operation>::params_type
-{
-};
-
-template<typename Handle>
-struct io_handle_parameter
-{
-	Handle* handle;
-};
-
-template<typename Operation>
-struct io_parameters_with_handle
-	: io_handle_parameter<io_handle_type<Operation>>
-	, io_parameters<Operation>
-{
-	explicit io_parameters_with_handle(io_handle_type<Operation>& handle, auto&&... args)
-		: io_handle_parameter<io_handle_type<Operation>>{ &handle }
-		, io_parameters<Operation>{ vsm_forward(args)... }
-	{
-	}
-};
-
-template<typename Result>
-struct io_result_storage
-{
-	Result result;
-
-	vsm::result<Result> consume()
-	{
-		return vsm_move(result);
-	}
-};
-
-template<>
-struct io_result_storage<void>
-{
-	vsm::result<void> consume()
-	{
-		return {};
-	}
-};
-
-template<typename Result>
-struct io_result_parameter
-{
-	Result* result;
-
-	io_result_parameter()
-		: result(nullptr)
-	{
-	}
-
-	io_result_parameter(vsm::result<Result>& storage)
-	{
-		result = &*storage;
-	}
-
-	io_result_parameter(io_result_storage<Result>& storage)
-	{
-		result = &storage.result;
-	}
-
-	void bind_storage(result_storage<Result>& storage)
-	{
-		vsm_assert(result == nullptr);
-		result = &storage.result;
-	}
-
-	vsm::result<void> produce(vsm::instance_of<vsm::result> auto&& r) const
-	{
-		vsm_assert(result != nullptr);
-		vsm_try_assign(*result, vsm_forward(r));
-		return {};
-	}
-};
-
-template<>
-struct io_result_parameter<void>
-{
-	io_result_parameter() = default;
-
-	io_result_parameter(vsm::result<void>& storage)
-	{
-	}
-
-	io_result_parameter(result_storage<void>& storage)
-	{
-	}
-
-	void bind_storage(result_storage<void>& storage)
-	{
-	}
-
-	vsm::result<void> produce(vsm::result<void> const& r) const
-	{
-		return r;
-	}
-};
-
-template<typename Operation>
-struct io_parameters_with_result
-	: io_parameters_with_handle<Operation>
-	, io_result_parameter<io_result_type<Operation>>
-{
-	explicit io_parameters_with_result(parameters_with_handle<Operation> const& args)
-		: io_parameters_with_handle<Operation>(args)
-	{
-	}
-
-	explicit io_parameters_with_result(io_result_parameter<io_result_type<Operation>> const result, parameters_with_handle<Operation> const& args)
-		: io_parameters_with_handle<Operation>(args)
-		, io_result_parameter<io_result_type<Operation>>(result)
-	{
-	}
-
-	explicit io_parameters_with_result(auto&&... args)
-		: io_parameters_with_handle(vsm_forward(args)...)
-	{
-	}
-
-	explicit io_parameters_with_result(io_result_parameter<io_result_type<Operation>> const result, auto&&... args)
-		: io_parameters_with_handle(vsm_forward(args)...)
-		, io_result_parameter<io_result_type<Operation>>(result)
-	{
-	}
-};
 
 
 template<typename Operation, typename H>
@@ -581,4 +486,6 @@ vsm::result<io_result_type<Operation>> block(basic_async_handle<H, M> const& han
 }
 
 } // namespace detail
+#endif
+
 } // namespace allio

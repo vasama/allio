@@ -120,11 +120,11 @@ protected:
 		vsm::result<process_exit_code> wait(P const& args = {}) const;
 	};
 
-	template<typename H>
-	struct async_interface : base_type::async_interface<H>
+	template<typename M, typename H>
+	struct async_interface : base_type::async_interface<M, H>
 	{
 		template<parameters<wait_parameters> P = wait_parameters::interface>
-		basic_sender<wait_t> wait_async(P const& args = {}) const;	
+		basic_sender<M, H, wait_t> wait_async(P const& args = {}) const;	
 	};
 };
 

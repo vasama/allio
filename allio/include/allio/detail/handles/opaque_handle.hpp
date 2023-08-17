@@ -88,7 +88,7 @@ protected:
 		vsm::result<void> poll(P const& args = {}) const;
 	};
 
-	template<typename H, typename M>
+	template<typename M, typename H>
 	struct async_interface
 	{
 		template<parameters<poll_parameters> P = poll_parameters::interface>

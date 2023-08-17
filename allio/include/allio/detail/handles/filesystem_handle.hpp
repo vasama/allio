@@ -152,11 +152,11 @@ protected:
 		vsm::result<void> open(path_descriptor const path, P const& args) &;
 	};
 
-	template<typename H>
-	struct async_interface : base_type::async_interface<H>
+	template<typename M, typename H>
+	struct async_interface : base_type::async_interface<M, H>
 	{
 		template<parameters<open_parameters> P = open_parameters::interface>
-		basic_sender<open_t> open_async(path_descriptor const path, P const& args) &;
+		basic_sender<M, H, open_t> open_async(path_descriptor const path, P const& args) &;
 	};
 };
 

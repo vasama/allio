@@ -4,7 +4,7 @@
 
 namespace allio {
 
-using event_handle = basic_handle<_event_handle>;
+using detail::event_handle;
 
 template<typename Multiplexer>
 using basic_event_handle = basic_async_handle<detail::_event_handle, Multiplexer>;

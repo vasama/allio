@@ -1,5 +1,6 @@
 #pragma once
 
+#include <allio/detail/io_parameters.hpp>
 #include <allio/error.hpp>
 
 #include <vsm/assert.h>
@@ -7,7 +8,7 @@
 
 #include <cstdint>
 
-namespace allio {
+namespace allio::detail {
 
 class async_operation;
 
@@ -129,7 +130,7 @@ struct async_operation_storage
 	explicit async_operation_storage(
 		io_parameters_with_result<O> const& args,
 		async_operation_listener* const listener)
-		: B(listener)
+		: M::async_storage(listener)
 		, args(args)
 	{
 	}
@@ -209,4 +210,4 @@ struct async_operation_facade
 	}
 };
 
-} // namespace allio
+} // namespace allio::detail

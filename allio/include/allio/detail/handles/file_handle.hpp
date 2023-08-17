@@ -40,20 +40,20 @@ protected:
 		vsm::result<size_t> write_at(file_size const offset, write_buffer const buffer, P const& args = {}) const;
 	};
 
-	template<typename H>
-	struct async_interface : base_type::async_interface<H>
+	template<typename M, typename H>
+	struct async_interface : base_type::async_interface<M, H>
 	{
 		template<parameters<byte_io_parameters> P = byte_io_parameters::interface>
-		basic_sender<scatter_read_at_t> read_at_async(file_size const offset, read_buffers const buffers, P const& args = {}) const;
+		basic_sender<M, H, scatter_read_at_t> read_at_async(file_size const offset, read_buffers const buffers, P const& args = {}) const;
 		
 		template<parameters<byte_io_parameters> P = byte_io_parameters::interface>
-		basic_sender<scatter_read_at_t> read_at_async(file_size const offset, read_buffer const buffer, P const& args = {}) const;
+		basic_sender<M, H, scatter_read_at_t> read_at_async(file_size const offset, read_buffer const buffer, P const& args = {}) const;
 
 		template<parameters<byte_io_parameters> P = byte_io_parameters::interface>
-		basic_sender<gather_write_at_t> write_at_async(file_size const offset, write_buffers const buffers, P const& args = {}) const;
+		basic_sender<M, H, gather_write_at_t> write_at_async(file_size const offset, write_buffers const buffers, P const& args = {}) const;
 
 		template<parameters<byte_io_parameters> P = byte_io_parameters::interface>
-		basic_sender<gather_write_at_t> write_at_async(file_size const offset, write_buffer const buffer, P const& args = {}) const;
+		basic_sender<M, H, gather_write_at_t> write_at_async(file_size const offset, write_buffer const buffer, P const& args = {}) const;
 	};
 };
 

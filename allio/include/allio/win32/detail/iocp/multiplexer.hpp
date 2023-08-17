@@ -1,7 +1,7 @@
 #pragma once
 
-#include <allio/async_io.hpp>
-//#include <allio/win32/platform_handle.hpp> //TODO: Move impl flags here.
+#include <allio/detail/async_io.hpp>
+#include <allio/win32/detail/handles/platform_handle.hpp>
 #include <allio/win32/detail/unique_handle.hpp>
 #include <allio/win32/detail/win32_fwd.hpp>
 
@@ -18,11 +18,11 @@ public:
 
 	class operation_storage
 	{
-		void(*m_io_handler)(iocp_multiplexer& m, S& s, io_slot& slot) noexcept = nullptr;
+		void(*m_io_handler)(iocp_multiplexer& m, operation_storage& s, io_slot& slot) noexcept = nullptr;
 
 	public:
 		template<auto& F, std::derived_from<operation_storage> S>
-		void set_io_handler(this S& self) &
+		void set_io_handler(this S& self)
 		{
 			m_io_handler = [](iocp_multiplexer& m, operation_storage& s, io_slot& slot) noexcept
 			{

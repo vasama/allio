@@ -360,7 +360,7 @@ protected:
 		return {};
 	}
 
-	struct unchecked_t {};
+	struct private_t {};
 
 	static bool check_native_handle(native_handle_type const& handle);
 	void set_native_handle(native_handle_type const& handle);
@@ -494,7 +494,7 @@ public:
 		return Handle::release_native_handle();
 	}
 
-	typename Handle::native_handle_type release_native_handle(handle::unchecked_t)
+	typename Handle::native_handle_type release_native_handle(handle::private_t)
 	{
 		return Handle::release_native_handle();
 	}
