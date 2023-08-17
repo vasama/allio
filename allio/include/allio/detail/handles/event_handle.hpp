@@ -59,7 +59,6 @@ public:
 	using wait_parameters = deadline_parameters;
 
 	/// @brief Wait for the event object to become signaled.
-	/// @note Internally synchronized with @ref signal.
 	template<parameters<wait_parameters> P = wait_parameters::interface>
 	vsm::result<void> wait(P const& args = {}) const
 	{
@@ -99,7 +98,6 @@ protected:
 	struct async_interface : base_type::async_interface<M, H>
 	{
 		/// @brief Wait for the event object to become signaled.
-		/// @note Internally synchronized with @ref signal.
 		template<parameters<wait_parameters> P = wait_parameters::interface>
 		basic_sender<M, H, wait_t> wait_async(P const& args = {}) const;
 	};
@@ -110,16 +108,6 @@ private:
 };
 
 using event_handle = basic_handle<_event_handle>;
-
-#if 0
-template<>
-struct io_operation_traits<event_handle::create_t>
-{
-	using handle_type = event_handle;
-	using result_type = void;
-	using params_type = event_handle::create_parameters;
-};
-#endif
 
 template<>
 struct io_operation_traits<event_handle::wait_t>
