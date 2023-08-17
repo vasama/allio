@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/handle.hpp>
+#include <allio/detail/handle.hpp>
 #include <allio/platform.hpp>
 
 namespace allio::detail {

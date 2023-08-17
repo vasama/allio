@@ -2,7 +2,7 @@
 
 #error
 
-#include <allio/handle.hpp>
+#include <allio/detail/handle.hpp>
 #include <allio/opaque_handle.h>
 
 #include <vsm/unique_resource.hpp>
