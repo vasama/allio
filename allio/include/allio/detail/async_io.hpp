@@ -115,14 +115,14 @@ struct async_operation_data {};
 
 template<typename M, typename H>
 struct async_handle_storage
-	: M::handle_type
+	: M::context_type
 	, async_handle_data<M, H>
 {
 };
 
 template<typename M, typename H, typename O>
 struct async_operation_storage
-	: M::async_storage
+	: M::operation_storage
 	, async_operation_data<M, H, O>
 {
 	io_parameters_with_result<O> args;
@@ -135,7 +135,7 @@ struct async_operation_storage
 	{
 	}
 
-	using async_operation::set_result;
+	using M::operation_storage::set_result;
 };
 
 
@@ -145,33 +145,31 @@ struct async_handle_impl {};
 template<typename M, typename H>
 struct async_handle_facade
 {
+	using C = async_handle_storage<M, H>;
 	using impl = async_handle_impl<M, H>;
-	using context = async_handle_storage<M, H>;
 
-	static vsm::result<void> attach(M& m, H const& h, context& c) noexcept
+	static vsm::result<void> attach(M& m, C& c, H const& h) noexcept
 	{
-		vsm_try_void(M::attach(m, h, c));
-
-		if constexpr (requires { impl::attach(m, h, c); })
+		if constexpr (requires { impl::attach(m, c, h); })
 		{
-			if (auto const r = impl::attach(m, h, c); !r)
-			{
-				unrecoverable(M::detach(m, h, c));
-				return vsm::unexpected(r.error());
-			}
+			return impl::attach(m, c, h);
 		}
-
-		return {};
+		else
+		{
+			return m.attach(c, h);
+		}
 	}
 
-	static void detach(M& m, H const& h, context& c) noexcept
+	static vsm::result<void> detach(M& m, C& c, H const& h) noexcept
 	{
-		if constexpr (requires { impl::detach(m, h, c); })
+		if constexpr (requires { impl::detach(m, c, h); })
 		{
-			unrecoverable(impl::detach(m, h, c));
+			return impl::detach(m, c, h);
 		}
-		
-		unrecoverable(M::detach(m, h, c));
+		else
+		{
+			return m.detach(c, h);
+		}
 	}
 };
 

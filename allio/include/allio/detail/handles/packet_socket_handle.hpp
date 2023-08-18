@@ -34,7 +34,7 @@ public:
 		type_list
 		<
 			scatter_read_t,
-			gather_write_t,
+			gather_write_t
 		>
 	>;
 

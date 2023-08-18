@@ -15,7 +15,6 @@ vsm::result<void> _event_handle::_create(reset_mode const reset_mode, create_par
 {
 	vsm_try_void(kernel_init());
 
-
 	vsm_assert(!*this);
 
 	handle_flags h_flags = {};
@@ -82,57 +81,6 @@ vsm::result<void> _event_handle::signal() const
 
 	return {};
 }
-
-#if 0
-vsm::result<void> _event_handle::create(reset_mode const reset_mode, create_parameters const& args) noexcept
-{
-	vsm_try_void(kernel_init());
-
-
-	if (*this)
-	{
-		return vsm::unexpected(error::handle_is_not_null);
-	}
-
-	handle_flags h_flags = {};
-	bool manual_reset = true;
-
-	if (args.reset_mode == event_handle::auto_reset)
-	{
-		manual_reset = false;
-		h_flags |= event_handle::flags::auto_reset;
-	}
-
-	HANDLE h_handle;
-	NTSTATUS const status = NtCreateEvent(
-		&h_handle,
-		EVENT_ALL_ACCESS,
-		/* ObjectAttributes: */ nullptr,
-		manual_reset
-			? NotificationTimer
-			: SynchronizationTimer,
-		args.signal);
-
-	if (!NT_SUCCESS(status))
-	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
-	}
-
-	return initialize_platform_handle(h, unique_handle(event),
-		[&](native_platform_handle const handle)
-		{
-			return platform_handle::native_handle_type
-			{
-				handle::native_handle_type
-				{
-					h_flags | handle::flags::not_null,
-				},
-				handle,
-			};
-		}
-	);
-}
-#endif
 
 vsm::result<void> _event_handle::_wait(wait_parameters const& args) const
 {

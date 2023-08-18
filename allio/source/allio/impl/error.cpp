@@ -4,7 +4,7 @@
 
 using namespace allio;
 
-void detail::unrecoverable_error_default(std::error_code const error, std::source_location const location)
+void detail::unrecoverable_error_default(std::error_code const error)
 {
 	std::abort();
 }
@@ -55,7 +55,35 @@ std::error_condition detail::error_category::default_error_condition(int const c
 		return std::error_condition(std::errc::timed_out);
 	}
 	
-	return std::error_condition(code , *this);
+	return std::error_condition(code, *this);
 }
 
 detail::error_category const detail::error_category_instance;
+
+
+namespace {
+
+struct default_error_handler : error_handler
+{
+	void handle_error(error_information const& information) override
+	{
+		//TODO: Handle error somehow.
+	}
+};
+
+static constinit default_error_handler default_error_handler_instance;
+static constinit error_handler* g_error_handler = &default_error_handler_instance;
+
+} // namespace
+
+void allio::set_error_handler(error_handler* const handler) noexcept
+{
+	g_error_handler = handler != nullptr
+		? handler
+		: &default_error_handler_instance;
+}
+
+error_handler& allio::get_error_handler() noexcept
+{
+	return *g_error_handler;
+}

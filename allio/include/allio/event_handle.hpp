@@ -8,6 +8,6 @@
 namespace allio {
 
 allio_detail_export
-using async_event_handle = basic_event_handle<default_multiplexer>;
+using async_event_handle = basic_event_handle<default_multiplexer*>;
 
 } // namespace allio

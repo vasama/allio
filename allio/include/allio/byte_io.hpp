@@ -1,6 +1,8 @@
 #pragma once
 
 #include <allio/byte_io_buffers.hpp>
+#include <allio/filesystem.hpp>
+#include <allio/handle.hpp>
 
 namespace allio {
 namespace detail {
@@ -11,7 +13,7 @@ struct scatter_gather_parameters
 	using result_type = size_t;
 	using params_type = deadline_parameters;
 
-	detail::untyped_buffers_storage buffers;
+	untyped_buffers_storage buffers;
 	file_size offset;
 };
 

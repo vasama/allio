@@ -4,22 +4,20 @@
 
 #include <vsm/result.hpp>
 
-#include <source_location>
-
 extern "C"
-void allio_unrecoverable_error(std::error_code error, std::source_location location);
+void allio_unrecoverable_error(std::error_code error);
 
 namespace allio {
 namespace detail {
 
-void unrecoverable_error_default(std::error_code error, std::source_location location);
-void unrecoverable_error(std::error_code error, std::source_location location = std::source_location::current());
+void unrecoverable_error_default(std::error_code error);
+void unrecoverable_error(std::error_code error);
 
-inline void unrecoverable(vsm::result<void> const& e, std::source_location const location = std::source_location::current())
+inline void unrecoverable(vsm::result<void> const& e)
 {
 	if (!e)
 	{
-		unrecoverable_error(e.error(), location);
+		unrecoverable_error(e.error());
 	}
 }
 
@@ -31,7 +29,8 @@ struct error_category final : std::error_category
 	std::error_condition default_error_condition(int code) const noexcept override;
 };
 
-allio_detail_api extern const error_category error_category_instance;
+allio_detail_api
+extern const error_category error_category_instance;
 
 } // namespace detail
 
@@ -77,6 +76,35 @@ inline std::error_code make_error_code(error const error)
 	return std::error_code(static_cast<int>(error), detail::error_category_instance);
 }
 
+
+enum class error_source : uintptr_t;
+
+struct error_information
+{
+	std::error_code error;
+	error_source source;
+};
+
+class error_handler
+{
+public:
+	virtual void handle_error(error_information const& information) = 0;
+
+protected:
+	error_handler() = default;
+	error_handler(error_handler const&) = default;
+	error_handler& operator=(error_handler const&) = default;
+	~error_handler() = default;
+};
+
+
+void set_error_handler(error_handler* const handler) noexcept;
+error_handler& get_error_handler() noexcept;
+
+inline error_handler& get_error_handler(error_handler* const handler) noexcept
+{
+	return handler != nullptr ? handler : get_error_handler();
+}
 
 } // namespace allio
 

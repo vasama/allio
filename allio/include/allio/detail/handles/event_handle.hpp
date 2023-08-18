@@ -62,7 +62,7 @@ public:
 	template<parameters<wait_parameters> P = wait_parameters::interface>
 	vsm::result<void> wait(P const& args = {}) const
 	{
-		return wait_impl(args);
+		return _wait(args);
 	}
 
 

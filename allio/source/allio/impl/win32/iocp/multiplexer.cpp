@@ -1,4 +1,4 @@
-#include <allio/win32/iocp/multiplexer.hpp>
+#include <allio/win32/detail/iocp/multiplexer.hpp>
 
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>
@@ -6,12 +6,13 @@
 #include <allio/win32/platform.hpp>
 //#include <allio/win32/handles/platform_handle.hpp>
 
+#include <span>
+
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-using handle_type = iocp_multiplexer::handle_type;
-
+using context = iocp_multiplexer::context_type;
 
 static vsm::result<void> set_completion_information(HANDLE const handle, HANDLE const port)
 {
@@ -45,18 +46,18 @@ static vsm::result<void> set_completion_information(HANDLE const handle, HANDLE 
 	return {};
 }
 
-vsm::result<void> handle_type::attach(iocp_multiplexer& m, platform_handle const& h)
+vsm::result<void> iocp_multiplexer::attach(context& c, platform_handle const& h)
 {
-	return set_completion_information(unwrap_handle(h.get_platform_handle()), m.m_completion_port.get());
+	return set_completion_information(unwrap_handle(h.get_platform_handle()), m_completion_port.get());
 }
 
-vsm::result<void> handle_type::detach(iocp_multiplexer& m, platform_handle const& h)
+vsm::result<void> iocp_multiplexer::detach(context& c, platform_handle const& h)
 {
 	return set_completion_information(unwrap_handle(h.get_platform_handle()), NULL);
 }
 
 
-vsm::result<bool> handle_type::cancel_io(iocp_multiplexer& m, io_slot& slot, native_platform_handle const handle) const
+vsm::result<bool> iocp_multiplexer::cancel_io(io_slot& slot, native_platform_handle const handle)
 {
 	//TODO: This is a undefined behaviour...
 	IO_STATUS_BLOCK& io_status_block = *static_cast<iocp_multiplexer::io_status_block&>(slot);
@@ -85,6 +86,22 @@ vsm::result<bool> handle_type::cancel_io(iocp_multiplexer& m, io_slot& slot, nat
 	return true;
 }
 
+
+static vsm::result<unique_wait_packet> create_wait_packet()
+{
+	HANDLE packet;
+	NTSTATUS const status = NtCreateWaitCompletionPacket(
+		&packet,
+		/* DesiredAccess: */ 0,
+		/* ObjectAttributes: */ nullptr);
+
+	if (!NT_SUCCESS(status))
+	{
+		return vsm::unexpected(static_cast<kernel_error>(status));
+	}
+
+	return vsm::result<unique_wait_packet>(vsm::result_value, wrap_wait_packet(packet));
+}
 
 static vsm::result<bool> associate_wait_packet(
 	HANDLE const wait_packet,
@@ -127,7 +144,7 @@ static vsm::result<bool> associate_wait_packet(
 		if (!NT_SUCCESS(cancel_status))
 		{
 			// There is no good way to handle cancellation failure.
-			unrecoverable(static_cast<kernel_error>(cancel_status));
+			unrecoverable_error(static_cast<kernel_error>(cancel_status));
 		}
 	}
 
@@ -150,46 +167,53 @@ static vsm::result<bool> cancel_wait_packet(
 	return status != STATUS_PENDING;
 }
 
-//TODO: Make these static? They don't actually need access to the handle context.
-vsm::result<void> handle_type::submit_wait(iocp_multiplexer& m, io_slot& slot, unique_wait_packet& packet, native_platform_handle const handle) const
+vsm::result<unique_wait_packet> iocp_multiplexer::acquire_wait_packet()
+{
+	return create_wait_packet();
+}
+
+vsm::result<void> iocp_multiplexer::release_wait_packet(unique_wait_packet& packet)
+{
+	return {};
+}
+
+vsm::result<bool> iocp_multiplexer::submit_wait(wait_slot& slot, unique_wait_packet& packet, native_platform_handle const handle)
 {
 	if (!packet)
 	{
-		vsm_try_assign(packet, m.acquire_wait_packet());
+		vsm_try_assign(packet, acquire_wait_packet());
 	}
 
 	vsm_try(already_signaled, associate_wait_packet(
-		packet.get(),
-		m.m_completion_port.get(),
+		unwrap_wait_packet(packet.get()),
+		m_completion_port.get(),
 		unwrap_handle(handle),
 		/* key_context: */ nullptr,
 		&slot,
 		STATUS_SUCCESS,
 		/* completion_information: */ 0,
-		/* may_complete_synchronously: */ true))
+		/* may_complete_synchronously: */ true));
 
 	if (already_signaled)
 	{
-		slot_data.Status = STATUS_SUCCESS;
+		slot.Status = STATUS_SUCCESS;
+		unrecoverable(release_wait_packet(packet));
 	}
 	else
 	{
-		slot_data.Status = STATUS_PENDING;
+		slot.Status = STATUS_PENDING;
 	}
 
 	return already_signaled;
 }
 
-vsm::result<bool> handle_type::cancel_wait(iocp_multipleser& m, io_slot& slot, unique_wait_packet& packet, native_platform_handle const handle) const
+vsm::result<bool> iocp_multiplexer::cancel_wait(wait_slot& slot, unique_wait_packet& packet)
 {
 	vsm_try(cancelled, cancel_wait_packet(
-		packet.get(),
+		unwrap_wait_packet(packet.get()),
 		/* remove_queued_completion: */ false));
 
-	if (cancelled)
-	{
-		m.release_wait_packet(packet);
-	}
+	unrecoverable(release_wait_packet(packet));
 	
 	return cancelled;
 }
@@ -220,8 +244,8 @@ static vsm::result<size_t> remove_io_completions(
 	{
 		status = NtRemoveIoCompletionEx(
 			completion_port,
-			entries.data(),
-			entries.size(),
+			buffer.data(),
+			buffer.size(),
 			&num_entries_removed,
 			kernel_timeout(deadline),
 			/* Alertable: */ false);
@@ -242,14 +266,14 @@ static vsm::result<size_t> remove_io_completions(
 
 vsm::result<bool> iocp_multiplexer::poll(poll_parameters const& args)
 {
+	bool made_progress = false;
+
 	poll_mode const mode = args.mode;
 	deadline deadline = args.deadline;
 
-	bool made_progress = false;
-
 	if (vsm::any_flags(mode, poll_mode::flush))
 	{
-		if (flush())
+		if (flush(local_poll_statistics(args.statistics)))
 		{
 			made_progress = true;
 			deadline = deadline::instant();
@@ -266,20 +290,18 @@ vsm::result<bool> iocp_multiplexer::poll(poll_parameters const& args)
 			std::span(entries, 1),
 			deadline));
 		
-		if (entry_count == 0)
+		if (entry_count != 0)
 		{
-			break;
-		}
+			made_progress = true;
+			for (auto const& entry : std::span(entries, entry_count))
+			{
+				//TODO: Think about this. It's a bit sus.
+				io_slot* const slot = static_cast<io_status_block*>(
+					reinterpret_cast<basic_io_slot_storage<IO_STATUS_BLOCK>*>(entry.ApcContext));
 
-		made_progress = true;
-		for (auto const& entry : std::span(entries, entry_count))
-		{
-			//TODO: Think about this. It's a bit sus.
-			io_slot* const = static_cast<io_status_block*>(
-				reinterpret_cast<basic_io_slot_storage<IO_STATUS_BLOCK>*>(entry.ApcContext));
-
-			vsm_assert(slot->m_operation != nullptr);
-			slot->m_operation->m_io_handler(*this, *slot->m_operation, *slot);
+				vsm_assert(slot->m_operation != nullptr);
+				slot->m_operation->m_io_handler(*this, *slot->m_operation, *slot);
+			}
 		}
 	}
 

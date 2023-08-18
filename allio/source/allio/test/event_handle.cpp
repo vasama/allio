@@ -1,7 +1,5 @@
 #include <allio/event_handle.hpp>
 
-#include <allio/test/multiplexer.hpp>
-
 #include <vsm/atomic.hpp>
 
 #include <catch2/catch_all.hpp>

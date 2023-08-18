@@ -3,17 +3,16 @@
 #include <allio/handles/event_handle.hpp>
 #include <allio/win32/detail/iocp/multiplexer.hpp>
 
-#include <allio/win32/wait_packet.hpp>
+namespace allio::detail {
 
-namespace allio {
-
-extern template struct async_operation_facade<win32::iocp_multiplexer, event_handle::base_type>;
+extern template struct async_handle_facade<iocp_multiplexer, event_handle::base_type>;
 
 template<>
-struct async_operation_data<win32::iocp_multiplexer, event_handle::base_type, event_handle::wait_t>
+struct async_operation_data<iocp_multiplexer, event_handle::base_type, event_handle::wait_t>
 {
 	win32::unique_wait_packet wait_packet;
+	iocp_multiplexer::wait_slot wait_slot;
 };
-extern template struct async_operation_facade<win32::iocp_multiplexer, event_handle::base_type, event_handle::wait_t>;
+extern template struct async_operation_facade<iocp_multiplexer, event_handle::base_type, event_handle::wait_t>;
 
-} // namespace allio
+} // namespace allio::detail

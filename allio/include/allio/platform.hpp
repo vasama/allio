@@ -17,7 +17,8 @@ enum class native_platform_handle : uintptr_t
 
 namespace detail {
 
-vsm::result<void> close_native_platform_handle(native_platform_handle handle) noexcept;
+vsm::result<void> close_handle(native_platform_handle handle, error_handler* error_handler) noexcept;
+vsm::result<void> close_handle(native_platform_handle handle) noexcept;
 
 struct native_platform_handle_deleter
 {

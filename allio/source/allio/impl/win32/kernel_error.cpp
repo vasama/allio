@@ -7,12 +7,12 @@
 using namespace allio;
 using namespace allio::win32;
 
-char const* detail::nt_error_category::name() const noexcept
+char const* detail::kernel_error_category::name() const noexcept
 {
 	return "Windows NT Kernel";
 }
 
-std::string detail::nt_error_category::message(int const code) const
+std::string detail::kernel_error_category::message(int const code) const
 {
 	ULONG const win32_error = win32::RtlNtStatusToDosError(static_cast<NTSTATUS>(code));
 	if (win32_error != ERROR_MR_MID_NOT_FOUND)
@@ -22,4 +22,4 @@ std::string detail::nt_error_category::message(int const code) const
 	return std::format("NTSTATUS:{:08X}", static_cast<uint32_t>(code));
 }
 
-detail::nt_error_category const detail::nt_error_category::instance;
+detail::kernel_error_category const detail::kernel_error_category::instance;

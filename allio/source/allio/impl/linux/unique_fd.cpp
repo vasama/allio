@@ -11,9 +11,18 @@ using namespace allio::linux;
 
 vsm::result<void> detail::close_fd(int const fd) noexcept
 {
+	static_assert(vsm_os_linux, "Check close behaviour on EINTR");
+
 	if (::close(fd) == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		int const e = errno;
+
+		if (e == EBADF)
+		{
+			return vsm::unexpected(static_cast<system_error>(e));
+		}
+
+		
 	}
 	return {};
 }

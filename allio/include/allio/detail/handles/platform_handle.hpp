@@ -65,8 +65,17 @@ protected:
 	}
 
 
+	void close(error_handler const* const error_handler)
+	{
+		if (m_native_handle.value != native_platform_handle::null)
+		{
+			vsm_verify(close_handle(m_native_handle.value, error_handler));
+		}
+	}
+
+
 	template<typename H>
-	struct sync_interface
+	struct sync_interface : base_type::sync_interface<H>
 	{
 		template<parameters<duplicate_parameters> P = duplicate_parameters::interface>
 		vsm::result<H> duplicate(P const& args = {}) const;

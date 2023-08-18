@@ -25,6 +25,7 @@ find_package(vsm-unique_resource REQUIRED)
 
 vsm_add_library2(allio
 	HEADERS
+		include/allio/detail/async_io.hpp
 		include/allio/detail/any_handle.hpp
 		include/allio/detail/api.hpp
 		include/allio/detail/dynamic_buffer.hpp
@@ -32,7 +33,6 @@ vsm_add_library2(allio
 		include/allio/detail/string_ref.hpp
 		include/allio/detail/type_list.hpp
 
-		include/allio/async.hpp
 		include/allio/async_result.hpp
 		include/allio/byte_io.hpp
 		include/allio/deadline.hpp
@@ -63,7 +63,6 @@ vsm_add_library2(allio
 		include/allio/sync_wait.hpp
 
 	SOURCES
-		source/allio/impl/default_multiplexer.cpp
 		source/allio/impl/error.cpp
 		source/allio/impl/unique_name.cpp
 		source/allio/impl/unique_name.hpp
@@ -81,16 +80,16 @@ vsm_add_library2(allio
 		unifex
 
 	TEST_SOURCES
-		source/allio/test/directory_handle.cpp
+		#source/allio/test/directory_handle.cpp
 		source/allio/test/event_handle.cpp
-		source/allio/test/file_handle.cpp
+		#source/allio/test/file_handle.cpp
 		source/allio/test/filesystem.hpp
-		source/allio/test/map_handle.cpp
+		#source/allio/test/map_handle.cpp
 		source/allio/test/multiplexer.hpp
 		source/allio/test/path_view.cpp
-		source/allio/test/process_handle.cpp
+		#source/allio/test/process_handle.cpp
 		source/allio/test/reverse_iterator.hpp
-		source/allio/test/socket_handle.cpp
+		#source/allio/test/socket_handle.cpp
 		source/allio/test/task.hpp
 )
 
@@ -109,17 +108,11 @@ vsm_configure(allio
 		include/allio/win32/detail/win32_fwd.hpp
 
 	SOURCES
-		source/allio/impl/win32/default_multiplexer.cpp
-		source/allio/impl/win32/directory_handle.cpp
-		source/allio/impl/win32/directory_handle.hpp
 		source/allio/impl/win32/encoding.cpp
 		source/allio/impl/win32/encoding.hpp
 		source/allio/impl/win32/error.cpp
 		source/allio/impl/win32/error.hpp
 		source/allio/impl/win32/event_handle.cpp
-		#source/allio/impl/win32/filesystem_handle.cpp
-		#source/allio/impl/win32/filesystem_handle.hpp
-		#source/allio/impl/win32/file_handle.cpp
 		source/allio/impl/win32/kernel.cpp
 		source/allio/impl/win32/kernel.hpp
 		source/allio/impl/win32/kernel_error.cpp
@@ -127,23 +120,16 @@ vsm_configure(allio
 		source/allio/impl/win32/kernel_path.hpp
 		source/allio/impl/win32/kernel_path_impl.hpp
 		source/allio/impl/win32/kernel_path_old.hpp
-		#ource/allio/impl/win32/map_handle.cpp
 		source/allio/impl/win32/memory.cpp
 		source/allio/impl/win32/peb.cpp
 		source/allio/impl/win32/peb.hpp
-		#source/allio/impl/win32/platform_handle.cpp
-		#source/allio/impl/win32/platform_handle.hpp
 		source/allio/impl/win32/platform.cpp
-		#source/allio/impl/win32/posix_socket.cpp
-		#source/allio/impl/win32/posix_socket.hpp
-		#source/allio/impl/win32/process_handle.cpp
-		#source/allio/impl/win32/process_handle.hpp
-		#source/allio/impl/win32/section_handle.cpp
-		#source/allio/impl/win32/sync_byte_io.cpp
-		#source/allio/impl/win32/sync_filesystem_handle.hpp
 		source/allio/impl/win32/unique_handle.cpp
-		source/allio/impl/win32/wsa_ex.cpp
-		source/allio/impl/win32/wsa_ex.hpp
+		#source/allio/impl/win32/wsa_ex.cpp
+		#source/allio/impl/win32/wsa_ex.hpp
+
+		source/allio/impl/win32/iocp/event_handle.cpp
+		source/allio/impl/win32/iocp/multiplexer.cpp
 
 	TEST_SOURCES
 		source/allio/test/win32/kernel_path.cpp

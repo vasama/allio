@@ -51,10 +51,10 @@ struct handle_base
 	~handle() = default \
 
 allio_detail_export
-class handle : public detail::handle_base
+class handle : public handle_base
 {
 protected:
-	using base_type = detail::handle_base;
+	using base_type = handle_base;
 
 private:
 	vsm::linear<handle_flags> m_flags;
@@ -93,13 +93,18 @@ public:
 	}
 
 
-	struct close_t;
-	using close_parameters = no_parameters;
-
-
 	#define allio_handle_create_parameters(type, data, ...) \
 		type(allio::handle, create_parameters) \
 		data(bool, multiplexable, false) \
+
+	allio_interface_parameters(allio_handle_create_parameters);
+
+	struct close_t;
+	#define allio_handle_close_parameters(type, data, ...) \
+		type(::allio::detail::handle, close_parameters) \
+		data(::allio::error_handler*, error_handler, nullptr) \
+	
+	allio_interface_parameters(allio_handle_close_parameters);
 
 protected:
 	struct private_t {};
@@ -125,7 +130,7 @@ protected:
 
 
 	template<std::derived_from<handle> H>
-	static vsm::result<void> _initialize(H& h, auto&& initializer)
+	static vsm::result<void> initialize(H& h, auto&& initializer)
 	{
 		return h._initialize(vsm_forward(initializer));
 	}
@@ -135,14 +140,17 @@ protected:
 	struct sync_interface
 	{
 		template<parameters<close_parameters> P = close_parameters::interface>
-		vsm::result<void> close(P const& args = {});
+		void close(P const& args = {})
+		{
+			static_cast<H&>(*this)._close(args);
+		}
 	};
 
 	template<typename M, typename H>
 	struct async_interface
 	{
 		template<parameters<close_parameters> P = close_parameters::interface>
-		detail::basic_sender<M, H, close_t> close(P const& args = {});
+		basic_sender<M, H, close_t> close_async(P const& args = {});
 	};
 };
 
@@ -177,7 +185,7 @@ public:
 	{
 		if (*this)
 		{
-			detail::unrecoverable(this->close());
+			unrecoverable(H::close_internal());
 		}
 		H::operator=(vsm_move(other));
 		return *this;
@@ -187,7 +195,7 @@ public:
 	{
 		if (*this)
 		{
-			detail::unrecoverable(this->close());
+			unrecoverable(H::close_internal());
 		}
 	}
 
@@ -267,6 +275,14 @@ private:
 		return vsm_forward(initializer)(*this);
 	}
 
+	void _close(handle::close_parameters const& args)
+	{
+		if (*this)
+		{
+			return H::close(args.error_handler);
+		}
+	}
+
 
 	friend class handle;
 
@@ -288,7 +304,7 @@ class basic_async_handle final
 	using handle_type = basic_handle<H>;
 
 	using multiplexer_type = multiplexer_t<M>;
-	using context_type = detail::multiplexer_context<multiplexer_type, H>;
+	using context_type = async_handle_storage<multiplexer_type, H>;
 
 	static_assert(std::is_default_constructible_v<M>);
 	static_assert(std::is_nothrow_move_assignable_v<M>);
@@ -315,7 +331,7 @@ public:
 	{
 		if (*this)
 		{
-			detail::unrecoverable(this->close());
+			unrecoverable(this->close());
 		}
 
 		H::operator=(vsm_move(other));
@@ -328,7 +344,7 @@ public:
 	{
 		if (*this)
 		{
-			detail::unrecoverable(this->close());
+			unrecoverable(this->close());
 		}
 	}
 
@@ -346,7 +362,16 @@ public:
 			return vsm::unexpected(error::handle_is_not_null);
 		}
 
-		m_multiplexer = vsm_forward(multiplexer);
+		return _set_multiplexer(vsm_forward(multiplexer));
+	}
+
+	void clear_multiplexer(error_handler* const error_handler) &
+	{
+		if (*this && m_multiplexer)
+		{
+			m_context.detach(*m_multiplexer, static_cast<H const&>(*this), error_handler);
+			m_multiplexer = {};
+		}
 	}
 
 	vsm::result<M> release_multiplexer()
@@ -355,8 +380,10 @@ public:
 		{
 			return vsm::unexpected(error::handle_is_not_null);
 		}
-		
-		return vsm_move(m_multiplexer);
+
+		vsm::result<M> multiplexer = vsm_move(m_multiplexer);
+		m_multiplexer = {};
+		return multiplexer;
 	}
 
 
@@ -365,11 +392,6 @@ public:
 		if (*this)
 		{
 			return vsm::unexpected(error::handle_is_not_null);
-		}
-	
-		if (!m_multiplexer)
-		{
-			return vsm::unexpected(error::multiplexer_is_null);
 		}
 
 		return _set_handle(handle);
@@ -381,9 +403,7 @@ public:
 		{
 			return vsm::unexpected(error::handle_is_null);
 		}
-		
-		vsm_assert(m_multiplexer);
-		
+
 		vsm::result<handle_type> r(vsm::result_value);
 		vsm_try_void(_release_handle(*r));
 		return r;
@@ -398,28 +418,60 @@ private:
 			return vsm::unexpected(error::handle_is_not_null);
 		}
 
-		if (!m_multiplexer)
-		{
-			return vsm::unexpected(error::multiplexer_is_null);
-		}
-	
 		handle_type h;
 		vsm_try_void(vsm_forward(initializer)(h));
 		return _set_handle(h);
 	}
 
-	vsm::result<void> _set_handle(handle_type& h)
+	vsm::result<void> _set_multiplexer(M multiplexer)
 	{
-		vsm_try_void(m_context.attach(*m_multiplexer, vsm_as_const(h)));
-		this->H::operator=(static_cast<H&&>(h));
+		if (!multiplexer)
+		{
+			return vsm::unexpected(error::invalid_argument);
+		}
+
+		if (*this)
+		{
+			vsm_try_void(m_context.attach(*multiplexer, static_cast<H const&>(*this)));
+		}
+
+		m_multiplexer = vsm_move(multiplexer);
 		return {};
 	}
 
-	vsm::result<void> _release_handle(handle_type& h)
+	vsm::result<void> _set_handle(handle_type& handle)
 	{
-		vsm_try_void(m_context.detach(*m_multiplexer, vsm_as_const(*this)));
+		if (m_multiplexer)
+		{
+			vsm_try_void(m_context.attach(*m_multiplexer, static_cast<H const&>(handle)));
+		}
+
+		this->H::operator=(static_cast<H&&>(handle));
+		return {};
+	}
+
+	void _release_handle(handle_type& handle)
+	{
+		if (m_multiplexer)
+		{
+			m_context.detach(*m_multiplexer, static_cast<H const&>(*this), nullptr);
+		}
+
 		handle.H::operator=(static_cast<H&&>(*this));
 		return {};
+	}
+
+	void _close(error_handler* const error_handler)
+	{
+		if (*this)
+		{
+			if (m_multiplexer)
+			{
+				m_context.detach(*m_multiplexer, static_cast<H const&>(*this), error_handler);
+			}
+
+			H::close(args.error_handler);
+		}
 	}
 
 
