@@ -41,6 +41,8 @@ TEST_CASE("basic signaling", "[event_handle]")
 		.signal = is_signaled,
 	}).value();
 
+	REQUIRE(event);
+
 	auto const wait = [&]()
 	{
 		return ::wait(event, deadline::instant());

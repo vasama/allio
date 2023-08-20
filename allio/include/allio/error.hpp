@@ -103,7 +103,7 @@ error_handler& get_error_handler() noexcept;
 
 inline error_handler& get_error_handler(error_handler* const handler) noexcept
 {
-	return handler != nullptr ? handler : get_error_handler();
+	return handler != nullptr ? *handler : get_error_handler();
 }
 
 } // namespace allio

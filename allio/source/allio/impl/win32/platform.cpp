@@ -11,7 +11,7 @@ using namespace allio::win32;
 
 vsm::result<void> detail::close_handle(native_platform_handle const handle, error_handler* const error_handler) noexcept
 {
-	NTSTATUS const status = NtClose(unwrap_handle(handle));
+	NTSTATUS const status = win32::NtClose(unwrap_handle(handle));
 
 	if (!NT_SUCCESS(status))
 	{
@@ -25,7 +25,7 @@ vsm::result<void> detail::close_handle(native_platform_handle const handle, erro
 		get_error_handler(error_handler).handle_error(
 		{
 			.error = static_cast<kernel_error>(status),
-			.reason = error_source::NtClose,
+			.source = error_source::NtClose,
 		});
 	}
 	

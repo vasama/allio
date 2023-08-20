@@ -12,6 +12,7 @@ using namespace allio::win32;
 #define allio_nt_syscalls(X, ...) \
 	X(RtlNtStatusToDosError,                    ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(RtlSetCurrentDirectory_U,                 ntdll       __VA_OPT__(, __VA_ARGS__)) \
+	X(NtClose,                                  ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtWaitForSingleObject,                    ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtQueryInformationFile,                   ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtSetInformationFile,                     ntdll       __VA_OPT__(, __VA_ARGS__)) \
@@ -32,6 +33,9 @@ using namespace allio::win32;
 	X(NtCreateSection,                          ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtMapViewOfSection,                       ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtUnmapViewOfSection,                     ntdll       __VA_OPT__(, __VA_ARGS__)) \
+	X(NtCreateEvent,                            ntdll       __VA_OPT__(, __VA_ARGS__)) \
+	X(NtSetEvent,                               ntdll       __VA_OPT__(, __VA_ARGS__)) \
+	X(NtResetEvent,                             ntdll       __VA_OPT__(, __VA_ARGS__)) \
 
 #define allio_x_entry(syscall, ...) \
 	decltype(win32::syscall) win32::syscall = nullptr;

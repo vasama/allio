@@ -185,7 +185,7 @@ public:
 	{
 		if (*this)
 		{
-			unrecoverable(H::close_internal());
+			H::close(nullptr);
 		}
 		H::operator=(vsm_move(other));
 		return *this;
@@ -195,7 +195,7 @@ public:
 	{
 		if (*this)
 		{
-			unrecoverable(H::close_internal());
+			H::close(nullptr);
 		}
 	}
 
@@ -357,32 +357,35 @@ public:
 	template<std::convertible_to<M> T = M>
 	vsm::result<void> set_multiplexer(T&& multiplexer) &
 	{
-		if (*this)
-		{
-			return vsm::unexpected(error::handle_is_not_null);
-		}
-
 		return _set_multiplexer(vsm_forward(multiplexer));
 	}
 
-	void clear_multiplexer(error_handler* const error_handler) &
+	void clear_multiplexer(error_handler* const error_handler = nullptr) &
 	{
 		if (*this && m_multiplexer)
 		{
-			m_context.detach(*m_multiplexer, static_cast<H const&>(*this), error_handler);
-			m_multiplexer = {};
+			M multiplexer = {};
+			{
+				using std::swap;
+				swap(multiplexer, m_multiplexer);
+			}
+			vsm_assert(!m_multiplexer);
+
+			m_context.detach(*multiplexer, static_cast<H const&>(*this), error_handler);
 		}
 	}
 
-	vsm::result<M> release_multiplexer()
+	M release_multiplexer(error_handler* const error_handler = nullptr)
 	{
-		if (*this)
+		M multiplexer = vsm_move(m_multiplexer);
+
+		//TODO: Think about this and make sure this is a
+		//      desirable behaviour for copyable multiplexer handles.
+		if (*this && multiplexer && !m_multiplexer)
 		{
-			return vsm::unexpected(error::handle_is_not_null);
+			m_context.detach(*multiplexer, static_cast<H const&>(*this), error_handler);
 		}
 
-		vsm::result<M> multiplexer = vsm_move(m_multiplexer);
-		m_multiplexer = {};
 		return multiplexer;
 	}
 
@@ -423,7 +426,7 @@ private:
 		return _set_handle(h);
 	}
 
-	vsm::result<void> _set_multiplexer(M multiplexer)
+	vsm::result<void> _set_multiplexer(M&& multiplexer)
 	{
 		if (!multiplexer)
 		{
@@ -470,7 +473,7 @@ private:
 				m_context.detach(*m_multiplexer, static_cast<H const&>(*this), error_handler);
 			}
 
-			H::close(args.error_handler);
+			H::close(error_handler);
 		}
 	}
 

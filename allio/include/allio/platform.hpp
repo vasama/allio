@@ -24,7 +24,7 @@ struct native_platform_handle_deleter
 {
 	void vsm_static_operator_invoke(native_platform_handle const handle) noexcept
 	{
-		unrecoverable(close_native_platform_handle(handle));
+		unrecoverable(close_handle(handle));
 	}
 };
 

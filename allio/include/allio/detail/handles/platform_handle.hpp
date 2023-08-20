@@ -65,7 +65,7 @@ protected:
 	}
 
 
-	void close(error_handler const* const error_handler)
+	void close(error_handler* const error_handler)
 	{
 		if (m_native_handle.value != native_platform_handle::null)
 		{

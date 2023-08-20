@@ -16,6 +16,7 @@ inline constexpr NTSTATUS STATUS_BUFFER_TOO_SMALL               = 0xC0000023;
 inline constexpr NTSTATUS STATUS_OBJECT_NAME_INVALID            = 0xC0000033;
 inline constexpr NTSTATUS STATUS_CANCELLED                      = 0xC0000120;
 inline constexpr NTSTATUS STATUS_NOT_FOUND                      = 0xC0000225;
+inline constexpr NTSTATUS STATUS_HANDLE_NOT_CLOSABLE            = 0xC0000325;
 
 
 inline constexpr ULONG SL_RESTART_SCAN                          = 0x00000001;
@@ -310,6 +311,9 @@ extern ULONG(NTAPI* RtlNtStatusToDosError)(
 
 extern NTSTATUS(NTAPI* RtlSetCurrentDirectory_U)(
 	_In_ PUNICODE_STRING PathName);
+
+extern NTSTATUS(NTAPI* NtClose)(
+	_In_ HANDLE Handle);
 
 extern NTSTATUS(NTAPI* NtWaitForSingleObject)(
 	_In_ HANDLE Handle,

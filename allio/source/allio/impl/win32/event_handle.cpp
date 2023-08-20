@@ -17,29 +17,38 @@ vsm::result<void> _event_handle::_create(reset_mode const reset_mode, create_par
 
 	vsm_assert(!*this);
 
-	handle_flags h_flags = {};
-	bool manual_reset = true;
+	handle_flags flags = flags::none;
+	EVENT_TYPE event_type = NotificationEvent;
 
 	if (reset_mode == reset_mode::auto_reset)
 	{
-		manual_reset = false;
-		h_flags |= flags::auto_reset;
+		flags |= flags::auto_reset;
+		event_type = SynchronizationEvent;
 	}
 	
-	HANDLE h_handle;
+	HANDLE handle;
 	NTSTATUS const status = NtCreateEvent(
-		&h_handle,
+		&handle,
 		EVENT_ALL_ACCESS,
 		/* ObjectAttributes: */ nullptr,
-		manual_reset
-			? NotificationEvent
-			: SynchronizationEvent,
+		event_type,
 		args.signal);
 
 	if (!NT_SUCCESS(status))
 	{
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
+
+	platform_handle::native_handle_type const native =
+	{
+		{
+			flags::not_null | flags,
+		},
+		wrap_handle(handle),
+	};
+
+	vsm_assert(check_native_handle(native));
+	set_native_handle(native);
 
 	return {};
 }
