@@ -9,6 +9,90 @@
 
 using namespace allio;
 
+namespace {
+
+template<typename T, typename... Ts>
+	requires (sizeof...(Ts) == 0)
+using root_variant = T;
+
+template<typename>
+struct root_value;
+
+template<typename T>
+struct root_value<type_list<T>>
+{
+	using type = T;
+};
+
+template<>
+struct root_value<type_list<>>
+{
+	using type = void;
+};
+
+template<typename Sender>
+class root_t
+{
+	using tuple_type = detail::execution::sender_value_types_t<Sender, single_variant, type_list>;
+	using value_type = typename root_value<tuple_type>::type;
+
+	using optional_type = std::optional<vsm::result<value_type>>;
+
+	class receiver
+	{
+		optional_type* m_result;
+
+	public:
+		receiver(optional_type& result)
+			: m_result(&result)
+		{
+		}
+
+		void set_value() &&
+		{
+			*m_result = vsm::result<void>();
+		}
+
+		void set_value(auto&& value) &&
+		{
+			*m_result = vsm_forward(value);
+		}
+
+		void set_error(auto&& value) &&
+		{
+			*m_result = vsm::unexpected(vsm_forward(value));
+		}
+	};
+
+	optional_type m_optional;
+	detail::execution::connect_result_t<Sender, receiver> m_operation;
+
+public:
+	explicit root_t(auto&& sender)
+		: m_operation(execution::connect(vsm_forward(sender), receiver(m_optional)))
+	{
+	}
+
+	[[nodiscard]] bool is_done() const
+	{
+		return m_optional.has_value();
+	}
+
+	[[nodiscard]] vsm::result<value_type> const& get() const
+	{
+		return *m_optional;
+	}
+};
+
+template<typename Sender>
+auto root(Sender&& sender)
+{
+	return root_t<std::remove_cvref_t<Sender>>(vsm_forward(sender));
+}
+
+} // namespace
+
+
 static vsm::result<bool> wait(event_handle const& event, deadline const deadline)
 {
 	auto const r = event.wait(
@@ -29,14 +113,20 @@ static vsm::result<bool> wait(event_handle const& event, deadline const deadline
 	return vsm::unexpected(r.error());
 }
 
+static event_handle::reset_mode get_reset_mode(bool const manual_reset)
+{
+	return manual_reset
+		? event_handle::manual_reset
+		: event_handle::auto_reset;
+}
+
 
 TEST_CASE("basic signaling", "[event_handle]")
 {
 	bool const manual_reset = GENERATE(0, 1);
 	bool is_signaled = GENERATE(0, 1);
 
-	event_handle const event = create_event(
-		manual_reset ? event_handle::manual_reset : event_handle::auto_reset,
+	event_handle const event = create_event(get_reset_mode(manual_reset),
 	{
 		.signal = is_signaled,
 	}).value();
@@ -166,4 +256,26 @@ TEST_CASE("concurrent fighting", "[event_handle]")
 	}
 
 	REQUIRE(signals_observed.load(std::memory_order_acquire) == signal_count);
+}
+
+TEST_CASE("async signaling", "[event_handle]")
+{
+	bool const manual_reset = GENERATE(0, 1);
+
+	auto multiplexer = default_multiplexer::create().value();
+
+	async_event_handle event = create_event(get_reset_mode(manual_reset)).value();
+	event.set_multiplexer(&multiplexer).value();
+
+	auto r = root(event.wait_async());
+	REQUIRE(!r.is_done());
+
+	multiplexer.poll().value();
+	REQUIRE(!r.is_done());
+
+	event.signal();
+	REQUIRE(!r.is_done());
+
+	multiplexer.poll().value();
+	REQUIRE(r.is_done());
 }

@@ -4,7 +4,8 @@
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/win32/kernel_error.hpp>
 #include <allio/win32/platform.hpp>
-//#include <allio/win32/handles/platform_handle.hpp>
+
+#include <vsm/lazy.hpp>
 
 #include <span>
 
@@ -13,6 +14,58 @@ using namespace allio::detail;
 using namespace allio::win32;
 
 using context = iocp_multiplexer::context_type;
+
+
+static vsm::result<unique_handle> create_completion_port(size_t const max_concurrent_threads)
+{
+	HANDLE handle;
+	NTSTATUS const status = NtCreateIoCompletion(
+		&handle,
+		IO_COMPLETION_ALL_ACCESS,
+		/* ObjectAttributes: */ nullptr,
+		max_concurrent_threads);
+
+	if (!NT_SUCCESS(status))
+	{
+		return vsm::unexpected(static_cast<kernel_error>(status));
+	}
+
+	return vsm_lazy(unique_handle(handle));
+}
+
+vsm::result<iocp_multiplexer> iocp_multiplexer::_create(create_parameters const& args)
+{
+	if (args.max_concurrent_threads == 0)
+	{
+		return vsm::unexpected(error::invalid_argument);
+	}
+
+	vsm_try(completion_port, create_completion_port(args.max_concurrent_threads));
+
+	vsm::intrusive_ptr<shared_object> shared_object = new shared_object
+	{
+		.completion_port = vms_move(completion_port),
+	};
+
+	return vsm_lazy(iocp_multiplexer(vsm_move(shared_object)));
+}
+
+vsm::result<iocp_multiplexer> iocp_multiplexer::_create(iocp_multiplexer const& other)
+{
+	if (!other.m_shared_object)
+	{
+		return vsm::unexpected(error::invalid_argument);
+	}
+
+	return vsm_lazy(iocp_multiplexer(other.m_shared_object));
+}
+
+iocp_multiplexer::iocp_multiplexer(vsm::intrusive_ptr<shared_object> shared_object)
+	: m_shared_object(vsm_move(shared_object))
+	, m_completion_port(m_shared_object->completion_port.get())
+{
+}
+
 
 static vsm::result<void> set_completion_information(HANDLE const handle, HANDLE const port)
 {

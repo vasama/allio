@@ -8,6 +8,9 @@
 #include <allio/win32/detail/win32_fwd.hpp>
 #include <allio/win32/wait_packet.hpp>
 
+#include <vsm/intrusive_ptr.hpp>
+#include <vsm/linear.hpp>
+
 #include <bit>
 
 namespace allio::detail {
@@ -104,7 +107,14 @@ public:
 	};
 
 private:
-	unique_handle m_completion_port;
+	struct shared_object : vsm::intrusive_ref_count
+	{
+		unique_handle completion_port;
+	};
+
+	vsm::intrusive_ptr<shared_object> m_shared_object;
+	vsm::linear<HANDLE> m_completion_port;
+
 	async_defer_list m_defer_list;
 
 public:
@@ -113,12 +123,30 @@ public:
 	};
 
 
+	#define allio_iocp_multiplexer_create_parameters(type, data, ...) \
+		type(::allio::detail::iocp_multiplexer, create_parameters) \
+		data(::size_t, max_concurrent_threads, 1) \
+
+	allio_interface_parameters(allio_iocp_multiplexer_create_parameters);
+
+	template<parameters<create_parameters> P = create_parameters::interface>
+	static vsm::result<iocp_multiplexer> create(P const& args = {})
+	{
+		return _create(args);
+	}
+
+	static vsm::result<iocp_multiplexer> create(iocp_multiplexer const& other)
+	{
+		return _create(other);
+	}
+
+
 	/// @return True if the multiplexer made any progress.
 	vsm::result<bool> poll(poll_parameters const& args = {});
 
 
-	vsm::result<void> attach(context_type& c, platform_handle const& h);
-	vsm::result<void> detach(context_type& c, platform_handle const& h);
+	vsm::result<void> attach(platform_handle const& h, context_type& c);
+	vsm::result<void> detach(platform_handle const& h, context_type& c);
 
 
 	vsm::result<void> submit(operation_storage& s, auto&& submit)
@@ -159,6 +187,13 @@ public:
 	}
 
 private:
+	explicit iocp_multiplexer(vsm::intrusive_ptr<shared_object> shared_object);
+
+
+	static vsm::result<iocp_multiplexer> _create(create_parameters const& args);
+	static vsm::result<iocp_multiplexer> _create(iocp_multiplexer const& other);
+
+
 	bool flush(poll_statistics& statistics);
 };
 

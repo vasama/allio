@@ -309,7 +309,7 @@ class basic_async_handle final
 	static_assert(std::is_default_constructible_v<M>);
 	static_assert(std::is_nothrow_move_assignable_v<M>);
 
-	vsm_no_unique_address M m_multiplexer;
+	vsm_no_unique_address M m_multiplexer = {};
 	vsm_no_unique_address context_type m_context;
 
 public:
@@ -317,6 +317,11 @@ public:
 
 
 	basic_async_handle() = default;
+
+	basic_async_handle(handle_type&& h)
+		: H(static_cast<H&&>(h))
+	{
+	}
 
 	template<std::convertible_to<M> T = M>
 		requires no_cvref_of<T, basic_async_handle>
@@ -331,7 +336,7 @@ public:
 	{
 		if (*this)
 		{
-			unrecoverable(this->close());
+			H::close(nullptr);
 		}
 
 		H::operator=(vsm_move(other));
@@ -344,7 +349,7 @@ public:
 	{
 		if (*this)
 		{
-			unrecoverable(this->close());
+			H::close(nullptr);
 		}
 	}
 
@@ -360,31 +365,15 @@ public:
 		return _set_multiplexer(vsm_forward(multiplexer));
 	}
 
-	void clear_multiplexer(error_handler* const error_handler = nullptr) &
+	M release_multiplexer(error_handler* const error_handler = nullptr)
 	{
 		if (*this && m_multiplexer)
 		{
-			M multiplexer = {};
-			{
-				using std::swap;
-				swap(multiplexer, m_multiplexer);
-			}
-			vsm_assert(!m_multiplexer);
-
-			m_context.detach(*multiplexer, static_cast<H const&>(*this), error_handler);
+			m_multiplexer->detach(static_cast<H const&>(*this), m_context, error_handler);
 		}
-	}
 
-	M release_multiplexer(error_handler* const error_handler = nullptr)
-	{
 		M multiplexer = vsm_move(m_multiplexer);
-
-		//TODO: Think about this and make sure this is a
-		//      desirable behaviour for copyable multiplexer handles.
-		if (*this && multiplexer && !m_multiplexer)
-		{
-			m_context.detach(*multiplexer, static_cast<H const&>(*this), error_handler);
-		}
+		m_multiplexer = {};
 
 		return multiplexer;
 	}
@@ -435,7 +424,7 @@ private:
 
 		if (*this)
 		{
-			vsm_try_void(m_context.attach(*multiplexer, static_cast<H const&>(*this)));
+			vsm_try_void(multiplexer->attach(static_cast<H const&>(*this), m_context));
 		}
 
 		m_multiplexer = vsm_move(multiplexer);
@@ -446,7 +435,7 @@ private:
 	{
 		if (m_multiplexer)
 		{
-			vsm_try_void(m_context.attach(*m_multiplexer, static_cast<H const&>(handle)));
+			vsm_try_void(m_multiplexer->attach(static_cast<H const&>(handle), m_context));
 		}
 
 		this->H::operator=(static_cast<H&&>(handle));
@@ -457,7 +446,7 @@ private:
 	{
 		if (m_multiplexer)
 		{
-			m_context.detach(*m_multiplexer, static_cast<H const&>(*this), nullptr);
+			m_multiplexer->detach(static_cast<H const&>(*this), m_context, nullptr);
 		}
 
 		handle.H::operator=(static_cast<H&&>(*this));
@@ -470,7 +459,7 @@ private:
 		{
 			if (m_multiplexer)
 			{
-				m_context.detach(*m_multiplexer, static_cast<H const&>(*this), error_handler);
+				m_multiplexer->detach(static_cast<H const&>(*this), m_context, error_handler);
 			}
 
 			H::close(error_handler);

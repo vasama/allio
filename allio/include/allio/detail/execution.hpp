@@ -15,6 +15,7 @@
 #	define allio_detail_set_stopped set_stopped
 #endif
 
+#if 0
 namespace allio::detail::execution {
 
 #if allio_config_unifex
@@ -24,4 +25,14 @@ using namespace stdexec;
 #endif
 
 } // namespace allio::detail::execution
+#endif
 
+namespace allio::detail {
+
+#if allio_config_unifex
+namespace execution = unifex;
+#else
+namespace execution = stdexec;
+#endif
+
+} // namespace allio::detail

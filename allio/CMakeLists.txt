@@ -18,6 +18,7 @@ find_package(vsm-core REQUIRED)
 find_package(vsm-flags REQUIRED)
 find_package(vsm-linear REQUIRED)
 find_package(vsm-intrusive REQUIRED)
+find_package(vsm-intrusive_ptr REQUIRED)
 find_package(vsm-optional REQUIRED)
 find_package(vsm-result REQUIRED)
 find_package(vsm-tag_ptr REQUIRED)
@@ -73,6 +74,7 @@ vsm_add_library2(allio
 		vsm::flags
 		vsm::linear
 		vsm::intrusive
+		vsm::intrusive_ptr
 		vsm::optional
 		vsm::result
 		vsm::tag_ptr
