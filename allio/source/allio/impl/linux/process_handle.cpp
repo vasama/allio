@@ -302,6 +302,14 @@ static system_result<raw_process_info> create_orphan_process(create_process_para
 } // namespace
 
 
+vsm::result<process_id> _process_handle::get_process_id() const
+{
+	//TODO: Parse /proc/self/fdinfo/{fd}
+	//      See https://stackoverflow.com/questions/74555660/given-a-pid-fd-as-acquired-from-pidfd-open-how-does-one-get-the-underlying
+	return vsm::unexpected(error::unsupported_operation);
+}
+
+
 vsm::result<unique_fd> linux::open_process(pid_t const pid)
 {
 	unsigned flags = 0;

@@ -461,6 +461,18 @@ static vsm::result<wchar_t*> make_command_line(command_line_storage& buffer, std
 }
 #endif
 
+vsm::result<process_id> _process_handle::get_process_id() const
+{
+	DWORD const id = GetProcessId(unwrap_handle(get_platform_handle()));
+
+	if (id == 0)
+	{
+		return vsm::unexpected(get_last_error());
+	}
+
+	return static_cast<process_id>(id);
+}
+
 static vsm::result<process_exit_code> get_process_exit_code(HANDLE const handle)
 {
 	DWORD exit_code;
