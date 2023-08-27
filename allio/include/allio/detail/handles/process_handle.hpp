@@ -13,9 +13,6 @@ class _process_handle : public platform_handle
 protected:
 	using base_type = platform_handle;
 
-private:
-	vsm::linear<process_id> m_id;
-
 public:
 	allio_handle_flags
 	(
@@ -23,33 +20,7 @@ public:
 	);
 
 
-	struct native_handle_type : base_type::native_handle_type
-	{
-		process_id id;
-	};
-
-	[[nodiscard]] native_handle_type get_native_handle() const
-	{
-		return
-		{
-			base_type::get_native_handle(),
-			m_id.value,
-			m_exit_code.value,
-		};
-	}
-
-
-	[[nodiscard]] process_id get_process_id() const
-	{
-		vsm_assert(*this); //PRECONDITION
-		return m_id.value;
-	}
-
-	[[nodiscard]] bool is_current() const
-	{
-		vsm_assert(*this); //PRECONDITION
-		return get_flags()[flags::current];
-	}
+	[[nodiscard]] vsm::result<process_id> get_process_id() const;
 
 
 	struct open_t;
@@ -91,21 +62,6 @@ public:
 
 protected:
 	allio_detail_default_lifetime(process_handle);
-
-
-	[[nodiscard]] static bool check_native_handle(native_handle_type const& native)
-	{
-		return base_type::check_native_handle(native) && _check_native_handle(native);
-	}
-
-	[[nodiscard]] static bool _check_native_handle(native_handle_type const& native);
-
-	void set_native_handle(native_handle_type const& native)
-	{
-		base_type::set_native_handle(native);
-		m_id.value = native.id;
-	}
-
 
 	template<typename H>
 	struct sync_interface : base_type::sync_interface<H>
