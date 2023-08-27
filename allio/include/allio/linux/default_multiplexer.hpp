@@ -8,6 +8,7 @@
 
 namespace allio {
 
+//TODO: default_multiplexer should not expose platform specific APIs.
 using default_multiplexer = linux::io_uring_multiplexer;
 
 } // namespace allio

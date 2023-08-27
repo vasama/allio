@@ -298,8 +298,8 @@ allio_detail_export
 template<typename H, typename M>
 class basic_async_handle final
 	: public H
-	, public H::template sync_interface<basic_async_handle<H, multiplexer_t<M>>>
-	, public H::template async_interface<multiplexer_t<M>, basic_async_handle<H, multiplexer_t<M>>>
+	, public H::template sync_interface<basic_async_handle<H, M>>
+	, public H::template async_interface<multiplexer_t<M>, basic_async_handle<H, M>>
 {
 	using handle_type = basic_handle<H>;
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <allio/detail/execution.hpp>
+
 namespace allio::detail {
 
 template<bool>

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/detail/handles/platform_handle.hpp>
+#include <allio/detail/sender.hpp>
 
 namespace allio::detail {
 
@@ -99,7 +100,10 @@ protected:
 	{
 		/// @brief Wait for the event object to become signaled.
 		template<parameters<wait_parameters> P = wait_parameters::interface>
-		basic_sender<M, H, wait_t> wait_async(P const& args = {}) const;
+		basic_sender<M, H, wait_t> wait_async(P const& args = {}) const
+		{
+			return basic_sender<M, H, wait_t>(static_cast<H const&>(*this), args);
+		}
 	};
 
 private:
