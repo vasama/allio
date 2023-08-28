@@ -3,6 +3,7 @@
 #include <allio/impl/linux/api_string.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/filesystem_handle.hpp>
+#include <allio/impl/linux/kernel/proc.hpp>
 #include <allio/linux/timeout.hpp>
 
 #include <vsm/lazy.hpp>
@@ -304,9 +305,30 @@ static system_result<raw_process_info> create_orphan_process(create_process_para
 
 vsm::result<process_id> _process_handle::get_process_id() const
 {
-	//TODO: Parse /proc/self/fdinfo/{fd}
-	//      See https://stackoverflow.com/questions/74555660/given-a-pid-fd-as-acquired-from-pidfd-open-how-does-one-get-the-underlying
-	return vsm::unexpected(error::unsupported_operation);
+	vsm_try(file, proc_open(
+		"/proc/self/fdinfo/%d",
+		unwrap_handle(get_platform_handle())));
+
+	int pid;
+	vsm_try_void(proc_scan(file,
+		"pos: %*d\n"
+		"flags: %*x\n"
+		"mnt_id: %*d\n"
+		"info: %*d\n"
+		"Pid: %d\n"
+		"NSpid: %*d\n", &pid));
+
+	return static_cast<process_id>(pid);
+
+//	vsm_try(scanner, proc_scanner::open(proc_path(
+//		"/proc/self/fdinfo/%d",
+//		unwrap_handle(get_platform_handle()))));
+//
+//	vsm_try(pid, scanner.scan<int>("Pid"));
+//
+//	//TODO: Parse /proc/self/fdinfo/{fd}
+//	//      See https://stackoverflow.com/questions/74555660/given-a-pid-fd-as-acquired-from-pidfd-open-how-does-one-get-the-underlying
+//	return vsm::unexpected(error::unsupported_operation);
 }
 
 
