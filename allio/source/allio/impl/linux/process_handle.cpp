@@ -309,26 +309,26 @@ vsm::result<process_id> _process_handle::get_process_id() const
 		"/proc/self/fdinfo/%d",
 		unwrap_handle(get_platform_handle())));
 
-	int pid;
+	long long pid;
 	vsm_try_void(proc_scan(file,
-		"pos: %*d\n"
-		"flags: %*x\n"
-		"mnt_id: %*d\n"
-		"info: %*d\n"
-		"Pid: %d\n"
-		"NSpid: %*d\n", &pid));
+		"pos: %*lli\n"
+		"flags: %*o\n"
+		"mnt_id: %*i\n"
+		"ino: %*lu\n"
+		"Pid: %lli\n", &pid));
+
+	if (pid == 0)
+	{
+		return vsm::unexpected(error::process_id_not_available);
+	}
+
+	// Linux PIDs are in the range [1, 2^22] and further limited
+	// to at most 2^31-1 by the 32-bit integers used to store them.
+	// Despite the kernel using long long for printing, there is no
+	// reasonable scenario where pid would exceed the range of int.
+	vsm_assert(0 < pid && pid < std::numeric_limits<process_id>::max());
 
 	return static_cast<process_id>(pid);
-
-//	vsm_try(scanner, proc_scanner::open(proc_path(
-//		"/proc/self/fdinfo/%d",
-//		unwrap_handle(get_platform_handle()))));
-//
-//	vsm_try(pid, scanner.scan<int>("Pid"));
-//
-//	//TODO: Parse /proc/self/fdinfo/{fd}
-//	//      See https://stackoverflow.com/questions/74555660/given-a-pid-fd-as-acquired-from-pidfd-open-how-does-one-get-the-underlying
-//	return vsm::unexpected(error::unsupported_operation);
 }
 
 

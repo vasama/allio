@@ -8,6 +8,22 @@ namespace allio {
 namespace detail::path_impl {
 
 template<typename Char>
+constexpr Char const* find_last(Char const* const beg, Char const* const end, Char const value)
+{
+	Char const* pos = end;
+
+	while (pos != beg)
+	{
+		if (*--pos == value)
+		{
+			return pos;
+		}
+	}
+
+	return end;
+}
+
+template<typename Char>
 constexpr bool is_separator(Char const character)
 {
 	return basic_path_view<Char>::is_separator(character);
@@ -64,11 +80,46 @@ constexpr bool has_drive_letter(Char const* const beg, Char const* const end)
 	return end - beg >= 2 && beg[1] == ':' && is_drive_letter(*beg);
 }
 
+// Any \xy\z where z, if present, is not a separator and xy is one of ?? or \? or \.
+template<typename Char>
+constexpr bool has_slash_root_name(Char const* const beg, Char const* const end)
+{
+	// Already determined by the caller.
+	vsm_assert(is_separator(beg[0]));
+
+	// All \xy\ are no shorter than 4 characters.
+	if (end - beg < 4)
+	{
+		return false;
+	}
+	
+	// All \xy\ have another separator after \xy.
+	if (!is_separator(beg[3]))
+	{
+		return false;
+	}
+
+	// \xy\ root name cannot be followed by a separator.
+	if (end - beg > 4 && is_separator(beg[4]))
+	{
+		return false;
+	}
+	
+	/* \\?\ or \\.\ */
+	if (is_separator(beg[1]))
+	{
+		return beg[2] == '?' || beg[2] == '.';
+	}
+	
+	/* \??\ */
+	return beg[1] == '?' && beg[2] == '?';
+}
+
 template<typename Char>
 constexpr Char const* find_root_name_end(Char const* const beg, Char const* const end)
 {
-	// Single character path cannot have a root name.
-	if (end - beg <= 1)
+	// No root name is less than 2 characters in length.
+	if (end - beg < 2)
 	{
 		return beg;
 	}
@@ -85,11 +136,8 @@ constexpr Char const* find_root_name_end(Char const* const beg, Char const* cons
 		return beg;
 	}
 
-	// Any \xy\z where z, if present, is not a separator and xy is one of ?? or \? or \.
-	if (end - beg >= 4 && is_separator(beg[3]) &&
-		(end - beg == 4 || !is_separator(beg[4])) && (
-			(is_separator(beg[1]) && (beg[2] == '?' || beg[2] == '.')) ||
-			(beg[1] == '?' && beg[2] == '?')))
+	/* \??\ \\?\ \\.\ */
+	if (has_slash_root_name(beg, end))
 	{
 		return beg + 3;
 	}
@@ -123,37 +171,27 @@ constexpr Char const* find_leaf_name(Char const* const beg, Char const* end)
 template<typename Char>
 constexpr Char const* find_extension(Char const* const beg, Char const* const end)
 {
-	Char const* ext = end;
+	Char const* const ext = find_last(beg, end, '.');
 
-	// If path is empty or a single character, there is no extension.
-	if (ext == beg || --ext == beg)
+	// The name contains no dot and so no extension.
+	if (ext == end)
 	{
 		return end;
 	}
 
-	if (*ext == '.')
+	// The name only contains a dot at the beginning, and so no extension.
+	if (ext == beg)
 	{
-		// If the previous character is at the beginning and is a dot, so there is no extension.
-		if (Char const* prev = ext - 1; prev == beg && *prev == '.')
-		{
-			return end;
-		}
-
-		// There is a dot not at the beginning of the name, so there is an extension.
-		return ext;
+		return end;
 	}
 
-	// Scan for a dot not at the beginning of the name, which starts an extension.
-	while (--ext != beg)
+	// The name ".." does not contain an extension.
+	if (end - beg == 2 && beg[1] == '.')
 	{
-		if (*ext == '.')
-		{
-			return ext;
-		}
+		return end;
 	}
 
-	// Reached the beginning of the name, so there is no extension.
-	return end;
+	return ext;
 }
 
 template<typename Char>

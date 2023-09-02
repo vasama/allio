@@ -5,8 +5,14 @@
 namespace allio {
 namespace detail {
 
-using process_id = int32_t;
+// Windows: Process IDs on Windows may be as high as 2^32 - 1.
+// Linux: Valid process IDs have a range of [1, 2^22].
+using process_id = uint32_t;
+
 using process_exit_code = int32_t;
+
+inline constexpr process_exit_code process_exit_code_unavailable = -1;
+
 
 class _process_handle : public platform_handle
 {

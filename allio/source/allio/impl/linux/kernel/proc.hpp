@@ -33,7 +33,10 @@ vsm::result<unique_proc_file> proc_open(
 	char const(&format)[Size],
 	std::convertible_to<int> auto const... args)
 {
-	char buffer[Size + sizeof...(args) * 10];
+	// Max number of digits in an int, including +1 for the sign.
+	static constexpr size_t max_int_digits = std::numeric_limits<int>::digits + 1;
+
+	char buffer[Size + sizeof...(args) * max_int_digits];
 	vsm_verify(snprintf(buffer, format, static_cast<int>(args)...) > 0);
 
 	FILE* const file = fopen(buffer, "r");
