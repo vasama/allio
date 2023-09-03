@@ -8,7 +8,9 @@
 #include <vector>
 
 using namespace allio;
+using namespace allio::detail::execution_namespaces;
 
+#if 0
 namespace {
 
 template<typename T, typename... Ts>
@@ -91,7 +93,7 @@ auto root(Sender&& sender)
 }
 
 } // namespace
-
+#endif
 
 static vsm::result<bool> wait(event_handle const& event, deadline const deadline)
 {
@@ -119,7 +121,6 @@ static event_handle::reset_mode get_reset_mode(bool const manual_reset)
 		? event_handle::manual_reset
 		: event_handle::auto_reset;
 }
-
 
 TEST_CASE("basic signaling", "[event_handle]")
 {
@@ -258,28 +259,82 @@ TEST_CASE("concurrent fighting", "[event_handle]")
 	REQUIRE(signals_observed.load(std::memory_order_acquire) == signal_count);
 }
 
+
+#include <tuple>
+#include <variant>
+
+namespace {
+
+template<typename... Ts>
+class detach_future
+{
+	using tuple_type = std::tuple<Ts...>;
+
+	using variant_type = std::variant
+	<
+		std::monostate,
+		tuple_type
+	>;
+
+	std::shared_ptr<variant_type> m_variant;
+
+public:
+	explicit detach_future(auto&& sender)
+		: m_variant(std::make_shared<variant_type>())
+	{
+		execution::start_detached(
+			vsm_forward(sender)
+			| future_exec::then([variant = m_variant](auto&& value)
+			{
+				variant->emplace<T>(vsm_forward(value));
+			})
+		);
+	}
+
+	tuple_type& get()
+	{
+		vsm_assert(std::holds_alternative<tuple_type>(*m_variant));
+		return std::get<tuple_type>(*m_variant);
+	}
+
+	tuple_type const& get() const
+	{
+		vsm_assert(std::holds_alternative<tuple_type>(*m_variant));
+		return std::get<tuple_type>(*m_variant);
+	}
+
+	explicit operator bool() const
+	{
+		return !std::holds_alternative<std::monostate>(*m_variant);
+	}
+};
+
+static auto detach(auto&& sender)
+{
+	using future_type = void;
+	return future_type(vsm_forward(sender));
+}
+
+} // namespace
+
+
 TEST_CASE("async signaling", "[event_handle]")
 {
 	bool const manual_reset = GENERATE(0, 1);
 
-	auto multiplexer = default_multiplexer::create().value();
+	auto multiplexer = create_default_multiplexer().value();
+	auto event = create_event(get_reset_mode(manual_reset), { .multiplexable = true }).value();
+	event.set_multiplexer(multiplexer).value();
 
-	async_event_handle event = create_event(get_reset_mode(manual_reset)).value();
-	event.set_multiplexer(&multiplexer).value();
+	auto future = detach(event.wait_async());
+	REQUIRE(!future);
 
-	auto s = event.wait_async();
-
-#if 0
-	auto r = root(event.wait_async());
-	REQUIRE(!r.is_done());
-
-	multiplexer.poll().value();
-	REQUIRE(!r.is_done());
+	multiplexer->poll().value();
+	REQUIRE(!future);
 
 	event.signal();
-	REQUIRE(!r.is_done());
+	REQUIRE(!future);
 
-	multiplexer.poll().value();
-	REQUIRE(r.is_done());
-#endif
+	multiplexer->poll().value();
+	REQUIRE(future);
 }

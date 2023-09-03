@@ -5,6 +5,14 @@ project(allio)
 include(FetchContent)
 
 FetchContent_Declare(
+	stdexec
+	#GIT_REPOSITORY https://github.com/NVIDIA/stdexec.git
+	#GIT_TAG main
+	GIT_REPOSITORY https://github.com/vasama/stdexec.git
+	GIT_TAG msvc
+)
+
+FetchContent_Declare(
 	unifex
 	#GIT_REPOSITORY https://github.com/facebookexperimental/libunifex.git
 	#GIT_TAG main
@@ -187,9 +195,5 @@ if(MSVC)
 	target_compile_options(allio PUBLIC /Zc:preprocessor)
 	target_compile_definitions(allio PUBLIC _SILENCE_ALL_CXX23_DEPRECATION_WARNINGS)
 endif()
-
-target_include_directories(allio PUBLIC D:/Code/stdexec/include)
-#target_compile_definitions(allio PUBLIC allio_config_unifex=1)
-target_compile_definitions(allio PUBLIC _SILENCE_CXX23_ALIGNED_UNION_DEPRECATION_WARNING)
 
 add_subdirectory(tools)

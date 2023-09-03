@@ -17,10 +17,6 @@
 
 namespace allio::detail {
 
-template<typename M, typename H, typename O>
-class basic_sender;
-
-
 struct handle_base
 {
 	using async_operations = type_list<>;
@@ -149,8 +145,8 @@ protected:
 	template<typename M, typename H>
 	struct async_interface
 	{
-		template<parameters<close_parameters> P = close_parameters::interface>
-		basic_sender<M, H, close_t> close_async(P const& args = {});
+		//template<parameters<close_parameters> P = close_parameters::interface>
+		//basic_sender<M, H, close_t> close_async(P const& args = {});
 	};
 };
 

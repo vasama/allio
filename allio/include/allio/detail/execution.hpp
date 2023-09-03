@@ -1,39 +1,15 @@
 #pragma once
 
-#define allio_config_unifex 1
-
-#if allio_config_unifex
-#	include <unifex/let_value.hpp>
-#	include <unifex/receiver_concepts.hpp>
-#	include <unifex/scheduler_concepts.hpp>
-#	include <unifex/sender_concepts.hpp>
-#	include <unifex/when_all.hpp>
-
-#	define allio_detail_set_stopped set_done
-#else
-#	include <stdexec/execution.hpp>
-
-#	define allio_detail_set_stopped set_stopped
-#endif
-
-#if 0
-namespace allio::detail::execution {
-
-#if allio_config_unifex
-using namespace unifex;
-#else
-using namespace stdexec;
-#endif
-
-} // namespace allio::detail::execution
-#endif
+#include <stdexec/execution.hpp>
 
 namespace allio::detail {
+namespace execution_namespaces {
 
-#if allio_config_unifex
-namespace execution = unifex;
-#else
-namespace execution = stdexec;
-#endif
+namespace ex = stdexec;
+namespace fex = exec;
+
+} // namespace execution_namespaces
+
+using namespace execution_namespaces;
 
 } // namespace allio::detail

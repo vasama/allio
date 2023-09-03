@@ -10,19 +10,12 @@
 #define allio_detail_default_handle_include(handle) \
 	vsm_pp_include(allio/vsm_os/detail/allio_detail_default_multiplexer/handle.hpp)
 
-#if 0
 #include <memory>
 
 namespace allio {
 
-using unique_multiplexer_ptr = std::unique_ptr<multiplexer>;
+using default_multiplexer_ptr = std::shared_ptr<default_multiplexer>;
 
-struct default_multiplexer_options
-{
-};
-
-allio_detail_api vsm::result<unique_multiplexer_ptr> create_default_multiplexer();
-allio_detail_api vsm::result<unique_multiplexer_ptr> create_default_multiplexer(default_multiplexer_options const& options);
+allio_detail_api vsm::result<default_multiplexer_ptr> create_default_multiplexer();
 
 } // namespace allio
-#endif
