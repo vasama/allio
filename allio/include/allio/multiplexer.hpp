@@ -8,6 +8,54 @@
 
 namespace allio {
 
+template<typename M, typename H, typename O = void>
+concept multiplexer_for = requires
+{
+};
+
+
+struct attach_t
+{
+	template<typename M, typename H, typename S>
+	vsm::result<void> vsm_static_operator_invoke(M& multiplexer, H& handle)
+		requires tag_invocable<attach_t, M&, H&>
+	{
+		return tag_invoke(multiplexer, handle);
+	}
+};
+
+struct detach_t
+{
+	template<typename M, typename H, typename S>
+	vsm::result<void> vsm_static_operator_invoke(M& multiplexer, H& handle)
+		requires tag_invocable<detach_t, M&, H&>
+	{
+		return tag_invoke(multiplexer, handle);
+	}
+};
+
+
+struct submit_t
+{
+	template<typename M, typename H, typename S>
+	vsm::result<void> vsm_static_operator_invoke(M& multiplexer, H& handle, S& state)
+		requires tag_invocable<submit_t, M&, H&, S&>
+	{
+		return tag_invoke(multiplexer, handle, state);
+	}
+};
+
+struct cancel_t
+{
+	template<typename M, typename H, typename S>
+	vsm::result<void> vsm_static_operator_invoke(M& multiplexer, H& handle, S& state)
+		requires tag_invocable<cancel_t, M&, H&, S&>
+	{
+		return tag_invoke(multiplexer, handle, state);
+	}
+};
+
+
 enum class poll_mode : uint8_t
 {
 	none                            = 0,

@@ -110,14 +110,37 @@ template<typename M, typename H>
 struct async_handle_data {};
 
 template<typename M, typename H>
-struct async_handle_impl {};
-
-template<typename M, typename H>
 struct async_handle_storage
 	: M::context_type
 	, async_handle_data<M, H>
 {
 };
+
+template<typename M, typename H, typename O>
+struct async_operation_data {};
+
+template<typename M, typename H, typename O>
+struct async_operation_storage
+	: M::operation_storage
+	, async_operation_data<M, H, O>
+{
+	io_parameters_with_result<O> args;
+
+	explicit async_operation_storage(
+		io_parameters_with_result<O> const& args,
+		async_operation_listener* const listener)
+		: M::async_storage(listener)
+		, args(args)
+	{
+	}
+
+	using M::operation_storage::set_result;
+};
+
+
+#if 0
+template<typename M, typename H>
+struct async_handle_impl {};
 
 template<typename M, typename H>
 struct async_handle_facade
@@ -150,30 +173,8 @@ struct async_handle_facade
 	}
 };
 
-
-template<typename M, typename H, typename O>
-struct async_operation_data {};
-
 template<typename M, typename H, typename O>
 struct async_operation_impl {};
-
-template<typename M, typename H, typename O>
-struct async_operation_storage
-	: M::operation_storage
-	, async_operation_data<M, H, O>
-{
-	io_parameters_with_result<O> args;
-
-	explicit async_operation_storage(
-		io_parameters_with_result<O> const& args,
-		async_operation_listener* const listener)
-		: M::async_storage(listener)
-		, args(args)
-	{
-	}
-
-	using M::operation_storage::set_result;
-};
 
 template<typename M, typename H, typename O>
 struct async_operation_facade
@@ -212,5 +213,6 @@ struct async_operation_facade
 		}
 	}
 };
+#endif
 
 } // namespace allio::detail
