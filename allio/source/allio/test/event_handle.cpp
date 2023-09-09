@@ -260,10 +260,11 @@ TEST_CASE("concurrent fighting", "[event_handle]")
 }
 
 
+#if 0
 #include <tuple>
 #include <variant>
 
-namespace {
+namespace __detach_future {
 
 template<typename... Ts>
 class detach_future
@@ -273,7 +274,8 @@ class detach_future
 	using variant_type = std::variant
 	<
 		std::monostate,
-		tuple_type
+		tuple_type,
+		std::error_code
 	>;
 
 	std::shared_ptr<variant_type> m_variant;
@@ -309,14 +311,34 @@ public:
 	}
 };
 
-static auto detach(auto&& sender)
+template<typename Sender, typename Continuation>
+using x = __value_types_of_t<Sender, no_env, __transform<__q<__decay_t>, __q<Continuation>>, __q<__msingle>>;
+
+template<typename Sender>
+static auto detach(Sender&& sender)
 {
-	using future_type = void;
+	using future_type = x<Sender&&, __q<detach_future>>;
 	return future_type(vsm_forward(sender));
 }
 
-} // namespace
+} // namespace __detach_future
 
+using  __detach_future::detach;
+#endif
+
+template<typename Sender>
+static auto detach(async_scope& scope, Sender&& sender)
+{
+	
+
+	scope.detach(
+		vsm_forward(sender) |
+		exec::then([](auto&&...)
+		{
+
+		})
+	);
+}
 
 TEST_CASE("async signaling", "[event_handle]")
 {
@@ -326,15 +348,62 @@ TEST_CASE("async signaling", "[event_handle]")
 	auto event = create_event(get_reset_mode(manual_reset), { .multiplexable = true }).value();
 	event.set_multiplexer(multiplexer).value();
 
-	auto future = detach(event.wait_async());
-	REQUIRE(!future);
+	{
+		async_scope scope;
+		auto future = detach(scope, event.wait_async());
+		REQUIRE(!future);
 
-	multiplexer->poll().value();
-	REQUIRE(!future);
+		multiplexer.poll().value();
+		REQUIRE(!future);
 
-	event.signal();
-	REQUIRE(!future);
+		event.signal().value();
+		REQUIRE(!future);
 
-	multiplexer->poll().value();
-	REQUIRE(future);
+		multiplexer.poll().value();
+		REQUIRE(future);
+
+		multiplexer.poll().value();
+		REQUIRE(future);
+	}
+
+	{
+		async_scope scope;
+		auto future = detach(scope, event.wait_async());
+		REQUIRE(!future);
+
+		multiplexer.poll().value();
+		REQUIRE(static_cast<bool>(future) == manual_reset);
+
+		if (!manual_reset)
+		{
+			event.signal().value();
+			REQUIRE(!future);
+		}
+
+		multiplexer.poll().value();
+		REQUIRE(future);
+
+		multiplexer.poll().value();
+		REQUIRE(future);
+	}
+
+	{
+		event.reset().value();
+
+		async_scope scope;
+		auto future = detach(scope, event.wait_async());
+		REQUIRE(!future);
+
+		multiplexer.poll().value();
+		REQUIRE(!future);
+
+		event.signal().value();
+		REQUIRE(!future);
+
+		multiplexer.poll().value();
+		REQUIRE(future);
+
+		multiplexer.poll().value();
+		REQUIRE(future);
+	}
 }

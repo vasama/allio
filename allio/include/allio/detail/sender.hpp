@@ -2,27 +2,30 @@
 
 #include <allio/detail/execution.hpp>
 
+#include <vsm/standard.hpp>
+
 namespace allio::detail {
 
 template<typename H, typename O>
 class basic_sender
 {
 	using multiplexer_handle_type = typename H::multiplexer_handle_type;
-	using multiplexer_type = multiplexer_t<M>;
-	using multiplexer_borrow_type = borrow_t<M>;
+	using multiplexer_handle_borrow_type = borrow_t<multiplexer_handle_type>;
+	using multiplexer_type = multiplexer_t<multiplexer_handle_type>;
 
 	using result_type = io_result_type<O>;
 
 	template<typename Receiver>
 	class operation : async_operation_listener
 	{
-		vsm_no_unique_address multiplexer_borrow_type m_multiplexer;
+		vsm_no_unique_address multiplexer_handle_borrow_type m_multiplexer;
 		vsm_no_unique_address io_result_storage<result_type> m_result;
 		vsm_no_unique_address async_operation_storage<M, H, O> m_storage;
 		vsm_no_unique_address Receiver m_receiver;
 
 	public:
 		explicit operation(auto&& sender, auto&& receiver)
+			noexcept(Receiver(vsm_forward(receiver)))
 			: m_storage(vsm_forward(sender).m_args)
 			, m_receiver(vsm_forward(receiver))
 		{
@@ -30,7 +33,8 @@ class basic_sender
 
 		void start() & noexcept
 		{
-			auto const r = async_operation_facade<M, H, O>::submit(*m_multiplexer, m_storage);
+			auto const r = submit(m_multiplexer, m_storage);
+			//auto const r = async_operation_facade<M, H, O>::submit(*m_multiplexer, m_storage);
 
 			if (!r)
 			{
@@ -83,7 +87,8 @@ public:
 	}
 
 	template<typename R>
-	operation<std::remove_cvref_t<R>> connect(R&& receiver) noexcept
+	operation<std::remove_cvref_t<R>> connect(R&& receiver)
+		noexcept(std::remove_cvref_t<R>(vsm_forward(receiver)))
 	{
 		return operation<std::remove_cvref_t<R>>(vsm_move(*this), vsm_forward(receiver));
 	}
