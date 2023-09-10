@@ -5,6 +5,8 @@
 #include <vsm/result.hpp>
 #include <vsm/utility.hpp>
 
+#include <memory>
+
 namespace allio {
 
 template<typename Pointer>
@@ -13,23 +15,17 @@ class basic_multiplexer_pointer_handle
 	Pointer m_multiplexer;
 
 public:
+	using value_type = std::remove_cvref_t<decltype(*vsm_declval(Pointer))>;
+
 	explicit basic_multiplexer_pointer_handle(Pointer multiplexer)
 		: m_multiplexer(vsm_move(multiplexer))
 	{
 	}
 
-	template<typename H, typename S>
-	friend vsm::result<void> tag_invoke(submit_t const submit, H& handle, S& state)
-		requires requires { submit(*m_multiplexer, handle, state); }
+	template<typename CPO, typename... Args>
+	friend auto tag_invoke(CPO cpo, basic_multiplexer_pointer_handle& h, Args&&... args)
+		-> decltype(cpo(*h.m_multiplexer, vsm_forward(args)...))
 	{
-		return submit(*m_multiplexer, handle, state);
-	}
-
-	template<typename H, typename S>
-	friend vsm::result<void> tag_invoke(cancel_t const cancel, H& handle, S& state)
-		requires requires { cancel(*m_multiplexer, handle, state); }
-	{
-		return cancel(*m_multiplexer, handle, state);
 	}
 };
 

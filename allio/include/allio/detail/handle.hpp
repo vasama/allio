@@ -1,8 +1,8 @@
 #pragma once
 
 #include <allio/detail/api.hpp>
-#include <allio/detail/async_io.hpp>
 #include <allio/detail/handle_flags.hpp>
+#include <allio/detail/io.hpp>
 #include <allio/detail/parameters.hpp>
 #include <allio/detail/type_list.hpp>
 #include <allio/error.hpp>
@@ -288,7 +288,7 @@ private:
 
 
 template<typename M>
-using multiplexer_t = std::remove_cvref_t<decltype(*std::declval<M const&>())>;
+using multiplexer_t = typename std::pointer_traits<M>::element_type;
 
 allio_detail_export
 template<typename H, typename M>
@@ -300,7 +300,7 @@ class basic_async_handle final
 	using handle_type = basic_handle<H>;
 
 	using multiplexer_type = multiplexer_t<M>;
-	using context_type = async_handle_storage<multiplexer_type, H>;
+	using context_type = handle_state<multiplexer_type, H>;
 
 	static_assert(std::is_default_constructible_v<M>);
 	static_assert(std::is_nothrow_move_assignable_v<M>);
@@ -411,7 +411,7 @@ private:
 		return _set_handle(h);
 	}
 
-	vsm::result<void> _set_multiplexer(M&& multiplexer)
+	vsm::result<void> _set_multiplexer(M multiplexer)
 	{
 		if (!multiplexer)
 		{
@@ -420,7 +420,10 @@ private:
 
 		if (*this)
 		{
-			vsm_try_void(multiplexer->attach(static_cast<H const&>(*this), m_context));
+			vsm_try_void(attach_handle(
+				vsm_as_const(m_multiplexer),
+				static_cast<H const&>(*this),
+				m_context));
 		}
 
 		m_multiplexer = vsm_move(multiplexer);

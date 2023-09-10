@@ -1,7 +1,7 @@
 #pragma once
 
 #include <allio/detail/handles/platform_handle.hpp>
-#include <allio/detail/sender.hpp>
+//#include <allio/detail/sender.hpp>
 
 namespace allio::detail {
 
@@ -19,12 +19,12 @@ public:
 
 	enum class reset_mode : uint8_t
 	{
-		/// @brief In manual reset mode, once signaled, an event object remains
-		///        signaled until manually reset using @ref reset.
+		/// @brief In manual reset mode, once signalled, an event object remains
+		///        signalled until manually reset using @ref reset.
 		manual_reset,
 
 		/// @brief In automatic reset mode an event object automatically becomes
-		///        unsignaled having been observed in the signaled state by a waiter.
+		///        unsignalled having been observed in the signalled state by a waiter.
 		auto_reset,
 	};
 
@@ -50,10 +50,10 @@ public:
 	/// @brief Reset the event object. This has no effect on any currently waiting threads,
 	///        but any new waiters will be blocked until the event object is signaled again.
 	///        Behaves the same whether or not the event object is currently signaled.
-	vsm::result<void> reset() const;
+	[[nodiscard]] vsm::result<void> reset() const;
 
 	/// @brief Signal the event object. This causes any waiting threads to be woken up.
-	vsm::result<void> signal() const;
+	[[nodiscard]] vsm::result<void> signal() const;
 
 
 	struct wait_t;
@@ -61,7 +61,7 @@ public:
 
 	/// @brief Wait for the event object to become signaled.
 	template<parameters<wait_parameters> P = wait_parameters::interface>
-	vsm::result<void> wait(P const& args = {}) const
+	[[nodiscard]] vsm::result<void> wait(P const& args = {}) const
 	{
 		return _wait(args);
 	}
@@ -86,7 +86,7 @@ protected:
 	{
 		//TODO: Explicit this could eliminate the need for the interface classes...
 		template<parameters<create_parameters> P = create_parameters::interface>
-		vsm::result<void> create(reset_mode const reset_mode, P const& args = {}) &
+		[[nodiscard]] vsm::result<void> create(reset_mode const reset_mode, P const& args = {}) &
 		{
 			return handle::initialize(static_cast<H&>(*this), [&](auto& h)
 			{
@@ -98,12 +98,14 @@ protected:
 	template<typename M, typename H>
 	struct async_interface : base_type::async_interface<M, H>
 	{
+#if 0
 		/// @brief Wait for the event object to become signaled.
 		template<parameters<wait_parameters> P = wait_parameters::interface>
-		basic_sender<M, H, wait_t> wait_async(P const& args = {}) const
+		[[nodiscard]] basic_sender<M, H, wait_t> wait_async(P const& args = {}) const
 		{
 			return basic_sender<M, H, wait_t>(static_cast<H const&>(*this), args);
 		}
+#endif
 	};
 
 private:

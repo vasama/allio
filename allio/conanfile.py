@@ -19,5 +19,6 @@ class package(ConanFile):
 		"vsm_optional/0.1",
 		"vsm_result/0.1",
 		"vsm_tag_ptr/0.1",
-		"vsm_unique_resource/0.1"
+		"vsm_unique_resource/0.1",
+		"p2300/460978414d1f46a4248cabecdc59dcdaba5c84d1"
 	)

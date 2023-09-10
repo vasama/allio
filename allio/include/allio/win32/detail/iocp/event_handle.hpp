@@ -5,14 +5,23 @@
 
 namespace allio::detail {
 
-extern template struct async_handle_facade<iocp_multiplexer, event_handle::base_type>;
+template<>
+struct handle_impl<iocp_multiplexer, _event_handle>
+{
+	vsm::result<void> attach(iocp_multiplexer& m, _event_handle const& h);
+	void detach(iocp_multiplexer& m, _event_handle const& h, error_handler* e);
+};
 
 template<>
-struct async_operation_data<iocp_multiplexer, event_handle::base_type, event_handle::wait_t>
+struct operation_impl<iocp_multiplexer, _event_handle, event_handle::wait_t>
 {
+	using context = handle_impl<iocp_multiplexer, _event_handle>;
+
 	win32::unique_wait_packet wait_packet;
 	iocp_multiplexer::wait_slot wait_slot;
+
+	vsm::result<void> submit(iocp_multiplexer& m, _event_handle& h, context& c);
+	void cancel(iocp_multiplexer& m, _event_handle& h, context& c, error_handler* e);
 };
-extern template struct async_operation_facade<iocp_multiplexer, event_handle::base_type, event_handle::wait_t>;
 
 } // namespace allio::detail

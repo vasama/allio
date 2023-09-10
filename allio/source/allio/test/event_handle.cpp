@@ -8,7 +8,7 @@
 #include <vector>
 
 using namespace allio;
-using namespace allio::detail::execution_namespaces;
+//namespace ex = allio::detail::ex;
 
 #if 0
 namespace {
@@ -260,6 +260,22 @@ TEST_CASE("concurrent fighting", "[event_handle]")
 }
 
 
+TEST_CASE("temp async")
+{
+	auto multiplexer = create_default_multiplexer().value();
+	async_event_handle event = create_event(event_handle::auto_reset, { .multiplexable = true }).value();
+	event.set_multiplexer(multiplexer);
+
+
+	struct listener_t : detail::io_listener
+	{
+	};
+	listener_t listener;
+
+	detail::operation_state<default_multiplexer, detail::_event_handle, event_handle::wait_t> state;
+	detail::create_io(multiplexer, event, state, &listener).value();
+}
+
 #if 0
 #include <tuple>
 #include <variant>
@@ -407,3 +423,4 @@ TEST_CASE("async signaling", "[event_handle]")
 		REQUIRE(future);
 	}
 }
+#endif

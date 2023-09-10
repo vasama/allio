@@ -1,7 +1,7 @@
 #pragma once
 
 #include <allio/async_defer_list.hpp>
-#include <allio/detail/async_io.hpp>
+#include <allio/detail/io.hpp>
 #include <allio/multiplexer.hpp>
 #include <allio/win32/detail/handles/platform_handle.hpp>
 #include <allio/win32/detail/unique_handle.hpp>
@@ -186,6 +186,7 @@ public:
 		return h.get_flags()[platform_handle::impl_type::flags::skip_completion_port_on_success];
 	}
 
+
 private:
 	explicit iocp_multiplexer(vsm::intrusive_ptr<shared_object> shared_object);
 
@@ -195,6 +196,20 @@ private:
 
 
 	bool flush(poll_statistics& statistics);
+};
+
+template<std::derived_from<platform_handle> H>
+struct handle_impl<iocp_multiplexer, H> : iocp_multiplexer::context_type
+{
+	vsm::result<void> attach(iocp_multiplexer& m, H const& h)
+	{
+		return m.attach(h, *this);
+	}
+
+	void detach(iocp_multiplexer& m, H const& h)
+	{
+		m.detach(h, *this);
+	}
 };
 
 } // namespace allio::detail

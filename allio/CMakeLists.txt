@@ -4,23 +4,6 @@ project(allio)
 
 include(FetchContent)
 
-FetchContent_Declare(
-	stdexec
-	#GIT_REPOSITORY https://github.com/NVIDIA/stdexec.git
-	#GIT_TAG main
-	GIT_REPOSITORY https://github.com/vasama/stdexec.git
-	GIT_TAG msvc
-)
-
-FetchContent_Declare(
-	unifex
-	#GIT_REPOSITORY https://github.com/facebookexperimental/libunifex.git
-	#GIT_TAG main
-	GIT_REPOSITORY https://github.com/vasama/libunifex.git
-	GIT_TAG aligned_union
-)
-FetchContent_MakeAvailable(unifex)
-
 find_package(vsm-box REQUIRED)
 find_package(vsm-core REQUIRED)
 find_package(vsm-flags REQUIRED)
@@ -31,6 +14,7 @@ find_package(vsm-optional REQUIRED)
 find_package(vsm-result REQUIRED)
 find_package(vsm-tag_ptr REQUIRED)
 find_package(vsm-unique_resource REQUIRED)
+find_package(p2300 REQUIRED)
 
 vsm_add_library2(allio
 	HEADERS
@@ -87,7 +71,7 @@ vsm_add_library2(allio
 		vsm::result
 		vsm::tag_ptr
 		vsm::unique_resource
-		unifex
+		p2300::p2300
 
 	TEST_SOURCES
 		#source/allio/test/directory_handle.cpp
@@ -192,7 +176,7 @@ target_compile_definitions(allio_test
 add_dependencies(allio_test add_numbers)
 
 if(MSVC)
-	target_compile_options(allio PUBLIC /Zc:preprocessor)
+	target_compile_options(allio PUBLIC /Zc:preprocessor /Zc:__cplusplus)
 	target_compile_definitions(allio PUBLIC _SILENCE_ALL_CXX23_DEPRECATION_WARNINGS)
 endif()
 
