@@ -260,20 +260,24 @@ TEST_CASE("concurrent fighting", "[event_handle]")
 }
 
 
+template<typename H, typename O>
+using operation_t = detail::operation_state<typename H::multiplexer_type, typename H::base_type, O>;
+
 TEST_CASE("temp async")
 {
-	auto multiplexer = create_default_multiplexer().value();
-	async_event_handle event = create_event(event_handle::auto_reset, { .multiplexable = true }).value();
-	event.set_multiplexer(multiplexer);
+	default_multiplexer multiplexer = default_multiplexer::create().value();
+	event_handle event = create_event(event_handle::auto_reset, { .multiplexable = true }).value();
 
+	detail::handle_state<default_multiplexer, event_handle::base_type> context;
+	detail::attach_handle(multiplexer, event, context).value();
 
 	struct listener_t : detail::io_listener
 	{
 	};
 	listener_t listener;
 
-	detail::operation_state<default_multiplexer, detail::_event_handle, event_handle::wait_t> state;
-	detail::create_io(multiplexer, event, state, &listener).value();
+	operation_t<async_event_handle, event_handle::wait_t> state;
+	detail::submit_io(multiplexer, event, context, state).value();
 }
 
 #if 0
@@ -342,6 +346,7 @@ static auto detach(Sender&& sender)
 using  __detach_future::detach;
 #endif
 
+#if 0
 template<typename Sender>
 static auto detach(async_scope& scope, Sender&& sender)
 {

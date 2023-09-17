@@ -70,6 +70,17 @@ struct cancel_io_t
 };
 inline constexpr cancel_io_t cancel_io = {};
 
+struct reap_io_t
+{
+	template<typename M, typename H, typename C, typename S>
+	std::error_code vsm_static_operator_invoke(M& m, H& h, C& c, S& s)
+		requires vsm::tag_invocable<reap_io_t, M&, H&, C&, S&>
+	{
+		return vsm::tag_invoke(reap_io_t(), m, h, c, s);
+	}
+};
+inline constexpr reap_io_t reap_io = {};
+
 
 template<typename M, typename H>
 struct handle_impl
@@ -99,16 +110,18 @@ struct handle_state : handle_impl<M, H>
 template<typename M, typename H, typename O>
 struct operation_state : operation_impl<M, H, O>
 {
+	using C = handle_state<M, H>;
+
 	vsm_no_unique_address io_parameters_with_result<O> args;
 
-	friend vsm::result<void> tag_invoke(submit_io_t, M& m, H const& h, operation_state& s)
+	friend vsm::result<void> tag_invoke(submit_io_t, M& m, H const& h, C& c, operation_state& s)
 	{
-		return s.operation_impl<M, H, O>::submit(m, h);
+		return s.operation_impl<M, H, O>::submit(m, h, c);
 	}
 
-	friend void tag_invoke(cancel_io_t, M& m, H const& h, operation_state& s, error_handler* const e)
+	friend void tag_invoke(cancel_io_t, M& m, H const& h, C& c, operation_state& s, error_handler* const e)
 	{
-		s.operation_impl<M, H, O>::cancel(m, h, e);
+		s.operation_impl<M, H, O>::cancel(m, h, c, e);
 	}
 };
 

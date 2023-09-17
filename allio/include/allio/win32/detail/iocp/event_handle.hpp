@@ -6,22 +6,31 @@
 namespace allio::detail {
 
 template<>
-struct handle_impl<iocp_multiplexer, _event_handle>
+class handle_impl<iocp_multiplexer, _event_handle>
 {
-	vsm::result<void> attach(iocp_multiplexer& m, _event_handle const& h);
-	void detach(iocp_multiplexer& m, _event_handle const& h, error_handler* e);
+	using M = iocp_multiplexer;
+	using H = _event_handle;
+	using C = handle_impl;
+
+	friend vsm::result<void> tag_invoke(attach_handle_t, M& m, H const& h, C& c);
+	friend void tag_invoke(detach_handle_t, M& m, H const& h, C& c, error_handler* e);
 };
 
 template<>
-struct operation_impl<iocp_multiplexer, _event_handle, event_handle::wait_t>
+class operation_impl<iocp_multiplexer, _event_handle, event_handle::wait_t>
 {
-	using context = handle_impl<iocp_multiplexer, _event_handle>;
+	using M = iocp_multiplexer;
+	using H = _event_handle;
+	using C = handle_impl<M, H>;
+	using O = H::wait_t;
+	using S = operation_state<M, H, O>;
 
 	win32::unique_wait_packet wait_packet;
 	iocp_multiplexer::wait_slot wait_slot;
 
-	vsm::result<void> submit(iocp_multiplexer& m, _event_handle& h, context& c);
-	void cancel(iocp_multiplexer& m, _event_handle& h, context& c, error_handler* e);
+	friend vsm::result<void> tag_invoke(submit_io_t, M& m, H const& h, C const& c, S& s);
+	friend std::error_code tag_invoke(reap_io_t, M& m, H const& h, C const& c, S& s);
+	friend void tag_invoke(cancel_io_t, M& m, H const& h, C const& c, S& s, error_handler* e);
 };
 
 } // namespace allio::detail

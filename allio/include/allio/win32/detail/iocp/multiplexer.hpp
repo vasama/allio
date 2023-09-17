@@ -1,6 +1,5 @@
 #pragma once
 
-#include <allio/async_defer_list.hpp>
 #include <allio/detail/io.hpp>
 #include <allio/multiplexer.hpp>
 #include <allio/win32/detail/handles/platform_handle.hpp>
@@ -22,7 +21,7 @@ class iocp_multiplexer final
 public:
 	class io_slot;
 
-	class operation_storage : public async_defer_list::operation_storage
+	class operation_storage
 	{
 		void(*m_io_handler)(iocp_multiplexer& m, operation_storage& s, io_slot& slot) noexcept = nullptr;
 
@@ -115,8 +114,6 @@ private:
 	vsm::intrusive_ptr<shared_object> m_shared_object;
 	vsm::linear<HANDLE> m_completion_port;
 
-	async_defer_list m_defer_list;
-
 public:
 	class context_type
 	{
@@ -149,10 +146,7 @@ public:
 	vsm::result<void> detach(platform_handle const& h, context_type& c);
 
 
-	vsm::result<void> submit(operation_storage& s, auto&& submit)
-	{
-		return m_defer_list.submit(s, vsm_forward(submit));
-	}
+	vsm::result<void> submit(operation_storage& s, auto&& submit);
 
 
 	/// @brief Attempt to cancel a pending I/O operation described by handle and slot.
@@ -173,12 +167,6 @@ public:
 	/// @return True if the operation was cancelled before its completion.
 	/// @post If the function returns true, no completion event is produced for this operation.
 	vsm::result<bool> cancel_wait(wait_slot& slot, win32::unique_wait_packet& packet);
-
-
-	void post(operation_storage& s, async_operation_status const status)
-	{
-		m_defer_list.post(s, status);
-	}
 
 
 	static bool supports_synchronous_completion(platform_handle const& h)

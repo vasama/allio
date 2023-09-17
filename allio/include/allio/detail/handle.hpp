@@ -299,7 +299,11 @@ class basic_async_handle final
 {
 	using handle_type = basic_handle<H>;
 
+public:
+	using multiplexer_pointer_type = M;
 	using multiplexer_type = multiplexer_t<M>;
+
+private:
 	using context_type = handle_state<multiplexer_type, H>;
 
 	static_assert(std::is_default_constructible_v<M>);
