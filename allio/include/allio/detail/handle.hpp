@@ -304,13 +304,13 @@ public:
 	using multiplexer_type = multiplexer_t<M>;
 
 private:
-	using context_type = handle_state<multiplexer_type, H>;
+	using connector_type = connector_t<multiplexer_type, H>;
 
 	static_assert(std::is_default_constructible_v<M>);
 	static_assert(std::is_nothrow_move_assignable_v<M>);
 
 	vsm_no_unique_address M m_multiplexer = {};
-	vsm_no_unique_address context_type m_context;
+	vsm_no_unique_address connector_type m_connector;
 
 public:
 	using base_type = H;
@@ -340,7 +340,7 @@ public:
 		}
 
 		H::operator=(vsm_move(other));
-		m_context = vsm_move(other.m_context);
+		m_connector = vsm_move(other.m_connector);
 
 		return *this;
 	}
@@ -369,7 +369,7 @@ public:
 	{
 		if (*this && m_multiplexer)
 		{
-			m_multiplexer->detach(static_cast<H const&>(*this), m_context, error_handler);
+			m_multiplexer->detach(static_cast<H const&>(*this), m_connector, error_handler);
 		}
 
 		M multiplexer = vsm_move(m_multiplexer);
@@ -427,7 +427,7 @@ private:
 			vsm_try_void(attach_handle(
 				vsm_as_const(m_multiplexer),
 				static_cast<H const&>(*this),
-				m_context));
+				m_connector));
 		}
 
 		m_multiplexer = vsm_move(multiplexer);
@@ -438,7 +438,7 @@ private:
 	{
 		if (m_multiplexer)
 		{
-			vsm_try_void(m_multiplexer->attach(static_cast<H const&>(handle), m_context));
+			vsm_try_void(m_multiplexer->attach(static_cast<H const&>(handle), m_connector));
 		}
 
 		this->H::operator=(static_cast<H&&>(handle));
@@ -449,7 +449,7 @@ private:
 	{
 		if (m_multiplexer)
 		{
-			m_multiplexer->detach(static_cast<H const&>(*this), m_context, nullptr);
+			m_multiplexer->detach(static_cast<H const&>(*this), m_connector, nullptr);
 		}
 
 		handle.H::operator=(static_cast<H&&>(*this));
@@ -462,7 +462,7 @@ private:
 		{
 			if (m_multiplexer)
 			{
-				m_multiplexer->detach(static_cast<H const&>(*this), m_context, error_handler);
+				m_multiplexer->detach(static_cast<H const&>(*this), m_connector, error_handler);
 			}
 
 			H::close(error_handler);

@@ -47,19 +47,26 @@ public:
 	allio_interface_parameters(allio_event_handle_create_parameters);
 
 
-	/// @brief Reset the event object. This has no effect on any currently waiting threads,
-	///        but any new waiters will be blocked until the event object is signaled again.
-	///        Behaves the same whether or not the event object is currently signaled.
+	/// @brief Reset the event object.
+	///        * Any currently pending waits are not affected.
+	///        * Any new waits will pend until the event object is signaled again.
 	[[nodiscard]] vsm::result<void> reset() const;
 
-	/// @brief Signal the event object. This causes any waiting threads to be woken up.
+	/// @brief Signal the event object.
+	///        * If the event object is already signaled, this operation has no effect.
+	///        * Otherwise if there are no pending waits, the event object becomes signaled.
+	///        * Otherwise if the reset mode is @ref allio::event_handle::auto_reset,
+	///          one pending wait is completed and the event object remains unsignaled.
+	///        * Otherwise if the reset mode is @ref allio::event_handle::manual_reset,
+	///          all pending waits are completed and the event object becomes signaled.
 	[[nodiscard]] vsm::result<void> signal() const;
 
 
 	struct wait_t;
 	using wait_parameters = deadline_parameters;
 
-	/// @brief Wait for the event object to become signaled.
+	/// @brief Wait for the event object to be signaled.
+	///        See @ref signal for more information.
 	template<parameters<wait_parameters> P = wait_parameters::interface>
 	[[nodiscard]] vsm::result<void> wait(P const& args = {}) const
 	{

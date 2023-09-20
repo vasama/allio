@@ -3,15 +3,59 @@
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/win32/kernel_error.hpp>
 
-#include <vsm/lift.hpp>
-
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
 using M = iocp_multiplexer;
-using H = event_handle;
+using H = _event_handle;
+using C = connector_t<M, H>;
 
+namespace allio::detail {
+
+using wait_t = _event_handle::wait_t;
+using wait_s = operation_t<M, H, H::wait_t>;
+
+vsm::result<void> operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s)
+{
+	return m.submit(s, [&]() -> vsm::result<void>
+	{
+		if (!h)
+		{
+			return vsm::unexpected(error::handle_is_null);
+		}
+
+		s.set_io_handler([](M& m, wait_s& s, M::io_slot& slot)
+		{
+			s.complete(basic_io_result<NTSTATUS>(s.wait_slot.Status));
+		});
+
+		s.wait_slot.set_operation(s);
+
+		return m.submit_wait(
+			s.wait_slot,
+			s.wait_packet,
+			h.get_platform_handle());
+	});
+}
+
+void operation_impl<M, H, wait_t>::cancel(M& m, H const& h, C const& c, S& s, error_handler* const e)
+{
+	(void)m.cancel_wait(s.wait_slot, s.wait_packet, e);
+}
+
+std::error_code operation_impl<M, H, wait_t>::reap(M& m, H const& h, C const& c, S& s, io_result&& result)
+{
+	NTSTATUS const status = static_cast<basic_io_result<NTSTATUS>&&>(result).value;
+
+	return NT_SUCCESS(status)
+		? std::error_code()
+		: std::error_code(static_cast<kernel_error>(status));
+}
+
+} // namespace allio::detail
+
+#if 0
 template<>
 struct async_handle_impl<M, H>
 {
@@ -92,3 +136,4 @@ struct async_operation_impl<M, H, H::wait_t>
 	}
 };
 template struct async_operation_facade<M, H, H::wait_t>;
+#endif
