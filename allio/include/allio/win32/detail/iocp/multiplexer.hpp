@@ -1,5 +1,6 @@
 #pragma once
 
+#include <allio/async_result.hpp>
 #include <allio/detail/io.hpp>
 #include <allio/multiplexer.hpp>
 #include <allio/win32/detail/handles/platform_handle.hpp>
@@ -107,12 +108,12 @@ public:
 	};
 
 private:
-	struct shared_object : vsm::intrusive_ref_count
+	struct shared_state_t : vsm::intrusive_ref_count
 	{
 		unique_handle completion_port;
 	};
 
-	vsm::intrusive_ptr<shared_object> m_shared_object;
+	vsm::intrusive_ptr<shared_state_t> m_shared_state;
 	vsm::linear<HANDLE> m_completion_port;
 
 public:
@@ -128,43 +129,47 @@ public:
 	allio_interface_parameters(allio_iocp_multiplexer_create_parameters);
 
 	template<parameters<create_parameters> P = create_parameters::interface>
-	static vsm::result<iocp_multiplexer> create(P const& args = {})
+	[[nodiscard]] static vsm::result<iocp_multiplexer> create(P const& args = {})
 	{
 		return _create(args);
 	}
 
-	static vsm::result<iocp_multiplexer> create(iocp_multiplexer const& other)
+	[[nodiscard]] static vsm::result<iocp_multiplexer> create(iocp_multiplexer const& other)
 	{
 		return _create(other);
 	}
 
 
 	/// @return True if the multiplexer made any progress.
-	vsm::result<bool> poll(poll_parameters const& args = {});
+	[[nodiscard]] vsm::result<bool> poll(poll_parameters const& args = {});
 
 
 	[[nodiscard]] vsm::result<void> attach(platform_handle const& h, connector_type& c);
 	void detach(platform_handle const& h, connector_type& c, error_handler* e);
 
 
-	vsm::result<void> submit(operation& s, auto&& submit);
+	[[nodiscard]] vsm::result<void> submit(operation& s, auto&& submit)
+	{
+		return _submit(s, vsm_forward(submit)());
+	}
 
 
 	/// @brief Attempt to cancel a pending I/O operation described by handle and slot.
 	/// @return True if the operation was cancelled before its completion.
 	/// @note A completion event is queued regardless of whether the operation was cancelled.
-	vsm::result<bool> cancel_io(io_slot& slot, native_platform_handle handle);
+	[[nodiscard]] bool cancel_io(io_slot& slot, native_platform_handle handle);
 
 
 	[[nodiscard]] vsm::result<win32::unique_wait_packet> acquire_wait_packet();
-	[[nodiscard]] vsm::result<void> release_wait_packet(win32::unique_wait_packet& packet);
+	void release_wait_packet(win32::unique_wait_packet&& packet);
 
 	/// @brief Submit a wait operation on the specified slot and handle, as if by WaitForSingleObject.
 	[[nodiscard]] vsm::result<void> submit_wait(wait_slot& slot, win32::unique_wait_packet& packet, native_platform_handle handle);
 
 	/// @brief Attempt to cancel a wait operation started on the specified slot.
 	/// @return True if the operation was cancelled before its completion.
-	[[nodiscard]] bool cancel_wait(wait_slot& slot, win32::unique_wait_packet& packet, error_handler* e);
+	/// @note A completion event is queued regardless of whether the operation was cancelled.
+	[[nodiscard]] bool cancel_wait(wait_slot& slot, win32::unique_wait_packet& packet);
 
 
 	[[nodiscard]] static bool supports_synchronous_completion(platform_handle const& h)
@@ -174,14 +179,43 @@ public:
 
 
 private:
-	explicit iocp_multiplexer(vsm::intrusive_ptr<shared_object> shared_object);
+	explicit iocp_multiplexer(vsm::intrusive_ptr<shared_state_t> shared_state);
 
 
-	static vsm::result<iocp_multiplexer> _create(create_parameters const& args);
-	static vsm::result<iocp_multiplexer> _create(iocp_multiplexer const& other);
+	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(create_parameters const& args);
+	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(iocp_multiplexer const& other);
+
+	[[nodiscard]] vsm::result<void> _submit(operation& s, vsm::result<void> const r)
+	{
+		if (!r)
+		{
+
+		}
+
+		return {};
+	}
+
+	[[nodiscard]] vsm::result<void> _submit(operation& s, async_result<void> const r)
+	{
+		if (!r)
+		{
+			auto const& e = r.error();
+
+			if (e.is_synchronous())
+			{
+				return vsm::unexpected(e.error_code());
+			}
+
+			_push_completion(s);
+		}
+
+		return {};
+	}
+
+	void _push_completion(operation& s);
 
 
-	bool flush(poll_statistics& statistics);
+	//bool flush(poll_statistics& statistics);
 };
 
 template<std::derived_from<platform_handle> H>

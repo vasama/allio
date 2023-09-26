@@ -20,6 +20,7 @@ using namespace allio::win32;
 	X(NtReadFile,                               ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtWriteFile,                              ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtCancelIoFileEx,                         ntdll       __VA_OPT__(, __VA_ARGS__)) \
+	X(NtCreateIoCompletion,                     ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtRemoveIoCompletion,                     ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtRemoveIoCompletionEx,                   ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtCreateWaitCompletionPacket,             ntdll       __VA_OPT__(, __VA_ARGS__)) \
@@ -47,7 +48,9 @@ vsm::result<void> win32::kernel_init()
 {
 	static vsm::result<void> const r = []() -> vsm::result<void>
 	{
-		HMODULE const ntdll = GetModuleHandleA("NTDLL.DLL");
+		HMODULE const ntdll = GetModuleHandleW(L"NTDLL.DLL");
+
+		vsm_assert(ntdll != NULL);
 
 #define allio_x_entry(syscall, dll) \
 		if (FARPROC const proc = GetProcAddress(dll, vsm_pp_str(syscall))) \

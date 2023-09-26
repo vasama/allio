@@ -259,6 +259,27 @@ TEST_CASE("concurrent fighting", "[event_handle]")
 	REQUIRE(signals_observed.load(std::memory_order_acquire) == signal_count);
 }
 
+template<typename L>
+class basic_reaper : public detail::io_reaper
+{
+	L m_l;
+
+public:
+	basic_reaper(auto&& l)
+		: m_l(vsm_forward(l))
+	{
+	}
+
+private:
+	void reap(detail::operation_base& s, detail::io_result&& r) override
+	{
+		m_l(s, vsm_move(r));
+	}
+};
+
+template<typename L>
+basic_reaper(L&&) -> basic_reaper<std::decay_t<L>>;
+
 TEST_CASE("temp async")
 {
 	default_multiplexer multiplexer = default_multiplexer::create().value();
@@ -269,18 +290,25 @@ TEST_CASE("temp async")
 
 	using operation_type = detail::operation_t<default_multiplexer, event_handle::base_type, event_handle::wait_t>;
 
-	struct my_reaper : detail::io_reaper
+	std::optional<std::error_code> result;
+	basic_reaper reaper([&](detail::operation_base& s, detail::io_result&& r)
 	{
-		void reap(detail::operation_base& s, detail::io_result&& result) override
-		{
-			detail::reap_io(multiplexer, event, connector, static_cast<operation_type&>(s), vsm_move(result));
-		}
-	};
-	my_reaper reaper;
+		result = detail::reap_io(multiplexer, event, connector, static_cast<operation_type&>(s), vsm_move(r));
+	});
 
 	detail::io_parameters<event_handle::wait_t> args{};
 	operation_type operation(reaper, args);
 	detail::submit_io(multiplexer, event, connector, operation).value();
+
+	multiplexer.poll();
+	REQUIRE(!result);
+
+	event.signal().value();
+	REQUIRE(!result);
+
+	multiplexer.poll();
+	REQUIRE(result);
+	REQUIRE(!*result);
 }
 
 #if 0

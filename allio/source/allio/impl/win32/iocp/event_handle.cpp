@@ -18,7 +18,7 @@ using wait_s = operation_t<M, H, H::wait_t>;
 
 vsm::result<void> operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s)
 {
-	return m.submit(s, [&]() -> vsm::result<void>
+	return m.submit(s, [&]() -> async_result<void>
 	{
 		if (!h)
 		{
@@ -41,7 +41,7 @@ vsm::result<void> operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const
 
 void operation_impl<M, H, wait_t>::cancel(M& m, H const& h, C const& c, S& s, error_handler* const e)
 {
-	(void)m.cancel_wait(s.wait_slot, s.wait_packet, e);
+	(void)m.cancel_wait(s.wait_slot, s.wait_packet);
 }
 
 std::error_code operation_impl<M, H, wait_t>::reap(M& m, H const& h, C const& c, S& s, io_result&& result)

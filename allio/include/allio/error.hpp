@@ -2,6 +2,7 @@
 
 #include <allio/detail/api.hpp>
 
+#include <vsm/concepts.hpp>
 #include <vsm/result.hpp>
 
 extern "C"
@@ -19,6 +20,17 @@ inline void unrecoverable(vsm::result<void> const& e)
 	{
 		unrecoverable_error(e.error());
 	}
+}
+
+decltype(auto) unrecoverable(auto&& r, auto&& default_value)
+{
+	if (r)
+	{
+		return *vsm_forward(r);
+	}
+
+	unrecoverable_error(r.error());
+	return vsm_forward(default_value);
 }
 
 

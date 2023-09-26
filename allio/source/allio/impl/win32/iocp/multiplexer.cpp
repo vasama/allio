@@ -13,9 +13,6 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-using context = iocp_multiplexer::context_type;
-
-
 static vsm::result<unique_handle> create_completion_port(size_t const max_concurrent_threads)
 {
 	HANDLE handle;
@@ -42,27 +39,25 @@ vsm::result<iocp_multiplexer> iocp_multiplexer::_create(create_parameters const&
 
 	vsm_try(completion_port, create_completion_port(args.max_concurrent_threads));
 
-	vsm::intrusive_ptr<shared_object> shared_object = new shared_object
-	{
-		.completion_port = vms_move(completion_port),
-	};
+	vsm::intrusive_ptr<shared_state_t> shared_state(new shared_state_t);
+	shared_state->completion_port = vsm_move(completion_port);
 
-	return vsm_lazy(iocp_multiplexer(vsm_move(shared_object)));
+	return vsm_lazy(iocp_multiplexer(vsm_move(shared_state)));
 }
 
 vsm::result<iocp_multiplexer> iocp_multiplexer::_create(iocp_multiplexer const& other)
 {
-	if (!other.m_shared_object)
+	if (!other.m_shared_state)
 	{
 		return vsm::unexpected(error::invalid_argument);
 	}
 
-	return vsm_lazy(iocp_multiplexer(other.m_shared_object));
+	return vsm_lazy(iocp_multiplexer(other.m_shared_state));
 }
 
-iocp_multiplexer::iocp_multiplexer(vsm::intrusive_ptr<shared_object> shared_object)
-	: m_shared_object(vsm_move(shared_object))
-	, m_completion_port(m_shared_object->completion_port.get())
+iocp_multiplexer::iocp_multiplexer(vsm::intrusive_ptr<shared_state_t> shared_state)
+	: m_shared_state(vsm_move(shared_state))
+	, m_completion_port(m_shared_state->completion_port.get())
 {
 }
 
@@ -99,18 +94,27 @@ static vsm::result<void> set_completion_information(HANDLE const handle, HANDLE 
 	return {};
 }
 
-vsm::result<void> iocp_multiplexer::attach(context& c, platform_handle const& h)
-{
-	return set_completion_information(unwrap_handle(h.get_platform_handle()), m_completion_port.get());
+vsm::result<void> iocp_multiplexer::attach(platform_handle const& h, connector_type& c)
+{ 
+	return set_completion_information(unwrap_handle(h.get_platform_handle()), m_completion_port.value);
 }
 
-vsm::result<void> iocp_multiplexer::detach(context& c, platform_handle const& h)
+void iocp_multiplexer::detach(platform_handle const& h, connector_type& c, error_handler* const e)
 {
-	return set_completion_information(unwrap_handle(h.get_platform_handle()), NULL);
+	auto const r = set_completion_information(unwrap_handle(h.get_platform_handle()), NULL);
+
+	if (!r)
+	{
+		get_error_handler(e).handle_error(
+		{
+			.error = r.error(),
+			.source = error_source{},
+		});
+	}
 }
 
 
-vsm::result<bool> iocp_multiplexer::cancel_io(io_slot& slot, native_platform_handle const handle)
+bool iocp_multiplexer::cancel_io(io_slot& slot, native_platform_handle const handle)
 {
 	//TODO: This is a undefined behaviour...
 	IO_STATUS_BLOCK& io_status_block = *static_cast<iocp_multiplexer::io_status_block&>(slot);
@@ -125,18 +129,18 @@ vsm::result<bool> iocp_multiplexer::cancel_io(io_slot& slot, native_platform_han
 		unwrap_handle(handle),
 		&io_status_block,
 		&io_status_block);
-	
-	if (status == STATUS_NOT_FOUND)
+
+	if (NT_SUCCESS(status))
 	{
-		return false;
+		return true;
 	}
 
-	if (!NT_SUCCESS(status))
+	if (status != STATUS_NOT_FOUND)
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		unrecoverable_error(static_cast<kernel_error>(status));
 	}
 
-	return true;
+	return false;
 }
 
 
@@ -225,12 +229,12 @@ vsm::result<unique_wait_packet> iocp_multiplexer::acquire_wait_packet()
 	return create_wait_packet();
 }
 
-vsm::result<void> iocp_multiplexer::release_wait_packet(unique_wait_packet& packet)
+void iocp_multiplexer::release_wait_packet(unique_wait_packet&& packet)
 {
-	return {};
+	packet.reset();
 }
 
-vsm::result<bool> iocp_multiplexer::submit_wait(wait_slot& slot, unique_wait_packet& packet, native_platform_handle const handle)
+vsm::result<void> iocp_multiplexer::submit_wait(wait_slot& slot, unique_wait_packet& packet, native_platform_handle const handle)
 {
 	if (!packet)
 	{
@@ -239,36 +243,24 @@ vsm::result<bool> iocp_multiplexer::submit_wait(wait_slot& slot, unique_wait_pac
 
 	vsm_try(already_signaled, associate_wait_packet(
 		unwrap_wait_packet(packet.get()),
-		m_completion_port.get(),
+		m_completion_port.value,
 		unwrap_handle(handle),
 		/* key_context: */ nullptr,
 		&slot,
 		STATUS_SUCCESS,
 		/* completion_information: */ 0,
-		/* may_complete_synchronously: */ true));
+		/* may_complete_synchronously: */ false));
 
-	if (already_signaled)
-	{
-		slot.Status = STATUS_SUCCESS;
-		unrecoverable(release_wait_packet(packet));
-	}
-	else
-	{
-		slot.Status = STATUS_PENDING;
-	}
-
-	return already_signaled;
+	return {};
 }
 
-vsm::result<bool> iocp_multiplexer::cancel_wait(wait_slot& slot, unique_wait_packet& packet)
+bool iocp_multiplexer::cancel_wait(wait_slot& slot, unique_wait_packet& packet)
 {
-	vsm_try(cancelled, cancel_wait_packet(
-		unwrap_wait_packet(packet.get()),
-		/* remove_queued_completion: */ false));
-
-	unrecoverable(release_wait_packet(packet));
-	
-	return cancelled;
+	return unrecoverable(
+		cancel_wait_packet(
+			unwrap_wait_packet(packet.get()),
+			/* remove_queued_completion: */ false),
+		/* default_value: */ false);
 }
 
 
@@ -324,6 +316,7 @@ vsm::result<bool> iocp_multiplexer::poll(poll_parameters const& args)
 	poll_mode const mode = args.mode;
 	deadline deadline = args.deadline;
 
+#if 0
 	if (vsm::any_flags(mode, poll_mode::flush))
 	{
 		if (flush(local_poll_statistics(args.statistics)))
@@ -332,6 +325,7 @@ vsm::result<bool> iocp_multiplexer::poll(poll_parameters const& args)
 			deadline = deadline::instant();
 		}
 	}
+#endif
 
 	if (vsm::any_flags(mode, poll_mode::complete))
 	{
@@ -339,7 +333,7 @@ vsm::result<bool> iocp_multiplexer::poll(poll_parameters const& args)
 
 		//TODO: Pass more than one depending on how many operations have been submitted.
 		vsm_try(entry_count, remove_io_completions(
-			m_completion_port.get(),
+			m_completion_port.value,
 			std::span(entries, 1),
 			deadline));
 		

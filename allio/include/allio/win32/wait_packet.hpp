@@ -1,5 +1,7 @@
 #pragma once
 
+#include <allio/win32/detail/unique_handle.hpp>
+
 #include <vsm/unique_resource.hpp>
 
 #include <bit>
@@ -26,7 +28,10 @@ inline detail::HANDLE unwrap_wait_packet(wait_packet const handle)
 
 struct wait_packet_deleter
 {
-	void vsm_static_operator_invoke(wait_packet const wait_packet);
+	void vsm_static_operator_invoke(wait_packet const wait_packet)
+	{
+		detail::close_handle(unwrap_wait_packet(wait_packet));
+	}
 };
 
 using unique_wait_packet = vsm::unique_resource<wait_packet, wait_packet_deleter, wait_packet::null>;

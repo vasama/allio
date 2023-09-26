@@ -374,6 +374,12 @@ extern NTSTATUS(NTAPI* NtCancelIoFileEx)(
 	_Out_ PIO_STATUS_BLOCK IoRequestToCancel,
 	_Out_ PIO_STATUS_BLOCK IoStatusBlock);
 
+extern NTSTATUS(NTAPI* NtCreateIoCompletion)(
+	_Out_ PHANDLE IoCompletionHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_opt_ ULONG Count);
+
 extern NTSTATUS(NTAPI* NtRemoveIoCompletion)(
 	_In_ HANDLE IoCompletionHandle,
 	_Out_ PVOID *CompletionKey,

@@ -30,7 +30,7 @@ struct basic_io_result : io_result
 class io_reaper
 {
 public:
-	virtual void reap(operation_base& s, io_result&& result);
+	virtual void reap(operation_base& s, io_result&& result) = 0;
 };
 
 class operation_base
@@ -118,10 +118,10 @@ inline constexpr cancel_io_t cancel_io = {};
 struct reap_io_t
 {
 	template<typename M, typename H, typename C, typename S>
-	std::error_code vsm_static_operator_invoke(M& m, H& h, C& c, S& s)
-		requires vsm::tag_invocable<reap_io_t, M&, H&, C&, S&>
+	std::error_code vsm_static_operator_invoke(M& m, H& h, C& c, S& s, io_result&& r)
+		requires vsm::tag_invocable<reap_io_t, M&, H&, C&, S&, io_result&&>
 	{
-		return vsm::tag_invoke(reap_io_t(), m, h, c, s);
+		return vsm::tag_invoke(reap_io_t(), m, h, c, s, vsm_move(r));
 	}
 };
 inline constexpr reap_io_t reap_io = {};
@@ -174,6 +174,11 @@ private:
 	friend vsm::result<void> tag_invoke(submit_io_t, M& m, H const& h, C const& c, S& s)
 	{
 		return operation_impl<M, H, O>::submit(m, h, c, s);
+	}
+	
+	friend std::error_code tag_invoke(reap_io_t, M& m, H const& h, C const& c, S& s, io_result&& r)
+	{
+		return operation_impl<M, H, O>::reap(m, h, c, s, vsm_move(r));
 	}
 
 	friend void tag_invoke(cancel_io_t, M& m, H const& h, C const& c, S& s, error_handler* const e)
