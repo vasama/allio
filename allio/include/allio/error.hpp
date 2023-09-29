@@ -74,6 +74,7 @@ enum class error
 	handle_is_null,
 	handle_is_not_null,
 	handle_is_not_multiplexable,
+	multiplexer_is_null,
 	process_arguments_too_long,
 	process_is_current_process,
 	invalid_path,

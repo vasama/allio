@@ -13,6 +13,17 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
+namespace {
+
+enum class key_context : uintptr_t
+{
+	generic,
+	wait_packet,
+};
+
+} // namespace
+
+
 static vsm::result<unique_handle> create_completion_port(size_t const max_concurrent_threads)
 {
 	HANDLE handle;
@@ -32,6 +43,8 @@ static vsm::result<unique_handle> create_completion_port(size_t const max_concur
 
 vsm::result<iocp_multiplexer> iocp_multiplexer::_create(create_parameters const& args)
 {
+	vsm_try_void(kernel_init());
+
 	if (args.max_concurrent_threads == 0)
 	{
 		return vsm::unexpected(error::invalid_argument);
@@ -62,29 +75,27 @@ iocp_multiplexer::iocp_multiplexer(vsm::intrusive_ptr<shared_state_t> shared_sta
 }
 
 
-static vsm::result<void> set_completion_information(HANDLE const handle, HANDLE const port)
+static vsm::result<void> set_completion_information(
+	HANDLE const handle,
+	HANDLE const completion_port,
+	void* const key_context)
 {
 	IO_STATUS_BLOCK io_status_block = make_io_status_block();
 
 	FILE_COMPLETION_INFORMATION file_completion_information =
 	{
-		.Port = port,
-		.Key = nullptr,
+		.Port = completion_port,
+		.Key = key_context,
 	};
 
-	NTSTATUS status = NtSetInformationFile(
+	NTSTATUS const status = NtSetInformationFile(
 		handle,
 		&io_status_block,
 		&file_completion_information,
 		sizeof(file_completion_information),
-		port != nullptr
+		completion_port != nullptr
 			? FileCompletionInformation
 			: FileReplaceCompletionInformation);
-
-	if (status == STATUS_PENDING)
-	{
-		status = io_wait(handle, &io_status_block, deadline());
-	}
 
 	if (!NT_SUCCESS(status))
 	{
@@ -96,12 +107,18 @@ static vsm::result<void> set_completion_information(HANDLE const handle, HANDLE 
 
 vsm::result<void> iocp_multiplexer::attach(platform_handle const& h, connector_type& c)
 { 
-	return set_completion_information(unwrap_handle(h.get_platform_handle()), m_completion_port.value);
+	return set_completion_information(
+		unwrap_handle(h.get_platform_handle()),
+		m_completion_port.value,
+		std::bit_cast<void*>(key_context::generic));
 }
 
 void iocp_multiplexer::detach(platform_handle const& h, connector_type& c, error_handler* const e)
 {
-	auto const r = set_completion_information(unwrap_handle(h.get_platform_handle()), NULL);
+	auto const r = set_completion_information(
+		unwrap_handle(h.get_platform_handle()),
+		NULL,
+		nullptr);
 
 	if (!r)
 	{
@@ -116,19 +133,28 @@ void iocp_multiplexer::detach(platform_handle const& h, connector_type& c, error
 
 bool iocp_multiplexer::cancel_io(io_slot& slot, native_platform_handle const handle)
 {
-	//TODO: This is a undefined behaviour...
-	IO_STATUS_BLOCK& io_status_block = *static_cast<iocp_multiplexer::io_status_block&>(slot);
+	size_t const io_status_block_offset = io_status_block::get_storage_offset();
+	static_assert(io_status_block_offset == overlapped::get_storage_offset());
 
-	if (io_status_block.Status != STATUS_PENDING)
+	void* const isb = reinterpret_cast<void*>(
+		reinterpret_cast<uintptr_t>(&slot) + io_status_block_offset);
+
+#if 0
+	// This copy may cause a data race if the kernel writes the ISB.
+	//TODO: Figure out if this is worthwhile, and if so, do it atomically.
+	IO_STATUS_BLOCK isb_copy;
+	memcpy(&isb_copy, isb, sizeof(IO_STATUS_BLOCK));
+
+	if (isb_copy.Status != STATUS_PENDING)
 	{
 		return {};
 	}
-	
-	//TODO: Does NtCancelIoFileEx behave as documented by CancelIoEx?
+#endif
+
 	NTSTATUS const status = NtCancelIoFileEx(
 		unwrap_handle(handle),
-		&io_status_block,
-		&io_status_block);
+		reinterpret_cast<IO_STATUS_BLOCK*>(isb),
+		reinterpret_cast<IO_STATUS_BLOCK*>(isb));
 
 	if (NT_SUCCESS(status))
 	{
@@ -144,12 +170,14 @@ bool iocp_multiplexer::cancel_io(io_slot& slot, native_platform_handle const han
 }
 
 
+static constexpr ACCESS_MASK wait_packet_all_access = 1;
+
 static vsm::result<unique_wait_packet> create_wait_packet()
 {
 	HANDLE packet;
 	NTSTATUS const status = NtCreateWaitCompletionPacket(
 		&packet,
-		/* DesiredAccess: */ 0,
+		wait_packet_all_access,
 		/* ObjectAttributes: */ nullptr);
 
 	if (!NT_SUCCESS(status))
@@ -234,31 +262,29 @@ void iocp_multiplexer::release_wait_packet(unique_wait_packet&& packet)
 	packet.reset();
 }
 
-vsm::result<void> iocp_multiplexer::submit_wait(wait_slot& slot, unique_wait_packet& packet, native_platform_handle const handle)
+vsm::result<bool> iocp_multiplexer::submit_wait(
+	wait_packet const packet,
+	wait_slot& slot,
+	native_platform_handle const handle)
 {
-	if (!packet)
-	{
-		vsm_try_assign(packet, acquire_wait_packet());
-	}
+	vsm_assert(slot.m_operation != nullptr);
 
-	vsm_try(already_signaled, associate_wait_packet(
-		unwrap_wait_packet(packet.get()),
+	return associate_wait_packet(
+		unwrap_wait_packet(packet),
 		m_completion_port.value,
 		unwrap_handle(handle),
-		/* key_context: */ nullptr,
+		std::bit_cast<void*>(key_context::wait_packet),
 		&slot,
 		STATUS_SUCCESS,
 		/* completion_information: */ 0,
-		/* may_complete_synchronously: */ false));
-
-	return {};
+		/* may_complete_synchronously: */ true);
 }
 
-bool iocp_multiplexer::cancel_wait(wait_slot& slot, unique_wait_packet& packet)
+bool iocp_multiplexer::cancel_wait(wait_packet const packet)
 {
 	return unrecoverable(
 		cancel_wait_packet(
-			unwrap_wait_packet(packet.get()),
+			unwrap_wait_packet(packet),
 			/* remove_queued_completion: */ false),
 		/* default_value: */ false);
 }
@@ -309,7 +335,7 @@ static vsm::result<size_t> remove_io_completions(
 	return num_entries_removed;
 }
 
-vsm::result<bool> iocp_multiplexer::poll(poll_parameters const& args)
+vsm::result<bool> iocp_multiplexer::_poll(poll_parameters const& args)
 {
 	bool made_progress = false;
 
@@ -342,12 +368,40 @@ vsm::result<bool> iocp_multiplexer::poll(poll_parameters const& args)
 			made_progress = true;
 			for (auto const& entry : std::span(entries, entry_count))
 			{
-				//TODO: Think about this. It's a bit sus.
-				io_slot* const slot = static_cast<io_status_block*>(
-					reinterpret_cast<basic_io_slot_storage<IO_STATUS_BLOCK>*>(entry.ApcContext));
+				switch (std::bit_cast<key_context>(entry.KeyContext))
+				{
+				case key_context::generic:
+					{
+						size_t const io_status_block_offset = io_status_block::get_storage_offset();
+						static_assert(io_status_block_offset == overlapped::get_storage_offset());
 
-				vsm_assert(slot->m_operation != nullptr);
-				slot->m_operation->m_io_handler(*this, *slot->m_operation, *slot);
+						io_slot& slot = *std::launder(reinterpret_cast<io_slot*>(
+							reinterpret_cast<uintptr_t>(entry.ApcContext) - io_status_block_offset));
+
+						vsm_assert(slot.m_operation != nullptr);
+						operation_type& operation = *slot.m_operation;
+
+						operation.notify(wrap_io_status(slot));
+					}
+					break;
+
+				case key_context::wait_packet:
+					{
+						wait_slot& slot = *static_cast<wait_slot*>(entry.ApcContext);
+
+						vsm_assert(slot.m_operation != nullptr);
+						operation_type& operation = *slot.m_operation;
+
+						wait_status status =
+						{
+							.slot = slot,
+							.status = entry.IoStatusBlock.Status,
+						};
+						operation.notify(wrap_io_status(status));
+					}
+					break;
+				}
+
 			}
 		}
 	}

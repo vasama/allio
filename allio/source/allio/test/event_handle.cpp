@@ -1,6 +1,12 @@
 #include <allio/event_handle.hpp>
 
+//#include <allio/opaque_handle.hpp>
+#include <allio/sync_wait.hpp>
+
 #include <vsm/atomic.hpp>
+
+#include <exec/async_scope.hpp>
+#include <exec/single_thread_context.hpp>
 
 #include <catch2/catch_all.hpp>
 
@@ -8,7 +14,7 @@
 #include <vector>
 
 using namespace allio;
-//namespace ex = allio::detail::ex;
+namespace ex = stdexec;
 
 #if 0
 namespace {
@@ -95,13 +101,8 @@ auto root(Sender&& sender)
 } // namespace
 #endif
 
-static vsm::result<bool> wait(event_handle const& event, deadline const deadline)
+static vsm::result<bool> check_timeout(vsm::result<void> const r)
 {
-	auto const r = event.wait(
-	{
-		.deadline = deadline,
-	});
-
 	if (r)
 	{
 		return true;
@@ -115,6 +116,11 @@ static vsm::result<bool> wait(event_handle const& event, deadline const deadline
 	return vsm::unexpected(r.error());
 }
 
+static vsm::result<bool> wait(event_handle const& event, deadline const deadline)
+{
+	return check_timeout(event.wait({ .deadline = deadline }));
+}
+
 static event_handle::reset_mode get_reset_mode(bool const manual_reset)
 {
 	return manual_reset
@@ -122,7 +128,13 @@ static event_handle::reset_mode get_reset_mode(bool const manual_reset)
 		: event_handle::auto_reset;
 }
 
-TEST_CASE("basic signaling", "[event_handle]")
+static event_handle::reset_mode generate_reset_mode()
+{
+	return get_reset_mode(GENERATE(false, true));
+}
+
+
+TEST_CASE("basic signaling", "[event_handle][blocking]")
 {
 	bool const manual_reset = GENERATE(0, 1);
 	bool is_signaled = GENERATE(0, 1);
@@ -134,9 +146,9 @@ TEST_CASE("basic signaling", "[event_handle]")
 
 	REQUIRE(event);
 
-	auto const wait = [&]()
+	auto const wait = [&]() -> bool
 	{
-		return ::wait(event, deadline::instant());
+		return ::wait(event, deadline::instant()).value();
 	};
 
 	if (GENERATE(0, 1))
@@ -170,7 +182,7 @@ TEST_CASE("basic signaling", "[event_handle]")
 	is_signaled &= manual_reset;
 }
 
-TEST_CASE("concurrent signaling", "[event_handle]")
+TEST_CASE("concurrent signaling", "[event_handle][blocking]")
 {
 	event_handle const event = create_event(event_handle::manual_reset).value();
 
@@ -180,10 +192,10 @@ TEST_CASE("concurrent signaling", "[event_handle]")
 		event.signal().value();
 	});
 
-	REQUIRE(wait(event, std::chrono::milliseconds(1000)));
+	REQUIRE(wait(event, std::chrono::seconds(1)));
 }
 
-TEST_CASE("concurrent fighting", "[event_handle]")
+TEST_CASE("concurrent fighting", "[event_handle][blocking]")
 {
 	//TODO: Pick thread count based on CPU count.
 	static constexpr size_t const thread_count = 4;
@@ -259,204 +271,145 @@ TEST_CASE("concurrent fighting", "[event_handle]")
 	REQUIRE(signals_observed.load(std::memory_order_acquire) == signal_count);
 }
 
-template<typename L>
-class basic_reaper : public detail::io_reaper
+#if 0
+TEST_CASE("opaque signaling", "[event_handle][opaque_handle][blocking]")
 {
-	L m_l;
+	event_handle const event = create_event(event_handle::manual_reset).value();
+	opaque_handle const opaque = make_opaque_handle(get_opaque_handle(event));
 
-public:
-	basic_reaper(auto&& l)
-		: m_l(vsm_forward(l))
+	auto const poll = [&]() -> bool
 	{
-	}
+		return check_timeout(opaque.poll({ .deadline = deadline::instant() })).value();
+	};
 
-private:
-	void reap(detail::operation_base& s, detail::io_result&& r) override
-	{
-		m_l(s, vsm_move(r));
-	}
-};
-
-template<typename L>
-basic_reaper(L&&) -> basic_reaper<std::decay_t<L>>;
-
-TEST_CASE("temp async")
-{
-	default_multiplexer multiplexer = default_multiplexer::create().value();
-	event_handle event = create_event(event_handle::auto_reset, { .multiplexable = true }).value();
-
-	detail::connector_t<default_multiplexer, event_handle::base_type> connector;
-	detail::attach_handle(multiplexer, event, connector).value();
-
-	using operation_type = detail::operation_t<default_multiplexer, event_handle::base_type, event_handle::wait_t>;
-
-	std::optional<std::error_code> result;
-	basic_reaper reaper([&](detail::operation_base& s, detail::io_result&& r)
-	{
-		result = detail::reap_io(multiplexer, event, connector, static_cast<operation_type&>(s), vsm_move(r));
-	});
-
-	detail::io_parameters<event_handle::wait_t> args{};
-	operation_type operation(reaper, args);
-	detail::submit_io(multiplexer, event, connector, operation).value();
-
-	multiplexer.poll();
-	REQUIRE(!result);
+	REQUIRE(!poll());
 
 	event.signal().value();
-	REQUIRE(!result);
+	REQUIRE(poll());
 
-	multiplexer.poll();
-	REQUIRE(result);
-	REQUIRE(!*result);
+	event.reset().value();
+	REQUIRE(!poll());
+
+	event.signal().value();
+	REQUIRE(poll());
 }
-
-#if 0
-#include <tuple>
-#include <variant>
-
-namespace __detach_future {
-
-template<typename... Ts>
-class detach_future
-{
-	using tuple_type = std::tuple<Ts...>;
-
-	using variant_type = std::variant
-	<
-		std::monostate,
-		tuple_type,
-		std::error_code
-	>;
-
-	std::shared_ptr<variant_type> m_variant;
-
-public:
-	explicit detach_future(auto&& sender)
-		: m_variant(std::make_shared<variant_type>())
-	{
-		execution::start_detached(
-			vsm_forward(sender)
-			| future_exec::then([variant = m_variant](auto&& value)
-			{
-				variant->emplace<T>(vsm_forward(value));
-			})
-		);
-	}
-
-	tuple_type& get()
-	{
-		vsm_assert(std::holds_alternative<tuple_type>(*m_variant));
-		return std::get<tuple_type>(*m_variant);
-	}
-
-	tuple_type const& get() const
-	{
-		vsm_assert(std::holds_alternative<tuple_type>(*m_variant));
-		return std::get<tuple_type>(*m_variant);
-	}
-
-	explicit operator bool() const
-	{
-		return !std::holds_alternative<std::monostate>(*m_variant);
-	}
-};
-
-template<typename Sender, typename Continuation>
-using x = __value_types_of_t<Sender, no_env, __transform<__q<__decay_t>, __q<Continuation>>, __q<__msingle>>;
-
-template<typename Sender>
-static auto detach(Sender&& sender)
-{
-	using future_type = x<Sender&&, __q<detach_future>>;
-	return future_type(vsm_forward(sender));
-}
-
-} // namespace __detach_future
-
-using  __detach_future::detach;
 #endif
 
-#if 0
-template<typename Sender>
-static auto detach(async_scope& scope, Sender&& sender)
-{
-	
 
-	scope.detach(
-		vsm_forward(sender) |
-		exec::then([](auto&&...)
-		{
-
-		})
-	);
-}
-
-TEST_CASE("async signaling", "[event_handle]")
+TEST_CASE("async signaling", "[event_handle][async]")
 {
 	bool const manual_reset = GENERATE(0, 1);
 
-	auto multiplexer = create_default_multiplexer().value();
-	auto event = create_event(get_reset_mode(manual_reset), { .multiplexable = true }).value();
-	event.set_multiplexer(multiplexer).value();
+	CAPTURE(manual_reset);
+
+	default_multiplexer multiplexer = default_multiplexer::create().value();
+	async_event_handle const event =
+		create_event(get_reset_mode(manual_reset)).value()
+		.with_multiplexer(&multiplexer).value();
+
+	class shared_bool
+	{
+		std::shared_ptr<bool> m_ptr;
+
+	public:
+		explicit shared_bool(std::shared_ptr<bool> ptr)
+			: m_ptr(vsm_move(ptr))
+		{
+		}
+
+		operator bool() const
+		{
+			return *m_ptr;
+		}
+	};
+
+	auto const wait_detached = [&](exec::async_scope& scope) -> shared_bool
+	{
+		std::shared_ptr<bool> ptr = std::make_shared<bool>(false);
+		(void)scope.spawn_future(event.wait_async() | ex::then([ptr]()
+		{
+			*ptr = true;
+		}));
+		return shared_bool(vsm_move(ptr));
+	};
 
 	{
-		async_scope scope;
-		auto future = detach(scope, event.wait_async());
-		REQUIRE(!future);
+		exec::async_scope scope;
+		auto const signaled = wait_detached(scope);
+		REQUIRE(!signaled);
 
-		multiplexer.poll().value();
-		REQUIRE(!future);
+		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
+		REQUIRE(!signaled);
 
 		event.signal().value();
-		REQUIRE(!future);
+		REQUIRE(!signaled);
 
-		multiplexer.poll().value();
-		REQUIRE(future);
+		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
+		REQUIRE(signaled);
 
-		multiplexer.poll().value();
-		REQUIRE(future);
+		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
+		REQUIRE(signaled);
 	}
 
 	{
-		async_scope scope;
-		auto future = detach(scope, event.wait_async());
-		REQUIRE(!future);
+		exec::async_scope scope;
+		auto const signaled = wait_detached(scope);
 
-		multiplexer.poll().value();
-		REQUIRE(static_cast<bool>(future) == manual_reset);
+		if (!manual_reset)
+		{
+			REQUIRE(!signaled);
+		}
+
+		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
+		REQUIRE(signaled == manual_reset);
 
 		if (!manual_reset)
 		{
 			event.signal().value();
-			REQUIRE(!future);
+			REQUIRE(!signaled);
 		}
 
-		multiplexer.poll().value();
-		REQUIRE(future);
+		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
+		REQUIRE(signaled);
 
-		multiplexer.poll().value();
-		REQUIRE(future);
+		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
+		REQUIRE(signaled);
 	}
 
 	{
 		event.reset().value();
 
-		async_scope scope;
-		auto future = detach(scope, event.wait_async());
-		REQUIRE(!future);
+		exec::async_scope scope;
+		auto const signaled = wait_detached(scope);
+		REQUIRE(!signaled);
 
-		multiplexer.poll().value();
-		REQUIRE(!future);
+		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
+		REQUIRE(!signaled);
 
 		event.signal().value();
-		REQUIRE(!future);
+		REQUIRE(!signaled);
 
-		multiplexer.poll().value();
-		REQUIRE(future);
+		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
+		REQUIRE(signaled);
 
-		multiplexer.poll().value();
-		REQUIRE(future);
+		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
+		REQUIRE(signaled);
 	}
 }
-#endif
+
+TEST_CASE("async concurrent signaling", "[event_handle][async]")
+{
+	default_multiplexer multiplexer = default_multiplexer::create().value();
+	async_event_handle const event =
+		create_event(generate_reset_mode()).value()
+		.with_multiplexer(&multiplexer).value();
+
+	exec::single_thread_context signal_context;
+	auto signal_sender = ex::on(signal_context.get_scheduler(), ex::just() | ex::then([&event]()
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		event.signal().value();
+	}));
+
+	sync_wait(multiplexer, ex::when_all(event.wait_async(), signal_sender));
+}

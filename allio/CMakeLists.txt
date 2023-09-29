@@ -80,10 +80,12 @@ vsm_add_library2(allio
 		source/allio/test/filesystem.hpp
 		#source/allio/test/map_handle.cpp
 		source/allio/test/multiplexer.hpp
+		source/allio/test/opaque_handle.cpp
 		source/allio/test/path_view.cpp
 		#source/allio/test/process_handle.cpp
 		source/allio/test/reverse_iterator.hpp
 		#source/allio/test/socket_handle.cpp
+		source/allio/test/sync_wait.cpp
 		source/allio/test/task.hpp
 )
 

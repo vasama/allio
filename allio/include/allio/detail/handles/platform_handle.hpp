@@ -19,7 +19,6 @@ public:
 
 	#define allio_platform_handle_create_parameters(type, data, ...) \
 		type(allio::detail::platform_handle, create_parameters) \
-		data(bool, multiplexable, false) \
 
 	allio_interface_parameters(allio_platform_handle_create_parameters);
 

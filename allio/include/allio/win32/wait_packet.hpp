@@ -10,6 +10,7 @@
 
 namespace allio::win32 {
 
+//TODO: Use uint32_t instead.
 enum class wait_packet : uintptr_t
 {
 	null = 0

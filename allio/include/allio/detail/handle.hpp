@@ -142,7 +142,7 @@ protected:
 		}
 	};
 
-	template<typename M, typename H>
+	template<typename H>
 	struct async_interface
 	{
 		//template<parameters<close_parameters> P = close_parameters::interface>
@@ -295,7 +295,7 @@ template<typename H, typename M>
 class basic_async_handle final
 	: public H
 	, public H::template sync_interface<basic_async_handle<H, M>>
-	, public H::template async_interface<multiplexer_t<M>, basic_async_handle<H, M>>
+	, public H::template async_interface<basic_async_handle<H, M>>
 {
 	using handle_type = basic_handle<H>;
 
@@ -324,7 +324,7 @@ public:
 	}
 
 	template<std::convertible_to<M> T = M>
-		requires no_cvref_of<T, basic_async_handle>
+		requires vsm::no_cvref_of<T, basic_async_handle>
 	explicit basic_async_handle(T&& multiplexer)
 		: m_multiplexer(vsm_forward(multiplexer))
 	{
@@ -438,7 +438,7 @@ private:
 	{
 		if (m_multiplexer)
 		{
-			vsm_try_void(m_multiplexer->attach(static_cast<H const&>(handle), m_connector));
+			vsm_try_void(attach_handle(*m_multiplexer, static_cast<H const&>(handle), m_connector));
 		}
 
 		this->H::operator=(static_cast<H&&>(handle));
@@ -449,7 +449,7 @@ private:
 	{
 		if (m_multiplexer)
 		{
-			m_multiplexer->detach(static_cast<H const&>(*this), m_connector, nullptr);
+			detach_handle(*m_multiplexer, static_cast<H const&>(*this), m_connector);
 		}
 
 		handle.H::operator=(static_cast<H&&>(*this));
@@ -467,6 +467,25 @@ private:
 
 			H::close(error_handler);
 		}
+	}
+
+
+	template<typename S>
+	friend vsm::result<submit_result> tag_invoke(submit_io_t, basic_async_handle const& h, S& s)
+	{
+		return submit_io(*h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s);
+	}
+
+	template<typename S>
+	friend vsm::result<submit_result> tag_invoke(notify_io_t, basic_async_handle const& h, S& s, io_status* const status)
+	{
+		return notify_io(*h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s, status);
+	}
+
+	template<typename S>
+	friend void tag_invoke(cancel_io_t, basic_async_handle const& h, S& s)
+	{
+		return cancel_io(*h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s);
 	}
 
 

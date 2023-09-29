@@ -28,6 +28,7 @@ struct peb_context
 		return { process_parameters.CurrentDirectoryHandle, { beg, end } };
 	}
 
+	// Scan the environment variables for a variable named '=X:', where X is the drive letter.
 	static std::optional<path_section<wchar_t>> get_current_directory_on_drive(unique_lock_type const& lock, wchar_t const drive)
 	{
 		vsm_assert(L'A' <= drive && drive <= L'Z');
@@ -38,17 +39,19 @@ struct peb_context
 
 		while (*environment)
 		{
-			wchar_t const* const var_beg = environment;
-			wchar_t const* const var_end = std::wcschr(environment, L'=');
-			wchar_t const* const val_end = var_beg + std::wcslen(var_end);
+			wchar_t const* const beg = environment;
+			wchar_t const* const end = beg + std::wcslen(beg);
 
-			if (var_end != nullptr && var_end - var_beg == 3 &&
-				var_beg[0] == L'=' && var_beg[1] == drive && var_beg[2] == L':')
+			if (end - beg > 4 &&
+				beg[0] == L'=' &&
+				beg[1] == drive &&
+				beg[2] == L':' &&
+				beg[3] == L'=')
 			{
-				return path_section{ var_end + 1, val_end };
+				return path_section{ beg + 4, end };
 			}
 
-			environment = val_end + 1;
+			environment = end + 1;
 		}
 
 		return std::nullopt;

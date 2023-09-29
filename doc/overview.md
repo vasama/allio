@@ -20,4 +20,4 @@ A multiplexer represents a mechanism for submitting asynchronous operations on h
 Some examples of concrete root multiplexer types:
 * `win32::iocp_multiplexer`: A Windows specific multiplexer employing the I/O Completion Port API.
 * `linux::io_uring_multiplexer`: A Linux specific multiplexer employing the io_uring API.
-* `manual_multiplexer`: A generic multiplexer which leaves signalling of operation completion to the user. One use case is in freestanding applications where completion may be signalled by an interrupt handler.
+* `manual_multiplexer`: A generic multiplexer which leaves signalling of operation completion to the user. One use case is in freestanding applications where completion may be signaled by an interrupt handler.

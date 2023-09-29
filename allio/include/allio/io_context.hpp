@@ -1,41 +1,26 @@
 #pragma once
 
-#include <allio/detail/execution.hpp>
-#include <allio/detail/handles/event_handle.hpp>
+#include <allio/default_multiplexer.hpp>
+#include <allio/detail/io_context.hpp>
 
-#include <vsm/intrusive/list.hpp>
+#include <vsm/box.hpp>
 
 namespace allio {
 namespace detail {
 
-template<typename Context>
-class io_scheduler
+template<typename T>
+class inline_ptr
 {
 	
 };
 
-template<typename Multiplexer>
-class io_context
-{
-	struct sender_link : vsm::intrusive::list_link {};
-
-	class sender : sender_link
-	{
-		
-	};
-
-	Multiplexer m_multiplexer;
-
-	vsm::intrusive::list<sender_link> m_list;
-	basic_event_handle<Multiplexer*> m_event;
-
-public:
-	explicit io_context(Multiplexer multiplexer)
-		: m_multiplexer(vsm_move(multiplexer))
-		, m_event(&*m_multiplexer)
-	{
-	}
-};
-
 } // namespace detail
+
+using detail::basic_io_context;
+
+/// @brief Default execution context for I/O.
+///        Uses an internal @ref default_multiplexer for asynchronous I/O.
+///        Uses an internal @ref basic_event_queue for multiplexer aware work scheduling.
+using io_context = basic_io_context<inline_ptr<default_multiplexer>>;
+
 } // namespace allio

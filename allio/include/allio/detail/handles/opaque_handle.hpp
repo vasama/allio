@@ -7,21 +7,15 @@
 
 #include <vsm/unique_resource.hpp>
 
+#include <functional>
+
 namespace allio::detail {
 
-/// @brief ABI-stable native handle type for asynchronous polling
-///        across ABI boundaries such as dynamically linked libraries.
-///        Instead of exposing allio types in your dynamic library ABI,
-///        return a native_opaque_handle instead and wrap it afterwards
-///        in @ref opaque_handle for RAII.
-using native_opaque_handle = allio_opaque_handle;
-
+template<typename Version>
 using unique_opaque_handle = vsm::unique_resource<
-	native_opaque_handle,
-	vsm::function<void(native_opaque_handle)>;
+	Version,
+	std::function<void(Version)>;
 
-
-namespace detail {
 
 class _opaque_handle : public handle
 {
@@ -34,7 +28,7 @@ private:
 public:
 	struct native_handle_type : base_type::native_handle_type
 	{
-		native_opaque_handle native_handle;
+		opaque_handle_v1 native_handle;
 	};
 
 	[[nodiscard]] native_handle_type get_native_handle() const
@@ -53,7 +47,7 @@ public:
 	}
 
 
-	struct poll_tag;
+	struct poll_t;
 	using poll_parameters = deadline_parameters;
 
 
@@ -62,7 +56,7 @@ public:
 		base_type::async_operations,
 		type_list
 		<
-			poll_tag
+			poll_t
 		>
 	>;
 
@@ -92,15 +86,16 @@ protected:
 	struct async_interface
 	{
 		template<parameters<poll_parameters> P = poll_parameters::interface>
-		basic_sender<M, H, poll_tag> poll_async(P const& args = {}) const;
+		io_sender<H, poll_t> poll_async(P const& args = {}) const;
 	};
 };
-
-} // namespace detail
 
 using opaque_handle = basic_handle<detail::_opaque_handle>;
 
 template<typename Multiplexer>
 using basic_opaque_handle = async_handle<detail::_opaque_handle, Multiplexer>;
 
-} // namespace allio
+
+opaque_handle make_opaque_handle(opaque_handle_v1 const native);
+
+} // namespace allio::detail

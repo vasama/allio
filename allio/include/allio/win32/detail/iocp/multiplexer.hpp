@@ -20,11 +20,10 @@ namespace allio::detail {
 class iocp_multiplexer final
 {
 public:
-	class io_slot;
-
+#if 0
 	class operation
 	{
-		void(*m_io_handler)(iocp_multiplexer& m, operation& s, io_slot& slot) noexcept = nullptr;
+		void(*m_io_callback)(iocp_multiplexer& m, operation& s, io_slot& slot) noexcept = nullptr;
 
 	public:
 		template<std::derived_from<operation> S>
@@ -40,13 +39,34 @@ public:
 	private:
 		friend class iocp_multiplexer;
 	};
+#endif
+
+	class connector_type
+	{
+	};
+
+	class operation_type : public operation_base
+	{
+	protected:
+		using operation_base::operation_base;
+
+		operation_type(operation_type const&) = default;
+		operation_type& operator=(operation_type const&) = default;
+
+		~operation_type() = default;
+
+	private:
+		using operation_base::notify;
+
+		friend class iocp_multiplexer;
+	};
 
 	class io_slot
 	{
-		operation* m_operation = nullptr;
+		operation_type* m_operation = nullptr;
 
 	public:
-		void set_operation(operation& operation)&
+		void set_operation(operation_type& operation) &
 		{
 			m_operation = &operation;
 		}
@@ -67,6 +87,8 @@ private:
 	{
 		static constexpr size_t buffer_size = win32_type_traits<T>::size;
 		static_assert(buffer_size >= win32_type_traits<IO_STATUS_BLOCK>::size);
+
+	protected:
 		alignas(uintptr_t) std::byte m_buffer [buffer_size];
 
 	public:
@@ -96,6 +118,12 @@ private:
 		: public io_slot
 		, public basic_io_slot_storage<T>
 	{
+		static consteval size_t get_storage_offset()
+		{
+			return offsetof(basic_io_slot, m_buffer);
+		}
+
+		friend class iocp_multiplexer;
 	};
 
 public:
@@ -104,8 +132,18 @@ public:
 
 	struct wait_slot : io_slot
 	{
-		NTSTATUS Status;
 	};
+
+	struct io_status_type
+	{
+		io_slot& slot;
+		NTSTATUS status;
+	};
+	
+	static io_status_type& unwrap_io_status(io_status* const status)
+	{
+		return *reinterpret_cast<io_status_type*>(status);
+	}
 
 private:
 	struct shared_state_t : vsm::intrusive_ref_count
@@ -117,11 +155,6 @@ private:
 	vsm::linear<HANDLE> m_completion_port;
 
 public:
-	class connector_type
-	{
-	};
-
-
 	#define allio_iocp_multiplexer_create_parameters(type, data, ...) \
 		type(::allio::detail::iocp_multiplexer, create_parameters) \
 		data(::size_t, max_concurrent_threads, 1) \
@@ -141,17 +174,23 @@ public:
 
 
 	/// @return True if the multiplexer made any progress.
-	[[nodiscard]] vsm::result<bool> poll(poll_parameters const& args = {});
+	template<parameters<poll_parameters> P = poll_parameters::interface>
+	[[nodiscard]] vsm::result<bool> poll(P const& args = {})
+	{
+		return _poll(args);
+	}
 
 
 	[[nodiscard]] vsm::result<void> attach(platform_handle const& h, connector_type& c);
 	void detach(platform_handle const& h, connector_type& c, error_handler* e);
 
 
+#if 0
 	[[nodiscard]] vsm::result<void> submit(operation& s, auto&& submit)
 	{
 		return _submit(s, vsm_forward(submit)());
 	}
+#endif
 
 
 	/// @brief Attempt to cancel a pending I/O operation described by handle and slot.
@@ -160,16 +199,59 @@ public:
 	[[nodiscard]] bool cancel_io(io_slot& slot, native_platform_handle handle);
 
 
+	/// @brief Acquire a wait packet from the multiplexer's pool.
+	/// @return Returns a unique wait packet handle.
 	[[nodiscard]] vsm::result<win32::unique_wait_packet> acquire_wait_packet();
+
+	/// @brief Release a wait packet into the multiplexer's pool.
 	void release_wait_packet(win32::unique_wait_packet&& packet);
 
+	/// @brief Represents a lease of a wait packet from a multiplexer.
+	///        On destruction, if the lease is still active, the wait packet is returned to the multiplexer.
+	class wait_packet_lease
+	{
+		struct deleter
+		{
+			iocp_multiplexer* m_multiplexer;
+
+			void vsm_static_operator_invoke(win32::unique_wait_packet* const wait_packet)
+			{
+				m_multiplexer->release_wait_packet(vsm_move(*wait_packet));
+			}
+		};
+		vsm::unique_resource<win32::unique_wait_packet*, deleter> m_wait_packet;
+
+	public:
+		explicit wait_packet_lease(iocp_multiplexer& multiplexer, win32::unique_wait_packet& wait_packet)
+			: m_wait_packet(&wait_packet, deleter{ &multiplexer })
+		{
+		}
+
+		void retain()
+		{
+			(void)m_wait_packet.release();
+		}
+	};
+
+	/// @brief Acquire a wait packet from the multiplexer's pool as a lease.
+	/// @param wait_packet Reference to a unique wait packet handle to be assigned.
+	/// @return Returns a leased wait packet. See @ref wait_packet_lease.
+	[[nodiscard]] vsm::result<wait_packet_lease> lease_wait_packet(win32::unique_wait_packet& wait_packet)
+	{
+		vsm_try_assign(wait_packet, acquire_wait_packet());
+		return wait_packet_lease(*this, wait_packet);
+	}
+
 	/// @brief Submit a wait operation on the specified slot and handle, as if by WaitForSingleObject.
-	[[nodiscard]] vsm::result<void> submit_wait(wait_slot& slot, win32::unique_wait_packet& packet, native_platform_handle handle);
+	/// @pre The wait_slot shall be associated with an operation state.
+	/// @return True if the object was already signaled.
+	/// @note A completion event is not queued if the object was already signaled.
+	[[nodiscard]] vsm::result<bool> submit_wait(win32::wait_packet packet, wait_slot& slot, native_platform_handle handle);
 
 	/// @brief Attempt to cancel a wait operation started on the specified slot.
 	/// @return True if the operation was cancelled before its completion.
 	/// @note A completion event is queued regardless of whether the operation was cancelled.
-	[[nodiscard]] bool cancel_wait(wait_slot& slot, win32::unique_wait_packet& packet);
+	[[nodiscard]] bool cancel_wait(win32::wait_packet packet);
 
 
 	[[nodiscard]] static bool supports_synchronous_completion(platform_handle const& h)
@@ -182,9 +264,12 @@ private:
 	explicit iocp_multiplexer(vsm::intrusive_ptr<shared_state_t> shared_state);
 
 
+	[[nodiscard]] vsm::result<bool> _poll(poll_parameters const& args);
+
 	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(create_parameters const& args);
 	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(iocp_multiplexer const& other);
 
+#if 0
 	[[nodiscard]] vsm::result<void> _submit(operation& s, vsm::result<void> const r)
 	{
 		if (!r)
@@ -213,6 +298,7 @@ private:
 	}
 
 	void _push_completion(operation& s);
+#endif
 
 
 	//bool flush(poll_statistics& statistics);
@@ -229,9 +315,9 @@ struct connector_impl<iocp_multiplexer, H> : iocp_multiplexer::connector_type
 		return m.attach(h, c);
 	}
 
-	friend void tag_invoke(detach_handle_t, M& m, H const& h, C& c, error_handler* const e)
+	friend void tag_invoke(detach_handle_t, M& m, H const& h, C& c)
 	{
-		return m.detach(h, c, e);
+		return m.detach(h, c);
 	}
 };
 

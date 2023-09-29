@@ -86,7 +86,7 @@ class manual_scheduler
 		private:
 			static void send(operation_base& self)
 			{
-				detail::execution::set_value(static_cast<operation&&>(self).m_receiver);
+				ex::set_value(static_cast<operation&&>(self).m_receiver);
 			}
 		};
 

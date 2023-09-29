@@ -1,7 +1,6 @@
 #pragma once
 
 #include <allio/detail/api.hpp>
-#include <allio/indirection.hpp>
 
 #include <vsm/platform.h>
 #include <vsm/preprocessor.h>
@@ -13,8 +12,8 @@
 
 namespace allio {
 
-using default_multiplexer_handle = shared_indirect<default_multiplexer>;
+using default_multiplexer_ptr = default_multiplexer*;
 
-allio_detail_api vsm::result<default_multiplexer_handle> create_default_multiplexer();
+allio_detail_api vsm::result<default_multiplexer_ptr> create_default_multiplexer();
 
 } // namespace allio

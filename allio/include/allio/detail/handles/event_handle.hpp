@@ -1,7 +1,7 @@
 #pragma once
 
 #include <allio/detail/handles/platform_handle.hpp>
-//#include <allio/detail/sender.hpp>
+#include <allio/detail/io_sender.hpp>
 
 namespace allio::detail {
 
@@ -19,12 +19,12 @@ public:
 
 	enum class reset_mode : uint8_t
 	{
-		/// @brief In manual reset mode, once signalled, an event object remains
-		///        signalled until manually reset using @ref reset.
+		/// @brief In manual reset mode, once signaled, an event object remains
+		///        signaled until manually reset using @ref reset.
 		manual_reset,
 
 		/// @brief In automatic reset mode an event object automatically becomes
-		///        unsignalled having been observed in the signalled state by a waiter.
+		///        unsignaled having been observed in the signaled state by a wait operation.
 		auto_reset,
 	};
 
@@ -39,6 +39,11 @@ public:
 	}
 
 
+	struct create_t
+	{
+
+	};
+
 	#define allio_event_handle_create_parameters(type, data, ...) \
 		type(allio::event_handle, create_parameters) \
 		allio_platform_handle_create_parameters(__VA_ARGS__, __VA_ARGS__) \
@@ -46,11 +51,6 @@ public:
 
 	allio_interface_parameters(allio_event_handle_create_parameters);
 
-
-	/// @brief Reset the event object.
-	///        * Any currently pending waits are not affected.
-	///        * Any new waits will pend until the event object is signaled again.
-	[[nodiscard]] vsm::result<void> reset() const;
 
 	/// @brief Signal the event object.
 	///        * If the event object is already signaled, this operation has no effect.
@@ -61,8 +61,20 @@ public:
 	///          all pending waits are completed and the event object becomes signaled.
 	[[nodiscard]] vsm::result<void> signal() const;
 
+	/// @brief Reset the event object.
+	///        * Any currently pending waits are not affected.
+	///        * Any new waits will pend until the event object is signaled again.
+	[[nodiscard]] vsm::result<void> reset() const;
 
-	struct wait_t;
+
+	struct wait_t
+	{
+		using handle_type = _event_handle const;
+		using result_type = void;
+		using params_type = deadline_parameters;
+	};
+
+
 	using wait_parameters = deadline_parameters;
 
 	/// @brief Wait for the event object to be signaled.
@@ -102,32 +114,44 @@ protected:
 		}
 	};
 
-	template<typename M, typename H>
-	struct async_interface : base_type::async_interface<M, H>
+	template<typename H>
+	struct async_interface : base_type::async_interface<H>
 	{
-#if 0
 		/// @brief Wait for the event object to become signaled.
 		template<parameters<wait_parameters> P = wait_parameters::interface>
-		[[nodiscard]] basic_sender<M, H, wait_t> wait_async(P const& args = {}) const
+		[[nodiscard]] io_sender<H, wait_t> wait_async(P const& args = {}) const
 		{
-			return basic_sender<M, H, wait_t>(static_cast<H const&>(*this), args);
+			return io_sender<H, wait_t>(static_cast<H const&>(*this));
 		}
-#endif
 	};
 
 private:
 	vsm::result<void> _create(reset_mode reset_mode, create_parameters const& args);
 	vsm::result<void> _wait(wait_parameters const& args) const;
+
+	friend vsm::result<void> tag_invoke(blocking_io_t, std::derived_from<_event_handle> auto& h, io_parameters<create_t> const& args)
+	{
+		return handle::initialize(h, [&](auto& h)
+		{
+			return blocking_io(static_cast<_event_handle&>(h), args);
+		});
+	}
+
+	//static vsm::result<void> _create(_event_handle& h, io_parameters<create_t> const& args);
+	static vsm::result<void> _wait(_event_handle& h, io_parameters<wait_t> const& args);
+};
+
+template<>
+struct io_operation_traits<_event_handle::wait_t>
+{
+	using handle_type = _event_handle const;
+	using result_type = void;
+	using params_type = _event_handle::wait_parameters;
 };
 
 using event_handle = basic_handle<_event_handle>;
 
-template<>
-struct io_operation_traits<event_handle::wait_t>
-{
-	using handle_type = event_handle const;
-	using result_type = void;
-	using params_type = event_handle::wait_parameters;
-};
+template<typename Multiplexer>
+using basic_event_handle = basic_async_handle<detail::_event_handle, Multiplexer>;
 
 } // namespace allio::detail
