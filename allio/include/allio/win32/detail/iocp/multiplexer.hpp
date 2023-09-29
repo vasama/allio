@@ -181,16 +181,11 @@ public:
 	}
 
 
+	//TODO: Take native_platform_handle instead of platform_handle.
 	[[nodiscard]] vsm::result<void> attach(platform_handle const& h, connector_type& c);
+	//TODO: Return a vsm::result<void> instead of void as detaching can fail.
+	//      Handles should gain a multiplexer coupling aware close to avoid detaching.
 	void detach(platform_handle const& h, connector_type& c, error_handler* e);
-
-
-#if 0
-	[[nodiscard]] vsm::result<void> submit(operation& s, auto&& submit)
-	{
-		return _submit(s, vsm_forward(submit)());
-	}
-#endif
 
 
 	/// @brief Attempt to cancel a pending I/O operation described by handle and slot.
@@ -227,6 +222,8 @@ public:
 		{
 		}
 
+		/// @brief Retain the leased wait_packet.
+		///        The wait packet will not be returned to the multiplexer.
 		void retain()
 		{
 			(void)m_wait_packet.release();
@@ -268,40 +265,6 @@ private:
 
 	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(create_parameters const& args);
 	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(iocp_multiplexer const& other);
-
-#if 0
-	[[nodiscard]] vsm::result<void> _submit(operation& s, vsm::result<void> const r)
-	{
-		if (!r)
-		{
-
-		}
-
-		return {};
-	}
-
-	[[nodiscard]] vsm::result<void> _submit(operation& s, async_result<void> const r)
-	{
-		if (!r)
-		{
-			auto const& e = r.error();
-
-			if (e.is_synchronous())
-			{
-				return vsm::unexpected(e.error_code());
-			}
-
-			_push_completion(s);
-		}
-
-		return {};
-	}
-
-	void _push_completion(operation& s);
-#endif
-
-
-	//bool flush(poll_statistics& statistics);
 };
 
 template<std::derived_from<platform_handle> H>
