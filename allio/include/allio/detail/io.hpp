@@ -172,7 +172,7 @@ class connector
 {
 	using impl_type = connector_impl<M, H>;
 	static_assert(std::is_default_constructible_v<impl_type>);
-	friend class impl_type;
+	friend impl_type;
 };
 
 template<typename M, typename H>
@@ -191,7 +191,7 @@ class operation
 {
 	using impl_type = operation_impl<M, H, O>;
 	static_assert(std::is_default_constructible_v<impl_type>);
-	friend class impl_type;
+	friend impl_type;
 
 	vsm_no_unique_address io_parameters<O> args;
 

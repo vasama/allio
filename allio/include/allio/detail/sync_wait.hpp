@@ -7,6 +7,7 @@
 
 #include <vsm/standard.hpp>
 #include <vsm/tag_invoke.hpp>
+#include <vsm/utility.hpp>
 
 #include <optional>
 
@@ -110,7 +111,7 @@ struct receiver
 			vsm_assert(self.m_variant->index() == 0);
 			try
 			{
-				self.m_variant->emplace<1>(vsm_forward(values)...);
+				self.m_variant->template emplace<1>(vsm_forward(values)...);
 			}
 			catch (...)
 			{
@@ -127,7 +128,7 @@ struct receiver
 		friend void tag_invoke(ex::set_stopped_t, type&& self) noexcept
 		{
 			vsm_assert(self.m_variant->index() == 0);
-			self.m_variant->emplace<2>();
+			self.m_variant->template emplace<2>();
 		}
 
 		friend env<Multiplexer> tag_invoke(ex::get_env_t, type const& self) noexcept
@@ -141,15 +142,15 @@ struct receiver
 			using error_type = std::decay_t<decltype(error)&&>;
 			if constexpr (std::is_same_v<error_type, std::exception_ptr>)
 			{
-				m_variant->emplace<3>(vsm_forward(error));
+				m_variant->template emplace<3>(vsm_forward(error));
 			}
 			else if constexpr (std::is_same_v<error_type, std::error_code>)
 			{
-				m_variant->emplace<3>(std::make_exception_ptr(std::system_error(error)));
+				m_variant->template emplace<3>(std::make_exception_ptr(std::system_error(error)));
 			}
 			else
 			{
-				m_variant->emplace<3>(std::make_exception_ptr(vsm_forward(error)));
+				m_variant->template emplace<3>(std::make_exception_ptr(vsm_forward(error)));
 			}
 		}
 	};

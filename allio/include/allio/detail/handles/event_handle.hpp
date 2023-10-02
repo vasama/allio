@@ -84,7 +84,7 @@ public:
 	template<parameters<wait_parameters> P = wait_parameters::interface>
 	[[nodiscard]] vsm::result<void> wait(P const& args = {}) const
 	{
-		return _wait(args);
+		return blocking_io(*this, args);
 	}
 
 
@@ -131,6 +131,7 @@ private:
 	vsm::result<void> _create(reset_mode reset_mode, create_parameters const& args);
 	vsm::result<void> _wait(wait_parameters const& args) const;
 
+	#if 0
 	friend vsm::result<void> tag_invoke(blocking_io_t, std::derived_from<_event_handle> auto& h, io_parameters<create_t> const& args)
 	{
 		return handle::initialize(h, [&](auto& h)
@@ -138,9 +139,13 @@ private:
 			return blocking_io(static_cast<_event_handle&>(h), args);
 		});
 	}
+	#endif
 
 	//static vsm::result<void> _create(_event_handle& h, io_parameters<create_t> const& args);
 	static vsm::result<void> _wait(_event_handle& h, io_parameters<wait_t> const& args);
+
+protected:
+	static vsm::result<void> blocking_io(_event_handle const& h, io_parameter<wait_t> const& args);
 };
 
 template<>

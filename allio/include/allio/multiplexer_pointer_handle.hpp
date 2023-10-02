@@ -15,7 +15,7 @@ class basic_multiplexer_pointer_handle
 	Pointer m_multiplexer;
 
 public:
-	using value_type = std::remove_cvref_t<decltype(*vsm_declval(Pointer))>;
+	using value_type = std::remove_cvref_t<decltype(*std::declval<Pointer>())>;
 
 	explicit basic_multiplexer_pointer_handle(Pointer multiplexer)
 		: m_multiplexer(vsm_move(multiplexer))

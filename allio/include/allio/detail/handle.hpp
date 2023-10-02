@@ -449,7 +449,6 @@ private:
 		}
 
 		handle.H::operator=(static_cast<H&&>(*this));
-		return {};
 	}
 
 	void _close(error_handler* const error_handler)
@@ -465,6 +464,12 @@ private:
 		}
 	}
 
+
+	template<typename O>
+	friend vsm::result<void> tag_invoke(blocking_io_t, any_cvref_of<basic_async_handle> auto& h, io_parameters<O> const& args)
+	{
+		return H::blocking_io(h, args);
+	}
 
 	template<typename S>
 	friend vsm::result<io_result> tag_invoke(submit_io_t, basic_async_handle const& h, S& s)

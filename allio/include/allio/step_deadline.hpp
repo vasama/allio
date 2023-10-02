@@ -9,6 +9,8 @@ class step_deadline
 	deadline m_deadline;
 
 public:
+	step_deadline() = default;
+
 	step_deadline(deadline const deadline)
 		: m_deadline(deadline)
 	{

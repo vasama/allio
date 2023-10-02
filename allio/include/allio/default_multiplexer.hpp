@@ -14,6 +14,4 @@ namespace allio {
 
 using default_multiplexer_ptr = default_multiplexer*;
 
-allio_detail_api vsm::result<default_multiplexer_ptr> create_default_multiplexer();
-
 } // namespace allio

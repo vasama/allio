@@ -165,7 +165,7 @@ vsm::result<void> _event_handle::_create(_event_handle& h, io_parameters<create_
 }
 #endif
 
-vsm::result<void> _event_handle::_wait(_event_handle& h, io_parameters<wait_t> const& args)
+vsm::result<void> _event_handle::blocking_io(_event_handle& h, io_parameters<wait_t> const& args)
 {
 	if (!h)
 	{
@@ -177,6 +177,8 @@ vsm::result<void> _event_handle::_wait(_event_handle& h, io_parameters<wait_t> c
 		/* Alertable: */ false,
 		kernel_timeout(args.deadline));
 
+	//TODO: Check for STATUS_TIMEOUT in other places where it might be missing.
+	//TODO: Replace NT_SUCCESS with one that checks for non-zero for debug purposes.
 	if (status == STATUS_TIMEOUT)
 	{
 		return vsm::unexpected(error::async_operation_timed_out);

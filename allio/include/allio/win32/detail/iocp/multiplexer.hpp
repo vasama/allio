@@ -1,6 +1,5 @@
 #pragma once
 
-#include <allio/async_result.hpp>
 #include <allio/detail/io.hpp>
 #include <allio/multiplexer.hpp>
 #include <allio/win32/detail/handles/platform_handle.hpp>
@@ -10,6 +9,7 @@
 
 #include <vsm/intrusive_ptr.hpp>
 #include <vsm/linear.hpp>
+#include <vsm/result.hpp>
 
 #include <bit>
 
@@ -26,10 +26,8 @@ public:
 	{
 	protected:
 		using operation_base::operation_base;
-
 		operation_type(operation_type const&) = default;
 		operation_type& operator=(operation_type const&) = default;
-
 		~operation_type() = default;
 
 	private:
@@ -117,7 +115,7 @@ public:
 		NTSTATUS status;
 	};
 
-	static io_status_type& unwrap_io_status(io_status const status)
+	static io_status_type const& unwrap_io_status(io_status const status)
 	{
 		return status.unwrap<io_status_type>();
 	}
@@ -156,13 +154,6 @@ public:
 	{
 		return _poll(args);
 	}
-
-
-	//TODO: Take native_platform_handle instead of platform_handle.
-	[[nodiscard]] vsm::result<void> attach(platform_handle const& h, connector_type& c);
-	//TODO: Return a vsm::result<void> instead of void as detaching can fail.
-	//      Handles should gain a multiplexer coupling aware close to avoid detaching.
-	void detach(platform_handle const& h, connector_type& c, error_handler* e);
 
 
 	/// @brief Attempt to cancel a pending I/O operation described by handle and slot.
@@ -237,28 +228,30 @@ public:
 private:
 	explicit iocp_multiplexer(vsm::intrusive_ptr<shared_state_t> shared_state);
 
-
 	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(create_parameters const& args);
 	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(iocp_multiplexer const& other);
 
+
+	//TODO: Take native_platform_handle instead of platform_handle.
+	[[nodiscard]] vsm::result<void> _attach_handle(platform_handle const& h, connector_type& c);
+	//TODO: Return a vsm::result<void> instead of void as detaching can fail.
+	//      Handles should gain a multiplexer coupling aware close to avoid detaching.
+	void _detach_handle(platform_handle const& h, connector_type& c);
+
+	template<std::derived_from<_platform_handle> H>
+	friend vsm::result<void> tag_invoke(attach_handle_t, iocp_multiplexer& m, H const& h, connector_type& c)
+	{
+		return m._attach_handle(h.get_platform_handle(), c);
+	}
+
+	template<std::derived_from<_platform_handle> H>
+	friend void tag_invoke(detach_handle_t, iocp_multiplexer& m, H const& h, connector_type& c)
+	{
+		return m._detach_handle(h.get_platform_handle(), c);
+	}
+
+
 	[[nodiscard]] vsm::result<bool> _poll(poll_parameters const& args);
-};
-
-template<std::derived_from<platform_handle> H>
-struct connector_impl<iocp_multiplexer, H> : iocp_multiplexer::connector_type
-{
-	using M = iocp_multiplexer;
-	using C = connector_t<M, H>;
-
-	friend vsm::result<void> tag_invoke(attach_handle_t, M& m, H const& h, C& c)
-	{
-		return m.attach(h, c);
-	}
-
-	friend void tag_invoke(detach_handle_t, M& m, H const& h, C& c)
-	{
-		return m.detach(h, c);
-	}
 };
 
 } // namespace allio::detail

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <system_error>
+#include <vsm/result.hpp>
 
 #include <allio/linux/detail/undef.i>
 

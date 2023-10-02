@@ -140,15 +140,19 @@ vsm_configure(allio
 	PLATFORM Linux
 	
 	HEADERS
-		include/allio/linux/io_uring_multiplexer.hpp
+		include/allio/linux/detail/io_uring/event_handle.hpp
+		include/allio/linux/detail/io_uring/multiplexer.hpp
 		include/allio/linux/platform.hpp
-		include/allio/linux/timeout.hpp
+		include/allio/linux/timespec.hpp
 		include/allio/linux/detail/path.hpp
 		include/allio/linux/detail/path_view.hpp
 		include/allio/linux/detail/undef.i
 		include/allio/linux/detail/unique_fd.hpp
 	
 	SOURCES
+		source/allio/impl/linux/kernel/fcntl.hpp
+		source/allio/impl/linux/kernel/proc.hpp
+		source/allio/impl/linux/kernel/stat.hpp
 		source/allio/impl/linux/api_string.hpp
 		source/allio/impl/linux/default_multiplexer.cpp
 		#source/allio/impl/linux/directory_handle.cpp
@@ -168,7 +172,6 @@ vsm_configure(allio
 		#source/allio/impl/linux/process_handle.cpp
 		#source/allio/impl/linux/process_handle.hpp
 		#source/allio/impl/linux/section_handle.cpp
-		source/allio/impl/linux/stat.hpp
 		source/allio/impl/linux/sync_byte_io.cpp
 		source/allio/impl/linux/unique_fd.cpp
 		source/allio/impl/linux/version.cpp

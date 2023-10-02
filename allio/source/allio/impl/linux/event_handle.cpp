@@ -14,6 +14,35 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::linux;
 
+vsm::result<void> linux::poll_event(int const fd, deadline const deadline)
+{
+	pollfd poll_fd =
+	{
+		.fd = fd,
+		.events = POLLIN,
+	};
+
+	int const result = ppoll(
+		&poll_fd,
+		1,
+		kernel_timeout<timespec>(deadline),
+		nullptr);
+
+	if (result == -1)
+	{
+		return vsm::unexpected(get_last_error());
+	}
+
+	if (result == 0)
+	{
+		return vsm::unexpected(error::async_operation_timed_out);
+	}
+
+	vsm_assert(poll_fd.revents == POLLIN);
+
+	return {};
+}
+
 vsm::result<bool> linux::reset_event(int const fd)
 {
 	eventfd_t value;
@@ -38,6 +67,25 @@ vsm::result<bool> linux::reset_event(int const fd)
 	vsm_assert(value != 0);
 
 	return true;
+}
+
+vsm::result<void> linux::check_event(int const fd, bool const auto_reset)
+{
+	if (auto_reset)
+	{
+		vsm_try(was_non_zero, reset_event(fd));
+
+		if (was_non_zero)
+		{
+			return {};
+		}
+
+		return vsm::unexpected(error::async_operation_timed_out);
+	}
+	else
+	{
+		return poll_event(fd, deadline::instant());
+	}
 }
 
 
@@ -85,7 +133,7 @@ vsm::result<void> event_handle_base::reset() const
 
 vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::event_create> const& args)
 {
-	event_handle& h = *args.handle;
+	_event_handle& h = *args.handle;
 
 	if (h)
 	{
@@ -94,9 +142,9 @@ vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::ev
 
 	handle_flags h_flags = {};
 
-	if (args.reset_mode == event_handle::auto_reset)
+	if (args.reset_mode == _event_handle::auto_reset)
 	{
-		h_flags |= event_handle::flags::auto_reset;
+		h_flags |= _event_handle::flags::auto_reset;
 	}
 
 	int const event = eventfd(
@@ -133,52 +181,34 @@ vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::ev
 	}
 
 	int const event = unwrap_handle(h.get_platform_handle());
+	bool const auto_reset = is_auto_reset(h);
+
+	if (args.deadline == deadline::instant())
+	{
+		return check_event(event, auto_reset);
+	}
 
 	// The deadline must be made absolute and stepped in each iteration.
 	step_deadline absolute_deadline(args.deadline);
 
 	while (true)
 	{
+		// Evaluate the stepped deadline. If the user provided a relative deadline
+		// a timeout error may be returned here only after the first iteration.
+		// In the case of an absolute deadline, poll may never get called.
+		vsm_try(relative_deadline, absolute_deadline.step());
+
 		// Poll the event fd for a non-zero value without resetting it.
 		// Ideally in auto reset mode both wait and reset would happen
 		// using the same syscall, but there are two problems:
 		// * read and its ilk don't support timeouts like poll does.
 		// * The event must be opened in non-blocking mode to allow non-blocking reset
 		//   using write even in the unlikely case of a maxed out counter value.
-		//   Opening the event twice in both blocking and non-blocking modes might work,
-		//   but that is also not a particularly satisfying solution.
-		{
-			// Evaluate the stepped deadline. If the user provided a relative deadline
-			// a timeout error may be returned here only after the first iteration.
-			// In the case of an absolute deadline, poll may never get called.
-			vsm_try(relative_deadline, absolute_deadline.step());
+		//   There is also no way to open the event in both blocking and non-blocking
+		//   modes at the same time.
+		vsm_try_void(poll_event(event, relative_deadline));
 
-			pollfd fd =
-			{
-				.fd = event,
-				.events = POLLIN,
-			};
-
-			int const result = ppoll(
-				&fd,
-				1,
-				kernel_timeout<timespec>(relative_deadline),
-				nullptr);
-
-			if (result == -1)
-			{
-				return vsm::unexpected(get_last_error());
-			}
-
-			if (result == 0)
-			{
-				return vsm::unexpected(error::async_operation_timed_out);
-			}
-
-			vsm_assert(fd.revents == POLLIN);
-		}
-
-		if (h.get_flags()[event_handle::flags::auto_reset])
+		if (auto_reset)
 		{
 			vsm_try(was_non_zero, reset_event(event));
 
