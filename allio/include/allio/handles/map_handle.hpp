@@ -4,7 +4,7 @@
 
 namespace allio {
 
-using map_handle = basic_handle<detail::_map_handle>;
+using map_handle = basic_blocking_handle<detail::_map_handle>;
 
 
 template<parameters<map_handle::basic_map_parameters> P = map_handle::basic_map_parameters>

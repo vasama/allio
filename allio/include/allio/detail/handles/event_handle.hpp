@@ -5,6 +5,21 @@
 
 namespace allio::detail {
 
+enum class event_reset_mode : uint8_t
+{
+	/// @brief In manual reset mode, once signaled, an event object remains
+	///        signaled until manually reset using @ref reset.
+	manual_reset,
+
+	/// @brief In automatic reset mode an event object automatically becomes
+	///        unsignaled having been observed in the signaled state by a wait operation.
+	auto_reset,
+};
+
+inline constexpr event_reset_mode manual_reset_event = event_reset_mode::manual_reset;
+inline constexpr event_reset_mode auto_reset_event = event_reset_mode::auto_reset;
+
+
 class _event_handle : public platform_handle
 {
 protected:
@@ -17,35 +32,22 @@ public:
 	);
 
 
-	enum class reset_mode : uint8_t
-	{
-		/// @brief In manual reset mode, once signaled, an event object remains
-		///        signaled until manually reset using @ref reset.
-		manual_reset,
-
-		/// @brief In automatic reset mode an event object automatically becomes
-		///        unsignaled having been observed in the signaled state by a wait operation.
-		auto_reset,
-	};
-
+	using reset_mode = event_reset_mode;
 	using enum reset_mode;
 
 	[[nodiscard]] reset_mode get_reset_mode() const
 	{
 		vsm_assert(*this); //PRECONDITION
-		return get_flags()[flags::auto_reset]
-			? reset_mode::auto_reset
-			: reset_mode::manual_reset;
+		return get_flags()[flags::auto_reset] ? auto_reset : manual_reset;
 	}
 
 
 	struct create_t
 	{
-
 	};
 
 	#define allio_event_handle_create_parameters(type, data, ...) \
-		type(allio::event_handle, create_parameters) \
+		type(allio::detail::_event_handle, create_parameters) \
 		allio_platform_handle_create_parameters(__VA_ARGS__, __VA_ARGS__) \
 		data(bool, signal, false) \
 
@@ -55,9 +57,9 @@ public:
 	/// @brief Signal the event object.
 	///        * If the event object is already signaled, this operation has no effect.
 	///        * Otherwise if there are no pending waits, the event object becomes signaled.
-	///        * Otherwise if the reset mode is @ref allio::event_handle::auto_reset,
+	///        * Otherwise if the reset mode is @ref event_handle::auto_reset,
 	///          one pending wait is completed and the event object remains unsignaled.
-	///        * Otherwise if the reset mode is @ref allio::event_handle::manual_reset,
+	///        * Otherwise if the reset mode is @ref event_handle::manual_reset,
 	///          all pending waits are completed and the event object becomes signaled.
 	[[nodiscard]] vsm::result<void> signal() const;
 
@@ -149,9 +151,28 @@ struct io_operation_traits<_event_handle::wait_t>
 	using params_type = _event_handle::wait_parameters;
 };
 
-using event_handle = basic_handle<_event_handle>;
+
+using blocking_event_handle = basic_blocking_handle<_event_handle>;
 
 template<typename Multiplexer>
-using basic_event_handle = basic_async_handle<detail::_event_handle, Multiplexer>;
+using basic_event_handle = basic_async_handle<_event_handle, Multiplexer>;
+
+
+template<parameters<_event_handle::create_parameters> P = _event_handle::create_parameters::interface>
+vsm::result<blocking_event_handle> create_event(event_reset_mode const reset_mode, P const& args = {})
+{
+	vsm::result<blocking_event_handle> r(vsm::result_value);
+	vsm_try_void(r->create(reset_mode, args));
+	return r;
+}
+
+template<typename Multiplexer, parameters<_event_handle::create_parameters> P = _event_handle::create_parameters::interface>
+vsm::result<basic_event_handle<Multiplexer>> create_event(Multiplexer&& multiplexer, event_reset_mode const reset_mode, P const& args = {})
+{
+	vsm::result<basic_event_handle<Multiplexer>> r(vsm::result_value);
+	vsm_try_void(r->set_multiplexer(multiplexer));
+	vsm_try_void(r->create(reset_mode, args));
+	return r;
+}
 
 } // namespace allio::detail

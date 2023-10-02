@@ -37,12 +37,12 @@ struct operation_impl<iocp_multiplexer, _opaque_handle, _opaque_handle::poll_t>
 
 	wait_operation_state wait_state;
 
-	static submit_result submit(M& m, H const& h, C const&, S& s)
+	static io_result submit(M& m, H const& h, C const&, S& s)
 	{
 		return wait_operation_state::submit(m, h, s.wait_state);
 	}
 
-	static submit_result notify(M& m, H const& h, C const&, S& s, io_status* const status)
+	static io_result notify(M& m, H const& h, C const&, S& s, io_status const status)
 	{
 		return wait_operation_state::notify(m, h, s.wait_state, status);
 	}

@@ -15,7 +15,7 @@ using M = iocp_multiplexer;
 using H = platform_handle;
 using S = wait_operation_state;
 
-submit_result wait_operation_state::submit(M& m, H const& h, S& s)
+io_result wait_operation_state::submit(M& m, H const& h, S& s)
 {
 	if (!h)
 	{
@@ -51,7 +51,7 @@ submit_result wait_operation_state::submit(M& m, H const& h, S& s)
 	return std::nullopt;
 }
 
-submit_result wait_operation_state::notify(M& m, H const& h, S& s, io_status* const status)
+io_result wait_operation_state::notify(M& m, H const& h, S& s, io_status const status)
 {
 	iocp_multiplexer::wait_packet_lease const lease(m, s.wait_packet);
 

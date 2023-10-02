@@ -4,7 +4,7 @@
 
 namespace allio {
 
-using file_handle = basic_handle<detail::_file_handle>;
+using file_handle = basic_blocking_handle<detail::_file_handle>;
 
 template<typename Multiplexer>
 using basic_file_handle = basic_async_handle<detail::_file_handle, Multiplexer>;

@@ -10,7 +10,7 @@ using detail::directory_stream_view;
 using detail::directory_stream_buffer;
 
 
-using directory_handle = basic_handle<detail::_directory_handle>;
+using directory_handle = basic_blocking_handle<detail::_directory_handle>;
 
 template<typename Multiplexer>
 using basic_directory_handle = basic_async_handle<detail::_directory_handle, Multiplexer>;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <allio/detail/execution.hpp>
+
 #include <vsm/assert.h>
 #include <vsm/atomic.hpp>
 #include <vsm/intrusive/mpsc_queue.hpp>

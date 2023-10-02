@@ -7,7 +7,7 @@ namespace allio {
 using detail::accept_result;
 
 
-using listen_socket_handle = basic_handle<detail::_listen_socket_handle>;
+using listen_socket_handle = basic_blocking_handle<detail::_listen_socket_handle>;
 
 template<typename Multiplexer>
 using basic_listen_socket_handle = basic_async_handle<detail::_listen_socket_handle, Multiplexer>;

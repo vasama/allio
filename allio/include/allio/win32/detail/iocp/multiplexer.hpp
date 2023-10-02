@@ -15,32 +15,9 @@
 
 namespace allio::detail {
 
-//TODO: Allow setting the NumberOfConcurrentThreads and
-//      initializing with another iocp_multiplexer to duplicate the handle.
 class iocp_multiplexer final
 {
 public:
-#if 0
-	class operation
-	{
-		void(*m_io_callback)(iocp_multiplexer& m, operation& s, io_slot& slot) noexcept = nullptr;
-
-	public:
-		template<std::derived_from<operation> S>
-		void set_io_handler(this S& self, auto handler)
-		{
-			static_assert(std::is_empty_v<decltype(handler)>);
-			self.m_io_handler = [](iocp_multiplexer& m, operation& s, io_slot& slot) noexcept
-			{
-				std::bit_cast<decltype(handler)>(static_cast<unsigned char>(0))(m, static_cast<S&>(s), slot);
-			};
-		}
-
-	private:
-		friend class iocp_multiplexer;
-	};
-#endif
-
 	class connector_type
 	{
 	};
@@ -139,10 +116,10 @@ public:
 		io_slot& slot;
 		NTSTATUS status;
 	};
-	
-	static io_status_type& unwrap_io_status(io_status* const status)
+
+	static io_status_type& unwrap_io_status(io_status const status)
 	{
-		return *reinterpret_cast<io_status_type*>(status);
+		return status.unwrap<io_status_type>();
 	}
 
 private:
@@ -261,10 +238,10 @@ private:
 	explicit iocp_multiplexer(vsm::intrusive_ptr<shared_state_t> shared_state);
 
 
-	[[nodiscard]] vsm::result<bool> _poll(poll_parameters const& args);
-
 	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(create_parameters const& args);
 	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(iocp_multiplexer const& other);
+
+	[[nodiscard]] vsm::result<bool> _poll(poll_parameters const& args);
 };
 
 template<std::derived_from<platform_handle> H>

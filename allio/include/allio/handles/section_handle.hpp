@@ -4,7 +4,7 @@
 
 namespace allio {
 
-using section_handle = basic_handle<detail::_section_handle>;
+using section_handle = basic_blocking_handle<detail::_section_handle>;
 
 
 template<parameters<section_handle::create_parameters> P = section_handle::create_parameters::interface>

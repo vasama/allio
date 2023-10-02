@@ -8,7 +8,7 @@ using detail::process_id;
 using detail::process_exit_code;
 
 
-using process_handle = basic_handle<detail::_process_handle>;
+using process_handle = basic_blocking_handle<detail::_process_handle>;
 
 template<typename Multiplexer>
 using basic_process_handle = basic_async_handle<detail::_process_handle, Multiplexer>;

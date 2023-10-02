@@ -4,7 +4,7 @@
 
 namespace allio {
 
-using stream_socket_handle = basic_handle<detail::_stream_socket_handle>;
+using stream_socket_handle = basic_blocking_handle<detail::_stream_socket_handle>;
 
 template<typename Multiplexer>
 using basic_stream_socket_handle = basic_async_handle<detail::_stream_socket_handle, Multiplexer>;

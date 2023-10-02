@@ -153,7 +153,7 @@ protected:
 
 allio_detail_export
 template<typename H>
-class basic_handle;
+class basic_blocking_handle;
 
 allio_detail_export
 template<typename H, typename M>
@@ -162,9 +162,9 @@ class basic_async_handle;
 
 allio_detail_export
 template<typename H>
-class basic_handle final
+class basic_blocking_handle final
 	: public H
-	, public H::template sync_interface<basic_handle<H>>
+	, public H::template sync_interface<basic_blocking_handle<H>>
 {
 	template<typename M>
 	using async_handle_type = basic_async_handle<H, M>;
@@ -173,11 +173,11 @@ public:
 	using base_type = H;
 
 
-	basic_handle() = default;
+	basic_blocking_handle() = default;
 
-	basic_handle(basic_handle&& other) noexcept = default;
+	basic_blocking_handle(basic_blocking_handle&& other) noexcept = default;
 
-	basic_handle& operator=(basic_handle&& other) & noexcept
+	basic_blocking_handle& operator=(basic_blocking_handle&& other) & noexcept
 	{
 		if (*this)
 		{
@@ -187,7 +187,7 @@ public:
 		return *this;
 	}
 
-	~basic_handle()
+	~basic_blocking_handle()
 	{
 		if (*this)
 		{
@@ -229,14 +229,14 @@ public:
 		return {};
 	}
 
-	static vsm::result<basic_handle> from_native_handle(typename H::native_handle_type const& native)
+	static vsm::result<basic_blocking_handle> from_native_handle(typename H::native_handle_type const& native)
 	{
 		if (!H::check_native_handle(native))
 		{
 			return vsm::unexpected(error::invalid_argument);
 		}
 
-		vsm::result<basic_handle> r(vsm::result_value);
+		vsm::result<basic_blocking_handle> r(vsm::result_value);
 		r->H::set_native_handle(native);
 		return r;
 	}
@@ -286,10 +286,6 @@ private:
 	friend class basic_async_handle;
 };
 
-
-template<typename M>
-using multiplexer_t = typename std::pointer_traits<M>::element_type;
-
 allio_detail_export
 template<typename H, typename M>
 class basic_async_handle final
@@ -297,7 +293,7 @@ class basic_async_handle final
 	, public H::template sync_interface<basic_async_handle<H, M>>
 	, public H::template async_interface<basic_async_handle<H, M>>
 {
-	using handle_type = basic_handle<H>;
+	using blocking_handle_type = basic_blocking_handle<H>;
 
 public:
 	using multiplexer_pointer_type = M;
@@ -318,7 +314,7 @@ public:
 
 	basic_async_handle() = default;
 
-	basic_async_handle(handle_type&& h)
+	basic_async_handle(blocking_handle_type&& h)
 		: H(static_cast<H&&>(h))
 	{
 	}
@@ -379,7 +375,7 @@ public:
 	}
 
 
-	vsm::result<void> set_handle(handle_type&& handle) &
+	vsm::result<void> set_handle(blocking_handle_type&& handle) &
 	{
 		if (*this)
 		{
@@ -389,14 +385,14 @@ public:
 		return _set_handle(handle);
 	}
 
-	vsm::result<handle_type> release_handle()
+	vsm::result<blocking_handle_type> release_handle()
 	{
 		if (!*this)
 		{
 			return vsm::unexpected(error::handle_is_null);
 		}
 
-		vsm::result<handle_type> r(vsm::result_value);
+		vsm::result<blocking_handle_type> r(vsm::result_value);
 		vsm_try_void(_release_handle(*r));
 		return r;
 	}
@@ -410,7 +406,7 @@ private:
 			return vsm::unexpected(error::handle_is_not_null);
 		}
 
-		handle_type h;
+		blocking_handle_type h;
 		vsm_try_void(vsm_forward(initializer)(h));
 		return _set_handle(h);
 	}
@@ -425,7 +421,7 @@ private:
 		if (*this)
 		{
 			vsm_try_void(attach_handle(
-				vsm_as_const(m_multiplexer),
+				*vsm_as_const(m_multiplexer),
 				static_cast<H const&>(*this),
 				m_connector));
 		}
@@ -434,7 +430,7 @@ private:
 		return {};
 	}
 
-	vsm::result<void> _set_handle(handle_type& handle)
+	vsm::result<void> _set_handle(blocking_handle_type& handle)
 	{
 		if (m_multiplexer)
 		{
@@ -445,7 +441,7 @@ private:
 		return {};
 	}
 
-	void _release_handle(handle_type& handle)
+	void _release_handle(blocking_handle_type& handle)
 	{
 		if (m_multiplexer)
 		{
@@ -471,13 +467,13 @@ private:
 
 
 	template<typename S>
-	friend vsm::result<submit_result> tag_invoke(submit_io_t, basic_async_handle const& h, S& s)
+	friend vsm::result<io_result> tag_invoke(submit_io_t, basic_async_handle const& h, S& s)
 	{
 		return submit_io(*h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s);
 	}
 
 	template<typename S>
-	friend vsm::result<submit_result> tag_invoke(notify_io_t, basic_async_handle const& h, S& s, io_status* const status)
+	friend vsm::result<io_result> tag_invoke(notify_io_t, basic_async_handle const& h, S& s, io_status const status)
 	{
 		return notify_io(*h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s, status);
 	}
@@ -492,7 +488,7 @@ private:
 	friend class handle;
 
 	template<typename>
-	friend class basic_handle;
+	friend class basic_blocking_handle;
 };
 
 } // namespace allio::detail

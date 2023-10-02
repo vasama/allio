@@ -90,7 +90,7 @@ protected:
 	};
 };
 
-using opaque_handle = basic_handle<detail::_opaque_handle>;
+using opaque_handle = basic_blocking_handle<detail::_opaque_handle>;
 
 template<typename Multiplexer>
 using basic_opaque_handle = async_handle<detail::_opaque_handle, Multiplexer>;

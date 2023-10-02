@@ -23,7 +23,7 @@ static std::error_code get_kernel_error_code(NTSTATUS const status)
 using wait_t = _event_handle::wait_t;
 using wait_s = operation_t<M, H, wait_t>;
 
-submit_result operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s)
+io_result operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s)
 {
 	if (!h)
 	{
@@ -72,7 +72,7 @@ submit_result operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c,
 	return std::nullopt;
 }
 
-submit_result operation_impl<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& s, io_status* const status)
+io_result operation_impl<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& s, io_status const status)
 {
 	auto const wait_status = M::unwrap_io_status(status);
 	vsm_assert(&wait_status.slot == &s.wait_slot);

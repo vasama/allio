@@ -104,6 +104,8 @@ vsm_configure(allio
 		include/allio/win32/detail/win32_fwd.hpp
 
 	SOURCES
+		source/allio/impl/win32/completion_port.cpp
+		source/allio/impl/win32/completion_port.hpp
 		source/allio/impl/win32/encoding.cpp
 		source/allio/impl/win32/encoding.hpp
 		source/allio/impl/win32/error.cpp
@@ -121,6 +123,8 @@ vsm_configure(allio
 		source/allio/impl/win32/peb.hpp
 		source/allio/impl/win32/platform.cpp
 		source/allio/impl/win32/unique_handle.cpp
+		source/allio/impl/win32/wait_packet.cpp
+		source/allio/impl/win32/wait_packet.hpp
 		#source/allio/impl/win32/wsa_ex.cpp
 		#source/allio/impl/win32/wsa_ex.hpp
 
@@ -129,6 +133,7 @@ vsm_configure(allio
 
 	TEST_SOURCES
 		source/allio/test/win32/kernel_path.cpp
+		source/allio/test/win32/wait_packet.cpp
 )
 
 vsm_configure(allio

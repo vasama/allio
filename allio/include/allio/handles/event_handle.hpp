@@ -4,15 +4,12 @@
 
 namespace allio {
 
-using detail::event_handle;
-using detail::basic_event_handle;
+using detail::event_reset_mode;
+using detail::manual_reset_event;
+using detail::auto_reset_event;
 
-template<parameters<event_handle::create_parameters> P = event_handle::create_parameters::interface>
-vsm::result<event_handle> create_event(event_handle::reset_mode const reset_mode, P const& args = {})
-{
-	vsm::result<event_handle> r(vsm::result_value);
-	vsm_try_void(r->create(reset_mode, args));
-	return r;
-}
+using detail::blocking_event_handle;
+using detail::basic_event_handle;
+using detail::create_event;
 
 } // namespace allio

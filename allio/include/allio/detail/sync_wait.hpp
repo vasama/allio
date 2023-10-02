@@ -11,7 +11,6 @@
 #include <optional>
 
 namespace allio::detail {
-
 namespace _sync_wait {
 
 template<typename Multiplexer>
@@ -21,7 +20,7 @@ class event
 
 public:
 	/*explicit*/ event(Multiplexer& multiplexer)
-		: m_event(create_event(event_handle::auto_reset).value().with_multiplexer(&multiplexer).value())
+		: m_event(create_event(&multiplexer, auto_reset_event).value())
 	{
 	}
 

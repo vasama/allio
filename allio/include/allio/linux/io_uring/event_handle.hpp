@@ -6,7 +6,7 @@
 namespace allio {
 
 template<>
-struct async_handle_traits<linux::io_uring_multiplexer, event_handle::base_type>
+struct async_handle_traits<linux::io_uring_multiplexer, _event_handle>
 {
 	struct context_type
 	{
@@ -14,7 +14,7 @@ struct async_handle_traits<linux::io_uring_multiplexer, event_handle::base_type>
 };
 
 template<>
-struct async_operation_traits<linux::io_uring_multiplexer, event_handle::base_type, event_handle::wait_tag>
+struct async_operation_traits<linux::io_uring_multiplexer, _event_handle, _event_handle::wait_t>
 {
 	struct storage_type
 	{

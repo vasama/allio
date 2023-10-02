@@ -36,8 +36,8 @@ struct operation_impl<iocp_multiplexer, _event_handle, _event_handle::wait_t>
 	win32::unique_wait_packet wait_packet;
 	iocp_multiplexer::wait_slot wait_slot;
 
-	static submit_result submit(M& m, H const& h, C const& c, S& s);
-	static submit_result notify(M& m, H const& h, C const& c, S& s, io_status* status);
+	static io_result submit(M& m, H const& h, C const& c, S& s);
+	static io_result notify(M& m, H const& h, C const& c, S& s, io_status status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 

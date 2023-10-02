@@ -46,17 +46,17 @@ class io_sender
 			self.handle_result(submit_io(*self.m_handle, self.m_operation));
 		}
 
-		void notify(operation_base& operation, io_status* const status) noexcept override
+		void notify(operation_base& operation, io_status const status) noexcept override
 		{
 			vsm_assert(&operation == &m_operation);
 			handle_result(notify_io(*m_handle, m_operation, status));
 		}
 
-		void handle_result(vsm::result<submit_result> const& r)
+		void handle_result(vsm::result<io_result> const& r)
 		{
 			if (r)
 			{
-				if (submit_result const& v = *r)
+				if (io_result const& v = *r)
 				{
 					if (std::error_code const& e = *v)
 					{
