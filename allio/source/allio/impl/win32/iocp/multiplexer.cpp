@@ -58,29 +58,20 @@ iocp_multiplexer::iocp_multiplexer(vsm::intrusive_ptr<shared_state_t> shared_sta
 }
 
 
-vsm::result<void> iocp_multiplexer::attach(platform_handle const& h, connector_type& c)
+vsm::result<void> iocp_multiplexer::_attach_handle(native_platform_handle const handle, connector_type& c)
 { 
 	return set_completion_information(
-		unwrap_handle(h.get_platform_handle()),
+		unwrap_handle(handle),
 		m_completion_port.value,
 		std::bit_cast<void*>(key_context::generic));
 }
 
-void iocp_multiplexer::detach(platform_handle const& h, connector_type& c, error_handler* const e)
+void iocp_multiplexer::_detach_handle(native_platform_handle const handle, connector_type& c)
 {
-	auto const r = set_completion_information(
-		unwrap_handle(h.get_platform_handle()),
+	unrecoverable(set_completion_information(
+		unwrap_handle(handle),
 		NULL,
-		nullptr);
-
-	if (!r)
-	{
-		get_error_handler(e).handle_error(
-		{
-			.error = r.error(),
-			.source = error_source{},
-		});
-	}
+		nullptr));
 }
 
 

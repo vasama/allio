@@ -64,11 +64,11 @@ protected:
 	}
 
 
-	void close(error_handler* const error_handler)
+	void close()
 	{
 		if (m_native_handle.value != native_platform_handle::null)
 		{
-			vsm_verify(close_handle(m_native_handle.value, error_handler));
+			vsm_verify(close_handle(m_native_handle.value));
 		}
 	}
 

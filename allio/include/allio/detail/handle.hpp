@@ -4,6 +4,7 @@
 #include <allio/detail/handle_flags.hpp>
 #include <allio/detail/io.hpp>
 #include <allio/detail/parameters.hpp>
+#include <allio/detail/parameters2.hpp>
 #include <allio/detail/type_list.hpp>
 #include <allio/error.hpp>
 
@@ -89,18 +90,7 @@ public:
 	}
 
 
-	#define allio_handle_create_parameters(type, data, ...) \
-		type(allio::handle, create_parameters) \
-		data(bool, multiplexable, false) \
-
-	allio_interface_parameters(allio_handle_create_parameters);
-
 	struct close_t;
-	#define allio_handle_close_parameters(type, data, ...) \
-		type(::allio::detail::handle, close_parameters) \
-		data(::allio::error_handler*, error_handler, nullptr) \
-	
-	allio_interface_parameters(allio_handle_close_parameters);
 
 protected:
 	struct private_t {};
@@ -135,10 +125,9 @@ protected:
 	template<typename H>
 	struct sync_interface
 	{
-		template<parameters<close_parameters> P = close_parameters::interface>
-		void close(P const& args = {})
+		void close()
 		{
-			static_cast<H&>(*this)._close(args);
+			static_cast<H&>(*this)._close();
 		}
 	};
 
@@ -170,9 +159,6 @@ class basic_blocking_handle final
 	using async_handle_type = basic_async_handle<H, M>;
 
 public:
-	using base_type = H;
-
-
 	basic_blocking_handle() = default;
 
 	basic_blocking_handle(basic_blocking_handle&& other) noexcept = default;
@@ -181,7 +167,7 @@ public:
 	{
 		if (*this)
 		{
-			H::close(nullptr);
+			H::close();
 		}
 		H::operator=(vsm_move(other));
 		return *this;
@@ -191,7 +177,7 @@ public:
 	{
 		if (*this)
 		{
-			H::close(nullptr);
+			H::close();
 		}
 	}
 
@@ -271,12 +257,22 @@ private:
 		return vsm_forward(initializer)(*this);
 	}
 
-	void _close(handle::close_parameters const& args)
+	void _close()
 	{
 		if (*this)
 		{
-			return H::close(args.error_handler);
+			return H::close();
 		}
+	}
+
+
+	template<typename O>
+	friend vsm::result<void> tag_invoke(
+		blocking_io_t,
+		vsm::any_cvref_of<basic_blocking_handle> auto& h,
+		io_parameters_t<O> const& args)
+	{
+		return H::do_blocking_io(h, args);
 	}
 
 
@@ -309,9 +305,6 @@ private:
 	vsm_no_unique_address connector_type m_connector;
 
 public:
-	using base_type = H;
-
-
 	basic_async_handle() = default;
 
 	basic_async_handle(blocking_handle_type&& h)
@@ -332,7 +325,7 @@ public:
 	{
 		if (*this)
 		{
-			H::close(nullptr);
+			H::close();
 		}
 
 		H::operator=(vsm_move(other));
@@ -345,7 +338,7 @@ public:
 	{
 		if (*this)
 		{
-			H::close(nullptr);
+			H::close();
 		}
 	}
 
@@ -361,11 +354,11 @@ public:
 		return _set_multiplexer(vsm_forward(multiplexer));
 	}
 
-	M release_multiplexer(error_handler* const error_handler = nullptr)
+	M release_multiplexer()
 	{
 		if (*this && m_multiplexer)
 		{
-			m_multiplexer->detach(static_cast<H const&>(*this), m_connector, error_handler);
+			m_multiplexer->detach(static_cast<H const&>(*this), m_connector);
 		}
 
 		M multiplexer = vsm_move(m_multiplexer);
@@ -451,24 +444,27 @@ private:
 		handle.H::operator=(static_cast<H&&>(*this));
 	}
 
-	void _close(error_handler* const error_handler)
+	void _close()
 	{
 		if (*this)
 		{
 			if (m_multiplexer)
 			{
-				m_multiplexer->detach(static_cast<H const&>(*this), m_connector, error_handler);
+				m_multiplexer->detach(static_cast<H const&>(*this), m_connector);
 			}
 
-			H::close(error_handler);
+			H::close();
 		}
 	}
 
 
 	template<typename O>
-	friend vsm::result<void> tag_invoke(blocking_io_t, any_cvref_of<basic_async_handle> auto& h, io_parameters<O> const& args)
+	friend vsm::result<void> tag_invoke(
+		blocking_io_t,
+		vsm::any_cvref_of<basic_async_handle> auto& h,
+		io_parameters_t<O> const& args)
 	{
-		return H::blocking_io(h, args);
+		return H::do_blocking_io(h, args);
 	}
 
 	template<typename S>

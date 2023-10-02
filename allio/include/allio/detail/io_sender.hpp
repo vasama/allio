@@ -11,17 +11,16 @@ namespace allio::detail {
 template<typename H, typename O>
 class io_sender
 {
-	using traits_type = io_operation_traits<O>;
-
-	using handle_base_type = std::remove_cv_t<typename traits_type::handle_type>;
+	using handle_base_type = std::remove_cv_t<typename O::handle_type>;
 	static_assert(std::is_base_of_v<handle_base_type, H>);
 
-	using handle_type = vsm::select_t<std::is_const_v<typename traits_type::handle_type>, H const, H>;
+	using handle_type = vsm::select_t<std::is_const_v<typename O::handle_type>, H const, H>;
 	using multiplexer_type = typename H::multiplexer_type;
 
 	using operation_type = operation_t<multiplexer_type, handle_base_type, O>;
 
-	using result_type = io_result_type<O>;
+	using params_type = io_parameters_t<O>;
+	using result_type = typename O::result_type;
 
 	template<typename Receiver>
 	class operation : io_callback
@@ -90,7 +89,7 @@ class io_sender
 	};
 
 	handle_type* m_handle;
-	vsm_no_unique_address io_parameters<O> m_args;
+	vsm_no_unique_address params_type m_args;
 
 public:
 	using completion_signatures = ex::completion_signatures<
@@ -99,9 +98,10 @@ public:
 		ex::set_stopped_t()
 	>;
 
-	explicit io_sender(handle_type& handle, auto&&... args)
+	template<std::convertible_to<params_type> Args>
+	explicit io_sender(handle_type& handle, Args&& args)
 		: m_handle(&handle)
-		, m_args{ vsm_forward(args)... }
+		, m_args(vsm_forward(args))
 	{
 	}
 

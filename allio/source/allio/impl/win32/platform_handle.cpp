@@ -10,7 +10,8 @@ using namespace allio::win32;
 
 handle_flags win32::set_multiplexable_completion_modes(HANDLE const handle)
 {
-	if (SetFileCompletionNotificationModes(handle,
+	if (SetFileCompletionNotificationModes(
+		handle,
 		FILE_SKIP_COMPLETION_PORT_ON_SUCCESS | FILE_SKIP_SET_EVENT_ON_HANDLE))
 	{
 		return

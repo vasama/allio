@@ -1,10 +1,68 @@
 #pragma once
 
+#include <allio/detail/parameters2.hpp>
+
 #include <vsm/result.hpp>
+#include <vsm/standard.hpp>
 #include <vsm/utility.hpp>
 
 namespace allio::detail {
 
+template<typename O>
+struct io_parameters_t
+	: O::required_params_type
+	, O::optional_params_type
+{
+	io_parameters_t() = default;
+
+	explicit io_parameters_t(auto&&... args)
+		: O::required_params_type{ { vsm_forward(args) }... }
+		, O::optional_params_type{}
+	{
+	}
+};
+
+template<typename O>
+class io_arguments_t : io_parameters_t<O>
+{
+	using base = io_parameters_t<O>;
+
+public:
+	explicit io_arguments_t(auto&&... args)
+		: base(vsm_forward(args)...)
+	{
+	}
+
+	base&& operator()(auto&&... args) &&
+	{
+		(set_argument(static_cast<base&>(*this), vsm_forward(args)), ...);
+		return static_cast<base&&>(*this);
+	}
+};
+
+
+template<typename Result>
+struct io_result_storage
+{
+	Result result;
+
+	vsm::result<Result> consume()
+	{
+		return vsm_move(result);
+	}
+};
+
+template<>
+struct io_result_storage<void>
+{
+	vsm::result<void> consume()
+	{
+		return {};
+	}
+};
+
+
+#if 0
 template<typename Operation>
 struct io_operation_traits;
 
@@ -37,26 +95,6 @@ struct io_parameters_with_handle
 		: io_handle_parameter<io_handle_type<Operation>>{ &handle }
 		, io_parameters<Operation>{ vsm_forward(args)... }
 	{
-	}
-};
-
-template<typename Result>
-struct io_result_storage
-{
-	Result result;
-
-	vsm::result<Result> consume()
-	{
-		return vsm_move(result);
-	}
-};
-
-template<>
-struct io_result_storage<void>
-{
-	vsm::result<void> consume()
-	{
-		return {};
 	}
 };
 
@@ -144,5 +182,6 @@ struct io_parameters_with_result
 	{
 	}
 };
+#endif
 
 } // namespace allio::detail

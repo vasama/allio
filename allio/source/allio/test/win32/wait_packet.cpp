@@ -29,7 +29,9 @@ TEST_CASE("wait packet can be used to wait for events", "[wait_packet][windows][
 	bool const initially_signaled = GENERATE(false, true);
 	CAPTURE(initially_signaled);
 
-	auto const event = create_event(auto_reset_event, { .signal = initially_signaled }).value();
+	auto const event = create_event(
+		auto_reset_event,
+		signal_event(initially_signaled)).value();
 
 	auto const wait_packet = create_wait_packet().value();
 

@@ -9,7 +9,7 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-vsm::result<void> detail::close_handle(native_platform_handle const handle, error_handler* const error_handler) noexcept
+vsm::result<void> detail::close_handle(native_platform_handle const handle) noexcept
 {
 	NTSTATUS const status = win32::NtClose(unwrap_handle(handle));
 
@@ -21,18 +21,9 @@ vsm::result<void> detail::close_handle(native_platform_handle const handle, erro
 		case STATUS_HANDLE_NOT_CLOSABLE:
 			return vsm::unexpected(static_cast<kernel_error>(status));
 		}
-
-		get_error_handler(error_handler).handle_error(
-		{
-			.error = static_cast<kernel_error>(status),
-			.source = error_source::NtClose,
-		});
+		
+		unrecoverable_error(static_cast<kernel_error>(status));
 	}
 	
 	return {};
-}
-
-vsm::result<void> detail::close_handle(native_platform_handle const handle) noexcept
-{
-	return close_handle(handle, nullptr);
 }

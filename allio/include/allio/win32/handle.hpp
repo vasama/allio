@@ -1,15 +1,13 @@
 #pragma once
 
+#include <allio/detail/parameters2.hpp>
+
 namespace allio::win32 {
 
 struct synchronous_t
 {
-	bool alert;
+	
 };
-
-inline synchronous_t synchronous(bool const alert = false)
-{
-	return { alert };
-}
+inline constexpr synchronous_t synchronous = {};
 
 } // namespace allio::win32

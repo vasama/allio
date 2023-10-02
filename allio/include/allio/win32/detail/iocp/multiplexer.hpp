@@ -15,6 +15,34 @@
 
 namespace allio::detail {
 
+namespace iocp {
+
+struct max_concurrent_threads_t
+{
+	struct parameter_t
+	{
+		size_t max_concurrent_threads;
+	};
+
+	struct argument_t
+	{
+		size_t max_concurrent_threads;
+
+		friend void tag_invoke(set_argument_t, parameter_t& args, argument_t const& value)
+		{
+			args.max_concurrent_threads = value.max_concurrent_threads;
+		}
+	};
+
+	argument_t vsm_static_operator_invoke(size_t const max_concurrent_threads)
+	{
+		return { max_concurrent_threads };
+	}
+};
+inline constexpr max_concurrent_threads_t max_concurrent_threads;
+
+} // namespace iocp
+
 class iocp_multiplexer final
 {
 public:
@@ -121,6 +149,7 @@ public:
 	}
 
 private:
+	// IOCP handles cannot be duplicated, so the sharing is implemented in user space.
 	struct shared_state_t : vsm::intrusive_ref_count
 	{
 		unique_handle completion_port;
@@ -129,17 +158,17 @@ private:
 	vsm::intrusive_ptr<shared_state_t> m_shared_state;
 	vsm::linear<HANDLE> m_completion_port;
 
-public:
-	#define allio_iocp_multiplexer_create_parameters(type, data, ...) \
-		type(::allio::detail::iocp_multiplexer, create_parameters) \
-		data(::size_t, max_concurrent_threads, 1) \
 
-	allio_interface_parameters(allio_iocp_multiplexer_create_parameters);
-
-	template<parameters<create_parameters> P = create_parameters::interface>
-	[[nodiscard]] static vsm::result<iocp_multiplexer> create(P const& args = {})
+	struct create_t
 	{
-		return _create(args);
+		using required_params_type = no_parameters_t;
+		using optional_params_type = iocp::max_concurrent_threads_t::parameter_t;
+	};
+
+public:
+	[[nodiscard]] static vsm::result<iocp_multiplexer> create(auto&&... args)
+	{
+		return _create(io_arguments_t<create_t>()(vsm_forward(args)...));
 	}
 
 	[[nodiscard]] static vsm::result<iocp_multiplexer> create(iocp_multiplexer const& other)
@@ -233,18 +262,18 @@ private:
 
 
 	//TODO: Take native_platform_handle instead of platform_handle.
-	[[nodiscard]] vsm::result<void> _attach_handle(platform_handle const& h, connector_type& c);
+	[[nodiscard]] vsm::result<void> _attach_handle(native_platform_handle handle, connector_type& c);
 	//TODO: Return a vsm::result<void> instead of void as detaching can fail.
 	//      Handles should gain a multiplexer coupling aware close to avoid detaching.
-	void _detach_handle(platform_handle const& h, connector_type& c);
+	void _detach_handle(native_platform_handle handle, connector_type& c);
 
-	template<std::derived_from<_platform_handle> H>
+	template<std::derived_from<platform_handle> H>
 	friend vsm::result<void> tag_invoke(attach_handle_t, iocp_multiplexer& m, H const& h, connector_type& c)
 	{
 		return m._attach_handle(h.get_platform_handle(), c);
 	}
 
-	template<std::derived_from<_platform_handle> H>
+	template<std::derived_from<platform_handle> H>
 	friend void tag_invoke(detach_handle_t, iocp_multiplexer& m, H const& h, connector_type& c)
 	{
 		return m._detach_handle(h.get_platform_handle(), c);

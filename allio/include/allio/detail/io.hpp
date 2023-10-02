@@ -15,9 +15,11 @@ namespace allio::detail {
 
 struct blocking_io_t
 {
-	template<typename H>
-	auto vsm_static_operator_invoke(H& handle)
+	template<typename H, typename O>
+	auto vsm_static_operator_invoke(H& handle, io_parameters_t<O> const& args)
+		requires vsm::tag_invocable<blocking_io_t, H&, io_parameters_t<O> const&>
 	{
+		return vsm::tag_invoke(blocking_io_t(), handle, args);
 	}
 };
 inline constexpr blocking_io_t blocking_io = {};
@@ -96,10 +98,10 @@ inline constexpr attach_handle_t attach_handle = {};
 struct detach_handle_t
 {
 	template<typename M, typename H, typename S>
-	void vsm_static_operator_invoke(M& m, H const& h, S& s, error_handler* const e = nullptr)
-		requires vsm::tag_invocable<detach_handle_t, M const&, H const&, S&, error_handler*>
+	void vsm_static_operator_invoke(M& m, H const& h, S& s)
+		requires vsm::tag_invocable<detach_handle_t, M const&, H const&, S&>
 	{
-		return vsm::tag_invoke(detach_handle_t(), m, h, s, e);
+		return vsm::tag_invoke(detach_handle_t(), m, h, s);
 	}
 };
 inline constexpr detach_handle_t detach_handle = {};
@@ -160,6 +162,18 @@ struct cancel_io_t
 inline constexpr cancel_io_t cancel_io = {};
 
 
+struct poll_io_t
+{
+	template<typename Multiplexer, typename... Args>
+	vsm::result<void> vsm_static_operator_invoke(Multiplexer& m, Args&&... args)
+		requires vsm::tag_invocable<poll_io_t, Multiplexer&, Args&&...>
+	{
+		return vsm::tag_invoke(poll_io_t(), m, vsm_forward(args)...);
+	}
+};
+inline constexpr poll_io_t poll_io = {};
+
+
 template<typename M, typename H>
 struct connector_impl
 {
@@ -193,12 +207,14 @@ class operation
 	static_assert(std::is_default_constructible_v<impl_type>);
 	friend impl_type;
 
-	vsm_no_unique_address io_parameters<O> args;
+	using params_type = io_parameters_t<O>;
+	vsm_no_unique_address params_type args;
 
 public:
-	explicit operation(io_callback& callback, io_parameters<O> const& args)
+	template<std::convertible_to<params_type> Args>
+	explicit operation(io_callback& callback, Args&& args)
 		: M::operation_type(callback)
-		, args(args)
+		, args(vsm_forward(args))
 	{
 	}
 
@@ -216,9 +232,9 @@ private:
 		return operation_impl<M, H, O>::notify(m, h, c, s, status);
 	}
 
-	friend void tag_invoke(cancel_io_t, M& m, H const& h, C const& c, S& s, error_handler* const e)
+	friend void tag_invoke(cancel_io_t, M& m, H const& h, C const& c, S& s)
 	{
-		return operation_impl<M, H, O>::cancel(m, h, c, s, e);
+		return operation_impl<M, H, O>::cancel(m, h, c, s);
 	}
 };
 

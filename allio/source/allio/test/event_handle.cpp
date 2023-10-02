@@ -32,7 +32,7 @@ static vsm::result<bool> check_timeout(vsm::result<void> const r)
 
 static vsm::result<bool> wait(blocking_event_handle const& event, deadline const deadline = deadline::instant())
 {
-	return check_timeout(event.wait({ .deadline = deadline }));
+	return check_timeout(event.wait(deadline));
 }
 
 static event_reset_mode get_reset_mode(bool const manual_reset)
@@ -55,21 +55,21 @@ TEST_CASE("new event_handle is not signaled", "[event_handle][blocking][create]"
 
 TEST_CASE("new event_handle is signaled if requested", "[event_handle][blocking][create]")
 {
-	auto const event = create_event(generate_reset_mode(), { .signal = true }).value();
+	auto const event = create_event(generate_reset_mode(), signal_event).value();
 	REQUIRE(event);
 	REQUIRE(wait(event).value());
 }
 
 TEST_CASE("auto reset event_handle becomes unsignaled", "[event_handle][blocking]")
 {
-	auto const event = create_event(auto_reset_event, { .signal = true }).value();
+	auto const event = create_event(auto_reset_event, signal_event).value();
 	REQUIRE(wait(event).value());
 	REQUIRE(!wait(event).value());
 }
 
 TEST_CASE("manual reset event_handle remains signaled", "[event_handle][blocking]")
 {
-	auto const event = create_event(manual_reset_event, { .signal = true }).value();
+	auto const event = create_event(manual_reset_event, signal_event).value();
 	REQUIRE(wait(event).value());
 	REQUIRE(wait(event).value());
 }
@@ -83,7 +83,7 @@ TEST_CASE("event_handle can be signaled", "[event_handle][blocking]")
 
 TEST_CASE("signaled event_handle can be reset", "[event_handle][blocking]")
 {
-	auto const event = create_event(generate_reset_mode(), {.signal = true}).value();
+	auto const event = create_event(generate_reset_mode(), signal_event).value();
 	event.reset().value();
 	REQUIRE(!wait(event).value());
 }

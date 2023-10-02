@@ -11,7 +11,7 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::linux;
 
-vsm::result<void> detail::close_handle(native_platform_handle const handle, error_handler* const error_handler) noexcept
+vsm::result<void> detail::close_handle(native_platform_handle const handle) noexcept
 {
 	static_assert(vsm_os_linux, "Check close behaviour on EINTR");
 
@@ -24,18 +24,8 @@ vsm::result<void> detail::close_handle(native_platform_handle const handle, erro
 			return vsm::unexpected(static_cast<system_error>(e));
 		}
 
-
-		get_error_handler(error_handler).handle_error(
-		{
-			.error = static_cast<kernel_error>(status),
-			.reason = error_source::close,
-		});
+		unrecoverable_error(static_cast<system_error>(e));
 	}
 
-	return {};	
-}
-
-vsm::result<void> detail::close_handle(native_platform_handle const handle) noexcept
-{
-	return close_handle(handle, nullptr);
+	return {};
 }
