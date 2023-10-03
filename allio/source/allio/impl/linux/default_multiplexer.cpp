@@ -1,3 +1,4 @@
+#if 0
 #include <allio/default_multiplexer.hpp>
 
 #include <allio/linux/io_uring_multiplexer.hpp>
@@ -21,3 +22,4 @@ vsm::result<unique_multiplexer_ptr> allio::create_default_multiplexer(default_mu
 
 	return vsm::unexpected(error::unsupported_operation);
 }
+#endif

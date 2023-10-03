@@ -148,7 +148,7 @@ private:
 
 struct deadline_t
 {
-	deadline deadline;
+	detail::deadline deadline;
 
 	friend void tag_invoke(set_argument_t, deadline_t& self, detail::deadline const deadline)
 	{

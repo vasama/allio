@@ -162,7 +162,7 @@ vsm_configure(allio
 		#source/allio/impl/linux/filesystem_handle.cpp
 		#source/allio/impl/linux/filesystem_handle.hpp
 		#source/allio/impl/linux/file_handle.cpp
-		source/allio/impl/linux/map_handle.cpp
+		#source/allio/impl/linux/map_handle.cpp
 		source/allio/impl/linux/memory.cpp
 		#source/allio/impl/linux/platform_handle.cpp
 		#source/allio/impl/linux/platform_handle.hpp
@@ -172,10 +172,13 @@ vsm_configure(allio
 		#source/allio/impl/linux/process_handle.cpp
 		#source/allio/impl/linux/process_handle.hpp
 		#source/allio/impl/linux/section_handle.cpp
-		source/allio/impl/linux/sync_byte_io.cpp
+		#source/allio/impl/linux/sync_byte_io.cpp
 		source/allio/impl/linux/unique_fd.cpp
 		source/allio/impl/linux/version.cpp
 		source/allio/impl/linux/version.hpp
+
+		source/allio/impl/linux/io_uring/event_handle.cpp
+		source/allio/impl/linux/io_uring/multiplexer.cpp
 )
 
 

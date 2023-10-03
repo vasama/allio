@@ -7,8 +7,14 @@ namespace allio::detail {
 
 struct set_argument_t
 {
+	template<typename Parameter>
+	friend constexpr void tag_invoke(set_argument_t, Parameter& args, Parameter const& value)
+	{
+		args = value;
+	}
+
 	template<typename Parameters, typename Argument>
-	void vsm_static_operator_invoke(Parameters& arguments, Argument&& argument)
+	constexpr void vsm_static_operator_invoke(Parameters& arguments, Argument&& argument)
 		requires vsm::tag_invocable<set_argument_t, Parameters&, Argument&&>
 	{
 		vsm::tag_invoke(set_argument_t(), arguments, vsm_forward(argument));
