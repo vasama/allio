@@ -142,7 +142,9 @@ protected:
 		/// @brief Wait for the event object to become signaled.
 		[[nodiscard]] io_sender<H, wait_t> wait_async(auto&&... args) const
 		{
-			return io_sender<H, wait_t>(static_cast<H const&>(*this), io_arguments_t<wait_t>()(vsm_forward(args)...));
+			return io_sender<H, wait_t>(
+				static_cast<H const&>(*this),
+				io_arguments_t<wait_t>()(vsm_forward(args)...));
 		}
 	};
 

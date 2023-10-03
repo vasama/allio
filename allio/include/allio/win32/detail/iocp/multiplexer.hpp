@@ -21,7 +21,7 @@ struct max_concurrent_threads_t
 {
 	struct parameter_t
 	{
-		size_t max_concurrent_threads;
+		size_t max_concurrent_threads = 1;
 	};
 
 	struct argument_t
@@ -165,6 +165,12 @@ private:
 		using optional_params_type = iocp::max_concurrent_threads_t::parameter_t;
 	};
 
+	struct poll_t
+	{
+		using required_params_type = no_parameters_t;
+		using optional_params_type = deadline_t;
+	};
+
 public:
 	[[nodiscard]] static vsm::result<iocp_multiplexer> create(auto&&... args)
 	{
@@ -178,10 +184,9 @@ public:
 
 
 	/// @return True if the multiplexer made any progress.
-	template<parameters<poll_parameters> P = poll_parameters::interface>
-	[[nodiscard]] vsm::result<bool> poll(P const& args = {})
+	[[nodiscard]] vsm::result<bool> poll(auto&&... args)
 	{
-		return _poll(args);
+		return _poll(io_arguments_t<poll_t>()(vsm_forward(args)...));
 	}
 
 
@@ -257,7 +262,7 @@ public:
 private:
 	explicit iocp_multiplexer(vsm::intrusive_ptr<shared_state_t> shared_state);
 
-	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(create_parameters const& args);
+	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(io_parameters_t<create_t> const& args);
 	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(iocp_multiplexer const& other);
 
 
@@ -280,7 +285,7 @@ private:
 	}
 
 
-	[[nodiscard]] vsm::result<bool> _poll(poll_parameters const& args);
+	[[nodiscard]] vsm::result<bool> _poll(io_parameters_t<poll_t> const& args);
 };
 
 } // namespace allio::detail

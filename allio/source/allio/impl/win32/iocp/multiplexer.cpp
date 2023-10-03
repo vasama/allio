@@ -26,7 +26,7 @@ enum class key_context : uintptr_t
 } // namespace
 
 
-vsm::result<iocp_multiplexer> iocp_multiplexer::_create(create_parameters const& args)
+vsm::result<iocp_multiplexer> iocp_multiplexer::_create(io_parameters_t<create_t> const& args)
 {
 	if (args.max_concurrent_threads == 0)
 	{
@@ -161,7 +161,7 @@ bool iocp_multiplexer::cancel_wait(wait_packet const packet)
 }
 
 
-vsm::result<bool> iocp_multiplexer::_poll(poll_parameters const& args)
+vsm::result<bool> iocp_multiplexer::_poll(io_parameters_t<poll_t> const& args)
 {
 	FILE_IO_COMPLETION_INFORMATION entries[32];
 

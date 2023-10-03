@@ -5,7 +5,6 @@
 #include <vsm/atomic.hpp>
 
 #include <exec/async_scope.hpp>
-#include <exec/single_thread_context.hpp>
 
 #include <catch2/catch_all.hpp>
 
@@ -30,7 +29,7 @@ static vsm::result<bool> check_timeout(vsm::result<void> const r)
 	return vsm::unexpected(r.error());
 }
 
-static vsm::result<bool> wait(blocking_event_handle const& event, deadline const deadline = deadline::instant())
+static vsm::result<bool> wait(auto const& event, deadline const deadline = deadline::instant())
 {
 	return check_timeout(event.wait(deadline));
 }
@@ -45,36 +44,35 @@ static event_reset_mode generate_reset_mode()
 	return get_reset_mode(GENERATE(false, true));
 }
 
-
-TEST_CASE("new event_handle is not signaled", "[event_handle][blocking][create]")
+TEST_CASE("new event_handle is not signaled", "[event_handle][blocking]")
 {
 	auto const event = create_event(generate_reset_mode()).value();
 	REQUIRE(event);
 	REQUIRE(!wait(event).value());
 }
 
-TEST_CASE("new event_handle is signaled if requested", "[event_handle][blocking][create]")
+TEST_CASE("new event_handle is signaled if requested", "[event_handle][blocking]")
 {
 	auto const event = create_event(generate_reset_mode(), signal_event).value();
 	REQUIRE(event);
 	REQUIRE(wait(event).value());
 }
 
-TEST_CASE("auto reset event_handle becomes unsignaled", "[event_handle][blocking]")
+TEST_CASE("auto reset event_handle becomes unsignaled after blocking wait", "[event_handle][blocking]")
 {
 	auto const event = create_event(auto_reset_event, signal_event).value();
 	REQUIRE(wait(event).value());
 	REQUIRE(!wait(event).value());
 }
 
-TEST_CASE("manual reset event_handle remains signaled", "[event_handle][blocking]")
+TEST_CASE("manual reset event_handle remains signaled after blocking wait", "[event_handle][blocking]")
 {
 	auto const event = create_event(manual_reset_event, signal_event).value();
 	REQUIRE(wait(event).value());
 	REQUIRE(wait(event).value());
 }
 
-TEST_CASE("event_handle can be signaled", "[event_handle][blocking]")
+TEST_CASE("event_handle can be signaled after creation", "[event_handle][blocking]")
 {
 	auto const event = create_event(generate_reset_mode()).value();
 	event.signal().value();
@@ -101,7 +99,7 @@ TEST_CASE("event_handle can be signaled concurrently", "[event_handle][blocking]
 	REQUIRE(wait(event, deadline::never()));
 }
 
-TEST_CASE("auto reset event_handle signals are only observed by one waiter", "[event_handle][blocking][threading]")
+TEST_CASE("auto reset event_handle signals are only observed by one wait", "[event_handle][blocking][threading]")
 {
 	//TODO: Pick thread count based on CPU count.
 	static constexpr size_t const thread_count = 4;
@@ -171,14 +169,8 @@ TEST_CASE("auto reset event_handle signals are only observed by one waiter", "[e
 }
 
 
-TEST_CASE("async signaling", "[event_handle][async]")
+static auto wait_detached(exec::async_scope& scope, event_handle const& event)
 {
-	bool const manual_reset = GENERATE(0, 1);
-	CAPTURE(manual_reset);
-
-	default_multiplexer multiplexer = default_multiplexer::create().value();
-	auto const event = create_event(&multiplexer, get_reset_mode(manual_reset)).value();
-
 	class shared_bool
 	{
 		std::shared_ptr<bool> m_ptr;
@@ -195,98 +187,103 @@ TEST_CASE("async signaling", "[event_handle][async]")
 		}
 	};
 
-	auto const wait_detached = [&](exec::async_scope& scope) -> shared_bool
+	std::shared_ptr<bool> ptr = std::make_shared<bool>(false);
+	(void)scope.spawn_future(event.wait_async() | ex::then([ptr]()
 	{
-		std::shared_ptr<bool> ptr = std::make_shared<bool>(false);
-		(void)scope.spawn_future(event.wait_async() | ex::then([ptr]()
-		{
-			*ptr = true;
-		}));
-		return shared_bool(vsm_move(ptr));
-	};
-
-	{
-		exec::async_scope scope;
-		auto const signaled = wait_detached(scope);
-		REQUIRE(!signaled);
-
-		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
-		REQUIRE(!signaled);
-
-		event.signal().value();
-		REQUIRE(!signaled);
-
-		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
-		REQUIRE(signaled);
-
-		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
-		REQUIRE(signaled);
-	}
-
-	{
-		exec::async_scope scope;
-		auto const signaled = wait_detached(scope);
-
-		if (!manual_reset)
-		{
-			REQUIRE(!signaled);
-		}
-
-		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
-		REQUIRE(signaled == manual_reset);
-
-		if (!manual_reset)
-		{
-			event.signal().value();
-			REQUIRE(!signaled);
-		}
-
-		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
-		REQUIRE(signaled);
-
-		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
-		REQUIRE(signaled);
-	}
-
-	{
-		event.reset().value();
-
-		exec::async_scope scope;
-		auto const signaled = wait_detached(scope);
-		REQUIRE(!signaled);
-
-		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
-		REQUIRE(!signaled);
-
-		event.signal().value();
-		REQUIRE(!signaled);
-
-		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
-		REQUIRE(signaled);
-
-		(void)multiplexer.poll({ .deadline = deadline::instant() }).value();
-		REQUIRE(signaled);
-	}
-}
-
-#if 0
-TEST_CASE("async concurrent signaling", "[event_handle][async][threading]")
-{
-	default_multiplexer multiplexer = default_multiplexer::create().value();
-	auto const event = create_event(&multiplexer, generate_reset_mode()).value();
-
-	exec::single_thread_context signal_context;
-	auto signal_sender = ex::on(signal_context.get_scheduler(), ex::just() | ex::then([&event]()
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
-		event.signal().value();
+		*ptr = true;
 	}));
-
-	//FIXME: The when_all completes on the signal thread.
-	//       This leaves sync_wait stuck polling the multiplexer.
-	sync_wait(multiplexer, ex::when_all(event.wait_async(), signal_sender));
+	return shared_bool(vsm_move(ptr));
 }
-#endif
+
+TEST_CASE("async wait on signaled event_handle may complete immediately", "[event_handle][async]")
+{
+	auto multiplexer = default_multiplexer::create().value();
+	auto const event = create_event(&multiplexer, auto_reset_event, signal_event).value();
+
+	exec::async_scope scope;
+	auto const signaled = wait_detached(scope, event);
+
+	if (!signaled)
+	{
+		(void)multiplexer.poll(deadline::instant()).value();
+	}
+
+	REQUIRE(signaled);
+}
+
+TEST_CASE("async wait on unsignaled event_handle completes after signaling", "[event_handle][async]")
+{
+	auto multiplexer = default_multiplexer::create().value();
+	auto const event = create_event(&multiplexer, auto_reset_event).value();
+
+	exec::async_scope scope;
+	auto const signaled = wait_detached(scope, event);
+	REQUIRE(!signaled);
+
+	event.signal().value();
+	(void)multiplexer.poll(deadline::instant()).value();
+	REQUIRE(signaled);
+}
+
+TEST_CASE("auto reset event_handle becomes unsignaled after async wait", "[event_handle][async]")
+{
+	auto multiplexer = default_multiplexer::create().value();
+	auto const event = create_event(&multiplexer, auto_reset_event, signal_event).value();
+
+	exec::async_scope scope;
+	(void)wait_detached(scope, event);
+	(void)multiplexer.poll(deadline::instant()).value();
+
+	REQUIRE(!wait(event).value());
+}
+
+TEST_CASE("manual reset event_handle remains signaled after async wait", "[event_handle][async]")
+{
+	auto multiplexer = default_multiplexer::create().value();
+	auto const event = create_event(&multiplexer, manual_reset_event, signal_event).value();
+
+	exec::async_scope scope;
+	(void)wait_detached(scope, event);
+	(void)multiplexer.poll(deadline::instant()).value();
+
+	REQUIRE(wait(event).value());
+}
+
+TEST_CASE("auto reset event_handle signals are only observed by one async wait", "[event_handle][async]")
+{
+	auto multiplexer = default_multiplexer::create().value();
+	auto const event = create_event(&multiplexer, auto_reset_event).value();
+
+	exec::async_scope scope;
+	auto const signal1 = wait_detached(scope, event);
+	auto const signal2 = wait_detached(scope, event);
+
+	event.signal().value();
+	(void)multiplexer.poll().value();
+
+	bool const is_signaled1 = signal1;
+	bool const is_signaled2 = signal2;
+	REQUIRE(is_signaled1 != is_signaled2);
+
+	event.signal().value();
+	(void)multiplexer.poll().value();
+}
+
+TEST_CASE("manual reset event_handle signals are observed by all async waits", "[event_handle][async]")
+{
+	auto multiplexer = default_multiplexer::create().value();
+	auto const event = create_event(&multiplexer, manual_reset_event).value();
+
+	exec::async_scope scope;
+	auto const signal1 = wait_detached(scope, event);
+	auto const signal2 = wait_detached(scope, event);
+
+	event.signal().value();
+	(void)multiplexer.poll().value();
+
+	REQUIRE(signal1);
+	REQUIRE(signal2);
+}
 
 
 #if 0 //TODO: Test opaque_handle wrapping event_handle
