@@ -258,13 +258,13 @@ private:
 	[[nodiscard]] vsm::result<void> _attach_handle(native_platform_handle handle, connector_type& c);
 	void _detach_handle(native_platform_handle handle, connector_type& c);
 
-	template<std::derived_from<_platform_handle> H>
+	template<std::derived_from<platform_handle> H>
 	friend vsm::result<void> tag_invoke(attach_handle_t, io_uring_multiplexer& m, H const& h, connector_type& c)
 	{
 		return m._attach_handle(h.get_platform_handle(), c);
 	}
 
-	template<std::derived_from<_platform_handle> H>
+	template<std::derived_from<platform_handle> H>
 	friend void tag_invoke(detach_handle_t, io_uring_multiplexer& m, H const& h, connector_type& c)
 	{
 		return m._detach_handle(h.get_platform_handle(), c);
