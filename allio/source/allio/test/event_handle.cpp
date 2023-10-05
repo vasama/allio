@@ -192,6 +192,7 @@ static auto wait_detached(exec::async_scope& scope, event_handle const& event)
 	{
 		*ptr = true;
 	}));
+
 	return shared_bool(vsm_move(ptr));
 }
 

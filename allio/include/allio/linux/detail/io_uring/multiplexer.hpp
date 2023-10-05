@@ -598,7 +598,7 @@ private:
 		return ring_view<io_uring_cqe>(m_cqes, m_cq_size - 1, m_cqe_multiply_shift);
 	}
 
-	void commit();
+	[[nodiscard]] vsm::result<void> commit();
 
 
 	[[nodiscard]] bool has_kernel_thread() const
@@ -615,7 +615,7 @@ private:
 	[[nodiscard]] bool has_pending_cqes() const;
 	void acquire_cqes();
 
-	void reap_all_cqes();
+	[[nodiscard]] bool reap_all_cqes();
 	void reap_cqe(io_uring_cqe const& cqe);
 
 

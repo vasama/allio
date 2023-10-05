@@ -324,38 +324,37 @@ vsm::result<void> io_uring_multiplexer::record_context::commit()
 #endif
 
 
-void io_uring_multiplexer::commit()
+vsm::result<void> io_uring_multiplexer::commit()
 {
-	#if 0
 	if (vsm::any_flags(m_flags, flags::auto_submit))
 	{
-		uint32_t const sq_offset = m_sq_acquire;
-		m_sq_release = sq_offset;
+		release_sqes();
 
-		// Make the produced SQEs visible to the kernel.
-		m_k_sq_produce.store(sq_offset, std::memory_order_release);
+		unsigned int enter_to_submit = 0;
+		unsigned int enter_flags = 0;
 
 		if (has_kernel_thread())
 		{
-			wake_kernel_thread();
+			enter_flags |= IORING_ENTER_SQ_WAKEUP;
 		}
 		else
 		{
-			//TODO: enter
+			enter_to_submit = static_cast<unsigned>(-1);
 		}
+
+		vsm_try_discard(io_uring_enter(
+			m_io_uring.get(),
+			enter_to_submit,
+			/* min_complete: */ 0,
+			enter_flags,
+			/* arg: */ nullptr));
 	}
-	#endif
+
+	return {};
 }
 
 
 #if 0
-bool io_uring_multiplexer::kernel_thread_needs_wakeup()
-{
-	return vsm::any_flags(
-		m_k_flags.load(std::memory_order_acquire),
-		IORING_SQ_NEED_WAKEUP);
-}
-
 void io_uring_multiplexer::wake_kernel_thread()
 {
 	vsm_assert(has_kernel_thread()); //PRECONDITION
@@ -403,14 +402,14 @@ bool io_uring_multiplexer::has_pending_cqes() const
 	return m_cq_consume != m_cq_produce;
 }
 
-void io_uring_multiplexer::reap_all_cqes()
+bool io_uring_multiplexer::reap_all_cqes()
 {
 	uint32_t const cq_consume = m_cq_consume;
 	uint32_t const cq_produce = m_cq_produce;
 
 	if (cq_consume == cq_produce)
 	{
-		return;
+		return false;
 	}
 	
 	ring_view<io_uring_cqe> const cqes = get_cqes();
@@ -424,6 +423,8 @@ void io_uring_multiplexer::reap_all_cqes()
 	}
 
 	m_cq_consume = cq_produce;
+
+	return true;
 }
 
 void io_uring_multiplexer::reap_cqe(io_uring_cqe const& cqe)
@@ -438,6 +439,7 @@ void io_uring_multiplexer::reap_cqe(io_uring_cqe const& cqe)
 
 	auto const user_data = vsm::reinterpret_pointer_cast<user_data_ptr>(cqe.user_data);
 	vsm_assert(user_data.ptr() != nullptr);
+
 	auto const tag = user_data.tag();
 
 	// Emulate IOSQE_CQE_SKIP_SUCCESS for CQEs cancelled via links, if requested.
@@ -479,8 +481,8 @@ namespace {
 enum class enter_reason : uint32_t
 {
 	none                        = 0,
-	submit_sqe                  = 1 << 0,
-	wait_for_cqe                = 1 << 1,
+	submit_sqes                 = 1 << 0,
+	wait_for_cqes               = 1 << 1,
 	wake_kernel_thread          = 1 << 2,
 };
 vsm_flag_enum(enter_reason);
@@ -496,26 +498,25 @@ vsm::result<bool> io_uring_multiplexer::_poll(io_parameters_t<poll_t> const& arg
 	unsigned int enter_min_complete = 0;
 	unsigned int enter_flags = 0;
 
-	if (!vsm::any_flags(m_flags, flags::auto_submit))
+	// If the auto submit mode is not enabled, submit all pending SQEs now.
+	if (!vsm::any_flags(m_flags, flags::auto_submit) && has_pending_sqes())
 	{
-		if (has_pending_sqes())
-		{
-			release_sqes();
+		// Release ready SQEs to the kernel.
+		release_sqes();
 
-			if (has_kernel_thread())
+		if (has_kernel_thread())
+		{
+			if (is_kernel_thread_inactive())
 			{
-				if (is_kernel_thread_inactive())
-				{
-					enter_flags |= IORING_ENTER_SQ_WAKEUP;
-					enter_reason |= reason::wake_kernel_thread;
-				}
+				enter_flags |= IORING_ENTER_SQ_WAKEUP;
+				enter_reason |= reason::wake_kernel_thread;
 			}
-			else
-			{
-				// Submit as many as are available.
-				enter_to_submit = static_cast<unsigned>(-1);
-				enter_reason |= reason::submit_sqe;
-			}
+		}
+		else
+		{
+			// Submit as many as are available.
+			enter_to_submit = static_cast<unsigned>(-1);
+			enter_reason |= reason::submit_sqes;
 		}
 	}
 
@@ -530,7 +531,7 @@ vsm::result<bool> io_uring_multiplexer::_poll(io_parameters_t<poll_t> const& arg
 	{
 		enter_min_complete = 1;
 		enter_flags |= IORING_ENTER_GETEVENTS;
-		enter_reason |= reason::wait_for_cqe;
+		enter_reason |= reason::wait_for_cqes;
 	}
 
 	if (enter_reason != reason::none)
@@ -548,7 +549,7 @@ vsm::result<bool> io_uring_multiplexer::_poll(io_parameters_t<poll_t> const& arg
 
 				// With an instant timeout, we won't be waiting anyway,
 				// so waiting for CQEs is no longer a reason to enter the kernel.
-				enter_reason &= ~reason::wait_for_cqe;
+				enter_reason &= ~reason::wait_for_cqes;
 			}
 			else if (vsm::any_flags(m_flags, flags::enter_ext_arg))
 			{
@@ -568,7 +569,7 @@ vsm::result<bool> io_uring_multiplexer::_poll(io_parameters_t<poll_t> const& arg
 
 				// Since we're polling the io_uring, we no longer need to
 				// enter the kernel in order to wait for CQEs.
-				enter_reason &= ~reason::wait_for_cqe;
+				enter_reason &= ~reason::wait_for_cqes;
 			}
 		}
 
@@ -581,6 +582,9 @@ vsm::result<bool> io_uring_multiplexer::_poll(io_parameters_t<poll_t> const& arg
 				enter_flags,
 				p_enter_arg));
 
+			//TODO: Do we need to handle consumed if kernel thread is not being used?
+
+			// Check for new CQEs produced by the kernel.
 			acquire_cqes();
 
 			if (has_pending_cqes())
@@ -612,15 +616,18 @@ vsm::result<bool> io_uring_multiplexer::_poll(io_parameters_t<poll_t> const& arg
 				return vsm::unexpected(get_last_error());
 			}
 
-			acquire_cqes();
+			if (r != 0)
+			{
+				// Check for new CQEs produced by the kernel.
+				acquire_cqes();
 
-			vsm_assert(has_pending_cqes());
+				// The poll just completed successfully,
+				// so there better be some pending CQEs.
+				vsm_assert(has_pending_cqes());
+			}
 		}
-
-		//TODO: Handle consumed in if no kernel thread.
 	}
 
-	reap_all_cqes();
-
-	return {};
+	// Finally, reap the pending CQEs, calling their io_callbacks if necessary.
+	return reap_all_cqes();
 }

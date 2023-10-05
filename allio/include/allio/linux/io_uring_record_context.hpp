@@ -174,9 +174,7 @@ public:
 		m_multiplexer.m_cq_free = m_cq_free;
 		m_last_sqe = nullptr;
 
-		m_multiplexer.commit();
-
-		return {};
+		return m_multiplexer.commit();
 	}
 
 private:
