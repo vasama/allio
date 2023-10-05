@@ -3,9 +3,11 @@
 #include <allio/detail/handles/platform_handle.hpp>
 #include <allio/detail/io.hpp>
 #include <allio/linux/detail/unique_fd.hpp>
+#include <allio/linux/detail/unique_mmap.hpp>
 #include <allio/linux/timespec.hpp>
 #include <allio/multiplexer.hpp>
 
+#include <vsm/flags.hpp>
 #include <vsm/result.hpp>
 #include <vsm/tag_ptr.hpp>
 
@@ -54,6 +56,60 @@ struct kernel_thread_t
 };
 inline constexpr kernel_thread_t::tag_t kernel_thread = {};
 
+struct submission_queue_size_t
+{
+	size_t submission_queue_size = 0;
+
+	struct tag_t
+	{
+		struct value_t
+		{
+			size_t value;
+		};
+
+		value_t vsm_static_operator_invoke(size_t const submission_queue_size)
+		{
+			return { submission_queue_size };
+		}
+
+		friend void tag_invoke(set_argument_t, submission_queue_size_t& args, value_t const& value)
+		{
+			args.submission_queue_size = value.value;
+		}
+	};
+};
+inline constexpr submission_queue_size_t::tag_t submission_queue_size = {};
+
+struct completion_queue_size_t
+{
+	size_t completion_queue_size = 0;
+
+	struct tag_t
+	{
+		struct value_t
+		{
+			size_t value;
+		};
+
+		value_t vsm_static_operator_invoke(size_t const completion_queue_size)
+		{
+			return { completion_queue_size };
+		}
+
+		friend void tag_invoke(set_argument_t, completion_queue_size_t& args, value_t const& value)
+		{
+			args.completion_queue_size = value.value;
+		}
+	};
+};
+inline constexpr completion_queue_size_t::tag_t completion_queue_size = {};
+
+
+struct fixed_file_t
+{
+};
+inline constexpr fixed_file_t fixed_file = {};
+
 } // namespace io_uring
 
 class io_uring_multiplexer final
@@ -82,6 +138,9 @@ class io_uring_multiplexer final
 	/// | <- @ref m_sq_acquire
 	/// |    Free slot where a new entry can be recorded.
 	/// |
+	/// | <- @ref m_sq_consume
+	/// |    Cached copy of m_k_sq_consume.
+	/// |
 	/// | <- @ref m_k_sq_consume
 	/// |    The ring buffer wraps around.
 	/// V
@@ -94,22 +153,19 @@ class io_uring_multiplexer final
 	/// V
 	/// @endverbatim
 
-	// Intentionally incomplete to prevent arithmetic.
-	struct sqe_placeholder;
-	struct cqe_placeholder;
-
 	enum class flags : uint32_t
 	{
 		enter_ext_arg                   = 1 << 0,
 		kernel_thread                   = 1 << 1,
-		auto_submit                     = 1 << 2,
-		record_lock                     = 1 << 3,
+		cqe_skip_success                = 1 << 2,
+		auto_submit                     = 1 << 3,
+		record_lock                     = 1 << 4,
 	};
 	vsm_flag_enum_friend(flags);
 
 public:
 	/// @brief Base class for objects bound to concrete io uring operations.
-	/// @note Over-aligned for pointer tagging via vsm::tag_ptr. See @ref io_data_ptr.
+	/// @note Over-aligned for pointer tagging using vsm::tag_ptr.
 	class alignas(4) io_data
 	{
 	protected:
@@ -119,9 +175,24 @@ public:
 		~io_data() = default;
 	};
 
+private:
+	enum class user_data_tag : uintptr_t
+	{
+		io_slot                     = 1 << 0,
+		cqe_skip_cancel             = 1 << 1,
+
+		all = io_slot | cqe_skip_cancel
+	};
+	vsm_flag_enum_friend(user_data_tag);
+
+	using user_data_ptr = vsm::tag_ptr<io_data, user_data_tag, user_data_tag::all>;
+
+public:
 	class connector_type
 	{
-		int file_index;
+		int32_t file_index;
+
+		friend io_uring_multiplexer;
 	};
 
 	class operation_type
@@ -137,22 +208,42 @@ public:
 	private:
 		using operation_base::notify;
 
-		friend class io_uring_multiplexer;
+		friend io_uring_multiplexer;
 	};
 
+private:
+	enum class operation_tag : uintptr_t
+	{
+		cqe_skip_success = 1 << 0,
 
+		all = cqe_skip_success
+	};
+	vsm_flag_enum_friend(operation_tag);
+
+	using operation_ptr = vsm::tag_ptr<operation_type, operation_tag, operation_tag::all>;
+
+public:
 	class io_slot : public io_data
 	{
-		operation_type* m_operation = nullptr;
+		operation_ptr m_operation = nullptr;
 
 	public:
-		void set_operation(operation_type& operation) &
+		void bind(operation_type& operation) &
 		{
+			#if 0
+			uintptr_t const p_operation = reinterpret_cast<uintptr_t>(&operation);
+			uintptr_t const p_io_slot = reinterpret_cast<uintptr_t>(this);
+
+			vsm_assert(p_io_slot >= p_operation);
+			vsm_assert(p_io_slot - p_operation <= static_cast<decltype(m_offset)>(-1));
+
+			m_offset = p_io_slot - p_operation;
+			#endif
+
 			m_operation = &operation;
 		}
 
-	private:
-		friend class io_uring_multiplexer;
+		friend io_uring_multiplexer;
 	};
 
 	class io_data_ref : vsm::tag_ptr<io_data, bool, true>
@@ -187,45 +278,6 @@ public:
 	}
 
 private:
-	class mmap_deleter
-	{
-		//TODO: Eliminate the borrow state and just store null instead?
-		static constexpr size_t borrow_value = static_cast<size_t>(-1);
-
-		size_t m_size;
-
-	public:
-		mmap_deleter() = default;
-
-		explicit mmap_deleter(size_t const size)
-			: m_size(size)
-		{
-		}
-
-		static mmap_deleter borrow()
-		{
-			return mmap_deleter(borrow_value);
-		}
-
-		void operator()(void const* const addr) const
-		{
-			if (m_size != borrow_value)
-			{
-				release(const_cast<void*>(addr), m_size);
-			}
-		}
-
-	private:
-		static void release(void* addr, size_t size);
-	};
-
-	template<typename T>
-	using unique_mmap = std::unique_ptr<T, mmap_deleter>;
-
-	using unique_byte_mmap = unique_mmap<std::byte>;
-	using unique_sqes_mmap = unique_mmap<sqe_placeholder>;
-
-
 	/// @brief Unique owner of the io uring kernel object.
 	unique_fd m_io_uring;
 
@@ -237,11 +289,11 @@ private:
 
 	/// @brief Ring of submission queue entries.
 	/// @note Written by user space, read by the kernel.
-	unique_sqes_mmap m_sqes;
+	unique_void_mmap m_sqes;
 
 	/// @brief Ring of completion queue entries.
 	/// @note Written by the kernel, read by user space.
-	cqe_placeholder* m_cqes;
+	void* m_cqes;
 
 
 	flags m_flags;
@@ -257,6 +309,8 @@ private:
 
 	/// @brief Shift used for multiplication by @ref m_cqe_size.
 	uint8_t m_cqe_multiply_shift;
+
+	uint8_t m_cqe_skip_success;
 
 
 	/// @brief One past the newest submission queue entry produced by user space.
@@ -292,6 +346,8 @@ private:
 	/// @brief Number of currently free SQEs.
 	uint32_t m_sq_free;
 
+	uint32_t m_sq_consume;
+
 	/// @brief One past the SQE most recently 
 	/// @note @ref m_sq_ready <= m_sq_acquire <= @ref m_sq_consume
 	uint32_t m_sq_acquire;
@@ -307,6 +363,8 @@ private:
 	/// @brief Number of currently free CQEs.
 	uint32_t m_cq_free;
 
+	uint32_t m_cq_produce;
+
 	/// @brief One past the CQE most recently consumed by user space.
 	/// @ref m_k_cq_consume == m_cq_consume <= @ref m_k_cq_produce
 	uint32_t m_cq_consume;
@@ -315,7 +373,11 @@ private:
 	struct create_t
 	{
 		using required_params_type = no_parameters_t;
-		using optional_params_type = io_uring::kernel_thread_t;
+		using optional_params_type = parameters_t<
+			io_uring::kernel_thread_t,
+			io_uring::submission_queue_size_t,
+			io_uring::completion_queue_size_t
+		>;
 	};
 
 	struct poll_t
@@ -351,32 +413,31 @@ public:
 	public:
 		class reference
 		{
-			timeout const* m_timeout;
+			timespec const& m_timespec;
 			bool m_absolute;
 
-		public:
-			explicit reference(timeout const&& timeout, bool absolute) = delete;
-
-			explicit reference(timeout const& timeout, bool const absolute)
-				: m_timeout(&timeout)
+			explicit reference(timespec const& timespec, bool const absolute)
+				: m_timespec(timespec)
 				, m_absolute(absolute)
 			{
 			}
 
-		private:
 			friend class io_uring_multiplexer;
 		};
 
 		reference set(deadline const deadline) &
 		{
 			m_timespec = make_timespec<timespec>(deadline);
-			return reference(*this, deadline.is_absolute());
+			return reference(m_timespec, deadline.is_absolute());
 		}
 
 	private:
 		friend class io_uring_multiplexer;
 	};
 
+	class record_context;
+
+#if 0
 	class record_context
 	{
 		io_uring_multiplexer& m_multiplexer;
@@ -385,25 +446,6 @@ public:
 		uint32_t m_cq_free;
 
 	public:
-		vsm::result<void> push(io_data_ref const data, std::invocable<io_uring_sqe&> auto&& initialize_sqe)
-		{
-			vsm_try(sqe, acquire_sqe(data));
-			vsm_forward(initialize_sqe)(*sqe);
-
-			// Users are not allowed to set the user_data field.
-			vsm_assert(check_sqe_user_data(*sqe, data) &&
-				"Use of io_uring_sqe::user_data is not allowed.");
-
-			// Users are not allowed to set certain sensitive flags.
-			vsm_assert(check_sqe_flags(*sqe) &&
-				"Use of some io_uring_sqe::flags is restricted.");
-
-			return {};
-		}
-
-		vsm::result<void> push_linked_timeout(timeout::reference timeout);
-
-	private:
 		explicit record_context(io_uring_multiplexer& multiplexer)
 			: m_multiplexer(multiplexer)
 			, m_sq_acquire(multiplexer.m_sq_acquire)
@@ -423,7 +465,40 @@ public:
 		}
 
 
+		template<typename SQE = io_uring_sqe>
+		vsm::result<void> push(SQE&& user_sqe)
+		{
+			vsm_try(sqe, acquire_sqe());
+			*sqe = vsm_forward(user_sqe);
+
+			vsm_assert(check_user_sqe(*sqe));
+
+			return {};
+		}
+
+#if 0
+		vsm::result<void> push(io_data_ref const data, std::invocable<io_uring_sqe&> auto&& initialize_sqe)
+		{
+			vsm_try(sqe, acquire_sqe(data));
+			vsm_forward(initialize_sqe)(*sqe);
+
+			// Users are not allowed to set the user_data field.
+			vsm_assert(check_sqe_user_data(*sqe, data) &&
+				"Use of io_uring_sqe::user_data is not allowed.");
+
+			// Users are not allowed to set certain sensitive flags.
+			vsm_assert(check_sqe_flags(*sqe) &&
+				"Use of some io_uring_sqe::flags is restricted.");
+
+			return {};
+		}
+#endif
+
+		vsm::result<void> push_linked_timeout(timeout::reference timeout);
+
+	private:
 		vsm::result<io_uring_sqe*> acquire_sqe(io_data_ref data);
+		vsm::result<io_uring_sqe*> acquire_sqe(bool acquire_cqe);
 
 		static bool check_sqe_user_data(io_uring_sqe const& sqe, io_data_ref data) noexcept;
 		static bool check_sqe_flags(io_uring_sqe const& sqe) noexcept;
@@ -447,32 +522,33 @@ public:
 			return context.push(data, vsm_forward(initialize_sqe));
 		});
 	}
+#endif
 
 private:
 	explicit io_uring_multiplexer(
 		unique_fd&& io_uring,
 		unique_byte_mmap&& sq_ring,
 		unique_byte_mmap&& cq_ring,
-		unique_sqes_mmap&& sq_data,
+		unique_void_mmap&& sq_data,
 		io_uring_params const& setup);
 
 
 	[[nodiscard]] static vsm::result<io_uring_multiplexer> _create(io_parameters_t<create_t> const& args);
 
 
-	[[nodiscard]] vsm::result<void> _attach_handle(native_platform_handle handle, connector_type& c);
-	void _detach_handle(native_platform_handle handle, connector_type& c);
+	[[nodiscard]] vsm::result<void> attach_handle(native_platform_handle handle, connector_type& c);
+	void detach_handle(native_platform_handle handle, connector_type& c);
 
 	template<std::derived_from<platform_handle> H>
 	friend vsm::result<void> tag_invoke(attach_handle_t, io_uring_multiplexer& m, H const& h, connector_type& c)
 	{
-		return m._attach_handle(h.get_platform_handle(), c);
+		return m.attach_handle(h.get_platform_handle(), c);
 	}
 
 	template<std::derived_from<platform_handle> H>
 	friend void tag_invoke(detach_handle_t, io_uring_multiplexer& m, H const& h, connector_type& c)
 	{
-		return m._detach_handle(h.get_platform_handle(), c);
+		return m.detach_handle(h.get_platform_handle(), c);
 	}
 
 
@@ -491,10 +567,63 @@ private:
 	}
 
 
-	[[nodiscard]] uint32_t _reap_completion_queue();
+	template<typename T>
+	class ring_view
+	{
+		std::byte* m_ring;
+		uint32_t m_mask;
+		uint32_t m_multiply_shift;
+
+	public:
+		explicit ring_view(void* const ring, uint32_t const mask, uint32_t const multiply_shift)
+			: m_ring(static_cast<std::byte*>(ring))
+			, m_mask(mask)
+			, m_multiply_shift(multiply_shift)
+		{
+		}
+
+		[[nodiscard]] T& operator[](uint32_t const offset) const
+		{
+			return *reinterpret_cast<T*>(m_ring + ((offset & m_mask) << m_multiply_shift));
+		}
+	};
+
+	[[nodiscard]] ring_view<io_uring_sqe> get_sqes()
+	{
+		return ring_view<io_uring_sqe>(m_sqes.get(), m_sq_size - 1, m_sqe_multiply_shift);
+	}
+
+	[[nodiscard]] ring_view<io_uring_cqe> get_cqes()
+	{
+		return ring_view<io_uring_cqe>(m_cqes, m_cq_size - 1, m_cqe_multiply_shift);
+	}
+
+	void commit();
+
+
+	[[nodiscard]] bool has_kernel_thread() const
+	{
+		return vsm::any_flags(m_flags, flags::kernel_thread);
+	}
+
+	[[nodiscard]] bool is_kernel_thread_inactive() const;
+
+
+	[[nodiscard]] bool has_pending_sqes() const;
+	void release_sqes();
+
+	[[nodiscard]] bool has_pending_cqes() const;
+	void acquire_cqes();
+
+	void reap_all_cqes();
+	void reap_cqe(io_uring_cqe const& cqe);
+
 
 	[[nodiscard]] vsm::result<bool> _poll(io_parameters_t<poll_t> const& args);
 };
+
+static_assert(std::is_default_constructible_v<io_uring_multiplexer::io_slot>);
+static_assert(std::is_default_constructible_v<io_uring_multiplexer::timeout>);
 
 } // namespace allio::detail
 

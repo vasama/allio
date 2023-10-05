@@ -1,7 +1,10 @@
-#include <allio/linux/io_uring/event_handle.hpp>
+#include <allio/linux/detail/io_uring/event_handle.hpp>
 
+#include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/event_handle.hpp>
-#include <allio/impl/linux/io_uring/io_uring.hpp>
+#include <allio/impl/linux/kernel/io_uring.hpp>
+#include <allio/linux/io_uring_record_context.hpp>
+#include <allio/linux/platform.hpp>
 
 #include <poll.h>
 #include <sys/eventfd.h>
@@ -22,6 +25,8 @@ using wait_s = operation_t<M, H, wait_t>;
 static vsm::result<io_result> _submit(M& m, H const& h, C const& c, wait_s& s)
 {
 	deadline relative_deadline;
+
+	// Evaluate the stepped deadline.
 	{
 		auto const r = s.absolute_deadline.step();
 		if (!r)
@@ -31,40 +36,54 @@ static vsm::result<io_result> _submit(M& m, H const& h, C const& c, wait_s& s)
 		relative_deadline = *r;
 	}
 
-	return m.record_io([&](io_uring_multiplexer::submission_context& ctx)
+	io_uring_multiplexer::record_context ctx(m);
+
+	auto const [fd, fd_flags] = ctx.get_fd(c, h.get_platform_handle());
+
+	vsm_try(poll_sqe, ctx.push(
 	{
-		bool const auto_reset = is_auto_reset(h);
+		.opcode = IORING_OP_POLL_ADD,
+		.flags = fd_flags,
+		.fd = fd,
+		.poll_events = POLLIN,
+		.user_data = ctx.get_user_data(s.poll_slot),
+	}));
 
-		if (relative_deadline != deadline::never())
+	if (relative_deadline != deadline::never())
+	{
+		// Link the timeout to the poll SQE.
+		vsm_try_void(ctx.link_timeout(s.timeout.set(relative_deadline)));
+	}
+
+	if (is_auto_reset(h))
+	{
+		// Link the previous SQE to this one.
+		ctx.link_last(IOSQE_IO_LINK);
+
+		// The read overwrites the timeout value, but that's fine.
+		// It is no longer needed after the poll has completed, and
+		// will be reassigned anyway if the operation is restarted.
+		vsm_try(read_sqe, ctx.push(
 		{
-			vsm_try_void(c.push_linked_timeout(s.timeout.set(relative_deadline)));
-		}
-
-		vsm_try_void(c.push(s.poll_data, [&](io_uring_sqe& sqe)
-		{
-			sqe.opcode = IORING_OP_POLL_ADD;
-			sqe.fd = unwrap_handle(h.get_platform_handle());
-			sqe.poll_events = POLLIN;
-
-			if (auto_reset)
-			{
-				sqe.flags = IOSQE_IO_LINK | IOSQE_CQE_SKIP_SUCCESS;
-			}
+			.opcode = IORING_OP_READ,
+			.flags = fd_flags,
+			.fd = fd,
+			.addr = reinterpret_cast<uintptr_t>(&s.event_value),
+			.len = sizeof(s.event_value),
+			.user_data = ctx.get_user_data(s),
 		}));
 
-		if (auto_reset)
-		{
-			vsm_try_void(c.push(s, [&](io_uring_sqe& sqe)
-			{
-				sqe.opcode = IORING_OP_READ;
-				sqe.fd = unwrap_handle(h.get_platform_handle());
-				sqe.addr = reinterpret_cast<uintptr_t>(&s.event_value);
-				sqe.len = sizeof(s.event_value);
-			}));
-		}
+		// Successful poll CQE can be skipped when reading.
+		ctx.set_cqe_skip_success(*poll_sqe);
+		ctx.set_cqe_skip_success_emulation(s.poll_slot);
 
-		return {};
-	});
+		// The read CQE can be skipped when it is canceled.
+		ctx.set_cqe_skip_success_linked_emulation(*read_sqe);
+	}
+
+	vsm_try_void(ctx.commit());
+
+	return std::nullopt;
 }
 
 vsm::result<io_result> operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s)
@@ -75,52 +94,118 @@ vsm::result<io_result> operation_impl<M, H, wait_t>::submit(M& m, H const& h, C 
 	}
 
 	// If the deadline is instant just check the event synchronously.
-	if (args.deadline == deadline::instant())
+	if (s.args.deadline == deadline::instant())
 	{
 		return vsm::as_error_code(check_event(
 			unwrap_handle(h.get_platform_handle()),
 			is_auto_reset(h)));
 	}
 
+	s.poll_slot.bind(s);
+
 	return _submit(m, h, c, s);
 }
 
 vsm::result<io_result> operation_impl<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& s, io_status const status)
 {
-	bool const auto_reset = h.get_flags()[_event_handle::flags::auto_reset];
-
 	auto const& cqe = M::unwrap_io_status(status);
 
 	if (cqe.result < 0)
 	{
 		if (cqe.result == -EAGAIN)
 		{
-			// The poll operation should never return EAGAIN.
-			// If it does though, restarting the operation would be fine.
+			// Only the read operation should ever return EAGAIN.
+			// In any case though, retrying the operation is fine.
 			vsm_assert(cqe.slot == nullptr);
 
-			// Someone else reset the event. Restart the operation to try again.
-			if (auto_reset)
-			{
-				return _submit(m, h, c, s);
-			}
+			// The read operation is only submitted in auto reset mode.
+			vsm_assert(is_auto_reset(h));
+
+			// Someone else won the race to reset the event.
+			// Retry by submitting both operations again.
+			return _submit(m, h, c, s);
 		}
 
 		return static_cast<system_error>(-cqe.result);
 	}
 
-	// Completion of the poll operation is ignored in auto reset mode.
-	if (auto_reset && cqe.slot != nullptr)
-	{
-		vsm_assert(cqe.slot == &s.poll_data);
-		vsm_assert(cqe.result == POLLIN);
-		return std::nullopt;
-	}
+	// Only one successful CQE is posted, either for the read or the poll.
+	vsm_assert(cqe.slot == (is_auto_reset(h) ? nullptr : &s.poll_slot));
 
 	return std::error_code();
+
+#if 0
+	if (cqe.slot == &s.poll_slot)
+	{
+		if (cqe.result < 0)
+		{
+			return static_cast<system_error>(-cqe.result);
+		}
+
+		vsm_assert(cqe.result == POLLIN);
+
+		if (!is_auto_reset(h))
+		{
+			return std::error_code();
+		}
+	}
+	else
+	{
+		// The read operation is only submitted in auto reset mode.
+		vsm_assert(is_auto_reset(h));
+
+		if (cqe.result < 0)
+		{
+			if (cqe.result == -EAGAIN)
+			{
+				// Someone else won the race to reset the event.
+				// Submit the operation again to retry.
+				return _submit(m, h, c, s);
+			}
+
+			return static_cast<system_error>(-cqe.result);
+		}
+
+		return std::error_code();
+	}
+
+	return std::nullopt;
+#endif
+
+#if 0
+	if (cqe.result < 0)
+	{
+		if (auto_reset && cqe.result == -EAGAIN)
+		{
+			// Only the read operation should ever return EAGAIN.
+			// In any case though, retrying the operation is fine.
+			vsm_assert(cqe.slot == nullptr);
+
+			return _submit(m, h, c, s);
+		}
+
+		return static_cast<system_error>(-cqe.result);
+	}
+
+	if (cqe.slot == &s.poll_slot)
+	{
+		vsm_assert(cqe.result == POLLIN);
+
+		if (auto_reset)
+		{
+			// In auto reset mode the poll completion is ignored.
+			// The subsequent read operation is still pending.
+			return std::nullopt;
+		}
+	}
+
+	vsm_assert(cqe.slot == nullptr);
+	return std::error_code();
+#endif
 }
 
 void operation_impl<M, H, wait_t>::cancel(M& m, H const& h, C const& c, S& s)
 {
-	//TODO: Cancel.
+	//TODO: Cancel
+	//m.cancel_io(s.poll_slot);
 }

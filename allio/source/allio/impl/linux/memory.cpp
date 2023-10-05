@@ -1,6 +1,6 @@
 #include <allio/memory.hpp>
 
-#include <allio/directory_handle.hpp>
+//#include <allio/directory_handle.hpp>
 #include <allio/impl/bounded_vector.hpp>
 
 #include <unistd.h>

@@ -81,7 +81,7 @@ public:
 
 		struct required_params_type
 		{
-			reset_mode reset_mode;
+			_event_handle::reset_mode reset_mode;
 		};
 
 		using optional_params_type = signal_event_t::parameter_t;

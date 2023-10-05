@@ -2,6 +2,7 @@
 
 #include <vsm/assert.h>
 #include <vsm/flags.hpp>
+#include <vsm/result.hpp>
 
 #include <bit>
 #include <span>

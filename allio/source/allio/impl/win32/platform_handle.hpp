@@ -1,5 +1,7 @@
 #pragma once
 
+#error
+
 #include <allio/platform_handle.hpp>
 #include <allio/win32/detail/unique_handle.hpp>
 #include <allio/win32/platform.hpp>

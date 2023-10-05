@@ -75,7 +75,7 @@ public:
 	constexpr bool is_relative() const
 	{
 		//TODO: VS complains about arithmetic overflow here.
-		return m_bits - 1 < absolute_flag - 1;
+		return static_cast<repr_type>(m_bits + 1) <= absolute_flag;
 	}
 
 	constexpr duration relative() const

@@ -1,8 +1,8 @@
 #include <allio/impl/linux/event_handle.hpp>
 
 #include <allio/impl/linux/error.hpp>
-#include <allio/impl/linux/platform_handle.hpp>
-#include <allio/linux/timeout.hpp>
+#include <allio/impl/linux/timeout.hpp>
+#include <allio/linux/platform.hpp>
 #include <allio/step_deadline.hpp>
 
 #include <poll.h>
@@ -89,7 +89,7 @@ vsm::result<void> linux::check_event(int const fd, bool const auto_reset)
 }
 
 
-vsm::result<void> event_handle_base::signal() const
+vsm::result<void> _event_handle::signal() const
 {
 	if (!*this)
 	{
@@ -98,16 +98,14 @@ vsm::result<void> event_handle_base::signal() const
 
 	int const r = eventfd_write(
 		unwrap_handle(get_platform_handle()),
-		1);
+		/* value: */ 1);
 
 	if (r == -1)
 	{
-		int const e = errno;
-
 		// If the counter is already full, EAGAIN is returned. This case is extremely unlikely,
 		// as it would require signaling the event object 2^64-1 times. However this case is also
 		// not problematic. The event object remains signaled as long as the counter is non-zero.
-		if (e != EAGAIN)
+		if (int const e = errno; e != EAGAIN)
 		{
 			return vsm::unexpected(static_cast<system_error>(e));
 		}
@@ -116,7 +114,7 @@ vsm::result<void> event_handle_base::signal() const
 	return {};
 }
 
-vsm::result<void> event_handle_base::reset() const
+vsm::result<void> _event_handle::reset() const
 {
 	if (!*this)
 	{
@@ -131,20 +129,18 @@ vsm::result<void> event_handle_base::reset() const
 }
 
 
-vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::event_create> const& args)
+vsm::result<void> _event_handle::do_blocking_io(_event_handle& h, io_parameters_t<create_t> const& args)
 {
-	_event_handle& h = *args.handle;
-
 	if (h)
 	{
 		return vsm::unexpected(error::handle_is_not_null);
 	}
 
-	handle_flags h_flags = {};
+	handle_flags flags = flags::none;
 
-	if (args.reset_mode == _event_handle::auto_reset)
+	if (args.reset_mode == reset_mode::auto_reset)
 	{
-		h_flags |= _event_handle::flags::auto_reset;
+		flags |= flags::auto_reset;
 	}
 
 	int const event = eventfd(
@@ -156,25 +152,22 @@ vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::ev
 		return vsm::unexpected(get_last_error());
 	}
 
-	return initialize_platform_handle(h, unique_fd(event),
-		[&](native_platform_handle const handle)
+	platform_handle::native_handle_type const native =
+	{
 		{
-			return platform_handle::native_handle_type
-			{
-				handle::native_handle_type
-				{
-					h_flags | handle::flags::not_null,
-				},
-				handle,
-			};
-		}
-	);
+			flags::not_null | flags,
+		},
+		wrap_handle(event),
+	};
+
+	vsm_assert(check_native_handle(native));
+	h.set_native_handle(native);
+
+	return {};
 }
 
-vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::event_wait> const& args)
+vsm::result<void> _event_handle::do_blocking_io(_event_handle const& h, io_parameters_t<wait_t> const& args)
 {
-	event_handle const& h = *args.handle;
-
 	if (!h)
 	{
 		return vsm::unexpected(error::handle_is_not_null);
@@ -215,10 +208,12 @@ vsm::result<void> event_handle_base::sync_impl(io::parameters_with_result<io::ev
 			// It is possible that another thread (possibly in another process)
 			// reset the event object between polling and reading. The auto reset mode
 			// guarantees that only a single waiter will observe the signaled state.
-			if (was_non_zero)
+			if (!was_non_zero)
 			{
-				return {};
+				continue;
 			}
 		}
+
+		return {};
 	}
 }

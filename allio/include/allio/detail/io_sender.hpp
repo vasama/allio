@@ -8,6 +8,26 @@
 
 namespace allio::detail {
 
+template<bool>
+struct _set_value_signature;
+
+template<>
+struct _set_value_signature<0>
+{
+	template<typename R>
+	using type = ex::set_value_t(R);
+};
+
+template<>
+struct _set_value_signature<1>
+{
+	template<typename R>
+	using type = ex::set_value_t();
+};
+
+template<typename R>
+using set_value_signature = typename _set_value_signature<std::is_void_v<R>>::template type<R>;
+
 template<typename H, typename O>
 class io_sender
 {
@@ -93,7 +113,7 @@ class io_sender
 
 public:
 	using completion_signatures = ex::completion_signatures<
-		ex::set_value_t(result_type),
+		set_value_signature<result_type>,
 		ex::set_error_t(std::error_code),
 		ex::set_stopped_t()
 	>;

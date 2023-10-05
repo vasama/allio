@@ -80,7 +80,7 @@ vsm_add_library2(allio
 		source/allio/test/filesystem.hpp
 		#source/allio/test/map_handle.cpp
 		source/allio/test/multiplexer.hpp
-		source/allio/test/opaque_handle.cpp
+		#source/allio/test/opaque_handle.cpp
 		source/allio/test/path_view.cpp
 		#source/allio/test/process_handle.cpp
 		source/allio/test/reverse_iterator.hpp
@@ -133,6 +133,7 @@ vsm_configure(allio
 
 	TEST_SOURCES
 		source/allio/test/win32/kernel_path.cpp
+		source/allio/test/win32/timer.cpp
 		source/allio/test/win32/wait_packet.cpp
 )
 
@@ -158,7 +159,7 @@ vsm_configure(allio
 		#source/allio/impl/linux/directory_handle.cpp
 		source/allio/impl/linux/error.cpp
 		source/allio/impl/linux/error.hpp
-		#source/allio/impl/linux/event_handle.cpp
+		source/allio/impl/linux/event_handle.cpp
 		#source/allio/impl/linux/filesystem_handle.cpp
 		#source/allio/impl/linux/filesystem_handle.hpp
 		#source/allio/impl/linux/file_handle.cpp
@@ -174,11 +175,15 @@ vsm_configure(allio
 		#source/allio/impl/linux/section_handle.cpp
 		#source/allio/impl/linux/sync_byte_io.cpp
 		source/allio/impl/linux/unique_fd.cpp
+		source/allio/impl/linux/unique_mmap.cpp
 		source/allio/impl/linux/version.cpp
 		source/allio/impl/linux/version.hpp
 
 		source/allio/impl/linux/io_uring/event_handle.cpp
 		source/allio/impl/linux/io_uring/multiplexer.cpp
+
+	TEST_SOURCES
+		source/allio/test/linux/io_uring.cpp
 )
 
 

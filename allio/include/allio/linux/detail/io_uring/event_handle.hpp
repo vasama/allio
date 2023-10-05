@@ -10,16 +10,25 @@ namespace allio::detail {
 template<>
 struct operation_impl<io_uring_multiplexer, _event_handle, _event_handle::wait_t>
 {
-	/// @brief Storage for the output of the read from the eventfd.
-	uint64_t event_value;
+	using M = io_uring_multiplexer;
+	using H = _event_handle;
+	using O = _event_handle::wait_t;
+	using C = connector_t<M, H>;
+	using S = operation_t<M, H, O>;
 
 	step_deadline absolute_deadline;
 
-	/// @brief Timeout passed by reference in a linked timeout SQE.
-	io_uring_multiplexer::timeout timeout;
+	union
+	{
+		/// @brief Timeout passed by reference in a linked timeout SQE.
+		io_uring_multiplexer::timeout timeout;
 
-	/// @brief Context for the poll operation in auto reset mode.
-	io_uring_multiplexer::io_data poll_data;
+		/// @brief Storage for the output of the read from the eventfd.
+		uint64_t event_value;
+	};
+
+	/// @brief Context for the poll operation.
+	io_uring_multiplexer::io_slot poll_slot;
 
 	static vsm::result<io_result> submit(M& m, H const& h, C const& c, S& s);
 	static vsm::result<io_result> notify(M& m, H const& h, C const& c, S& s, io_status status);

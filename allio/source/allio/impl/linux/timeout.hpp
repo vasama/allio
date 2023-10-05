@@ -4,7 +4,6 @@
 
 namespace allio {
 
-//TODO: This should be moved to allio/impl/linux/.
 template<typename Timespec>
 class kernel_timeout
 {
