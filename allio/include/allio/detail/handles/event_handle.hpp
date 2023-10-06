@@ -115,7 +115,7 @@ public:
 	///        See @ref signal for more information.
 	[[nodiscard]] vsm::result<void> wait(auto&&... args) const
 	{
-		return do_blocking_io(*this, io_arguments_t<wait_t>()(vsm_forward(args)...));
+		return do_blocking_io(*this, no_result, io_arguments_t<wait_t>()(vsm_forward(args)...));
 	}
 
 
@@ -158,8 +158,15 @@ private:
 	}
 
 protected:
-	static vsm::result<void> do_blocking_io(_event_handle& h, io_parameters_t<create_t> const& args);
-	static vsm::result<void> do_blocking_io(_event_handle const& h, io_parameters_t<wait_t> const& args);
+	static vsm::result<void> do_blocking_io(
+		_event_handle& h,
+		io_result_ref_t<create_t> result,
+		io_parameters_t<create_t> const& args);
+
+	static vsm::result<void> do_blocking_io(
+		_event_handle const& h,
+		io_result_ref_t<wait_t> result,
+		io_parameters_t<wait_t> const& args);
 };
 
 using blocking_event_handle = basic_blocking_handle<_event_handle>;
@@ -171,7 +178,7 @@ using basic_event_handle = basic_async_handle<_event_handle, Multiplexer>;
 vsm::result<blocking_event_handle> create_event(event_reset_mode const reset_mode, auto&&... args)
 {
 	vsm::result<blocking_event_handle> r(vsm::result_value);
-	vsm_try_void(blocking_io(*r, io_arguments_t<_event_handle::create_t>(reset_mode)(vsm_forward(args)...)));
+	vsm_try_void(blocking_io(*r, no_result, io_arguments_t<_event_handle::create_t>(reset_mode)(vsm_forward(args)...)));
 	return r;
 }
 
@@ -179,7 +186,7 @@ template<typename Multiplexer>
 vsm::result<basic_event_handle<Multiplexer>> create_event(Multiplexer&& multiplexer, event_reset_mode const reset_mode, auto&&... args)
 {
 	vsm::result<basic_event_handle<Multiplexer>> r(vsm::result_value, vsm_forward(multiplexer));
-	vsm_try_void(blocking_io(*r, io_arguments_t<_event_handle::create_t>(reset_mode)(vsm_forward(args)...)));
+	vsm_try_void(blocking_io(*r, no_result, io_arguments_t<_event_handle::create_t>(reset_mode)(vsm_forward(args)...)));
 	return r;
 }
 

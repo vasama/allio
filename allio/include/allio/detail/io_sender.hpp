@@ -62,13 +62,13 @@ class io_sender
 	private:
 		friend void tag_invoke(ex::start_t, operation& self) noexcept
 		{
-			self.handle_result(submit_io(*self.m_handle, self.m_operation));
+			self.handle_result(submit_io(*self.m_handle, self.m_operation, self.m_result));
 		}
 
 		void notify(operation_base& operation, io_status const status) noexcept override
 		{
 			vsm_assert(&operation == &m_operation);
-			handle_result(notify_io(*m_handle, m_operation, status));
+			handle_result(notify_io(*m_handle, m_operation, m_result, status));
 		}
 
 		void handle_result(vsm::result<io_result> const& r)

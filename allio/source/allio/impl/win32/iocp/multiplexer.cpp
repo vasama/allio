@@ -136,7 +136,7 @@ vsm::result<bool> iocp_multiplexer::submit_wait(
 		m_completion_port.value,
 		unwrap_handle(handle),
 		std::bit_cast<void*>(key_context::wait_packet),
-		&slot,
+		/* apc_context: */ &slot,
 		STATUS_SUCCESS,
 		/* completion_information: */ 0));
 
@@ -184,6 +184,8 @@ vsm::result<bool> iocp_multiplexer::_poll(io_parameters_t<poll_t> const& args)
 				size_t const io_status_block_offset = io_status_block::get_storage_offset();
 				static_assert(io_status_block_offset == overlapped::get_storage_offset());
 
+				// The ApcContext contains the pointer to the original IO_STATUS_BLOCK
+				// or OVERLAPPED passed to the I/O API when this operation was started.
 				io_slot& slot = *std::launder(reinterpret_cast<io_slot*>(
 					reinterpret_cast<uintptr_t>(entry.ApcContext) - io_status_block_offset));
 

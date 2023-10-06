@@ -2,8 +2,11 @@
 
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>
+#include <allio/win32/detail/unique_handle.hpp>
 #include <allio/win32/kernel_error.hpp>
 #include <allio/win32/platform.hpp>
+
+#include <vsm/out_resource.hpp>
 
 #include <win32.h>
 
@@ -49,7 +52,10 @@ vsm::result<void> _event_handle::reset() const
 	return {};
 }
 
-vsm::result<void> _event_handle::do_blocking_io(_event_handle& h, io_parameters_t<create_t> const& args)
+vsm::result<void> _event_handle::do_blocking_io(
+	_event_handle& h,
+	io_result_ref_t<create_t>,
+	io_parameters_t<create_t> const& args)
 {
 	vsm_try_void(kernel_init());
 
@@ -67,9 +73,9 @@ vsm::result<void> _event_handle::do_blocking_io(_event_handle& h, io_parameters_
 		event_type = SynchronizationEvent;
 	}
 
-	HANDLE handle;
+	unique_handle handle;
 	NTSTATUS const status = NtCreateEvent(
-		&handle,
+		vsm::out_resource(handle),
 		EVENT_ALL_ACCESS,
 		/* ObjectAttributes: */ nullptr,
 		event_type,
@@ -85,16 +91,21 @@ vsm::result<void> _event_handle::do_blocking_io(_event_handle& h, io_parameters_
 		{
 			flags::not_null | flags,
 		},
-		wrap_handle(handle),
+		wrap_handle(handle.get()),
 	};
 
 	vsm_assert(check_native_handle(native));
 	h.set_native_handle(native);
 
+	(void)handle.release();
+
 	return {};
 }
 
-vsm::result<void> _event_handle::do_blocking_io(_event_handle const& h, io_parameters_t<wait_t> const& args)
+vsm::result<void> _event_handle::do_blocking_io(
+	_event_handle const& h,
+	io_result_ref_t<wait_t>,
+	io_parameters_t<wait_t> const& args)
 {
 	if (!h)
 	{

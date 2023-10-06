@@ -13,17 +13,11 @@ using M = iocp_multiplexer;
 using H = _event_handle;
 using C = connector_t<M, H>;
 
-static std::error_code get_kernel_error_code(NTSTATUS const status)
-{
-	return NT_SUCCESS(status)
-		? std::error_code()
-		: std::error_code(static_cast<kernel_error>(status));
-}
-
 using wait_t = _event_handle::wait_t;
 using wait_s = operation_t<M, H, wait_t>;
+using wait_r = io_result_ref_t<wait_t>;
 
-io_result operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s)
+io_result operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s, wait_r)
 {
 	if (!h)
 	{
@@ -72,7 +66,7 @@ io_result operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wai
 	return std::nullopt;
 }
 
-io_result operation_impl<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& s, io_status const status)
+io_result operation_impl<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& s, wait_r, io_status const status)
 {
 	auto const wait_status = M::unwrap_io_status(status);
 	vsm_assert(&wait_status.slot == &s.wait_slot);

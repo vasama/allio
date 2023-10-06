@@ -1,5 +1,6 @@
 #pragma once
 
+#include <allio/detail/path.hpp>
 #include <allio/path_view.hpp>
 
 #include <string>
@@ -351,6 +352,12 @@ private:
 		path.resize(combine_result.size());
 		combine_result.copy(path.data());
 		return path;
+	}
+
+	template<vsm::any_cvref_of<basic_path_adaptor> Self>
+	friend string_view_type tag_invoke(get_path_string_t, Self&& self)
+	{
+		return static_cast<vsm::copy_cvref_t<Self&&, string_type>>(self);
 	}
 };
 

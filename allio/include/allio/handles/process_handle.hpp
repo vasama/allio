@@ -7,33 +7,25 @@ namespace allio {
 using detail::process_id;
 using detail::process_exit_code;
 
+using detail::command_line_t;
+using detail::command_line;
 
-using process_handle = basic_blocking_handle<detail::_process_handle>;
+using detail::environment_t;
+using detail::environment;
 
-template<typename Multiplexer>
-using basic_process_handle = basic_async_handle<detail::_process_handle, Multiplexer>;
+using detail::working_directory_t;
+using detail::working_directory;
 
+using detail::blocking_process_handle;
+using detail::basic_process_handle;
 
-template<parameters<process_handle::open_parameters> P = process_handle::open_parameters::interface>
-vsm::result<process_handle> open_process(process_id const id, P const& args = {})
-{
-	vsm::result<process_handle> r(vsm::result_value);
-	vsm_try_void(r->open(id, args));
-	return r;
-}
-
-template<parameters<process_handle::launch_parameters> P = process_handle::launch_parameters::interface>
-vsm::result<process_handle> launch_process(path_descriptor const path, P const& args = {})
-{
-	vsm::result<process_handle> r(vsm::result_value);
-	vsm_try_void(r->launch(path, args));
-	return r;
-}
-
+using detail::open_process;
+using detail::launch_process;
 
 namespace this_process {
 
-process_handle const& get_handle();
+using detail::_this_process::get_handle;
+using detail::_this_process::open;
 
 } // namespace this_process
 } // namespace allio

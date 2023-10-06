@@ -1,13 +1,14 @@
 #pragma once
 
+#include <allio/any_path.hpp>
+#include <allio/any_path_buffer.hpp>
 #include <allio/detail/handles/platform_handle.hpp>
 #include <allio/filesystem.hpp>
-#include <allio/input_path_view.hpp>
-#include <allio/output_path_ref.hpp>
+#include <allio/any_path_buffer.hpp>
 #include <allio/path.hpp>
 #include <allio/path_view.hpp>
 
-namespace allio {
+namespace allio::detail {
 
 class filesystem_handle;
 
@@ -92,8 +93,59 @@ vsm_flag_enum(path_kind);
 struct path_descriptor
 {
 	filesystem_handle const* base;
-	input_path_view path;
+	any_path_view path;
+
+	template<std::convertible_to<any_path_view> Path>
+	path_descriptor(Path const& path)
+		: base(nullptr)
+		, path(path)
+	{
+	}
+
+	template<std::convertible_to<any_path_view> Path>
+	path_descriptor(filesystem_handle const& base, Path const& path)
+		: base(&base)
+		, path(path)
+	{
+	}
 };
+
+inline path_descriptor at(filesystem_handle const& location, any_path_view const path)
+{
+	return path_descriptor(location, path);
+}
+
+
+struct file_mode_t
+{
+	detail::file_mode mode = detail::file_mode::read_write;
+};
+
+struct file_creation_t
+{
+	detail::file_creation creation = detail::file_creation::open_existing;
+};
+
+struct file_sharing_t
+{
+	detail::file_sharing sharing = detail::file_sharing::all;
+};
+
+struct file_caching_t
+{
+	detail::file_caching caching = detail::file_caching::none;
+};
+
+struct file_flags_t
+{
+	detail::file_flags file_flags = detail::file_flags::none;
+};
+
+struct path_kind_t
+{
+	detail::path_kind kind = detail::path_kind::any;
+};
+
 
 class filesystem_handle : public platform_handle
 {
@@ -101,34 +153,45 @@ protected:
 	using base_type = platform_handle;
 
 public:
-	struct open_t;
-
-	#define allio_filesystem_handle_open_parameters(type, data, ...) \
-		type(allio::filesystem_handle, open_parameters) \
-		allio_platform_handle_create_parameters(__VA_ARGS__, __VA_ARGS__) \
-		data(::allio::file_mode,            mode,           ::allio::file_mode::read_write) \
-		data(::allio::file_creation,        creation,       ::allio::file_creation::open_existing) \
-		data(::allio::file_sharing,         sharing,        ::allio::file_sharing::all) \
-		data(::allio::file_caching,         caching,        ::allio::file_caching::none) \
-		data(::allio::file_flags,           flags,          ::allio::file_flags::none) \
-
-	allio_interface_parameters(allio_filesystem_handle_open_parameters);
-
-
-	struct get_current_path_t;
-
-	#define allio_filesystem_handle_get_current_path_parameters(type, data, ...) \
-		type(allio::filesystem_handle, get_current_path_parameters) \
-		data(::allio::path_kind,            kind,           ::allio::path_kind::any) \
-
-	allio_interface_parameters(allio_filesystem_handle_get_current_path_parameters);
+	struct open_t
+	{
+		using handle_type = filesystem_handle;
+		using result_type = void;
+		using required_params_type = no_parameters_t;
+		using optional_params_type = parameters_t<
+			file_mode_t,
+			file_creation_t,
+			file_sharing_t,
+			file_caching_t,
+			file_flags_t>;
+	};
 
 
-	template<parameters<get_current_path_parameters> P = get_current_path_parameters::interface>
-	vsm::result<size_t> get_current_path(output_path_ref const output, P const& args = {}) const;
+	struct get_current_path_t
+	{
+		using handle_type = filesystem_handle const;
+		using result_type = size_t;
 
-	template<typename Path = path, parameters<get_current_path_parameters> P = get_current_path_parameters::interface>
-	vsm::result<Path> get_current_path(output_path_ref const output, P const& args = {}) const;
+		struct required_params_type
+		{
+			any_path_buffer buffer;
+		};
+
+		using optional_params_type = path_kind_t;
+	};
+
+	vsm::result<size_t> get_current_path(any_path_buffer const output, auto&&... args) const
+	{
+		return do_blocking_io(*this, io_arguments_t<get_current_path_t>(output)(vsm_forward(args)...));
+	}
+
+	template<typename Path = path>
+	vsm::result<Path> get_current_path(auto&&... args) const
+	{
+		vsm::result<Path> r(vsm::result_value);
+		vsm_try_void(do_blocking_io(*this, io_arguments_t<get_current_path_t>(*r)(vsm_forward(args)...)));
+		return r;
+	}
 
 
 	using async_operations = type_list_cat
@@ -145,43 +208,14 @@ protected:
 
 	using platform_handle::platform_handle;
 
-	template<typename H>
-	struct sync_interface : base_type::sync_interface<H>
-	{
-		template<parameters<open_parameters> P = open_parameters::interface>
-		vsm::result<void> open(path_descriptor const path, P const& args) &;
-	};
-
-	template<typename M, typename H>
-	struct async_interface : base_type::async_interface<M, H>
-	{
-		template<parameters<open_parameters> P = open_parameters::interface>
-		basic_sender<M, H, open_t> open_async(path_descriptor const path, P const& args) &;
-	};
+protected:
+	static vsm::result<void> do_blocking_io(
+		filesystem_handle const& h,
+		io_result_ref_t<get_current_path_t> result,
+		io_parameters_t<get_current_path_t> const& args);
 };
 
 
 vsm::result<file_attributes> query_file_attributes(path_descriptor path);
 
-
-template<>
-struct io_operation_traits<filesystem_handle::open_t>
-{
-	using handle_type = filesystem_handle;
-	using result_type = void;
-	using params_type = filesystem_handle::open_parameters;
-
-	path_descriptor path;
-};
-
-template<>
-struct io_operation_traits<filesystem_handle, filesystem_handle::get_current_path_t>
-{
-	using handle_type = filesystem_handle const;
-	using result_type = size_t;
-	using params_type = filesystem_handle::get_current_path_parameters;
-
-	output_path_ref output;
-};
-
-} // namespace allio
+} // namespace allio::detail

@@ -2,7 +2,11 @@
 
 #include <allio/impl/win32/kernel_path.hpp>
 
-#include <allio/impl/win32/encoding.hpp>
+#include <allio/error.hpp>
+#include <allio/impl/transcode.hpp>
+#include <allio/path_view.hpp>
+
+#include <vsm/lift.hpp>
 
 #include <memory>
 #include <optional>
@@ -61,18 +65,13 @@ public:
 		// Win32 API form does not allow a directory handle.
 		vsm_assert(!(args.win32_api_form && args.handle));
 
-		if (args.path.is_too_long())
-		{
-			return vsm::unexpected(error::filename_too_long);
-		}
-
 		if (args.path.empty())
 		{
 			return vsm::unexpected(error::invalid_path);
 		}
 
 		basic_kernel_path_converter c(context, storage, args);
-		vsm_try_void(c.make_path(args.path));
+		vsm_try_void(args.path.string().visit(vsm_lift_borrow(c._make_path_select)));
 
 		storage.m_lock = static_cast<unique_lock_type&&>(c.m_lock);
 		return path_type{ c.m_handle, { c.m_buffer_pos, c.m_buffer_end } };
@@ -88,7 +87,7 @@ private:
 	}
 
 
-	vsm::result<wchar_t*> resize_buffer(size_t const new_data_size)
+	vsm::result<std::pair<wchar_t*, wchar_t*>> resize_buffer(size_t const new_data_size)
 	{
 		if (m_storage.m_dynamic != nullptr)
 		{
@@ -110,12 +109,10 @@ private:
 		else
 		{
 			new_buffer_beg = new (std::nothrow) wchar_t[max_path_size];
-
 			if (new_buffer_beg == nullptr)
 			{
 				return vsm::unexpected(error::not_enough_memory);
 			}
-
 			m_storage.m_dynamic.reset(new_buffer_beg);
 
 			new_buffer_end = new_buffer_beg + max_path_size;
@@ -123,71 +120,119 @@ private:
 
 		wchar_t* const old_data_beg = new_buffer_end - old_data_size;
 		memcpy(old_data_beg, old_beg, old_data_size * sizeof(wchar_t));
-
 		wchar_t* const new_data_beg = old_data_beg - new_data_size;
 
 		m_buffer_beg = new_buffer_beg;
 		m_buffer_pos = new_data_beg;
 		m_buffer_end = new_buffer_end;
 
-		return new_data_beg;
+		return std::pair<wchar_t*, wchar_t*>{ new_data_beg, old_data_beg };
 	}
 
-	vsm::result<void> push_literal(char const* const beg, char const* const end)
+	vsm::result<std::pair<wchar_t*, wchar_t*>> push_buffer(size_t const new_data_size)
 	{
-		if (size_t const utf8_size = end - beg)
+		if (new_data_size <= m_buffer_pos - m_buffer_beg)
 		{
-			std::string_view const utf8_string = std::string_view(beg, utf8_size);
-
-			vsm_try(wide_size, utf8_to_wide(utf8_string));
-
-			wchar_t* const buffer_beg = m_buffer_beg;
-			wchar_t* const buffer_end = m_buffer_pos;
-
-			wchar_t* new_buffer_end;
-
-			if (wide_size <= buffer_end - buffer_beg)
-			{
-				m_buffer_pos = new_buffer_end = buffer_end - wide_size;
-			}
-			else
-			{
-				vsm_try_assign(new_buffer_end, resize_buffer(wide_size));
-			}
-
-			vsm_verify(utf8_to_wide(utf8_string, std::span(new_buffer_end, wide_size)));
+			wchar_t* const buffer_pos = m_buffer_pos;
+			wchar_t* const new_buffer_pos = buffer_pos - new_data_size;
+			m_buffer_pos = new_buffer_pos;
+			return std::pair<wchar_t*, wchar_t*>{ new_buffer_pos, buffer_pos };
 		}
+
+		return resize_buffer(new_data_size);
+	}
+
+
+	template<typename Char>
+	vsm::result<void> push_literal(Char const* const beg, Char const* const end)
+	{
+		if (beg == end)
+		{
+			return {};
+		}
+
+		wchar_t* const transcode1_beg = m_buffer_beg;
+
+		auto const r1 = transcode<wchar_t>(
+			std::basic_string_view(beg, end),
+			std::span(transcode1_beg, m_buffer_pos));
+
+		if (r1.ec != transcode_error{})
+		{
+			if (r1.ec != transcode_error::no_buffer_space)
+			{
+				return vsm::unexpected(error::invalid_encoding);
+			}
+
+			if (m_storage.m_dynamic != nullptr)
+			{
+				return vsm::unexpected(error::filename_too_long);
+			}
+
+
+			auto const r2 = transcode_size<wchar_t>(
+				std::basic_string_view(beg, end).substr(r1.decoded),
+				max_path_size - r1.encoded - (m_buffer_end - m_buffer_pos));
+
+			if (r2.ec != transcode_error{})
+			{
+				return r2.ec == transcode_error::no_buffer_space
+					? vsm::unexpected(error::filename_too_long)
+					: vsm::unexpected(error::invalid_encoding);
+			}
+
+
+			vsm_try_bind((out_beg_2, out_end_2), push_buffer(r2.encoded));
+
+			transcode_unchecked<wchar_t>(
+				std::basic_string_view(beg, end).substr(r1.decoded),
+				std::span(out_beg_2, out_end_2));
+		}
+
+		vsm_try_bind((out_beg_1, out_end_1), push_buffer(r1.encoded));
+
+		if (transcode1_beg + r1.encoded != out_beg_1)
+		{
+			memmove(out_beg_1, transcode1_beg, r1.encoded * sizeof(wchar_t));
+		}
+
 		return {};
 	}
 
 	vsm::result<void> push_literal(wchar_t const* const beg, wchar_t const* const end)
 	{
-		if (size_t const size = end - beg)
+		if (beg == end)
 		{
-			wchar_t* const buffer_beg = m_buffer_beg;
-			wchar_t* const buffer_end = m_buffer_pos;
-
-			if (size <= buffer_end - buffer_beg)
-			{
-				wchar_t* const new_buffer_end = buffer_end - size;
-				memcpy(new_buffer_end, beg, size * sizeof(wchar_t));
-				m_buffer_pos = new_buffer_end;
-			}
-			else
-			{
-				if (buffer_beg == m_buffer_end)
-				{
-					m_buffer_beg = const_cast<wchar_t*>(beg);
-					m_buffer_pos = const_cast<wchar_t*>(beg);
-					m_buffer_end = const_cast<wchar_t*>(end);
-				}
-				else
-				{
-					vsm_try(new_buffer_end, resize_buffer(size));
-					memcpy(new_buffer_end, beg, size * sizeof(wchar_t));
-				}
-			}
+			return {};
 		}
+
+		size_t const size = end - beg;
+
+		wchar_t* const buffer_beg = m_buffer_beg;
+		wchar_t* const buffer_pos = m_buffer_pos;
+
+		if (size <= buffer_pos - buffer_beg)
+		{
+			// If this piece fits in the existing buffer, just copy it.
+			wchar_t* const new_buffer_pos = buffer_pos - size;
+			memcpy(new_buffer_pos, beg, size * sizeof(wchar_t));
+			m_buffer_pos = new_buffer_pos;
+		}
+		else if (buffer_beg == m_buffer_end)
+		{
+			// If this is the first piece, borrow it instead of copying.
+			// This avoids allocating for large paths if they can be borrowed.
+			m_buffer_beg = const_cast<wchar_t*>(beg);
+			m_buffer_pos = const_cast<wchar_t*>(beg);
+			m_buffer_end = const_cast<wchar_t*>(end);
+		}
+		else
+		{
+			// Otherwise, resize the buffer and copy the string.
+			vsm_try_bind((new_buffer_beg, new_buffer_end), resize_buffer(size));
+			memcpy(new_buffer_beg, beg, size * sizeof(wchar_t));
+		}
+
 		return {};
 	}
 
@@ -389,6 +434,7 @@ private:
 	path_section<wchar_t> store_drive_root(wchar_t const drive)
 	{
 		static constexpr std::wstring_view root_template = L"\\??\\X:\\";
+		static_assert(root_template.size() <= storage_type::max_root_size);
 		static constexpr size_t drive_offset = root_template.find(L'X');
 
 		wchar_t* root_buffer = m_storage.m_root;
@@ -732,8 +778,9 @@ private:
 
 
 	template<typename Char>
-	vsm::result<void> make_path(std::basic_string_view<Char> const string)
+	vsm::result<void> _make_path(std::basic_string_view<Char> const string)
 	{
+		static_assert(!std::is_same_v<Char, char32_t>);
 		Char const* const beg = string.data();
 		Char const* const end = beg + string.size();
 		vsm_assert(beg != end);
@@ -784,24 +831,54 @@ private:
 		return set_relative_path(beg, end);
 	}
 
-	vsm::result<void> make_path(input_path_view const path)
+	template<typename Char>
+	vsm::result<void> _make_path_select(std::basic_string_view<Char> const string)
 	{
-		if (m_win32_api_form && !path.is_c_string())
+		if (m_win32_api_form)
 		{
 			vsm_try_void(push_literal(std::wstring_view(L"\0")));
 		}
+		return _make_path(string);
+	}
 
-		auto const extend_over_null_terminator = [&](auto string)
+	template<typename Char>
+	vsm::result<void> _make_path_select(std::basic_string_view<Char> string, std::same_as<null_terminated_t> auto...)
+	{
+		if (m_win32_api_form)
 		{
-			bool const null_terminator_size = m_win32_api_form && path.is_c_string();
-			return decltype(string)(string.data(), string.size() + null_terminator_size);
-		};
+			vsm_assert(string.data()[string.size()] == Char(0));
+			string = std::basic_string_view<Char>(string.data(), string.size() + 1);
+		}
+		return _make_path(string);
+	}
 
-		vsm_try_void(path.is_wide()
-			? make_path(extend_over_null_terminator(path.wide_view()))
-			: make_path(extend_over_null_terminator(path.utf8_view())));
+	vsm::result<void> _make_path_select(std::basic_string_view<char8_t> const string, std::same_as<null_terminated_t> auto... tag)
+	{
+		return _make_path_select(
+			std::basic_string_view<char>(
+				reinterpret_cast<char const*>(string.data()),
+				string.size()),
+			tag...);
+	}
 
-		return {};
+	vsm::result<void> _make_path_select(std::basic_string_view<char16_t> const string, std::same_as<null_terminated_t> auto... tag)
+	{
+		//TODO: This is technically UB.
+		return _make_path_select(
+			std::basic_string_view<wchar_t>(
+				reinterpret_cast<wchar_t const*>(string.data()),
+				string.size()),
+			tag...);
+	}
+
+	vsm::result<void> _make_path_select(std::basic_string_view<char32_t>, std::same_as<null_terminated_t> auto... tag)
+	{
+		return vsm::unexpected(error::unsupported_encoding);
+	}
+
+	vsm::result<void> _make_path_select(string_length_out_of_range_t)
+	{
+		return vsm::unexpected(error::filename_too_long);
 	}
 };
 

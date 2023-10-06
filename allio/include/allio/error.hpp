@@ -66,6 +66,7 @@ enum class error
 	//TODO: Rename. Not necessarily asynchronous.
 	async_operation_timed_out,
 	unsupported_operation,
+	invalid_encoding,
 	unsupported_encoding,
 	unsupported_multiplexer_handle_relation,
 	unsupported_asynchronous_operation,
@@ -82,6 +83,7 @@ enum class error
 	directory_stream_at_end,
 	virtual_address_not_available,
 	invalid_address,
+	command_line_too_long,
 };
 
 inline std::error_code make_error_code(error const error)

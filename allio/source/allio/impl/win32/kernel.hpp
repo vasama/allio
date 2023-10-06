@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/deadline.hpp>
+#include <allio/win32/kernel_error.hpp>
 
 #include <vsm/assert.h>
 #include <vsm/result.hpp>
@@ -18,6 +19,13 @@ inline constexpr NTSTATUS STATUS_OBJECT_NAME_INVALID            = 0xC0000033;
 inline constexpr NTSTATUS STATUS_CANCELLED                      = 0xC0000120;
 inline constexpr NTSTATUS STATUS_NOT_FOUND                      = 0xC0000225;
 inline constexpr NTSTATUS STATUS_HANDLE_NOT_CLOSABLE            = 0xC0000325;
+
+inline std::error_code get_kernel_error_code(NTSTATUS const status)
+{
+	return NT_SUCCESS(status)
+		? std::error_code()
+		: std::error_code(static_cast<kernel_error>(status));
+}
 
 
 inline constexpr ULONG SL_RESTART_SCAN                          = 0x00000001;

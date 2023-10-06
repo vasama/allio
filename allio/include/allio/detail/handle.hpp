@@ -270,9 +270,10 @@ private:
 	friend vsm::result<void> tag_invoke(
 		blocking_io_t,
 		vsm::any_cvref_of<basic_blocking_handle> auto& h,
+		io_result_ref_t<O> const result,
 		io_parameters_t<O> const& args)
 	{
-		return H::do_blocking_io(h, args);
+		return H::do_blocking_io(h, result, args);
 	}
 
 
@@ -462,21 +463,22 @@ private:
 	friend vsm::result<void> tag_invoke(
 		blocking_io_t,
 		vsm::any_cvref_of<basic_async_handle> auto& h,
+		io_result_ref_t<O> const result,
 		io_parameters_t<O> const& args)
 	{
-		return H::do_blocking_io(h, args);
+		return H::do_blocking_io(h, result, args);
 	}
 
-	template<typename S>
-	friend vsm::result<io_result> tag_invoke(submit_io_t, basic_async_handle const& h, S& s)
+	template<typename S, typename R>
+	friend vsm::result<io_result> tag_invoke(submit_io_t, basic_async_handle const& h, S& s, R const r)
 	{
-		return submit_io(*h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s);
+		return submit_io(*h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s, r);
 	}
 
-	template<typename S>
-	friend vsm::result<io_result> tag_invoke(notify_io_t, basic_async_handle const& h, S& s, io_status const status)
+	template<typename S, typename R>
+	friend vsm::result<io_result> tag_invoke(notify_io_t, basic_async_handle const& h, S& s, R const r, io_status const status)
 	{
-		return notify_io(*h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s, status);
+		return notify_io(*h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s, r, status);
 	}
 
 	template<typename S>

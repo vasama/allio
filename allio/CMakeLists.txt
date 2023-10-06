@@ -57,6 +57,7 @@ vsm_add_library2(allio
 
 	SOURCES
 		source/allio/impl/error.cpp
+		source/allio/impl/transcode.hpp
 		source/allio/impl/unique_name.cpp
 		source/allio/impl/unique_name.hpp
 
@@ -82,7 +83,7 @@ vsm_add_library2(allio
 		source/allio/test/multiplexer.hpp
 		#source/allio/test/opaque_handle.cpp
 		source/allio/test/path_view.cpp
-		#source/allio/test/process_handle.cpp
+		source/allio/test/process_handle.cpp
 		source/allio/test/reverse_iterator.hpp
 		#source/allio/test/socket_handle.cpp
 		source/allio/test/sync_wait.cpp
@@ -106,11 +107,10 @@ vsm_configure(allio
 	SOURCES
 		source/allio/impl/win32/completion_port.cpp
 		source/allio/impl/win32/completion_port.hpp
-		source/allio/impl/win32/encoding.cpp
-		source/allio/impl/win32/encoding.hpp
+		source/allio/impl/win32/command_line.cpp
+		source/allio/impl/win32/command_line.hpp
 		source/allio/impl/win32/error.cpp
 		source/allio/impl/win32/error.hpp
-		source/allio/impl/win32/event_handle.cpp
 		source/allio/impl/win32/kernel.cpp
 		source/allio/impl/win32/kernel.hpp
 		source/allio/impl/win32/kernel_error.cpp
@@ -122,18 +122,30 @@ vsm_configure(allio
 		source/allio/impl/win32/peb.cpp
 		source/allio/impl/win32/peb.hpp
 		source/allio/impl/win32/platform.cpp
+		source/allio/impl/win32/transcode.cpp
 		source/allio/impl/win32/unique_handle.cpp
 		source/allio/impl/win32/wait_packet.cpp
 		source/allio/impl/win32/wait_packet.hpp
 		#source/allio/impl/win32/wsa_ex.cpp
 		#source/allio/impl/win32/wsa_ex.hpp
+		
+		source/allio/impl/win32/handles/event_handle.cpp
+		source/allio/impl/win32/handles/filesystem_handle.cpp
+		source/allio/impl/win32/handles/filesystem_handle.hpp
+		source/allio/impl/win32/handles/platform_handle.cpp
+		source/allio/impl/win32/handles/platform_handle.hpp
+		source/allio/impl/win32/handles/process_handle.cpp
+		source/allio/impl/win32/handles/process_handle.hpp
 
 		source/allio/impl/win32/iocp/event_handle.cpp
+		source/allio/impl/win32/iocp/generic_wait.cpp
 		source/allio/impl/win32/iocp/multiplexer.cpp
+		source/allio/impl/win32/iocp/process_handle.cpp
 
 	TEST_SOURCES
+		source/allio/test/win32/command_line.cpp
 		source/allio/test/win32/kernel_path.cpp
-		source/allio/test/win32/timer.cpp
+		#source/allio/test/win32/timer2.cpp
 		source/allio/test/win32/wait_packet.cpp
 )
 
@@ -189,9 +201,9 @@ vsm_configure(allio
 
 target_compile_definitions(allio_test
 	PRIVATE
-		"allio_detail_add_numbers_path=\"$<TARGET_FILE:add_numbers>\""
+		"allio_detail_test_program=\"$<TARGET_FILE:test_program>\""
 )
-add_dependencies(allio_test add_numbers)
+add_dependencies(allio_test test_program)
 
 if(MSVC)
 	target_compile_options(allio PUBLIC /Zc:preprocessor /Zc:__cplusplus)

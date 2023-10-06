@@ -5,7 +5,7 @@
 using namespace allio;
 using namespace allio::win32;
 
-TEST_CASE("", "[timer2][windows][kernel]")
+TEST_CASE("", "[timer2][win32][kernel]")
 {
 	auto const 
 }

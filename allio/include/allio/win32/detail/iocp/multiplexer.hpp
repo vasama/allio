@@ -2,7 +2,7 @@
 
 #include <allio/detail/io.hpp>
 #include <allio/multiplexer.hpp>
-#include <allio/win32/detail/handles/platform_handle.hpp>
+#include <allio/win32/handles/platform_handle.hpp>
 #include <allio/win32/detail/unique_handle.hpp>
 #include <allio/win32/detail/win32_fwd.hpp>
 #include <allio/win32/wait_packet.hpp>

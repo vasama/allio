@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/input_path_view.hpp>
+#include <allio/any_path.hpp>
 #include <allio/win32/detail/win32_fwd.hpp>
 
 #include <allio/impl/win32/peb.hpp>
@@ -41,7 +41,7 @@ template<typename Handle>
 struct basic_kernel_path_parameters
 {
 	Handle handle = {};
-	input_path_view path;
+	any_path_view path;
 
 	// Use full path instead of handle and include a null terminator.
 	bool win32_api_form = false;

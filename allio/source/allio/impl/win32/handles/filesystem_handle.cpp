@@ -1,11 +1,17 @@
-#include <allio/impl/win32/filesystem_handle.hpp>
+#include <allio/impl/win32/handles/filesystem_handle.hpp>
 
-#include <allio/impl/win32/encoding.hpp>
+#include <allio/impl/new.hpp>
+#include <allio/impl/transcode.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/kernel_path.hpp>
 #include <allio/win32/kernel_error.hpp>
 
+#include <vsm/lazy.hpp>
+#include <vsm/out_resource.hpp>
+#include <vsm/standard.hpp>
+
 using namespace allio;
+using namespace allio::detail;
 using namespace allio::win32;
 
 namespace {
@@ -22,7 +28,7 @@ struct open_info
 
 } // namespace
 
-static vsm::result<open_info> make_open_info(filesystem_handle::open_parameters const& args, open_kind const kind)
+static vsm::result<open_info> make_open_info(open_kind const kind, open_args const& args)
 {
 	open_info info =
 	{
@@ -30,14 +36,13 @@ static vsm::result<open_info> make_open_info(filesystem_handle::open_parameters 
 		.create_disposition = FILE_OPEN,
 	};
 
-	if (args.multiplexable)
-	{
-		info.handle_flags |= platform_handle::implementation::flags::overlapped;
-	}
-	else
+#if 0 //TODO: Add support for synchronous files.
+	if (args.synchronous)
 	{
 		info.create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
+		info.handle_flags |= platform_handle::impl_type::flags::synchronous;
 	}
+#endif
 
 	switch (args.mode)
 	{
@@ -66,6 +71,7 @@ static vsm::result<open_info> make_open_info(filesystem_handle::open_parameters 
 		info.desired_access |= DELETE;
 		break;
 
+#if 0
 	case file_mode::append:
 		info.desired_access |= FILE_READ_ATTRIBUTES;
 		info.desired_access |= FILE_READ_DATA;
@@ -74,6 +80,7 @@ static vsm::result<open_info> make_open_info(filesystem_handle::open_parameters 
 		info.desired_access |= DELETE;
 		info.desired_access |= FILE_APPEND_DATA;
 		break;
+#endif
 
 	default:
 		return vsm::unexpected(error::invalid_argument);
@@ -135,10 +142,12 @@ static vsm::result<open_info> make_open_info(filesystem_handle::open_parameters 
 	return info;
 }
 
-static vsm::result<unique_handle_with_flags> create_file(HANDLE const root_handle, UNICODE_STRING path, open_info const& info)
+static vsm::result<unique_handle_with_flags> create_file(
+	HANDLE const root_handle,
+	UNICODE_STRING path,
+	open_info const& info)
 {
 	vsm_try_void(kernel_init());
-
 
 	OBJECT_ATTRIBUTES object_attributes = {};
 	object_attributes.Length = sizeof(object_attributes);
@@ -150,9 +159,9 @@ static vsm::result<unique_handle_with_flags> create_file(HANDLE const root_handl
 
 	IO_STATUS_BLOCK io_status_block = make_io_status_block();
 
-	HANDLE handle = INVALID_HANDLE_VALUE;
+	unique_handle handle;
 	NTSTATUS status = win32::NtCreateFile(
-		&handle,
+		vsm::out_resource(handle),
 		info.desired_access,
 		&object_attributes,
 		&io_status_block,
@@ -161,44 +170,46 @@ static vsm::result<unique_handle_with_flags> create_file(HANDLE const root_handl
 		info.share_access,
 		info.create_disposition,
 		info.create_options,
-		nullptr,
-		0);
+		/* EaBuffer: */ nullptr,
+		/* EaLength: */ 0);
 
 	if (status == STATUS_PENDING)
 	{
-		status = io_wait(handle, &io_status_block, deadline());
+		status = io_wait(handle.get(), &io_status_block, deadline::never());
 	}
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(kernel_error(status));
+		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
-	handle_flags handle_flags = info.handle_flags;
+	handle_flags flags = info.handle_flags;
+
 	if ((info.create_options & FILE_SYNCHRONOUS_IO_NONALERT) == 0)
 	{
-		handle_flags |= set_multiplexable_completion_modes(handle);
+		flags |= set_file_completion_notification_modes(handle.get());
 	}
 
-	return vsm::result<unique_handle_with_flags>(vsm::result_value, handle, handle_flags);
+	return vsm_lazy(unique_handle_with_flags
+	{
+		.handle = vsm_move(handle),
+		.flags = flags,
+	});
 }
 
 
 vsm::result<unique_handle_with_flags> win32::create_file(
-	filesystem_handle const* const hint, file_id_128 const& id,
-	filesystem_handle::open_parameters const& args, open_kind const kind)
+	HANDLE const hint_handle,
+	file_id_128 const& id,
+	open_kind const kind,
+	open_args const& args)
 {
-	vsm_try((auto, info), make_open_info(args, kind));
+	vsm_try(info, make_open_info(kind, args));
 
 	info.create_options |= FILE_OPEN_BY_FILE_ID;
 
-	HANDLE const hint_handle =
-		hint != nullptr && *hint
-			? unwrap_handle(hint->get_platform_handle())
-			: NULL;
-
 	UNICODE_STRING unicode_string;
-	unicode_string.Buffer = (wchar_t*)&id;
+	unicode_string.Buffer = reinterpret_cast<wchar_t*>(&const_cast<file_id_128&>(id));
 	unicode_string.Length = sizeof(id);
 	unicode_string.MaximumLength = unicode_string.Length;
 
@@ -206,21 +217,18 @@ vsm::result<unique_handle_with_flags> win32::create_file(
 }
 
 vsm::result<unique_handle_with_flags> win32::create_file(
-	filesystem_handle const* const base, input_path_view const path,
-	filesystem_handle::open_parameters const& args, open_kind const kind)
+	HANDLE const base_handle,
+	any_path_view const path,
+	open_kind const kind,
+	open_args const& args)
 {
-	vsm_try(info, make_open_info(args, kind));
-
-	HANDLE const base_handle =
-		base != nullptr && *base
-			? unwrap_handle(base->get_platform_handle())
-			: NULL;
+	vsm_try(info, make_open_info(kind, args));
 
 	kernel_path_storage path_storage;
 	vsm_try(kernel_path, make_kernel_path(path_storage,
 	{
 		.handle = base_handle,
-		.path = path
+		.path = path,
 	}));
 	vsm_assert(kernel_path.path.size() <= static_cast<USHORT>(-1) / sizeof(wchar_t));
 
@@ -233,19 +241,20 @@ vsm::result<unique_handle_with_flags> win32::create_file(
 }
 
 vsm::result<unique_handle_with_flags> win32::reopen_file(
-	filesystem_handle const& base,
-	filesystem_handle::open_parameters const& args, open_kind const kind)
+	HANDLE const handle,
+	open_kind const kind,
+	open_args const& args)
 {
-	vsm_assert(base);
+	vsm_assert(handle != NULL); //PRECONDITION
 
-	vsm_try(info, make_open_info(args, kind));
+	vsm_try(info, make_open_info(kind, args));
 
 	UNICODE_STRING unicode_string;
 	unicode_string.Buffer = nullptr;
 	unicode_string.Length = 0;
 	unicode_string.MaximumLength = unicode_string.Length;
 
-	return create_file(unwrap_handle(base.get_platform_handle()), unicode_string, info);
+	return create_file(handle, unicode_string, info);
 }
 
 
@@ -258,21 +267,19 @@ static constexpr size_t file_name_information_size =
 
 struct file_name_information_deleter
 {
-	void operator()(FILE_NAME_INFORMATION* const information) const
+	void vsm_static_operator_invoke(FILE_NAME_INFORMATION* const information)
 	{
 		operator delete(static_cast<void*>(information), file_name_information_buffer_size);
 	}
 };
 using file_name_information_ptr = std::unique_ptr<FILE_NAME_INFORMATION, file_name_information_deleter>;
 
+} // namespace
+
 static vsm::result<file_name_information_ptr> allocate_file_name_information()
 {
-	void* const block = operator new(file_name_information_size, std::nothrow);
-	if (block == nullptr)
-	{
-		return vsm::unexpected(error::not_enough_memory);
-	}
-	return vsm::result<file_name_information_ptr>(vsm::result_value, new (block) FILE_NAME_INFORMATION);
+	vsm_try(buffer, allocate_unique(file_name_information_size));
+	return vsm_lazy(file_name_information_ptr(new (buffer.release()) FILE_NAME_INFORMATION));
 }
 
 static vsm::result<file_name_information_ptr> query_file_name_information(HANDLE const handle)
@@ -286,17 +293,12 @@ static vsm::result<file_name_information_ptr> query_file_name_information(HANDLE
 
 	IO_STATUS_BLOCK io_status_block = make_io_status_block();
 
-	NTSTATUS status = NtQueryInformationFile(
+	NTSTATUS const status = NtQueryInformationFile(
 		handle,
 		&io_status_block,
 		r->get(),
 		file_name_information_size,
 		FileNormalizedNameInformation);
-
-	if (status == STATUS_PENDING)
-	{
-		status = io_wait(handle, &io_status_block, deadline::never());
-	}
 
 	if (!NT_SUCCESS(status))
 	{
@@ -306,19 +308,22 @@ static vsm::result<file_name_information_ptr> query_file_name_information(HANDLE
 	return r;
 }
 
-} // namespace
 
-
-vsm::result<void> filesystem_handle::sync_impl(io::parameters_with_result<io::get_current_path> const& args)
+vsm::result<void> filesystem_handle::do_blocking_io(
+	filesystem_handle const& h,
+	io_result_ref_t<get_current_path_t> const result,
+	io_parameters_t<get_current_path_t> const& args)
 {
-	filesystem_handle const& h = *args.handle;
-
 	if (!h)
 	{
 		return vsm::unexpected(error::handle_is_null);
 	}
 
 	vsm_try(information, query_file_name_information(unwrap_handle(h.get_platform_handle())));
-	std::wstring_view const wide_path = std::wstring_view(information->FileName, information->FileNameLength);
-	return args.produce(copy_string(wide_path, args.output));
+
+	std::wstring_view const wide_path = std::wstring_view(
+		information->FileName,
+		information->FileNameLength);
+
+	return result.produce(transcode_string(wide_path, args.buffer));
 }

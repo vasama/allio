@@ -1,5 +1,7 @@
 #pragma once
 
+#include <allio/detail/path.hpp>
+
 #include <string_view>
 
 namespace allio {
@@ -15,8 +17,10 @@ public:
 	{
 	}
 
-	using string_view_type::data;
-	using string_view_type::size;
+	friend string_view_type tag_invoke(get_path_string_t, basic_path_literal const& self)
+	{
+		return static_cast<string_view_type const&>(self);
+	}
 };
 
 namespace path_literals {

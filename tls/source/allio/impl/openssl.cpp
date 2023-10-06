@@ -7,20 +7,6 @@ using namespace allio;
 
 namespace {
 
-template<typename T, typename... Args>
-vsm::result<std::unique_ptr<T>> make_unique(Args&&... args)
-{
-	T* const ptr = new (std::nothrow) T(static_cast<Args&&>(args)...);
-
-	if (ptr == nullptr)
-	{
-		return vsm::unexpected(error::not_enough_memory);
-	}
-
-	return ptr;
-}
-
-
 enum class openssl_error : int
 {
 };

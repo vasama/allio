@@ -184,7 +184,12 @@ static system_error exec_target_process(create_process_parameters const& args)
 	}
 
 	// When execveat returns, its return value is always -1.
-	(void)execveat(args.exec_base, args.exec_path, args.exec_argv, args.exec_envp, args.exec_flags);
+	(void)execveat(
+		args.exec_base,
+		args.exec_path,
+		args.exec_argv,
+		args.exec_envp,
+		args.exec_flags);
 
 	return get_last_error();
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <allio/detail/path.hpp>
 #include <allio/detail/platform.h>
 #include <allio/path_literal.hpp>
 
@@ -306,6 +307,11 @@ public:
 private:
 	static constexpr bool equal(basic_path_view lhs, basic_path_view rhs);
 	static constexpr int compare(basic_path_view lhs, basic_path_view rhs);
+
+	friend string_view_type tag_invoke(get_path_string_t, basic_path_view const& self)
+	{
+		return static_cast<string_view_type const&>(self);
+	}
 };
 
 
