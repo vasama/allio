@@ -1,0 +1,224 @@
+#include <allio/impl/posix/socket.hpp>
+
+#include <allio/step_deadline.hpp>
+
+#include <vsm/defer.hpp>
+#include <vsm/lazy.hpp>
+#include <vsm/utility.hpp>
+
+using namespace allio;
+using namespace allio::detail;
+using namespace allio::posix;
+
+network_endpoint socket_address_union::get_network_endpoint() const
+{
+	switch (addr.sa_family)
+	{
+	case AF_INET:
+		return ipv4_endpoint{ ipv4_address(network_byte_order(ipv4.sin_addr.s_addr)), ipv4.sin_port };
+
+#if 0
+	case AF_INET6:
+		return ipv6_address(ipv6.)
+#endif
+	}
+
+	return {};
+}
+
+vsm::result<socket_address> socket_address::make(network_endpoint const& endpoint)
+{
+	vsm::result<socket_address> r(vsm::result_value);
+
+	switch (auto& addr = *r; endpoint.kind())
+	{
+	case network_address_kind::local:
+		{
+			std::string_view const path = endpoint.local().path().string();
+			if (path.size() > unix_socket_max_path)
+			{
+				return vsm::unexpected(error::filename_too_long);
+			}
+			addr.unix.sun_family = AF_UNIX;
+			memcpy(addr.unix.sun_path, path.data(), path.size());
+			if (path.size() < unix_socket_max_path)
+			{
+				addr.unix.sun_path[path.size()] = '\0';
+			}
+			addr.size = sizeof(addr.unix);
+		}
+		break;
+
+	case network_address_kind::ipv4:
+		{
+			ipv4_endpoint const ip = endpoint.ipv4();
+			addr.ipv4.sin_family = AF_INET;
+			addr.ipv4.sin_port = ip.port;
+			addr.ipv4.sin_addr.s_addr = network_byte_order(ip.address.integer());
+			memset(addr.ipv4.sin_zero, 0, sizeof(ipv4.sin_zero));
+			addr.size = sizeof(addr.ipv4);
+		}
+		break;
+
+#if 0
+	case network_address_kind::ipv6:
+		{
+			ipv6_address const ip = endpoint.ipv6();
+			addr.ipv6.sin6_family = AF_INET6;
+			addr.ipv6.sin6_port = ip.port();
+		}
+		break;
+#endif
+	}
+
+	return r;
+}
+
+vsm::result<socket_address> socket_address::get(socket_type const socket)
+{
+	vsm::result<socket_address> r(vsm::result_value);
+	r->size = sizeof(socket_address_union);
+
+	if (getsockname(socket, &r->addr, &r->size))
+	{
+		return vsm::unexpected(get_last_socket_error());
+	}
+
+	return r;
+}
+
+
+vsm::result<void> posix::socket_listen(
+	socket_type const socket,
+	socket_address const& addr,
+	uint32_t const* const p_backlog)
+{
+	int const backlog = p_backlog != nullptr
+		? std::min<uint32_t>(*p_backlog, std::numeric_limits<int>::max())
+		: SOMAXCONN;
+
+	if (::bind(socket, &addr.addr, addr.size) == socket_error_value)
+	{
+		return vsm::unexpected(get_last_socket_error());
+	}
+
+	if (::listen(socket, backlog) == socket_error_value)
+	{
+		return vsm::unexpected(get_last_socket_error());
+	}
+
+	return {};
+}
+
+vsm::result<unique_socket_with_flags> posix::socket_accept(
+	socket_type const socket_listen,
+	socket_address& addr,
+	deadline const deadline)
+{
+	if (deadline != deadline::never())
+	{
+		vsm_try_void(socket_poll_or_timeout(socket_listen, socket_poll_r, deadline));
+	}
+
+	socket_type const socket = accept(
+		socket_listen,
+		&addr.addr,
+		&addr.size);
+
+	if (socket == socket_error_value)
+	{
+		return vsm::unexpected(get_last_socket_error());
+	}
+
+	return vsm_lazy(unique_socket_with_flags
+	{
+		.socket = unique_socket(socket),
+	});
+}
+
+
+static vsm::result<void> socket_connect_with_timeout(
+	socket_type const socket,
+	socket_address const& addr,
+	deadline const deadline)
+{
+	vsm_try_void(socket_set_non_blocking(socket, true));
+
+	if (::connect(socket, &addr.addr, addr.size) == socket_error_value)
+	{
+		switch (socket_error const error = get_last_socket_error())
+		{
+		case socket_error::would_block:
+		case socket_error::in_progress:
+			break;
+
+		default:
+			return vsm::unexpected(error);
+		}
+	}
+
+	auto const r = [&]() -> vsm::result<void>
+	{
+		if (deadline == deadline::instant())
+		{
+			return vsm::unexpected(error::async_operation_timed_out);
+		}
+
+		step_deadline step_deadline(deadline);
+
+		vsm_try(relative_deadline, step_deadline.step());
+		vsm_try_void(socket_poll_or_timeout(socket, socket_poll_w, relative_deadline));
+
+		socket_address addr;
+		addr.size = sizeof(addr.addr);
+
+		// Check if the socket is connected by attempting to getting the peer address.
+		if (getpeername(socket, &addr.addr, &addr.size) == socket_error_value)
+		{
+			auto const getpeername_error = get_last_socket_error();
+
+			if (getpeername_error != socket_error::not_connected)
+			{
+				return vsm::unexpected(error::unknown_failure);
+			}
+
+			// If connecting failed, use recv to get the reason for the connect failure.
+			char dummy_buffer;
+			int const recv_result = recv(socket, &dummy_buffer, 1, 0);
+			vsm_assert(recv_result == socket_error_value);
+
+			return recv_result == socket_error_value
+				? vsm::unexpected(std::error_code(get_last_socket_error()))
+				: vsm::unexpected(std::error_code(error::unknown_failure));
+		}
+
+		vsm_try_void(socket_set_non_blocking(socket, false));
+
+		return {};
+	}();
+
+	if (!r)
+	{
+		unrecoverable(close_socket(socket));
+	}
+
+	return r;
+}
+
+vsm::result<void> posix::socket_connect(
+	socket_type const socket,
+	socket_address const& addr,
+	deadline const deadline)
+{
+	if (deadline != deadline::never())
+	{
+		return socket_connect_with_timeout(socket, addr, deadline);
+	}
+
+	if (::connect(socket, &addr.addr, addr.size) == socket_error_value)
+	{
+		return vsm::unexpected(get_last_socket_error());
+	}
+
+	return {};
+}

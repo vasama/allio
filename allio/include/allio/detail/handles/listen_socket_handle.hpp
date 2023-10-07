@@ -1,15 +1,47 @@
 #pragma once
 
 #include <allio/detail/handles/stream_socket_handle.hpp>
+#include <allio/detail/io_sender.hpp>
 
-namespace allio {
-namespace detail {
+#include <vsm/standard.hpp>
 
-struct accept_result
+#include <optional>
+
+namespace allio::detail {
+
+template<typename SocketHandle>
+struct basic_accept_result
 {
-	stream_socket_handle socket;
-	network_address address;
+	SocketHandle socket;
+	network_endpoint endpoint;
 };
+
+using _accept_result = basic_accept_result<blocking_stream_socket_handle>;
+
+
+struct backlog_t
+{
+	std::optional<uint32_t> backlog;
+
+	struct tag_t
+	{
+		struct argument_t
+		{
+			uint32_t value;
+			
+			friend void tag_invoke(set_argument_t, backlog_t& args, argument_t const& value)
+			{
+				args.backlog = value.value;
+			}
+		};
+
+		argument_t vsm_static_operator_invoke(uint32_t const backlog)
+		{
+			return { backlog };
+		}
+	};
+};
+inline constexpr backlog_t::tag_t backlog = {};
 
 class _listen_socket_handle : public common_socket_handle
 {
@@ -17,17 +49,37 @@ protected:
 	using base_type = common_socket_handle;
 
 public:
-	struct listen_t;
-	#define allio_listen_socket_handle_listen_parameters(type, data, ...) \
-		type(allio::detail::listen_socket_handle_base, listen_parameters) \
-		allio_platform_handle_create_parameters(__VA_ARGS__, __VA_ARGS__) \
-		data(uint32_t, backlog, 0) \
+	struct listen_t
+	{
+		using handle_type = _listen_socket_handle;
+		using result_type = void;
+		
+		struct required_params_type
+		{
+			network_endpoint endpoint;
+		};
 
-	allio_interface_parameters(allio_listen_socket_handle_listen_parameters);
+		using optional_params_type = backlog_t;
+	};
+
+	struct accept_t
+	{
+		using handle_type = _listen_socket_handle const;
+		using result_type = _accept_result;
+		
+		using required_params_type = no_parameters_t;
+		using optional_params_type = deadline_t;
+	};
 
 
-	struct accept_t;
-	using accept_parameters = common_socket_handle::create_parameters;
+	using async_operations = type_list_cat
+	<
+		base_type::async_operations,
+		type_list
+		<
+			accept_t
+		>
+	>;
 
 protected:
 	allio_detail_default_lifetime(_listen_socket_handle);
@@ -35,42 +87,54 @@ protected:
 	template<typename H>
 	struct sync_interface : base_type::sync_interface<H>
 	{
-		template<parameters<listen_parameters> P = listen_parameters::interface>
-		vsm::result<void> listen(network_address const& address, P const& args = {}) &;
-		
-		template<parameters<accept_parameters> P = accept_parameters::interface>
-		vsm::result<accept_result> accept(P const& args = {}) const;
+		vsm::result<_accept_result> accept(auto&&... args) const
+		{
+			vsm::result<_accept_result> r(vsm::result_value);
+			vsm_try_void(do_blocking_io(
+				static_cast<H const&>(*this),
+				r,
+				io_arguments_t<accept_t>(&r->socket)(vsm_forward(args)...)));
+			return r;
+		}
 	};
 
-	template<typename M, typename H>
-	struct async_interface : base_type::async_interface<M, H>
+	template<typename H>
+	struct async_interface : base_type::async_interface<H>
 	{
-		template<parameters<listen_parameters> P = listen_parameters::interface>
-		basic_sender<M, H, listen_t> listen_async(network_address const& address, P const& args = {}) &;
-		
-		template<parameters<accept_parameters> P = accept_parameters::interface>
-		basic_sender<M, H, accept_t> accept_async(P const& args = {}) const;
+		io_sender<H, accept_t> accept_async(auto&&... args) const
+		{
+			return io_sender<H, accept_t>(
+				static_cast<H const&>(*this),
+				io_arguments_t<accept_t>()(vsm_forward(args)...));
+		}
 	};
+
+protected:
+	static vsm::result<void> do_blocking_io(
+		_listen_socket_handle& h,
+		io_result_ref_t<listen_t> result,
+		io_parameters_t<listen_t> const& args);
+
+	static vsm::result<void> do_blocking_io(
+		_listen_socket_handle const& h,
+		io_result_ref_t<accept_t> result,
+		io_parameters_t<accept_t> const& args);
 };
 
-} // namespace detail
+using blocking_listen_socket_handle = basic_blocking_handle<_listen_socket_handle>;
 
-template<>
-struct io_operation_traits<listen_socket_handle::listen_t>
+template<typename Multiplexer>
+using basic_listen_socket_handle = basic_async_handle<_listen_socket_handle, Multiplexer>;
+
+
+vsm::result<blocking_listen_socket_handle> listen(network_endpoint const& endpoint, auto&&... args)
 {
-	using handle_type = listen_socket_handle;
-	using result_type = void;
-	using params_type = listen_socket_handle::listen_parameters;
+	vsm::result<blocking_listen_socket_handle> r(vsm::result_value);
+	vsm_try_void(blocking_io(
+		*r,
+		no_result,
+		io_arguments_t<_listen_socket_handle::listen_t>(endpoint)(vsm_forward(args)...)));
+	return r;
+}
 
-	network_address address;
-};
-
-template<>
-struct io_operation_traits<listen_socket_handle::listen_t>
-{
-	using handle_type = listen_socket_handle;
-	using result_type = accept_result;
-	using params_type = listen_socket_handle::accept_parameters;
-};
-
-} // namespace allio
+} // namespace allio::detail

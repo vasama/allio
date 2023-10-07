@@ -309,7 +309,7 @@ static vsm::result<response_buffer> consume_record_data(response_buffer& buffer,
 }
 
 
-vsm::result<void> dns_resolver::handle_query_result(network_address const& server_address, std::span<uint8_t const> const packet)
+vsm::result<void> dns_resolver::handle_query_result(network_endpoint const& server_address, std::span<uint8_t const> const packet)
 {
 	vsm_try(header, read_struct<dns_header>(buffer));
 	uint16_t const bitfield = dns_convert(header.bitfield);

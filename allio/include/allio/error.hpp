@@ -84,6 +84,7 @@ enum class error
 	virtual_address_not_available,
 	invalid_address,
 	command_line_too_long,
+	socket_already_bound,
 };
 
 inline std::error_code make_error_code(error const error)

@@ -10,7 +10,6 @@
 
 namespace allio {
 
-//TODO: Use uint32_t instead.
 enum class native_platform_handle : uintptr_t
 {
 	null = 0

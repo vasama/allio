@@ -1,7 +1,7 @@
 #pragma once
 
 #ifndef allio_detail_socket_api
-#	error Include <allio/impl/posix_socket.hpp> instead.
+#	error Include <allio/impl/posix/socket.hpp> instead.
 #endif
 
 #include <allio/linux/detail/undef.i>
@@ -21,9 +21,13 @@ namespace allio {
 using socket_type = int;
 using socket_address_size_type = unsigned int;
 
-static constexpr auto socket_error_value = -1;
-static constexpr socket_type invalid_socket = static_cast<socket_type>(-1);
-static constexpr size_t unix_socket_max_path = sizeof(sockaddr_un::sun_path);
+inline constexpr auto socket_error_value = -1;
+inline constexpr socket_type invalid_socket = static_cast<socket_type>(-1);
+inline constexpr size_t unix_socket_max_path = sizeof(sockaddr_un::sun_path);
+
+using socket_poll_mask = short;
+inline constexpr socket_poll_mask socket_poll_r = POLLIN;
+inline constexpr socket_poll_mask socket_poll_w = POLLOUT;
 
 
 using socket_error = linux::system_error;

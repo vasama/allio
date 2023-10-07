@@ -36,12 +36,8 @@ vsm_add_library2(allio
 		include/allio/filesystem_handle.hpp
 		include/allio/file_handle.hpp
 		include/allio/handle.hpp
-		include/allio/input_path_view.hpp
-		include/allio/input_string_view.hpp
 		include/allio/map_handle.hpp
 		include/allio/network.hpp
-		include/allio/output_path_ref.hpp
-		include/allio/output_string_ref.hpp
 		include/allio/packet_socket_handle.hpp
 		include/allio/path.hpp
 		include/allio/path_literal.hpp
@@ -75,19 +71,20 @@ vsm_add_library2(allio
 		p2300::p2300
 
 	TEST_SOURCES
-		#source/allio/test/directory_handle.cpp
-		source/allio/test/event_handle.cpp
-		#source/allio/test/file_handle.cpp
 		source/allio/test/filesystem.hpp
-		#source/allio/test/map_handle.cpp
 		source/allio/test/multiplexer.hpp
-		#source/allio/test/opaque_handle.cpp
 		source/allio/test/path_view.cpp
-		source/allio/test/process_handle.cpp
 		source/allio/test/reverse_iterator.hpp
-		#source/allio/test/socket_handle.cpp
 		source/allio/test/sync_wait.cpp
 		source/allio/test/task.hpp
+	
+		#source/allio/test/handles/directory_handle.cpp
+		source/allio/test/handles/event_handle.cpp
+		#source/allio/test/handles/file_handle.cpp
+		#source/allio/test/handles/map_handle.cpp
+		#source/allio/test/handles/opaque_handle.cpp
+		source/allio/test/handles/process_handle.cpp
+		source/allio/test/handles/socket_handle.cpp
 )
 
 vsm_configure(allio
@@ -105,6 +102,8 @@ vsm_configure(allio
 		include/allio/win32/detail/win32_fwd.hpp
 
 	SOURCES
+		source/allio/impl/posix/socket.cpp
+		source/allio/impl/posix/socket.hpp
 		source/allio/impl/win32/completion_port.cpp
 		source/allio/impl/win32/completion_port.hpp
 		source/allio/impl/win32/command_line.cpp
@@ -122,13 +121,19 @@ vsm_configure(allio
 		source/allio/impl/win32/peb.cpp
 		source/allio/impl/win32/peb.hpp
 		source/allio/impl/win32/platform.cpp
+		source/allio/impl/win32/posix_socket.cpp
+		source/allio/impl/win32/posix_socket.hpp
 		source/allio/impl/win32/transcode.cpp
 		source/allio/impl/win32/unique_handle.cpp
 		source/allio/impl/win32/wait_packet.cpp
 		source/allio/impl/win32/wait_packet.hpp
-		#source/allio/impl/win32/wsa_ex.cpp
-		#source/allio/impl/win32/wsa_ex.hpp
-		
+		source/allio/impl/win32/wsa_ex.cpp
+		source/allio/impl/win32/wsa_ex.hpp
+
+		source/allio/impl/posix/handles/common_socket_handle.cpp
+		source/allio/impl/posix/handles/listen_socket_handle.cpp
+		#source/allio/impl/posix/handles/packet_socket_handle.cpp
+		source/allio/impl/posix/handles/stream_socket_handle.cpp
 		source/allio/impl/win32/handles/event_handle.cpp
 		source/allio/impl/win32/handles/filesystem_handle.cpp
 		source/allio/impl/win32/handles/filesystem_handle.hpp
@@ -139,14 +144,17 @@ vsm_configure(allio
 
 		source/allio/impl/win32/iocp/event_handle.cpp
 		source/allio/impl/win32/iocp/generic_wait.cpp
+		source/allio/impl/win32/iocp/listen_socket_handle.cpp
 		source/allio/impl/win32/iocp/multiplexer.cpp
 		source/allio/impl/win32/iocp/process_handle.cpp
+		source/allio/impl/win32/iocp/stream_socket_handle.cpp
 
 	TEST_SOURCES
 		source/allio/test/win32/command_line.cpp
 		source/allio/test/win32/kernel_path.cpp
 		#source/allio/test/win32/timer2.cpp
 		source/allio/test/win32/wait_packet.cpp
+		source/allio/test/win32/wsa.cpp
 )
 
 vsm_configure(allio

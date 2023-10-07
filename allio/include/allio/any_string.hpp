@@ -139,13 +139,6 @@ public:
 
 	[[nodiscard]] decltype(auto) visit(auto&& visitor) const
 	{
-		return _visit<true>(vsm_forward(visitor));
-	}
-
-protected:
-	template<bool VisitLengthError>
-	[[nodiscard]] decltype(auto) _visit(auto&& visitor) const
-	{
 		switch (encoding())
 		{
 		case allio::encoding::narrow_execution_encoding:
@@ -164,14 +157,7 @@ protected:
 			return _visitor<char32_t>(vsm_forward(visitor));
 		}
 
-		if constexpr (VisitLengthError)
-		{
-			return std::invoke(vsm_forward(visitor), detail::string_length_out_of_range_t());
-		}
-		else
-		{
-			vsm_unreachable();
-		}
+		return std::invoke(vsm_forward(visitor), detail::string_length_out_of_range_t());
 	}
 
 private:

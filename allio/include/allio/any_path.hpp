@@ -3,6 +3,8 @@
 #include <allio/any_string.hpp>
 #include <allio/path_view.hpp>
 
+#include <vsm/lift.hpp>
+
 namespace allio {
 namespace detail {
 
@@ -35,19 +37,27 @@ public:
 	template<typename Visitor>
 	[[nodiscard]] decltype(auto) visit(Visitor&& visitor) const
 	{
-		return any_string_view::_visit<false>(
-			[&]<typename Char, typename... Tag>(std::basic_string_view<Char> const string, Tag... tag)
-			{
-				if constexpr (std::invocable<Visitor&&, basic_path_view<Char>, Tag...>)
-				{
-					return std::invoke(vsm_forward(visitor), basic_path_view<Char>(string), tag...);
-				}
-				else
-				{
-					return std::invoke(vsm_forward(visitor), basic_path_view<Char>(string));
-				}
-			}
-		);
+		return any_string_view::visit(vsm_bind_borrow(_visitor, vsm_forward(visitor)));
+	}
+
+private:
+	template<typename Visitor, typename Char, std::same_as<null_terminated_t>... Tag>
+	[[nodiscard]] decltype(auto) _visitor(Visitor&& visitor, std::basic_string_view<Char> const string, Tag...) const
+	{
+		if constexpr (std::invocable<Visitor&&, basic_path_view<Char>, Tag...>)
+		{
+			return std::invoke(vsm_forward(visitor), basic_path_view<Char>(string), Tag()...);
+		}
+		else
+		{
+			return std::invoke(vsm_forward(visitor), basic_path_view<Char>(string));
+		}
+	}
+
+	template<typename Visitor>
+	[[nodiscard]] decltype(auto) _visitor(Visitor&& visitor, detail::string_length_out_of_range_t)
+	{
+		return std::invoke(vsm_forward(visitor), detail::string_length_out_of_range_t());
 	}
 };
 

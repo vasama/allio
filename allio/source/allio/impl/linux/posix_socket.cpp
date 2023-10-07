@@ -24,7 +24,7 @@ vsm::result<unique_socket_with_flags> allio::create_socket(int const address_fam
 	return vsm::result<unique_socket_with_flags>(vsm::result_value, socket, handle_flags::none);
 }
 
-vsm::result<unique_socket_with_flags> allio::accept_socket(socket_type const listen_socket, socket_address& addr, listen_socket_handle::accept_parameters const& args)
+vsm::result<unique_socket_with_flags> allio::socket_accept(socket_type const socket_listen, socket_address& addr, listen_socket_handle::accept_parameters const& args)
 {
 	socket_type const socket = ::accept(socket, &addr.addr, &addr.size);
 
@@ -65,7 +65,7 @@ vsm::result<void> allio::packet_scatter_read(io::parameters_with_result<io::pack
 	}
 
 	args.result->packet_size = bytes_transferred;
-	args.result->address = addr.get_network_address();
+	args.result->address = addr.get_network_endpoint();
 
 	return {};
 }

@@ -11,6 +11,8 @@ protected:
 	using base_type = platform_handle;
 
 	allio_detail_default_lifetime(common_socket_handle);
+
+	void close();
 };
 
 } // namespace allio::detail

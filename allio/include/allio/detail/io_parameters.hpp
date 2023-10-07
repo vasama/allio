@@ -67,7 +67,7 @@ struct io_result_ref
 	Result& result;
 
 	io_result_ref(Result& storage)
-		: result(result)
+		: result(storage)
 	{
 	}
 
@@ -86,7 +86,7 @@ struct io_result_ref
 	template<std::convertible_to<Result> R = Result>
 	io_result_ref operator=(R&& value) const
 	{
-		result = vsm_forwartd(value);
+		result = vsm_forward(value);
 		return *this;
 	}
 

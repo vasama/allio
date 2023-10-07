@@ -56,8 +56,8 @@ class secure_socket_source_handle_base : public handle
 	using base_type = handle;
 
 public:
-	vsm::result<secure_stream_socket_handle_base> connect(network_address const& address);
-	vsm::result<secure_listen_socket_handle_base> listen(network_address const& address);
+	vsm::result<secure_stream_socket_handle_base> connect(network_endpoint const& address);
+	vsm::result<secure_listen_socket_handle_base> listen(network_endpoint const& address);
 
 	vsm::result<secure_stream_socket_handle_base> wrap(stream_socket_handle& socket);
 	vsm::result<secure_listen_socket_handle_base> wrap(listen_socket_handle& socket);

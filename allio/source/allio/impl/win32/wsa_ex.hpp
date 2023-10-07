@@ -1,12 +1,12 @@
 #pragma once
 
-#include <allio/impl/posix_socket.hpp>
+#include <allio/impl/posix/socket.hpp>
 
 namespace allio::win32 {
 
 struct wsa_accept_address_buffer
 {
-	class socket_address_buffer : public socket_address_union
+	class socket_address_buffer : public posix::socket_address_union
 	{
 		// AcceptEx requires an extra 16 bytes.
 		std::byte m_dummy_buffer[16];
@@ -18,15 +18,15 @@ struct wsa_accept_address_buffer
 };
 
 DWORD wsa_accept_ex(
-	SOCKET listen_socket,
-	SOCKET accept_socket,
+	SOCKET socket_listen,
+	SOCKET socket_accept,
 	wsa_accept_address_buffer& address,
-	LPOVERLAPPED overlapped);
+	OVERLAPPED& overlapped);
 
 DWORD wsa_connect_ex(
 	SOCKET socket,
-	socket_address const& addr,
-	LPOVERLAPPED overlapped);
+	posix::socket_address const& addr,
+	OVERLAPPED& overlapped);
 
 DWORD wsa_send_msg(
 	SOCKET socket,

@@ -104,12 +104,22 @@ protected:
 	}
 
 
+#if 0
+	void set_flags(handle_flags const new_flags) &
+	{
+		vsm_assert(*this); //PRECONDITION
+		vsm_assert(new_flags[flags::not_null]); //PRECONDITION
+		m_flags.value = new_flags;
+	}
+#endif
+
+
 	[[nodiscard]] static bool check_native_handle(native_handle_type const& native)
 	{
 		return native.flags[flags::not_null];
 	}
 
-	void set_native_handle(native_handle_type const& native)
+	void set_native_handle(native_handle_type const& native) &
 	{
 		m_flags.value = native.flags;
 	}
@@ -261,7 +271,7 @@ private:
 	{
 		if (*this)
 		{
-			return H::close();
+			H::close();
 		}
 	}
 

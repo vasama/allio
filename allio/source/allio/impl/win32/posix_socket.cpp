@@ -1,14 +1,18 @@
-#include <allio/impl/posix_socket.hpp>
+#include <allio/impl/posix/socket.hpp>
 
 #include <allio/detail/dynamic_buffer.hpp>
-#include <allio/impl/win32/platform_handle.hpp>
+#include <allio/impl/win32/handles/platform_handle.hpp>
 #include <allio/impl/win32/wsa_ex.hpp>
+
+#include <vsm/lazy.hpp>
 
 #include <algorithm>
 
 #pragma comment(lib, "ws2_32.lib")
 
 using namespace allio;
+using namespace allio::detail;
+using namespace allio::posix;
 using namespace allio::win32;
 
 char const* socket_error_category::name() const noexcept
@@ -42,8 +46,7 @@ static vsm::result<void> wsa_startup()
 		{
 			if (error == 0)
 			{
-				//TODO:
-				//WSACleanup();
+				WSACleanup();
 			}
 		}
 	};
@@ -56,14 +59,13 @@ static vsm::result<void> wsa_startup()
 
 	if (init.error != 0)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(static_cast<socket_error>(init.error));
 	}
 
 	return {};
 }
 
-
-vsm::result<unique_socket_with_flags> allio::create_socket(int const address_family, common_socket_handle::create_parameters const& args)
+vsm::result<unique_socket_with_flags> posix::create_socket(int const address_family)
 {
 	vsm_try_void(wsa_startup());
 
@@ -81,68 +83,225 @@ vsm::result<unique_socket_with_flags> allio::create_socket(int const address_fam
 	DWORD flags = WSA_FLAG_NO_HANDLE_INHERIT;
 	handle_flags handle_flags = {};
 
-	if (args.multiplexable)
+	if (true /*args.multiplexable*/) //TODO: Synchronous sockets
+	{
+		handle_flags |= platform_handle::impl_type::flags::synchronous;
+	}
+	else
 	{
 		flags |= WSA_FLAG_OVERLAPPED;
-		handle_flags |= platform_handle::implementation::flags::overlapped;
 	}
 
-	SOCKET const socket = WSASocketW(
+	SOCKET const raw_socket = WSASocketW(
 		address_family,
 		SOCK_STREAM,
 		protocol,
-		nullptr,
-		0,
+		/* lpProtocolInfo: */ nullptr,
+		/* group: */ 0,
 		flags);
 
-	if (socket == INVALID_SOCKET)
+	if (raw_socket == INVALID_SOCKET)
 	{
 		return vsm::unexpected(get_last_socket_error());
 	}
 
-	if (args.multiplexable)
+	unique_socket socket(raw_socket);
+
+	if (flags & WSA_FLAG_OVERLAPPED)
 	{
 		//TODO: Set multiplexable completion modes.
 		//handle_flags |= set_multiplexable_completion_modes(socket);
 	}
 
-	return vsm::result<unique_socket_with_flags>(vsm::result_value, socket, handle_flags);
+	return vsm_lazy(unique_socket_with_flags
+	{
+		.socket = vsm_move(socket),
+		.flags = handle_flags,
+	});
 }
 
-vsm::result<unique_socket_with_flags> allio::accept_socket(socket_type const listen_socket, socket_address& addr, common_socket_handle::create_parameters const& args)
+#if 0
+template<typename B, std::derived_from<B> D>
+static B& base_cast(D& derived)
 {
-	vsm_try(listen_addr, socket_address::get(listen_socket));
-	auto socket_result = create_socket(listen_addr.addr.sa_family, args);
+	return derived;
+}
+
+template<typename B, std::derived_from<B> D>
+static B&& base_cast(D&& derived)
+{
+	return static_cast<D&&>(derived);
+}
+
+template<typename B, std::derived_from<B> D>
+static B const& base_cast(D const& derived)
+{
+	return derived;
+}
+
+template<typename B, std::derived_from<B> D>
+static B const&& base_cast(D const&& derived)
+{
+	return static_cast<D const&&>(derived);
+}
+
+vsm::result<unique_socket_with_flags> posix::socket_accept(socket_type const socket_listen, socket_address& addr)
+{
+	if (0)
+	{
+		addr.size = sizeof(addr.addr);
+		socket_type new_socket = accept(socket_listen, &addr.addr, &addr.size);
+		if (new_socket == socket_error_value)
+		{
+			return vsm::unexpected(get_last_socket_error());
+		}
+		return vsm_lazy(unique_socket_with_flags{ unique_socket(new_socket) });
+	}
+	if (1)
+	{
+		addr.size = sizeof(addr.addr);
+		socket_type new_socket = WSAAccept(socket_listen, &addr.addr, &addr.size, nullptr, 0);
+		if (new_socket == socket_error_value)
+		{
+			return vsm::unexpected(get_last_socket_error());
+		}
+		return vsm_lazy(unique_socket_with_flags{ unique_socket(new_socket) });
+	}
+
+	vsm_try(listen_addr, socket_address::get(socket_listen));
+	auto socket_result = create_socket(listen_addr.addr.sa_family);
 	vsm_try((auto&&, socket), socket_result);
 
 	wsa_accept_address_buffer addr_buffer;
-	if (DWORD const error = wsa_accept_ex(listen_socket, socket.socket.get(), addr_buffer, nullptr))
+	DWORD const error = wsa_accept_ex(
+		socket_listen,
+		socket.socket.get(),
+		addr_buffer,
+		/* overlapped: */ nullptr);
+
+	if (error != 0)
 	{
 		return vsm::unexpected(static_cast<socket_error>(error));
 	}
 
-	static_cast<socket_address_union&>(addr) = addr_buffer.remote;
+	base_cast<socket_address_union>(addr) = addr_buffer.remote;
 	addr.size = 0;
 
 	return socket_result;
 }
+#endif
+
+vsm::result<socket_poll_mask> posix::socket_poll(socket_type const socket, socket_poll_mask const mask, deadline const deadline)
+{
+	WSAPOLLFD poll_fd =
+	{
+		.fd = socket,
+		.events = mask,
+	};
+
+	int const r = WSAPoll(
+		&poll_fd,
+		/* fds: */ 1,
+		//TODO: WSAPoll timeout
+		0);
+
+	if (r == SOCKET_ERROR)
+	{
+		return vsm::unexpected(get_last_socket_error());
+	}
+
+	if (r == 0)
+	{
+		return 0;
+	}
+
+	vsm_assert(poll_fd.revents & mask);
+	return poll_fd.revents;
+}
 
 // The layout of WSABUF necessitates a copy.
-template<typename T>
-static void transform_wsa_buffers(basic_buffers<T> const buffers, WSABUF* const wsa_buffers)
+static vsm::result<void> transform_wsa_buffers(untyped_buffers const buffers, WSABUF* const wsa_buffers)
 {
-	std::transform(buffers.begin(), buffers.end(), wsa_buffers,
-		[&](basic_buffer<T> const buffer) -> WSABUF
+	bool size_out_of_range = false;
+
+	std::transform(
+		buffers.begin(),
+		buffers.end(),
+		wsa_buffers,
+		[&](untyped_buffer const buffer) -> WSABUF
 		{
+			if (buffer.size() > std::numeric_limits<ULONG>::max())
+			{
+				size_out_of_range = true;
+			}
+
 			return WSABUF
 			{
-				.len = static_cast<uint32_t>(buffer.size()),
-				.buf = (CHAR*)buffer.data(),
+				.len = static_cast<ULONG>(buffer.size()),
+				.buf = static_cast<CHAR*>(const_cast<void*>(buffer.data())),
 			};
 		}
 	);
+
+	if (size_out_of_range)
+	{
+		return vsm::unexpected(error::invalid_argument);
+	}
+
+	return {};
 }
 
+vsm::result<size_t> posix::socket_scatter_read(socket_type const socket, untyped_buffers const buffers)
+{
+	detail::dynamic_buffer<WSABUF, 64> wsa_buffers_storage;
+	vsm_try(wsa_buffers, wsa_buffers_storage.reserve(buffers.size()));
+	vsm_try_void(transform_wsa_buffers(buffers, wsa_buffers));
+
+	DWORD flags = 0;
+
+	DWORD transferred;
+	int const r = WSARecv(
+		socket,
+		wsa_buffers,
+		buffers.size(),
+		&transferred,
+		&flags,
+		/* lpOverlapped: */ nullptr,
+		/* lpCompletionRoutine: */ nullptr);
+
+	if (r == SOCKET_ERROR)
+	{
+		return vsm::unexpected(get_last_socket_error());
+	}
+
+	return transferred;
+}
+
+vsm::result<size_t> posix::socket_gather_write(socket_type const socket, untyped_buffers const buffers)
+{
+	detail::dynamic_buffer<WSABUF, 64> wsa_buffers_storage;
+	vsm_try(wsa_buffers, wsa_buffers_storage.reserve(buffers.size()));
+	vsm_try_void(transform_wsa_buffers(buffers, wsa_buffers));
+
+	DWORD transferred;
+	int const r = WSASend(
+		socket,
+		wsa_buffers,
+		buffers.size(),
+		&transferred,
+		/* dwFlags: */ 0,
+		/* lpOverlapped: */ nullptr,
+		/* lpCompletionRoutine: */ nullptr);
+
+	if (r == SOCKET_ERROR)
+	{
+		return vsm::unexpected(get_last_socket_error());
+	}
+
+	return transferred;
+}
+
+#if 0
 vsm::result<void> allio::packet_scatter_read(io::parameters_with_result<io::packet_scatter_read> const& args)
 {
 	packet_socket_handle const& h = *args.handle;
@@ -177,7 +336,7 @@ vsm::result<void> allio::packet_scatter_read(io::parameters_with_result<io::pack
 	}
 	
 	args.result->packet_size = transferred;
-	args.result->address = addr.get_network_address();
+	args.result->endpoint = addr.get_network_endpoint();
 
 	return {};
 }
@@ -194,7 +353,7 @@ vsm::result<void> allio::packet_gather_write(io::parameters_with_result<io::pack
 	SOCKET const socket = unwrap_socket(h.get_platform_handle());
 
 	write_buffers const buffers = args.buffers;
-	vsm_try(addr, socket_address::make(*args.address));
+	vsm_try(addr, socket_address::make(*args.endpoint));
 
 	detail::dynamic_buffer<WSABUF, 64> wsa_buffers_storage;
 	vsm_try(wsa_buffers, wsa_buffers_storage.reserve(buffers.size()));
@@ -218,3 +377,4 @@ vsm::result<void> allio::packet_gather_write(io::parameters_with_result<io::pack
 
 	return {};
 }
+#endif

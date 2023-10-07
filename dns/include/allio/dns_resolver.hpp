@@ -15,7 +15,7 @@ struct dns_result
 	uint32_t time_to_live;
 	bool is_referral;
 	domain_name name;
-	network_address address;
+	network_endpoint address;
 };
 
 namespace detail {
@@ -24,7 +24,7 @@ class dns_query : public vsm::wb_tree_link
 {
 	uint16_t m_transaction_id;
 	uint16_t m_record_type_mask;
-	network_address const* m_server_address;
+	network_endpoint const* m_server_address;
 	std::string_view m_domain_name;
 };
 

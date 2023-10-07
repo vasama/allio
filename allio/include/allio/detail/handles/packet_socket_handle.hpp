@@ -9,7 +9,7 @@ namespace detail {
 struct packet_read_result
 {
 	size_t packet_size;
-	network_address address;
+	network_endpoint endpoint;
 };
 
 class _packet_socket_handle : public common_socket_handle
@@ -45,9 +45,9 @@ protected:
 	struct sync_interface : base_type::sync_interface<H>
 	{
 		template<parameters<bind_parameters> P = bind_parameters::interface>
-		vsm::result<void> bind(network_address const& address, P const& args = {}) &
+		vsm::result<void> bind(network_endpoint const& endpoint, P const& args = {}) &
 		{
-			return block<bind_t>(static_cast<H const&>(*this), args, address);
+			return block<bind_t>(static_cast<H const&>(*this), args, endpoint);
 		}
 
 		template<parameters<packet_io_parameters> P = packet_io_parameters::interface>
@@ -63,15 +63,15 @@ protected:
 		}
 
 		template<parameters<packet_io_parameters> P = packet_io_parameters::interface>
-		vsm::result<void> write(write_buffers const buffers, network_address const& address, P const& args = {}) const
+		vsm::result<void> write(write_buffers const buffers, network_endpoint const& endpoint, P const& args = {}) const
 		{
-			return block<gather_write_t>(static_cast<H const&>(*this), args, buffers, address);
+			return block<gather_write_t>(static_cast<H const&>(*this), args, buffers, endpoint);
 		}
 		
 		template<parameters<packet_io_parameters> P = packet_io_parameters::interface>
-		vsm::result<void> write(write_buffer const buffer, network_address const& address, P const& args = {}) const
+		vsm::result<void> write(write_buffer const buffer, network_endpoint const& endpoint, P const& args = {}) const
 		{
-			return block<gather_write_t>(static_cast<H const&>(*this), args, buffer, address);
+			return block<gather_write_t>(static_cast<H const&>(*this), args, buffer, endpoint);
 		}
 	};
 
@@ -91,15 +91,15 @@ protected:
 		}
 
 		template<parameters<packet_io_parameters> P = packet_io_parameters::interface>
-		basic_sender<M, H, gather_write_t> write_async(write_buffers const buffers, network_address const& address, P const& args = {}) const
+		basic_sender<M, H, gather_write_t> write_async(write_buffers const buffers, network_endpoint const& endpoint, P const& args = {}) const
 		{
-			return basic_sender<M, H, gather_write_t>(static_cast<H const&>(*this), args, buffers, address);
+			return basic_sender<M, H, gather_write_t>(static_cast<H const&>(*this), args, buffers, endpoint);
 		}
 		
 		template<parameters<packet_io_parameters> P = packet_io_parameters::interface>
-		basic_sender<M, H, gather_write_t> write_async(write_buffer const buffer, network_address const& address, P const& args = {}) const
+		basic_sender<M, H, gather_write_t> write_async(write_buffer const buffer, network_endpoint const& endpoint, P const& args = {}) const
 		{
-			return basic_sender<M, H, gather_write_t>(static_cast<H const&>(*this), args, buffer, address);
+			return basic_sender<M, H, gather_write_t>(static_cast<H const&>(*this), args, buffer, endpoint);
 		}
 	};
 };
@@ -124,7 +124,7 @@ struct io_operation_traits<packet_socket_handle::gather_write_at>
 	using params_type = packet_socket_handle::packet_io_parameters;
 
 	write_buffers buffers;
-	network_address address;
+	network_endpoint endpoint;
 };
 
 } // namespace allio

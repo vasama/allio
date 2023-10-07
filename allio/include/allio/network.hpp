@@ -3,6 +3,7 @@
 #include <allio/path_view.hpp>
 
 #include <vsm/assert.h>
+#include <vsm/utility.hpp>
 
 #include <bit>
 #include <concepts>
@@ -110,78 +111,99 @@ public:
 
 
 template<typename Address>
-struct network_endpoint
+struct ip_endpoint
 {
 	Address address;
 	uint16_t port;
 };
 
-using ipv4_endpoint = network_endpoint<ipv4_address>;
-using ipv6_endpoint = network_endpoint<ipv6_address>;
+using ipv4_endpoint = ip_endpoint<ipv4_address>;
+using ipv6_endpoint = ip_endpoint<ipv6_address>;
 
-//TODO: Rename to network_endpoint?
-class network_address
+
+struct null_endpoint_t {};
+inline constexpr null_endpoint_t null_endpoint = {};
+
+class network_endpoint
 {
 	network_address_kind m_kind;
 	union
 	{
-		struct {} m_null;
+		null_endpoint_t m_null;
 		local_address m_local;
 		ipv4_endpoint m_ipv4;
 		ipv6_endpoint m_ipv6;
 	};
 
 public:
-	constexpr network_address()
+	constexpr network_endpoint()
 		: m_kind(network_address_kind::null)
 		, m_null{}
 	{
 	}
 
-	constexpr network_address(local_address const& address)
+	constexpr network_endpoint(local_address const& address)
 		: m_kind(network_address_kind::local)
 		, m_local(address)
 	{
 	}
 
-	constexpr network_address(ipv4_endpoint const& address)
+	constexpr network_endpoint(ipv4_endpoint const& endpoint)
 		: m_kind(network_address_kind::ipv4)
-		, m_ipv4(address)
+		, m_ipv4(endpoint)
 	{
 	}
 
-	constexpr network_address(ipv6_endpoint const& address)
+	constexpr network_endpoint(ipv6_endpoint const& endpoint)
 		: m_kind(network_address_kind::ipv6)
-		, m_ipv6(address)
+		, m_ipv6(endpoint)
 	{
 	}
 
-	constexpr network_address_kind kind() const
+	[[nodiscard]] constexpr network_address_kind kind() const
 	{
 		return m_kind;
 	}
 
-	constexpr bool is_null() const
+	[[nodiscard]] constexpr bool is_null() const
 	{
 		return m_kind == network_address_kind::null;
 	}
 
-	constexpr local_address const& local() const
+	[[nodiscard]] constexpr local_address const& local() const
 	{
 		vsm_assert(m_kind == network_address_kind::local);
 		return m_local;
 	}
 
-	constexpr ipv4_endpoint const& ipv4() const
+	[[nodiscard]] constexpr ipv4_endpoint const& ipv4() const
 	{
 		vsm_assert(m_kind == network_address_kind::ipv4);
 		return m_ipv4;
 	}
 
-	constexpr ipv6_endpoint const& ipv6() const
+	[[nodiscard]] constexpr ipv6_endpoint const& ipv6() const
 	{
 		vsm_assert(m_kind == network_address_kind::ipv6);
 		return m_ipv6;
+	}
+
+	[[nodiscard]] decltype(auto) visit(auto&& visitor) const
+	{
+		switch (m_kind)
+		{
+		case network_address_kind::null:
+			return std::invoke(vsm_forward(visitor), null_endpoint_t());
+
+		case network_address_kind::local:
+			return std::invoke(vsm_forward(visitor), m_local);
+
+		case network_address_kind::ipv4:
+			return std::invoke(vsm_forward(visitor), m_ipv4);
+
+		case network_address_kind::ipv6:
+			return std::invoke(vsm_forward(visitor), m_ipv6);
+		}
 	}
 };
 

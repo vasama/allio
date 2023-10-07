@@ -1,43 +1,59 @@
 #pragma once
 
 #include <allio/byte_io_buffers.hpp>
+#include <allio/detail/deadline.hpp>
+#include <allio/detail/io_parameters.hpp>
 #include <allio/filesystem.hpp>
 #include <allio/handle.hpp>
 
 namespace allio {
-namespace detail {
 
-struct scatter_gather_parameters
+struct random_access_byte_io_parameters
 {
-	using handle_type = handle const;
-	using result_type = size_t;
-	using params_type = deadline_parameters;
-
 	untyped_buffers_storage buffers;
 	file_size offset;
 };
 
-} // namespace detail
+struct scatter_read_at_t
+{
+	using handle_type = handle const;
+	using result_type = size_t;
+
+	using required_params_type = random_access_byte_io_parameters;
+	using optional_params_type = detail::deadline_t;
+};
+
+struct gather_write_at_t
+{
+	using handle_type = handle const;
+	using result_type = size_t;
+
+	using required_params_type = random_access_byte_io_parameters;
+	using optional_params_type = detail::deadline_t;
+};
 
 
-struct scatter_read_at_tag;
-struct gather_write_at_tag;
+struct stream_byte_io_parameters
+{
+	untyped_buffers_storage buffers;
+};
 
-using random_access_scatter_gather_tags = type_list
-<
-	scatter_read_at_tag,
-	gather_write_at_tag
->;
+struct scatter_read_t
+{
+	using handle_type = handle const;
+	using result_type = size_t;
 
+	using required_params_type = stream_byte_io_parameters;
+	using optional_params_type = detail::deadline_t;
+};
 
+struct gather_write_t
+{
+	using handle_type = handle const;
+	using result_type = size_t;
 
-struct stream_scatter_read_tag;
-struct stream_gather_write_tag;
-
-using stream_scatter_gather_tags = type_list
-<
-	stream_scatter_read_tag,
-	stream_gather_write_tag
->;
+	using required_params_type = stream_byte_io_parameters;
+	using optional_params_type = detail::deadline_t;
+};
 
 } // namespace allio
