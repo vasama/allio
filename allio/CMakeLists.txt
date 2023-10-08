@@ -8,6 +8,7 @@ find_package(vsm-box REQUIRED)
 find_package(vsm-core REQUIRED)
 find_package(vsm-flags REQUIRED)
 find_package(vsm-linear REQUIRED)
+find_package(vsm-literals REQUIRED)
 find_package(vsm-intrusive REQUIRED)
 find_package(vsm-intrusive_ptr REQUIRED)
 find_package(vsm-optional REQUIRED)
@@ -53,6 +54,7 @@ vsm_add_library2(allio
 
 	SOURCES
 		source/allio/impl/error.cpp
+		source/allio/impl/network.cpp
 		source/allio/impl/transcode.hpp
 		source/allio/impl/unique_name.cpp
 		source/allio/impl/unique_name.hpp
@@ -62,6 +64,7 @@ vsm_add_library2(allio
 		vsm::core
 		vsm::flags
 		vsm::linear
+		vsm::literals
 		vsm::intrusive
 		vsm::intrusive_ptr
 		vsm::optional
@@ -73,6 +76,7 @@ vsm_add_library2(allio
 	TEST_SOURCES
 		source/allio/test/filesystem.hpp
 		source/allio/test/multiplexer.hpp
+		source/allio/test/network.cpp
 		source/allio/test/path_view.cpp
 		source/allio/test/reverse_iterator.hpp
 		source/allio/test/sync_wait.cpp

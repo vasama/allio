@@ -81,7 +81,7 @@ vsm::result<void> socket_listen(
 	uint32_t const* backlog);
 
 vsm::result<unique_socket_with_flags> socket_accept(
-	socket_type socket_listen,
+	socket_type listen_socket,
 	socket_address& addr,
 	deadline deadline);
 

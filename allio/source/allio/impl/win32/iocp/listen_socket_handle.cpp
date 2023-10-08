@@ -8,7 +8,6 @@
 
 using namespace allio;
 using namespace allio::detail;
-using namespace allio::posix;
 using namespace allio::win32;
 
 using M = iocp_multiplexer;
@@ -19,7 +18,29 @@ using accept_t = _listen_socket_handle::accept_t;
 using accept_s = operation_t<M, H, accept_t>;
 using accept_r = io_result_ref_t<accept_t>;
 
-static io_result handle_completion(accept_r const r, unique_socket socket, posix::socket_address_union const& addr)
+static io_result helper(vsm::result<bool> const r)
+{
+	if (r)
+	{
+		if (*r)
+		{
+			return std::error_code();
+		}
+		else
+		{
+			return std::nullopt;
+		}
+	}
+	else
+	{
+		return r.error();
+	}
+}
+
+static vsm::result<bool> handle_completion(
+	accept_r const r,
+	unique_wrapped_socket socket,
+	posix::socket_address_union const& addr)
 {
 	//TODO: Set file completion notification modes
 
@@ -28,57 +49,55 @@ static io_result handle_completion(accept_r const r, unique_socket socket, posix
 		{
 			H::flags::not_null,
 		},
-		wrap_socket(socket.get()),
+		socket.get(),
 	}));
 	(void)socket.release();
 
 	r.result.endpoint = addr.get_network_endpoint();
 
-	return std::error_code();
+	return true;
 }
 
 io_result operation_impl<M, H, accept_t>::submit(M& m, H const& h, C const& c, accept_s& s, accept_r const r)
 {
-	if (!h)
+	return helper([&]() -> vsm::result<bool>
 	{
-		return error::handle_is_null;
-	}
+		if (!h)
+		{
+			return vsm::unexpected(error::handle_is_null);
+		}
 
-	SOCKET const socket_listen = unwrap_socket(h.get_platform_handle());
-	//TODO: Cache the address family.
-	vsm_try(addr, socket_address::get(socket_listen));
-	vsm_try(socket, create_socket(addr.addr.sa_family));
-	s.socket = vsm_move(socket.socket);
+		SOCKET const listen_socket = posix::unwrap_socket(h.get_platform_handle());
+		//TODO: Cache the address family.
+		vsm_try(addr, posix::socket_address::get(listen_socket));
+		vsm_try(socket, posix::create_socket(addr.addr.sa_family));
+		s.socket = unique_wrapped_socket(posix::wrap_socket(socket.socket.release()));
 
-	OVERLAPPED& overlapped = *s.overlapped;
-	overlapped.Pointer = nullptr;
-	overlapped.hEvent = NULL;
+		OVERLAPPED& overlapped = *s.overlapped;
+		overlapped.Pointer = nullptr;
+		overlapped.hEvent = NULL;
 
-	static_assert(sizeof(s.address_storage) >= sizeof(wsa_accept_address_buffer));
-	auto& addr_buffer = *new (s.address_storage) wsa_accept_address_buffer;
+		static_assert(sizeof(s.address_storage) >= sizeof(wsa_accept_address_buffer));
+		auto& addr_buffer = *new (s.address_storage) wsa_accept_address_buffer;
 
-	DWORD const error = wsa_accept_ex(
-		socket_listen,
-		s.socket.get(),
-		addr_buffer,
-		overlapped);
+		// If using a multithreaded completion port, after this call
+		// another thread will race to complete this operation.
+		vsm_try(completed, submit_socket_io(
+			m,
+			h,
+			wsa_accept_ex,
+			listen_socket,
+			posix::unwrap_socket(s.socket.get()),
+			addr_buffer,
+			overlapped));
 
-	if (error == ERROR_IO_PENDING)
-	{
-		return std::nullopt;
-	}
+		if (completed)
+		{
+			return handle_completion(r, vsm_move(s.socket), addr_buffer.remote);
+		}
 
-	if (error != 0)
-	{
-		return static_cast<socket_error>(error);
-	}
-
-	if (!m.supports_synchronous_completion(h))
-	{
-		return std::nullopt;
-	}
-
-	return handle_completion(r, vsm_move(s.socket), addr_buffer.remote);
+		return false;
+	}());
 }
 
 io_result operation_impl<M, H, accept_t>::notify(M& m, H const& h, C const& c, accept_s& s, accept_r const r, io_status const p_status)
@@ -92,10 +111,10 @@ io_result operation_impl<M, H, accept_t>::notify(M& m, H const& h, C const& c, a
 	}
 
 	auto& addr_buffer = *std::launder(reinterpret_cast<wsa_accept_address_buffer*>(s.address_storage));
-	return handle_completion(r, vsm_move(s.socket), addr_buffer.remote);
+	return helper(handle_completion(r, vsm_move(s.socket), addr_buffer.remote));
 }
 
 void operation_impl<M, H, accept_t>::cancel(M& m, H const& h, C const& c, S& s)
 {
-	cancel_socket_io(unwrap_socket(h.get_platform_handle()), *s.overlapped);
+	cancel_socket_io(posix::unwrap_socket(h.get_platform_handle()), *s.overlapped);
 }

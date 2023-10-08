@@ -3,6 +3,8 @@
 #include <allio/detail/handles/stream_socket_handle.hpp>
 #include <allio/win32/detail/iocp/multiplexer.hpp>
 
+#include <allio/detail/unique_socket.hpp>
+
 namespace allio::detail {
 
 template<>
@@ -15,6 +17,7 @@ struct operation_impl<iocp_multiplexer, _stream_socket_handle, _stream_socket_ha
 	using S = operation_t<M, H, O>;
 	using R = io_result_ref_t<O>;
 
+	unique_wrapped_socket socket;
 	iocp_multiplexer::overlapped overlapped;
 
 	static io_result submit(M& m, H const& h, C const& c, S& s, R r);

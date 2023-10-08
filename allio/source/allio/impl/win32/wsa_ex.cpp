@@ -60,8 +60,8 @@ struct wsa_extension<BOOL(*)(SOCKET, Ps...), Extension>
 
 
 DWORD win32::wsa_accept_ex(
-	SOCKET const socket_listen,
-	SOCKET const socket_accept,
+	SOCKET const listen_socket,
+	SOCKET const accept_socket,
 	wsa_accept_address_buffer& address,
 	OVERLAPPED& overlapped)
 {
@@ -69,8 +69,8 @@ DWORD win32::wsa_accept_ex(
 
 	DWORD transferred = static_cast<DWORD>(-1);
 	if (!ext::invoke(
-		socket_listen,
-		socket_accept,
+		listen_socket,
+		accept_socket,
 		/* lpOutputBuffer: */ &address,
 		/* dwReceiveDataLength: */ 0,
 		sizeof(address.local),

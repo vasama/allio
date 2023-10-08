@@ -3,10 +3,14 @@
 #include <allio/path_view.hpp>
 
 #include <vsm/assert.h>
+#include <vsm/int128.hpp>
+#include <vsm/result.hpp>
 #include <vsm/utility.hpp>
 
 #include <bit>
+#include <compare>
 #include <concepts>
+#include <string_view>
 
 #include <cstdint>
 
@@ -66,59 +70,106 @@ class local_address
 	path_view m_path;
 
 public:
-	explicit local_address(path_view const path)
+	explicit constexpr local_address(path_view const path)
 		: m_path(path)
 	{
 	}
 
-	path_view path() const
+	constexpr path_view path() const
 	{
 		return m_path;
 	}
 };
+
 
 // Note that ipv4_address always represents addresses using native integer endianness.
 // This means that for example the loopback address 127.0.0.1 is unambiguously represented as 0x7f'00'00'01.
 // Some use cases outside of this library may require explicit conversion to network byte order.
 class ipv4_address
 {
-	uint32_t m_addr;
+public:
+	using integer_type = uint32_t;
+
+private:
+	integer_type m_addr;
 
 public:
-	explicit constexpr ipv4_address(uint32_t const address)
-		: m_addr(address)
+	ipv4_address() = default;
+
+	explicit constexpr ipv4_address(integer_type const integer)
+		: m_addr(integer)
 	{
 	}
 
-	constexpr uint32_t integer() const
+	constexpr integer_type integer() const
 	{
 		return m_addr;
 	}
 
 
 	static ipv4_address const localhost;
+
+	static vsm::result<ipv4_address> parse(std::string_view string);
+
+
+	friend auto operator<=>(ipv4_address const&, ipv4_address const&) = default;
 };
 
 inline constexpr ipv4_address ipv4_address::localhost = ipv4_address(0x7f'00'00'01);
 
+struct ipv4_endpoint
+{
+	ipv4_address address;
+	uint16_t port;
+
+	static vsm::result<ipv4_endpoint> parse(std::string_view string);
+
+	friend auto operator<=>(ipv4_endpoint const&, ipv4_endpoint const&) = default;
+};
+
+
 class ipv6_address
 {
-	uint32_t m_addr[4];
+public:
+	using integer_type = vsm::uint128_t;
+
+private:
+	integer_type m_addr;
 
 public:
+	ipv6_address() = default;
+
+	explicit constexpr ipv6_address(integer_type const integer)
+		: m_addr(integer)
+	{
+	}
+
+	constexpr integer_type integer() const
+	{
+		return m_addr;
+	}
+
+
 	static ipv6_address const localhost;
+
+	static vsm::result<ipv6_address> parse(std::string_view string);
+
+
+	friend auto operator<=>(ipv6_address const&, ipv6_address const&) = default;
 };
 
+inline constexpr ipv6_address ipv6_address::localhost = ipv6_address(1);
 
-template<typename Address>
-struct ip_endpoint
+struct ipv6_endpoint
 {
-	Address address;
+	ipv6_address address;
 	uint16_t port;
-};
+	uint32_t zone;
 
-using ipv4_endpoint = ip_endpoint<ipv4_address>;
-using ipv6_endpoint = ip_endpoint<ipv6_address>;
+	static vsm::result<ipv6_endpoint> parse(std::string_view string);
+
+	friend auto operator<=>(ipv6_endpoint const&, ipv6_endpoint const&) = default;
+};
 
 
 struct null_endpoint_t {};

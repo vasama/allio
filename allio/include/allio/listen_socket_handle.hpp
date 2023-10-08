@@ -6,6 +6,6 @@
 namespace allio {
 
 allio_detail_export
-using async_listen_socket_handle = basic_listen_socket_handle<default_multiplexer>;
+using listen_socket_handle = basic_listen_socket_handle<default_multiplexer_ptr>;
 
 } // namespace allio

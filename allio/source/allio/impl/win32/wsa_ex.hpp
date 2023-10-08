@@ -18,8 +18,8 @@ struct wsa_accept_address_buffer
 };
 
 DWORD wsa_accept_ex(
-	SOCKET socket_listen,
-	SOCKET socket_accept,
+	SOCKET listen_socket,
+	SOCKET accept_socket,
 	wsa_accept_address_buffer& address,
 	OVERLAPPED& overlapped);
 

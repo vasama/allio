@@ -93,7 +93,7 @@ protected:
 			vsm_try_void(do_blocking_io(
 				static_cast<H const&>(*this),
 				r,
-				io_arguments_t<accept_t>(&r->socket)(vsm_forward(args)...)));
+				io_arguments_t<accept_t>()(vsm_forward(args)...)));
 			return r;
 		}
 	};
@@ -127,9 +127,26 @@ template<typename Multiplexer>
 using basic_listen_socket_handle = basic_async_handle<_listen_socket_handle, Multiplexer>;
 
 
-vsm::result<blocking_listen_socket_handle> listen(network_endpoint const& endpoint, auto&&... args)
+vsm::result<blocking_listen_socket_handle> listen(
+	network_endpoint const& endpoint,
+	auto&&... args)
 {
 	vsm::result<blocking_listen_socket_handle> r(vsm::result_value);
+	vsm_try_void(blocking_io(
+		*r,
+		no_result,
+		io_arguments_t<_listen_socket_handle::listen_t>(endpoint)(vsm_forward(args)...)));
+	return r;
+}
+
+template<typename Multiplexer>
+vsm::result<basic_listen_socket_handle<Multiplexer>> listen(
+	Multiplexer multiplexer,
+	network_endpoint const& endpoint,
+	auto&&... args)
+{
+	vsm::result<basic_listen_socket_handle<Multiplexer>> r(vsm::result_value);
+	vsm_try_void(r->set_multiplexer(vsm_move(multiplexer)));
 	vsm_try_void(blocking_io(
 		*r,
 		no_result,

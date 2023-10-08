@@ -10,17 +10,40 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::posix;
 
+template<typename To, typename From>
+static To ipv6_network_byte_order(From const& addr)
+{
+	struct ipv6_data
+	{
+		uint64_t h;
+		uint64_t l;
+	};
+	auto const data = std::bit_cast<ipv6_data>(addr);
+	return std::bit_cast<To>(ipv6_data
+		{
+			.h = network_byte_order(data.l),
+			.l = network_byte_order(data.h),
+		});
+}
+
 network_endpoint socket_address_union::get_network_endpoint() const
 {
 	switch (addr.sa_family)
 	{
 	case AF_INET:
-		return ipv4_endpoint{ ipv4_address(network_byte_order(ipv4.sin_addr.s_addr)), ipv4.sin_port };
+		return ipv4_endpoint
+		{
+			.address = ipv4_address(network_byte_order(ipv4.sin_addr.s_addr)),
+			.port = network_byte_order(ipv4.sin_port),
+		};
 
-#if 0
 	case AF_INET6:
-		return ipv6_address(ipv6.)
-#endif
+		return ipv6_endpoint
+		{
+			.address = ipv6_network_byte_order<ipv6_address>(ipv6.sin6_addr),
+			.port = network_byte_order(ipv6.sin6_port),
+			.zone = network_byte_order(ipv6.sin6_scope_id),
+		};
 	}
 
 	return {};
@@ -53,22 +76,24 @@ vsm::result<socket_address> socket_address::make(network_endpoint const& endpoin
 		{
 			ipv4_endpoint const ip = endpoint.ipv4();
 			addr.ipv4.sin_family = AF_INET;
-			addr.ipv4.sin_port = ip.port;
+			addr.ipv4.sin_port = network_byte_order(ip.port);
 			addr.ipv4.sin_addr.s_addr = network_byte_order(ip.address.integer());
 			memset(addr.ipv4.sin_zero, 0, sizeof(ipv4.sin_zero));
 			addr.size = sizeof(addr.ipv4);
 		}
 		break;
 
-#if 0
 	case network_address_kind::ipv6:
 		{
-			ipv6_address const ip = endpoint.ipv6();
+			ipv6_endpoint const ip = endpoint.ipv6();
 			addr.ipv6.sin6_family = AF_INET6;
-			addr.ipv6.sin6_port = ip.port();
+			addr.ipv6.sin6_port = network_byte_order(ip.port);
+			addr.ipv6.sin6_flowinfo = 0;
+			addr.ipv6.sin6_addr = ipv6_network_byte_order<in6_addr>(ip.address);
+			addr.ipv6.sin6_scope_id = network_byte_order(ip.zone);
+			addr.size = sizeof(addr.ipv6);
 		}
 		break;
-#endif
 	}
 
 	return r;
@@ -111,17 +136,18 @@ vsm::result<void> posix::socket_listen(
 }
 
 vsm::result<unique_socket_with_flags> posix::socket_accept(
-	socket_type const socket_listen,
+	socket_type const listen_socket,
 	socket_address& addr,
 	deadline const deadline)
 {
 	if (deadline != deadline::never())
 	{
-		vsm_try_void(socket_poll_or_timeout(socket_listen, socket_poll_r, deadline));
+		vsm_try_void(socket_poll_or_timeout(listen_socket, socket_poll_r, deadline));
 	}
 
+	addr.size = sizeof(addr.addr);
 	socket_type const socket = accept(
-		socket_listen,
+		listen_socket,
 		&addr.addr,
 		&addr.size);
 

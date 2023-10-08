@@ -6,6 +6,8 @@
 
 #include <vsm/lazy.hpp>
 
+#include <exec/task.hpp>
+
 #include <catch2/catch_all.hpp>
 
 #include <filesystem>
@@ -14,6 +16,7 @@
 #include <type_traits>
 
 using namespace allio;
+namespace ex = stdexec;
 
 namespace {
 template<typename T>
@@ -92,14 +95,14 @@ TEST_CASE("a stream socket can connect to a listening socket", "[socket_handle][
 {
 	auto const endpoint = generate_endpoint();
 
-	auto const socket_listen = listen(endpoint).value();
+	auto const listen_socket = listen(endpoint).value();
 
 	auto connect_future = std::async(std::launch::async, [&]()
 	{
 		return connect(endpoint);
 	});
 
-	auto const server_socket = socket_listen.accept().value().socket;
+	auto const server_socket = listen_socket.accept().value().socket;
 	auto const client_socket = connect_future.get().value();
 
 	SECTION("the server socket has no data to read")
@@ -138,6 +141,46 @@ TEST_CASE("a stream socket can connect to a listening socket", "[socket_handle][
 }
 
 
+TEST_CASE("", "[socket_handle][async]")
+{
+	auto const endpoint = generate_endpoint();
+
+	auto multiplexer = default_multiplexer::create().value();
+
+	sync_wait(multiplexer, [&]() -> exec::task<void>
+	{
+		listen_socket_handle const listen_socket = listen(&multiplexer, endpoint).value();
+		stream_socket_handle server_socket;
+
+		co_await ex::when_all(
+			[&]() -> exec::task<void>
+			{
+				stream_socket_handle& socket = server_socket;
+
+				socket = (co_await listen_socket.accept_async()).socket;
+
+				signed char request_data;
+				REQUIRE(co_await socket.read_some_async(as_read_buffer(&request_data, 1)) == 1);
+
+				signed char const reply_data = -request_data;
+				REQUIRE(co_await socket.write_some_async(as_write_buffer(&reply_data, 1)) == 1);
+			}(),
+			[&]() -> exec::task<void>
+			{
+				stream_socket_handle const socket = co_await connect_async(endpoint);
+
+				signed char const request_data = 42;
+				REQUIRE(co_await socket.write_some_async(as_write_buffer(&request_data, 1)) == 1);
+
+				signed char reply_data;
+				REQUIRE(co_await socket.read_some_async(as_read_buffer(&reply_data, 1)) == 1);
+
+				REQUIRE(reply_data == -42);
+			}());
+	}());
+}
+
+
 #if 0
 //TODO: Get rid of this when the MSVC bug is fixed.
 #ifdef _MSC_VER
@@ -169,7 +212,7 @@ TEST_CASE("stream_socket_handle localhost server & client", "[socket_handle][str
 
 	(void)sync_wait(*multiplexer, [&]() -> unifex::task<void>
 	{
-		listen_socket_handle socket_listen = co_await error_into_except(listen_async(*multiplexer, address));
+		listen_socket_handle listen_socket = co_await error_into_except(listen_async(*multiplexer, address));
 		stream_socket_handle server_socket;
 
 		co_await unifex::when_all(
@@ -177,7 +220,7 @@ TEST_CASE("stream_socket_handle localhost server & client", "[socket_handle][str
 			{
 				stream_socket_handle& socket = server_socket;
 
-				socket = allio_await_move(co_await error_into_except(socket_listen.accept_async())).socket;
+				socket = allio_await_move(co_await error_into_except(listen_socket.accept_async())).socket;
 				socket.set_multiplexer(multiplexer.get());
 
 				int request_data;

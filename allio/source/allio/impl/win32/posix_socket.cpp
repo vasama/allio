@@ -12,20 +12,19 @@
 
 using namespace allio;
 using namespace allio::detail;
-using namespace allio::posix;
 using namespace allio::win32;
 
-char const* socket_error_category::name() const noexcept
+char const* posix::socket_error_category::name() const noexcept
 {
 	return "Windows WSA";
 }
 
-std::string socket_error_category::message(int const code) const
+std::string posix::socket_error_category::message(int const code) const
 {
 	return std::system_category().message(code);
 }
 
-socket_error_category const socket_error_category::instance;
+posix::socket_error_category const posix::socket_error_category::instance;
 
 
 static vsm::result<void> wsa_startup()
@@ -59,13 +58,13 @@ static vsm::result<void> wsa_startup()
 
 	if (init.error != 0)
 	{
-		return vsm::unexpected(static_cast<socket_error>(init.error));
+		return vsm::unexpected(static_cast<posix::socket_error>(init.error));
 	}
 
 	return {};
 }
 
-vsm::result<unique_socket_with_flags> posix::create_socket(int const address_family)
+vsm::result<posix::unique_socket_with_flags> posix::create_socket(int const address_family)
 {
 	vsm_try_void(wsa_startup());
 
@@ -145,36 +144,15 @@ static B const&& base_cast(D const&& derived)
 	return static_cast<D const&&>(derived);
 }
 
-vsm::result<unique_socket_with_flags> posix::socket_accept(socket_type const socket_listen, socket_address& addr)
+vsm::result<unique_socket_with_flags> posix::socket_accept(socket_type const listen_socket, socket_address& addr)
 {
-	if (0)
-	{
-		addr.size = sizeof(addr.addr);
-		socket_type new_socket = accept(socket_listen, &addr.addr, &addr.size);
-		if (new_socket == socket_error_value)
-		{
-			return vsm::unexpected(get_last_socket_error());
-		}
-		return vsm_lazy(unique_socket_with_flags{ unique_socket(new_socket) });
-	}
-	if (1)
-	{
-		addr.size = sizeof(addr.addr);
-		socket_type new_socket = WSAAccept(socket_listen, &addr.addr, &addr.size, nullptr, 0);
-		if (new_socket == socket_error_value)
-		{
-			return vsm::unexpected(get_last_socket_error());
-		}
-		return vsm_lazy(unique_socket_with_flags{ unique_socket(new_socket) });
-	}
-
-	vsm_try(listen_addr, socket_address::get(socket_listen));
+	vsm_try(listen_addr, socket_address::get(listen_socket));
 	auto socket_result = create_socket(listen_addr.addr.sa_family);
 	vsm_try((auto&&, socket), socket_result);
 
 	wsa_accept_address_buffer addr_buffer;
 	DWORD const error = wsa_accept_ex(
-		socket_listen,
+		listen_socket,
 		socket.socket.get(),
 		addr_buffer,
 		/* overlapped: */ nullptr);
@@ -191,7 +169,7 @@ vsm::result<unique_socket_with_flags> posix::socket_accept(socket_type const soc
 }
 #endif
 
-vsm::result<socket_poll_mask> posix::socket_poll(socket_type const socket, socket_poll_mask const mask, deadline const deadline)
+vsm::result<posix::socket_poll_mask> posix::socket_poll(socket_type const socket, socket_poll_mask const mask, deadline const deadline)
 {
 	WSAPOLLFD poll_fd =
 	{
@@ -217,6 +195,16 @@ vsm::result<socket_poll_mask> posix::socket_poll(socket_type const socket, socke
 
 	vsm_assert(poll_fd.revents & mask);
 	return poll_fd.revents;
+}
+
+vsm::result<void> posix::socket_set_non_blocking(socket_type const socket, bool const non_blocking)
+{
+	unsigned long mode = non_blocking ? 1 : 0;
+	if (ioctlsocket(socket, FIONBIO, &mode) == socket_error_value)
+	{
+		return vsm::unexpected(get_last_socket_error());
+	}
+	return {};
 }
 
 // The layout of WSABUF necessitates a copy.

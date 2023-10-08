@@ -1,9 +1,9 @@
 #include <allio/win32/detail/iocp/stream_socket_handle.hpp>
 
+#include <allio/impl/posix/socket.hpp>
 #include <allio/impl/win32/iocp/socket.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/wsa_ex.hpp>
-#include <allio/posix/socket.hpp>
 #include <allio/win32/kernel_error.hpp>
 
 using namespace allio;
@@ -18,58 +18,65 @@ using connect_t = _stream_socket_handle::connect_t;
 using connect_s = operation_t<M, H, connect_t>;
 using connect_r = io_result_ref_t<connect_t>;
 
-io_result operation_impl<M, H, connect_t>::submit(M& m, H const& h, C const& c, connect_s& s, connect_r)
+static io_result helper(vsm::result<bool> const r)
 {
-	if (!h)
+	if (r)
 	{
-		return error::handle_is_null;
-	}
-
-	if (h.get_flags()[H::flags::bound])
-	{
-		return error::socket_already_bound;
-	}
-
-	SOCKET const socket = unwrap_socket(h.get_platform_handle());
-	vsm_try(addr, socket_address::make(s.args.endpoint));
-
-	// The socket must be bound before calling ConnectEx.
-	{
-		socket_address_union bind_addr;
-		memset(&bind_addr, 0, sizeof(bind_addr));
-		bind_addr.addr.sa_family = addr.addr.sa_family;
-
-		if (::bind(socket, &bind_addr.addr, addr.size) == SOCKET_ERROR)
+		if (*r)
 		{
-			return get_last_socket_error();
+			return std::error_code();
+		}
+		else
+		{
+			return std::nullopt;
 		}
 	}
-
-	OVERLAPPED& overlapped = *s.overlapped;
-	overlapped.Pointer = nullptr;
-	overlapped.hEvent = NULL;
-
-	DWORD const error = wsa_connect_ex(
-		socket,
-		addr,
-		overlapped);
-
-	if (error == ERROR_IO_PENDING)
+	else
 	{
-		return std::nullopt;
+		return r.error();
 	}
+}
 
-	if (error != 0)
+io_result operation_impl<M, H, connect_t>::submit(M& m, H const& h, C const& c, connect_s& s, connect_r)
+{
+	return helper([&]() -> vsm::result<bool>
 	{
-		return static_cast<socket_error>(error);
-	}
+		if (h)
+		{
+			return vsm::unexpected(error::handle_is_not_null);
+		}
 
-	if (!m.supports_synchronous_completion(h))
-	{
-		return std::nullopt;
-	}
+		vsm_try(addr, posix::socket_address::make(s.args.endpoint));
+		vsm_try(socket, posix::create_socket(addr.addr.sa_family));
 
-	return std::error_code();
+		// The socket must be bound before calling ConnectEx.
+		{
+			posix::socket_address_union bind_addr;
+			memset(&bind_addr, 0, sizeof(bind_addr));
+			bind_addr.addr.sa_family = addr.addr.sa_family;
+
+			if (::bind(socket.socket.get(), &bind_addr.addr, addr.size) == SOCKET_ERROR)
+			{
+				return vsm::unexpected(posix::get_last_socket_error());
+			}
+		}
+
+		s.socket = unique_wrapped_socket(posix::wrap_socket(socket.socket.release()));
+
+		OVERLAPPED& overlapped = *s.overlapped;
+		overlapped.Pointer = nullptr;
+		overlapped.hEvent = NULL;
+
+		// If using a multithreaded completion port, after this call
+		// another thread will race to complete this operation.
+		return submit_socket_io(
+			m,
+			h,
+			wsa_connect_ex,
+			posix::unwrap_socket(s.socket.get()),
+			addr,
+			overlapped);
+	}());
 }
 
 io_result operation_impl<M, H, connect_t>::notify(M& m, H const& h, C const& c, connect_s& s, connect_r const r, io_status const p_status)
@@ -81,5 +88,5 @@ io_result operation_impl<M, H, connect_t>::notify(M& m, H const& h, C const& c, 
 
 void operation_impl<M, H, connect_t>::cancel(M& m, H const& h, C const& c, S& s)
 {
-	cancel_socket_io(unwrap_socket(h.get_platform_handle()), *s.overlapped);
+	cancel_socket_io(posix::unwrap_socket(s.socket.get()), *s.overlapped);
 }
