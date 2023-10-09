@@ -67,6 +67,12 @@ DWORD win32::wsa_accept_ex(
 {
 	using ext = wsa_extension<LPFN_ACCEPTEX, GUID WSAID_ACCEPTEX>;
 
+	using address_buffer = wsa_accept_address_buffer;
+	static_assert(
+		offsetof(address_buffer, local) == 0 &&
+		offsetof(address_buffer, remote) == sizeof(address_buffer::local),
+		"AcceptEx writes the local and remote addresses into the same buffer, one after the other.");
+
 	DWORD transferred = static_cast<DWORD>(-1);
 	if (!ext::invoke(
 		listen_socket,

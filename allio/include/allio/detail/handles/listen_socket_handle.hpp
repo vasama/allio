@@ -9,16 +9,6 @@
 
 namespace allio::detail {
 
-template<typename SocketHandle>
-struct basic_accept_result
-{
-	SocketHandle socket;
-	network_endpoint endpoint;
-};
-
-using _accept_result = basic_accept_result<blocking_stream_socket_handle>;
-
-
 struct backlog_t
 {
 	std::optional<uint32_t> backlog;
@@ -43,6 +33,24 @@ struct backlog_t
 };
 inline constexpr backlog_t::tag_t backlog = {};
 
+
+template<typename SocketHandle>
+struct basic_accept_result
+{
+	SocketHandle socket;
+	network_endpoint endpoint;
+};
+
+using _accept_result = basic_accept_result<blocking_stream_socket_handle>;
+
+template<typename Multiplexer>
+struct basic_accept_result_ref
+{
+	_stream_socket_handle& h;
+	connector_t<Multiplexer, _stream_socket_handle>& c;
+	network_endpoint& endpoint;
+};
+
 class _listen_socket_handle : public common_socket_handle
 {
 protected:
@@ -66,7 +74,7 @@ public:
 	{
 		using handle_type = _listen_socket_handle const;
 		using result_type = _accept_result;
-		
+
 		using required_params_type = no_parameters_t;
 		using optional_params_type = deadline_t;
 	};
@@ -107,6 +115,64 @@ protected:
 				static_cast<H const&>(*this),
 				io_arguments_t<accept_t>()(vsm_forward(args)...));
 		}
+
+		template<typename M, typename S, typename C, typename SSH>
+		friend vsm::result<io_result> tag_invoke(
+			submit_io_t,
+			M& m,
+			_listen_socket_handle const& h,
+			C const& c,
+			S& s,
+			io_result_ref<basic_accept_result<SSH>> const r)
+		{
+			return submit_io(
+				m,
+				h,
+				c,
+				s,
+				make_accept_result_ref(r.result));
+		}
+
+		template<typename M, typename S, typename C, typename SSH>
+		friend vsm::result<io_result> tag_invoke(
+			notify_io_t,
+			M& m,
+			_listen_socket_handle const& h,
+			C const& c,
+			S& s,
+			io_result_ref<basic_accept_result<SSH>> const r,
+			io_status const status)
+		{
+			return notify_io(
+				m,
+				h,
+				c,
+				s,
+				make_accept_result_ref(r.result),
+				status);
+		}
+
+	private:
+		template<typename SSH>
+		static auto make_accept_result_ref(basic_accept_result<SSH>& r)
+		{
+			return basic_accept_result_ref<typename SSH::multiplexer_type>
+			{
+				.h = r.socket,
+				.c = r.socket.get_connector(),
+				.endpoint = r.endpoint,
+			};
+		}
+
+		static vsm::result<io_result> handle_accept_result(vsm::result<io_result> const r)
+		{
+			if (r != std::error_code())
+			{
+				return r;
+			}
+
+
+		}
 	};
 
 protected:
@@ -145,12 +211,14 @@ vsm::result<basic_listen_socket_handle<Multiplexer>> listen(
 	network_endpoint const& endpoint,
 	auto&&... args)
 {
+	//TODO: Make sure mutable blocking I/O (e.g. listen, connect)
+	// on an async handle cannot leave the handle in an unattached state.
 	vsm::result<basic_listen_socket_handle<Multiplexer>> r(vsm::result_value);
-	vsm_try_void(r->set_multiplexer(vsm_move(multiplexer)));
 	vsm_try_void(blocking_io(
 		*r,
 		no_result,
 		io_arguments_t<_listen_socket_handle::listen_t>(endpoint)(vsm_forward(args)...)));
+	vsm_try_void(r->set_multiplexer(vsm_move(multiplexer)));
 	return r;
 }
 

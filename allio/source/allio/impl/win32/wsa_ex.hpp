@@ -11,7 +11,6 @@ struct wsa_accept_address_buffer
 		// AcceptEx requires an extra 16 bytes.
 		std::byte m_dummy_buffer[16];
 	};
-	static_assert(alignof(socket_address_buffer) <= sizeof(socket_address_buffer));
 
 	socket_address_buffer local;
 	socket_address_buffer remote;

@@ -359,6 +359,12 @@ public:
 		return m_multiplexer;
 	}
 
+	[[nodiscard]] connector_type const& get_connector() const
+	{
+		return m_connector;
+	}
+
+
 	template<std::convertible_to<M> T = M>
 	vsm::result<void> set_multiplexer(T&& multiplexer) &
 	{
@@ -488,7 +494,9 @@ private:
 	template<typename S, typename R>
 	friend vsm::result<io_result> tag_invoke(notify_io_t, basic_async_handle const& h, S& s, R const r, io_status const status)
 	{
-		return notify_io(*h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s, r, status);
+		//TODO: DEBUG
+		return tag_invoke(notify_io, *h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s, r, status);
+		//return notify_io(*h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s, r, status);
 	}
 
 	template<typename S>

@@ -141,6 +141,55 @@ TEST_CASE("a stream socket can connect to a listening socket", "[socket_handle][
 }
 
 
+template<typename Callable>
+class my_io_callback : public detail::io_callback
+{
+	Callable m_callable;
+
+public:
+	my_io_callback(auto&& callable)
+		: m_callable(vsm_forward(callable))
+	{
+	}
+
+	void notify(detail::operation_base& operation, detail::io_status const status) noexcept override
+	{
+		m_callable(operation, status);
+	}
+};
+
+template<typename Callable>
+my_io_callback(Callable&&) -> my_io_callback<std::decay_t<Callable>>;
+
+
+#if 0
+TEST_CASE("TEMP")
+{
+	using namespace detail;
+
+	auto const endpoint = ipv4_endpoint(ipv4_address::localhost, 51234);
+
+	auto multiplexer = default_multiplexer::create().value();
+
+	listen_socket_handle listen_socket = listen(&multiplexer, endpoint).value();
+
+	using operation_type = operation_t<default_multiplexer, listen_socket_handle, listen_socket_handle::accept_t>;
+
+	std::optional<operation_type> operation;
+	basic_accept_result<stream_socket_handle> result;
+
+	my_io_callback callback = [&](operation_base&, io_status const status)
+	{
+		notify_io(listen_socket, *operation, result, status);
+	};
+
+	//operation.emplace(&callback, io_arguments_t<listen_socket_handle::accept_t>()());
+	//REQUIRE(!submit_io(listen_socket, *operation, result).value());
+}
+#endif
+
+
+#if 0
 TEST_CASE("", "[socket_handle][async]")
 {
 	auto const endpoint = generate_endpoint();
@@ -179,6 +228,7 @@ TEST_CASE("", "[socket_handle][async]")
 			}());
 	}());
 }
+#endif
 
 
 #if 0

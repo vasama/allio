@@ -1,18 +1,27 @@
 #pragma once
 
-#include <allio/opaque_handle.h>
+#include <allio/abi.h>
 
 #include <vsm/result.hpp>
 #include <vsm/standard.hpp>
 #include <vsm/tag_invoke.hpp>
 
+#include <memory>
+
 namespace allio::detail {
 
-/// @brief ABI stable native handle type for asynchronous polling across ABI boundaries such as
-///        dynamically linked library interfaces. Instead of exposing allio types in your library
-///        ABI, return an opaque_handle_v1 instead and wrap it in a @ref opaque_handle before
-///        passing it to the user.
-using opaque_handle_v1 = allio_opaque_handle_v1;
+using opaque_handle = allio_abi_handle;
+using opaque_handle_functions = allio_abi_handle_functions;
+
+
+struct opaque_handle_deleter
+{
+	void vsm_static_operator_invoke(opaque_handle* const handle)
+	{
+		handle->functions->close(handle);
+	}
+};
+using unique_opaque_handle = std::unique_ptr<opaque_handle, opaque_handle_deleter>;
 
 
 template<typename Version>

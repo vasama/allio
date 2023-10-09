@@ -1,5 +1,6 @@
 #include <allio/win32/detail/iocp/listen_socket_handle.hpp>
 
+#if 0
 #include <allio/impl/posix/socket.hpp>
 #include <allio/impl/win32/iocp/socket.hpp>
 #include <allio/impl/win32/kernel.hpp>
@@ -16,7 +17,7 @@ using C = connector_t<M, H>;
 
 using accept_t = _listen_socket_handle::accept_t;
 using accept_s = operation_t<M, H, accept_t>;
-using accept_r = io_result_ref_t<accept_t>;
+using accept_r = basic_accept_result_ref<M>;
 
 static io_result helper(vsm::result<bool> const r)
 {
@@ -118,3 +119,4 @@ void operation_impl<M, H, accept_t>::cancel(M& m, H const& h, C const& c, S& s)
 {
 	cancel_socket_io(posix::unwrap_socket(h.get_platform_handle()), *s.overlapped);
 }
+#endif

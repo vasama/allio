@@ -6,6 +6,9 @@ using namespace allio;
 
 namespace {
 
+
+
+
 struct schannel_stream_socket_handle : secure_stream_socket_handle
 {
 

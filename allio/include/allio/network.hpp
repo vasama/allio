@@ -8,8 +8,10 @@
 #include <vsm/utility.hpp>
 
 #include <bit>
+#include <charconv>
 #include <compare>
 #include <concepts>
+#include <optional>
 #include <string_view>
 
 #include <cstdint>
@@ -70,6 +72,8 @@ class local_address
 	path_view m_path;
 
 public:
+	local_address() = default;
+
 	explicit constexpr local_address(path_view const path)
 		: m_path(path)
 	{
@@ -81,6 +85,8 @@ public:
 	}
 };
 
+
+using network_port_t = uint16_t;
 
 // Note that ipv4_address always represents addresses using native integer endianness.
 // This means that for example the loopback address 127.0.0.1 is unambiguously represented as 0x7f'00'00'01.
@@ -107,6 +113,7 @@ public:
 	}
 
 
+	static ipv4_address const unspecified;
 	static ipv4_address const localhost;
 
 	static vsm::result<ipv4_address> parse(std::string_view string);
@@ -115,18 +122,22 @@ public:
 	friend auto operator<=>(ipv4_address const&, ipv4_address const&) = default;
 };
 
+inline constexpr ipv4_address ipv4_address::unspecified = ipv4_address(0);
 inline constexpr ipv4_address ipv4_address::localhost = ipv4_address(0x7f'00'00'01);
 
 struct ipv4_endpoint
 {
 	ipv4_address address;
-	uint16_t port;
+	network_port_t port;
+
 
 	static vsm::result<ipv4_endpoint> parse(std::string_view string);
 
 	friend auto operator<=>(ipv4_endpoint const&, ipv4_endpoint const&) = default;
 };
 
+
+using ipv6_zone_t = uint32_t;
 
 class ipv6_address
 {
@@ -150,6 +161,7 @@ public:
 	}
 
 
+	static ipv6_address const unspecified;
 	static ipv6_address const localhost;
 
 	static vsm::result<ipv6_address> parse(std::string_view string);
@@ -158,13 +170,15 @@ public:
 	friend auto operator<=>(ipv6_address const&, ipv6_address const&) = default;
 };
 
+inline constexpr ipv6_address ipv6_address::unspecified = ipv6_address(0);
 inline constexpr ipv6_address ipv6_address::localhost = ipv6_address(1);
 
 struct ipv6_endpoint
 {
 	ipv6_address address;
-	uint16_t port;
-	uint32_t zone;
+	network_port_t port;
+	ipv6_zone_t zone;
+
 
 	static vsm::result<ipv6_endpoint> parse(std::string_view string);
 

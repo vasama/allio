@@ -15,7 +15,7 @@ struct operation_impl<iocp_multiplexer, _listen_socket_handle, _listen_socket_ha
 	using O = _listen_socket_handle::accept_t;
 	using C = connector_t<M, H>;
 	using S = operation_t<M, H, O>;
-	using R = io_result_ref_t<O>;
+	using R = basic_accept_result_ref<M>;
 
 	unique_wrapped_socket socket;
 	iocp_multiplexer::overlapped overlapped;

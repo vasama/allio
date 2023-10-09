@@ -12,7 +12,7 @@ struct ipv4_parse_result : ipv4_endpoint
 	bool is_endpoint;
 };
 
-constexpr bool _parse_ipv4(vsm::literal_parser p, ipv4_parse_result& r)
+constexpr bool _parse_ipv4_address(vsm::literal_parser& p, ipv4_address& r)
 {
 	uint32_t integer = 0;
 
@@ -37,9 +37,19 @@ constexpr bool _parse_ipv4(vsm::literal_parser p, ipv4_parse_result& r)
 		return false;
 	}
 	integer = integer << 8 | octet;
-	r.address = ipv4_address(integer);
 
-	if (r.is_endpoint = p.consume(':'))
+	r = ipv4_address(integer);
+	return true;
+}
+
+constexpr bool _parse_ipv4(vsm::literal_parser& p, ipv4_parse_result& r)
+{
+	if (!_parse_ipv4_address(p, r.address))
+	{
+		return false;
+	}
+
+	if ((r.is_endpoint = p.consume(':')))
 	{
 		if (!p.consume_integer(r.port))
 		{
@@ -47,13 +57,14 @@ constexpr bool _parse_ipv4(vsm::literal_parser p, ipv4_parse_result& r)
 		}
 	}
 
-	return p.beg == p.end;
+	return true;
 }
 
 consteval ipv4_parse_result _parse_ipv4_consteval(char const* const data, size_t const size)
 {
 	ipv4_parse_result r = {};
-	if (!_parse_ipv4(vsm::literal_parser(data, size), r))
+	vsm::literal_parser p(data, size);
+	if (!_parse_ipv4(p, r) || p.beg != p.end)
 	{
 		throw 0;
 	}
@@ -66,82 +77,115 @@ struct ipv6_parse_result : ipv6_endpoint
 	bool is_endpoint;
 };
 
-constexpr bool _parse_ipv6_address(vsm::literal_parser& p, ipv6_address& r)
+constexpr bool _parse_ipv6_integer(vsm::literal_parser& p, uint16_t& value)
 {
-	uint16_t h[8] = {};
-
-	int i = 0;
-	int j = -1;
-
-	if (p.consume(':'))
+	size_t size = p.end - p.beg;
+	if (size > 4)
 	{
-		j = 0;
+		size = 4;
 	}
-	else if (!p.consume_integer(h[i++], 0x10))
+	vsm::literal_parser q(p.beg, size);
+
+	if (!q.consume_integer(value, 0x10))
 	{
 		return false;
 	}
 
-	for (; i < 8; ++i)
+	p.beg = q.beg;
+	return true;
+}
+
+constexpr bool _parse_ipv6_address(vsm::literal_parser& p, ipv6_address& r)
+{
+	uint16_t hexadectets[8] = {};
+
+	int hexadectet_count = 0;
+	int double_colon_index = -1;
+
+	if (p.consume(':'))
+	{
+		double_colon_index = 0;
+	}
+	else
+	{
+		if (!_parse_ipv6_integer(p, hexadectets[hexadectet_count]))
+		{
+			return false;
+		}
+
+		hexadectet_count = 1;
+	}
+
+	for (; hexadectet_count < 8; ++hexadectet_count)
 	{
 		if (!p.consume(':'))
 		{
 			break;
 		}
 
-		if (p.consume(':') && j >= 0)
+		if (p.consume(':'))
 		{
-			return false;
+			if (double_colon_index >= 0)
+			{
+				return false;
+			}
+
+			double_colon_index = hexadectet_count;
 		}
 
-		if (!p.consume_integer(h[i++], 0x10))
+		if (!_parse_ipv6_integer(p, hexadectets[hexadectet_count]))
 		{
+			if (hexadectet_count == double_colon_index)
+			{
+				break;
+			}
+
 			return false;
 		}
 	}
 
-	// If a double colon was  used.
-	if (j >= 0)
+	if (double_colon_index >= 0)
 	{
-		// A double colon cannot be used if all eight hextets are specified.
-		if (i == 8)
+		// If a double colon is used, one to seven hexadectets may be specified.
+		if (hexadectet_count == 0 || hexadectet_count == 8)
 		{
 			return false;
 		}
 
-		int k = 7;
-
-		for (; i >= j; --k, --i)
+		// Shift the hexadectets after the double colon to the back of the array.
+		for (int i = 7, j = hexadectet_count - 1; j >= double_colon_index; --i, --j)
 		{
-			h[k] = h[i];
+			hexadectets[i] = hexadectets[j];
+			hexadectets[j] = 0;
 		}
-
-		for (; k >= j; --k)
+	}
+	else
+	{
+		// If a double colon is not used, all eight hexadectets must be specified.
+		if (hexadectet_count != 8)
 		{
-			h[k] = 0;
+			return false;
 		}
 	}
 
-	using vsm::uint128_t;
+	ipv6_address::integer_type const h64 =
+		static_cast<uint64_t>(hexadectets[0]) << 48 |
+		static_cast<uint64_t>(hexadectets[1]) << 32 |
+		static_cast<uint64_t>(hexadectets[2]) << 16 |
+		static_cast<uint64_t>(hexadectets[3]);
 
-	uint128_t const h64 =
-		static_cast<uint64_t>(h[0]) << 48 |
-		static_cast<uint64_t>(h[1]) << 32 |
-		static_cast<uint64_t>(h[2]) << 16 |
-		static_cast<uint64_t>(h[3]);
-
-	uint128_t const l64 =
-		static_cast<uint64_t>(h[4]) << 48 |
-		static_cast<uint64_t>(h[5]) << 32 |
-		static_cast<uint64_t>(h[6]) << 16 |
-		static_cast<uint64_t>(h[7]);
+	ipv6_address::integer_type const l64 =
+		static_cast<uint64_t>(hexadectets[4]) << 48 |
+		static_cast<uint64_t>(hexadectets[5]) << 32 |
+		static_cast<uint64_t>(hexadectets[6]) << 16 |
+		static_cast<uint64_t>(hexadectets[7]);
 
 	r = ipv6_address(h64 << 64 | l64);
 
 	return true;
 }
 
-constexpr bool _parse_ipv6(vsm::literal_parser p, ipv6_parse_result& r)
+constexpr bool _parse_ipv6(vsm::literal_parser& p, ipv6_parse_result& r)
 {
 	r.is_endpoint = p.consume('[');
 
@@ -165,22 +209,25 @@ constexpr bool _parse_ipv6(vsm::literal_parser p, ipv6_parse_result& r)
 			return false;
 		}
 
-		if (p.consume(':'))
+		if (!p.consume(':'))
 		{
-			if (!p.consume_integer(r.port))
-			{
-				return false;
-			}
+			return false;
+		}
+
+		if (!p.consume_integer(r.port))
+		{
+			return false;
 		}
 	}
 
-	return p.beg == p.end;
+	return true;
 }
 
 consteval ipv6_parse_result _parse_ipv6_consteval(char const* const data, size_t const size)
 {
 	ipv6_parse_result r = {};
-	if (!_parse_ipv6(vsm::literal_parser(data, size), r))
+	vsm::literal_parser p(data, size);
+	if (!_parse_ipv6(p, r) || p.beg != p.end)
 	{
 		throw 0;
 	}
