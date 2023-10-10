@@ -46,6 +46,8 @@ inline constexpr max_concurrent_threads_t max_concurrent_threads;
 class iocp_multiplexer final
 {
 public:
+	using multiplexer_tag = void;
+
 	class connector_type
 	{
 	};
@@ -174,7 +176,7 @@ private:
 public:
 	[[nodiscard]] static vsm::result<iocp_multiplexer> create(auto&&... args)
 	{
-		return _create(io_arguments_t<create_t>()(vsm_forward(args)...));
+		return _create(io_args<create_t>()(vsm_forward(args)...));
 	}
 
 	[[nodiscard]] static vsm::result<iocp_multiplexer> create(iocp_multiplexer const& other)
@@ -186,7 +188,7 @@ public:
 	/// @return True if the multiplexer made any progress.
 	[[nodiscard]] vsm::result<bool> poll(auto&&... args)
 	{
-		return _poll(io_arguments_t<poll_t>()(vsm_forward(args)...));
+		return _poll(io_args<poll_t>()(vsm_forward(args)...));
 	}
 
 

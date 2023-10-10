@@ -16,7 +16,7 @@ using detail::environment;
 using detail::working_directory_t;
 using detail::working_directory;
 
-using detail::blocking_process_handle;
+using detail::process_handle_t;
 using detail::basic_process_handle;
 
 using detail::open_process;

@@ -74,7 +74,7 @@ protected:
 
 
 	template<typename H>
-	struct sync_interface : base_type::sync_interface<H>
+	struct interface : base_type::interface<H>
 	{
 		template<parameters<duplicate_parameters> P = duplicate_parameters::interface>
 		vsm::result<H> duplicate(P const& args = {}) const;

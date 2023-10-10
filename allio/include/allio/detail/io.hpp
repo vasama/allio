@@ -111,16 +111,16 @@ struct submit_io_t
 {
 	template<typename H, typename S, typename R>
 	vsm::result<io_result> vsm_static_operator_invoke(H& h, S& s, R&& r)
-		requires vsm::tag_invocable<submit_io_t, H&, S&, decltype(io_result_ref(vsm_forward(r)))>
+		requires vsm::tag_invocable<submit_io_t, H&, S&, R&&>
 	{
-		return vsm::tag_invoke(submit_io_t(), h, s, io_result_ref(vsm_forward(r)));
+		return vsm::tag_invoke(submit_io_t(), h, s, vsm_forward(r));
 	}
 
 	template<typename M, typename H, typename C, typename S, typename R>
 	vsm::result<io_result> vsm_static_operator_invoke(M& m, H& h, C& c, S& s, R&& r)
-		requires vsm::tag_invocable<submit_io_t, M&, H&, C&, S&, decltype(io_result_ref(vsm_forward(r)))>
+		requires vsm::tag_invocable<submit_io_t, M&, H&, C&, S&, R&&>
 	{
-		return vsm::tag_invoke(submit_io_t(), m, h, c, s, io_result_ref(vsm_forward(r)));
+		return vsm::tag_invoke(submit_io_t(), m, h, c, s, vsm_forward(r));
 	}
 };
 inline constexpr submit_io_t submit_io = {};
@@ -129,16 +129,16 @@ struct notify_io_t
 {
 	template<typename H, typename S, typename R>
 	vsm::result<io_result> vsm_static_operator_invoke(H& h, S& s, R&& r, io_status const status)
-		requires vsm::tag_invocable<notify_io_t, H&, S&, decltype(io_result_ref(vsm_forward(r))), io_status>
+		requires vsm::tag_invocable<notify_io_t, H&, S&, R&&, io_status>
 	{
-		return vsm::tag_invoke(notify_io_t(), h, s, io_result_ref(vsm_forward(r)), status);
+		return vsm::tag_invoke(notify_io_t(), h, s, vsm_forward(r), status);
 	}
 
 	template<typename M, typename H, typename C, typename S, typename R>
 	vsm::result<io_result> vsm_static_operator_invoke(M& m, H& h, C& c, S& s, R&& r, io_status const status)
-		requires vsm::tag_invocable<notify_io_t, M&, H&, C&, S&, decltype(io_result_ref(vsm_forward(r))), io_status>
+		requires vsm::tag_invocable<notify_io_t, M&, H&, C&, S&, R&&, io_status>
 	{
-		return vsm::tag_invoke(notify_io_t(), m, h, c, s, io_result_ref(vsm_forward(r)), status);
+		return vsm::tag_invoke(notify_io_t(), m, h, c, s, vsm_forward(r), status);
 	}
 };
 inline constexpr notify_io_t notify_io = {};

@@ -3,6 +3,7 @@
 #include <allio/detail/default_security_provider.hpp>
 #include <allio/detail/handle.hpp>
 #include <allio/detail/no_security_provider.hpp>
+#include <allio/network.hpp>
 
 #include <vsm/linear.hpp>
 #include <vsm/standard.hpp>
@@ -10,8 +11,13 @@
 
 namespace allio::detail {
 
+struct network_endpoint_t
+{
+	network_endpoint endpoint;
+};
+
 template<typename SecurityProvider = default_security_provider>
-class socket_handle_base : handle
+class socket_handle_base : public handle
 {
 protected:
 	using base_type = handle;
@@ -26,11 +32,6 @@ private:
 	vsm_no_unique_address secure_socket_type m_secure_socket;
 
 public:
-};
-
-struct network_endpoint_t
-{
-	network_endpoint endpoint;
 };
 
 } // namespace allio::detail

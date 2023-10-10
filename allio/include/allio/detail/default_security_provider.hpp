@@ -1,5 +1,7 @@
 #pragma once
 
+#include <allio/detail/lifetime.hpp>
+
 #include <vsm/linear.hpp>
 #include <vsm/result.hpp>
 
@@ -21,7 +23,7 @@ public:
 	virtual vsm::result<secure_socket_object*> create_datagram_socket();
 
 protected:
-	allio_detail_default_lifetime(secure_socket_object);
+	allio_detail_default_lifetime(secure_socket_source);
 };
 
 struct default_security_provider

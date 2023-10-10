@@ -1,6 +1,7 @@
 #pragma once
 
-#include <allio/detail/handles/new_socket_handle_base.hpp>
+#include <allio/detail/handles/socket_handle_base.hpp>
+#include <allio/detail/io_sender.hpp>
 
 namespace allio::detail {
 
@@ -31,65 +32,65 @@ public:
 
 	struct read_some_t
 	{
+		using handle_type = abstract_socket_handle const;
+		using result_type = size_t;
 	};
 
 	struct write_some_t
 	{
+		using handle_type = abstract_socket_handle const;
+		using result_type = size_t;
 	};
 
 	using asynchronous_operations = type_list_cat<
-		base_type::asynchronous_operations,
+		typename base_type::asynchronous_operations,
 		type_list<connect_t, disconnect_t, read_some_t, write_some_t>
 	>;
 
 protected:
 	template<typename H>
-	struct blocking_interface : base_type::blocking_interface<H>
-	{
-	};
-
-	template<typename H>
-	struct asynchronous_interface : base_type::asynchronous_interface<H>
+	struct interface : base_type::template interface<H>
 	{
 	};
 
 	static vsm::result<void> do_blocking_io(
 		abstract_socket_handle& h,
-		io_result_t<connect_t>& r,
+		io_result_ref_t<connect_t> r,
 		io_parameters_t<connect_t> const& args);
 
 	static vsm::result<void> do_blocking_io(
 		abstract_socket_handle& h,
-		io_result_t<disconnect_t>& r,
+		io_result_ref_t<disconnect_t> r,
 		io_parameters_t<disconnect_t> const& args);
 
+#if 0
 	static vsm::result<void> do_blocking_io(
 		abstract_socket_handle const& h,
-		io_result_t<read_some_t>& r,
+		io_result_ref_t<read_some_t>& r,
 		io_parameters_t<read_some_t> const& args);
 
 	static vsm::result<void> do_blocking_io(
 		abstract_socket_handle const& h,
-		io_result_t<write_some_t>& r,
+		io_result_ref_t<write_some_t>& r,
 		io_parameters_t<write_some_t> const& args);
+#endif
 };
 
-template<typename Multiplexer = default_multiplexer>
-using socket_handle = basic_handle<abstract_socket_handle<>, Multiplexer>;
+template<typename Multiplexer>
+using basic_socket_handle = basic_handle<abstract_socket_handle<>, Multiplexer>;
 
-vsm::result<socket_handle<void>> connect(
-	no_multiplexer_t,
+vsm::result<basic_socket_handle<void>> connect(
 	network_endpoint const& endpoint,
 	auto&&... args)
 {
-	using h_type = socket_handle<void>;
+	using h_type = basic_socket_handle<void>;
 
 	h_type h;
-	void_t r;
-	vsm_try_void(blocking_io(
+	(tag_invoke(blocking_io,
+	//vsm_try_void(blocking_io(
 		h,
-		r,
-		io_arguments_t<h_type::connect_t>(endpoint)(vsm_forward(args)...)));
+		no_result,
+		io_args<h_type::connect_t>(endpoint)(vsm_forward(args)...)));
 	return h;
 }
 
@@ -99,11 +100,11 @@ auto connect(
 	network_endpoint const& endpoint,
 	auto&&... args)
 {
-	using h_type = socket_handle<Multiplexer>;
+	using h_type = basic_socket_handle<Multiplexer>;
 
 	return io_handle_sender<h_type::connect_t, h_type>(
 		multiplexer,
-		io_arguments_t<h_type::connect_t>(endpoint)(vsm_forward(args)...));
+		io_args<h_type::connect_t>(endpoint)(vsm_forward(args)...));
 }
 
 } // namespace allio::detail

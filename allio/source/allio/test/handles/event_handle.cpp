@@ -29,9 +29,9 @@ static vsm::result<bool> check_timeout(vsm::result<void> const r)
 	return vsm::unexpected(r.error());
 }
 
-static vsm::result<bool> wait(auto const& event, deadline const deadline = deadline::instant())
+static vsm::result<bool> wait(event_handle_t const& event, deadline const deadline = deadline::instant())
 {
-	return check_timeout(event.wait(deadline));
+	return check_timeout(event.blocking_wait(deadline));
 }
 
 static event_reset_mode get_reset_mode(bool const manual_reset)
@@ -169,7 +169,8 @@ TEST_CASE("auto reset event_handle signals are only observed by one wait", "[eve
 }
 
 
-static auto wait_detached(exec::async_scope& scope, event_handle const& event)
+template<typename Multiplexer>
+static auto wait_detached(exec::async_scope& scope, event_handle<Multiplexer> const& event)
 {
 	class shared_bool
 	{
@@ -188,7 +189,7 @@ static auto wait_detached(exec::async_scope& scope, event_handle const& event)
 	};
 
 	std::shared_ptr<bool> ptr = std::make_shared<bool>(false);
-	(void)scope.spawn_future(event.wait_async() | ex::then([ptr]()
+	(void)scope.spawn_future(event.wait() | ex::then([ptr]()
 	{
 		*ptr = true;
 	}));
@@ -199,7 +200,7 @@ static auto wait_detached(exec::async_scope& scope, event_handle const& event)
 TEST_CASE("async wait on signaled event_handle may complete immediately", "[event_handle][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
-	auto const event = create_event(&multiplexer, auto_reset_event, signal_event).value();
+	auto const event = create_event(multiplexer, auto_reset_event, signal_event).value();
 
 	exec::async_scope scope;
 	auto const signaled = wait_detached(scope, event);
@@ -215,7 +216,7 @@ TEST_CASE("async wait on signaled event_handle may complete immediately", "[even
 TEST_CASE("async wait on unsignaled event_handle completes after signaling", "[event_handle][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
-	auto const event = create_event(&multiplexer, auto_reset_event).value();
+	auto const event = create_event(multiplexer, auto_reset_event).value();
 
 	exec::async_scope scope;
 	auto const signaled = wait_detached(scope, event);
@@ -229,7 +230,7 @@ TEST_CASE("async wait on unsignaled event_handle completes after signaling", "[e
 TEST_CASE("auto reset event_handle becomes unsignaled after async wait", "[event_handle][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
-	auto const event = create_event(&multiplexer, auto_reset_event, signal_event).value();
+	auto const event = create_event(multiplexer, auto_reset_event, signal_event).value();
 
 	exec::async_scope scope;
 	(void)wait_detached(scope, event);
@@ -241,7 +242,7 @@ TEST_CASE("auto reset event_handle becomes unsignaled after async wait", "[event
 TEST_CASE("manual reset event_handle remains signaled after async wait", "[event_handle][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
-	auto const event = create_event(&multiplexer, manual_reset_event, signal_event).value();
+	auto const event = create_event(multiplexer, manual_reset_event, signal_event).value();
 
 	exec::async_scope scope;
 	(void)wait_detached(scope, event);
@@ -253,7 +254,7 @@ TEST_CASE("manual reset event_handle remains signaled after async wait", "[event
 TEST_CASE("auto reset event_handle signals are only observed by one async wait", "[event_handle][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
-	auto const event = create_event(&multiplexer, auto_reset_event).value();
+	auto const event = create_event(multiplexer, auto_reset_event).value();
 
 	exec::async_scope scope;
 	auto const signal1 = wait_detached(scope, event);
@@ -273,7 +274,7 @@ TEST_CASE("auto reset event_handle signals are only observed by one async wait",
 TEST_CASE("manual reset event_handle signals are observed by all async waits", "[event_handle][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
-	auto const event = create_event(&multiplexer, manual_reset_event).value();
+	auto const event = create_event(multiplexer, manual_reset_event).value();
 
 	exec::async_scope scope;
 	auto const signal1 = wait_detached(scope, event);

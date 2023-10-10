@@ -90,7 +90,7 @@ struct working_directory_t
 inline constexpr working_directory_t::tag_t working_directory = {};
 
 
-class _process_handle : public platform_handle
+class process_handle_t : public platform_handle
 {
 protected:
 	using base_type = platform_handle;
@@ -115,7 +115,7 @@ public:
 
 	struct open_t
 	{
-		using handle_type = _process_handle;
+		using handle_type = process_handle_t;
 		using result_type = void;
 
 		struct required_params_type
@@ -128,7 +128,7 @@ public:
 
 	struct launch_t
 	{
-		using handle_type = _process_handle;
+		using handle_type = process_handle_t;
 		using result_type = void;
 
 		struct required_params_type
@@ -145,16 +145,16 @@ public:
 
 	struct wait_t
 	{
-		using handle_type = _process_handle const;
+		using handle_type = process_handle_t const;
 		using result_type = process_exit_code;
 		using required_params_type = no_parameters_t;
 		using optional_params_type = deadline_t;
 	};
 
-	vsm::result<process_exit_code> wait(auto&&... args) const
+	vsm::result<process_exit_code> blocking_wait(auto&&... args) const
 	{
 		vsm::result<process_exit_code> r(vsm::result_value);
-		vsm_try_void(do_blocking_io(*this, r, io_arguments_t<wait_t>()(vsm_forward(args)...)));
+		vsm_try_void(do_blocking_io(*this, r, io_args<wait_t>()(vsm_forward(args)...)));
 		return r;
 	}
 
@@ -171,87 +171,90 @@ public:
 #endif
 
 
-	using async_operations = type_list_cat
+	using asynchronous_operations = type_list_cat
 	<
-		base_type::async_operations,
-		type_list
-		<
-			wait_t
-		>
+		base_type::asynchronous_operations,
+		type_list<wait_t>
 	>;
 
 protected:
-	allio_detail_default_lifetime(_process_handle);
+	allio_detail_default_lifetime(process_handle_t);
 
 	template<typename H>
-	struct sync_interface : base_type::sync_interface<H>
+	struct interface : base_type::interface<H>
 	{
-	};
-
-	template<typename H>
-	struct async_interface : base_type::async_interface<H>
-	{
-		io_sender<H, wait_t> wait_async(auto&&... args) const;
+		[[nodiscard]] auto wait(auto&&... args) const
+		{
+			return handle::invoke(
+				static_cast<H const&>(*this),
+				io_args<wait_t>()(vsm_forward(args)...));
+		}
 	};
 
 protected:
 	static vsm::result<void> do_blocking_io(
-		_process_handle& h,
+		process_handle_t& h,
 		io_result_ref_t<open_t> result,
 		io_parameters_t<open_t> const& args);
 
 	static vsm::result<void> do_blocking_io(
-		_process_handle& h,
+		process_handle_t& h,
 		io_result_ref_t<launch_t> result,
 		io_parameters_t<launch_t> const& args);
 
 	static vsm::result<void> do_blocking_io(
-		_process_handle const& h,
+		process_handle_t const& h,
 		io_result_ref_t<wait_t> result,
 		io_parameters_t<wait_t> const& args);
 };
 
-using blocking_process_handle = basic_blocking_handle<_process_handle>;
-
 template<typename Multiplexer>
-using basic_process_handle = basic_async_handle<_process_handle, Multiplexer>;
+using basic_process_handle = basic_async_handle<process_handle_t, Multiplexer>;
 
 
-vsm::result<blocking_process_handle> open_process(process_id const process_id, auto&&... args)
+vsm::result<basic_process_handle<void>> open_process(process_id const process_id, auto&&... args)
 {
-	vsm::result<blocking_process_handle> r(vsm::result_value);
-	vsm_try_void(blocking_io(*r, no_result, io_arguments_t<_process_handle::open_t>(process_id)(vsm_forward(args)...)));
+	vsm::result<basic_process_handle<void>> r(vsm::result_value);
+	vsm_try_void(blocking_io(
+		*r,
+		no_result,
+		io_args<process_handle_t::open_t>(process_id)(vsm_forward(args)...)));
 	return r;
 }
 
 template<typename Multiplexer>
-vsm::result<blocking_process_handle> open_process(Multiplexer&& multiplexer, process_id const process_id, auto&&... args)
+vsm::result<basic_process_handle<multiplexer_handle_t<Multiplexer>>> open_process(
+	Multiplexer&& multiplexer,
+	process_id const process_id,
+	auto&&... args)
+{
+	vsm_try(h, open_process(process_id, vsm_forward(args)...));
+	return vsm_move(h).with_multiplexer()
+	vsm::result<basic_process_handle<Multiplexer>> r(vsm::result_value);
+	vsm_try_void(blocking_io(*r, no_result, io_args<process_handle_t::open_t>(process_id)(vsm_forward(args)...)));
+	return r;
+}
+
+
+vsm::result<basic_process_handle<void>> launch_process(path_descriptor const path, auto&&... args)
+{
+	vsm::result<basic_process_handle<void>> r(vsm::result_value);
+	vsm_try_void(blocking_io(*r, no_result, io_args<process_handle_t::launch_t>(path)(vsm_forward(args)...)));
+	return r;
+}
+
+template<typename Multiplexer>
+vsm::result<basic_process_handle<void>> launch_process(Multiplexer&& multiplexer, path_descriptor const path, auto&&... args)
 {
 	vsm::result<basic_process_handle<Multiplexer>> r(vsm::result_value);
-	vsm_try_void(blocking_io(*r, no_result, io_arguments_t<_process_handle::open_t>(process_id)(vsm_forward(args)...)));
-	return r;
-}
-
-
-vsm::result<blocking_process_handle> launch_process(path_descriptor const path, auto&&... args)
-{
-	vsm::result<blocking_process_handle> r(vsm::result_value);
-	vsm_try_void(blocking_io(*r, no_result, io_arguments_t<_process_handle::launch_t>(path)(vsm_forward(args)...)));
-	return r;
-}
-
-template<typename Multiplexer>
-vsm::result<blocking_process_handle> launch_process(Multiplexer&& multiplexer, path_descriptor const path, auto&&... args)
-{
-	vsm::result<basic_process_handle<Multiplexer>> r(vsm::result_value);
-	vsm_try_void(blocking_io(*r, no_result, io_arguments_t<_process_handle::launch_t>(path)(vsm_forward(args)...)));
+	vsm_try_void(blocking_io(*r, no_result, io_args<process_handle_t::launch_t>(path)(vsm_forward(args)...)));
 	return r;
 }
 
 namespace _this_process {
 
-blocking_process_handle const& get_handle();
-vsm::result<blocking_process_handle> open();
+basic_process_handle<void> const& get_handle();
+vsm::result<basic_process_handle<void>> open();
 
 } // namespace _this_process
 } // namespace allio::detail

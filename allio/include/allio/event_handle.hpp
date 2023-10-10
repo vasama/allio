@@ -6,6 +6,7 @@
 namespace allio {
 
 allio_detail_export
-using event_handle = basic_event_handle<default_multiplexer_ptr>;
+template<typename Multiplexer = default_multiplexer_handle>
+using event_handle = basic_event_handle<Multiplexer>;
 
 } // namespace allio

@@ -35,12 +35,14 @@ class io_sender
 	static_assert(std::is_base_of_v<handle_base_type, H>);
 
 	using handle_type = vsm::select_t<std::is_const_v<typename O::handle_type>, H const, H>;
-	using multiplexer_type = typename H::multiplexer_type;
+
+	using multiplexer_handle_type = typename H::multiplexer_handle_type;
+	using multiplexer_type = typename multiplexer_handle_type::multiplexer_type;
 
 	using operation_type = operation_t<multiplexer_type, handle_base_type, O>;
 
 	using params_type = io_parameters_t<O>;
-	using result_type = typename O::result_type;
+	using result_type = io_result_t<O, multiplexer_handle_type>;
 
 	template<typename Receiver>
 	class operation : io_callback
@@ -133,6 +135,11 @@ public:
 	{
 		return operation<std::remove_cvref_t<R>>(vsm_forward(sender), vsm_forward(receiver));
 	}
+};
+
+template<typename H, typename O>
+class io_handle_sender
+{
 };
 
 } // namespace allio::detail

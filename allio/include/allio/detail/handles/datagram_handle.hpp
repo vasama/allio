@@ -76,38 +76,38 @@ protected:
 };
 
 template<typename Multiplexer = default_multiplexer>
-using datagram_handle = basic_handle<abstract_datagram_handle<>, Multiplexer>;
+using basic_datagram_handle = basic_handle<abstract_datagram_handle<>, Multiplexer>;
 
-vsm::result<datagram_handle<void>> bind(
+vsm::result<basic_datagram_handle<void>> bind(
 	no_multiplexer_t,
 	network_endpoint const& endpoint
 	auto&&... args)
 {
-	using h_type = datagram_handle<void>;
+	using h_type = basic_datagram_handle<void>;
 
 	h_type h;
 	void_t r;
 	vsm_try_void(blocking_io(
 		h,
 		r,
-		io_arguments_t<h_type::bind_t>(endpoint)(vsm_forward(args)...)));
+		io_args<h_type::bind_t>(endpoint)(vsm_forward(args)...)));
 	return h;
 }
 
 template<typename Multiplexer>
-vsm::result<datagram_handle<Multiplexer>> listen(
+vsm::result<basic_datagram_handle<Multiplexer>> bind(
 	Multiplexer&& multiplexer,
 	network_endpoint const& endpoint,
 	auto&&... args)
 {
-	using h_type = datagram_handle<Multiplexer>;
+	using h_type = basic_datagram_handle<Multiplexer>;
 
 	h_type h;
 	void_t r;
 	vsm_try_void(blocking_io(
 		h,
 		r,
-		io_arguments_t<h_type::bind_t>(endpoint)(vsm_forward(args)...)));
+		io_args<h_type::bind_t>(endpoint)(vsm_forward(args)...)));
 	return h;
 }
 

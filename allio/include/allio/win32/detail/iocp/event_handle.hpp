@@ -6,10 +6,10 @@
 namespace allio::detail {
 
 template<>
-struct connector_impl<iocp_multiplexer, _event_handle>
+struct connector_impl<iocp_multiplexer, event_handle_t>
 {
 	using M = iocp_multiplexer;
-	using H = _event_handle;
+	using H = event_handle_t;
 	using C = connector_t<M, H>;
 
 	friend vsm::result<void> tag_invoke(attach_handle_t, M&, H const&, C&)
@@ -25,11 +25,11 @@ struct connector_impl<iocp_multiplexer, _event_handle>
 };
 
 template<>
-struct operation_impl<iocp_multiplexer, _event_handle, _event_handle::wait_t>
+struct operation_impl<iocp_multiplexer, event_handle_t, event_handle_t::wait_t>
 {
 	using M = iocp_multiplexer;
-	using H = _event_handle;
-	using O = _event_handle::wait_t;
+	using H = event_handle_t;
+	using O = event_handle_t::wait_t;
 	using C = connector_t<M, H>;
 	using S = operation_t<M, H, O>;
 	using R = io_result_ref_t<O>;

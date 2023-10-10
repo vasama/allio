@@ -7,6 +7,8 @@
 #include <vsm/type_traits.hpp>
 #include <vsm/utility.hpp>
 
+#include <tuple>
+
 namespace allio::detail {
 
 template<typename O>
@@ -24,31 +26,101 @@ struct io_parameters_t
 };
 
 template<typename O>
-class io_arguments_t : io_parameters_t<O>
+	requires
+		std::is_same_v<typename O::required_params_type, no_parameters_t> &&
+		std::is_same_v<typename O::optional_params_type, no_parameters_t>
+struct io_parameters_t<O>
 {
-	using base = io_parameters_t<O>;
+};
+
+template<typename O, typename... Args>
+class io_args_t
+{
+	static constexpr auto pack_args(Args&&... args)
+	{
+		return [&args...](auto use)
+		{
+			return use(vsm_forward(args)...);
+		};
+	}
+
+	decltype(pack_args(vsm_declval(Args)...)) m_args;
 
 public:
-	explicit io_arguments_t(auto&&... args)
-		: base(vsm_forward(args)...)
+	explicit io_args_t(Args&&... args)
+		: m_args(pack_args(vsm_forward(args)...))
 	{
 	}
 
-	base&& operator()(auto&&... args) &&
+	io_parameters_t<O> operator()(auto&&... optional_args) &&
 	{
-		(set_argument(static_cast<base&>(*this), vsm_forward(args)), ...);
-		return static_cast<base&&>(*this);
+		return m_args([&](auto&&... required_args) -> io_parameters_t<O>
+		{
+			io_parameters_t<O> r(vsm_forward(required_args)...);
+			(set_argument(r, vsm_forward(optional_args)), ...);
+			return r;
+		});
 	}
 };
 
+template<typename O, typename... Args>
+io_args_t<O, Args...> io_args(Args&&... args)
+{
+	return io_args_t<O, Args...>(vsm_forward(args)...);
+}
 
-struct void_t {};
 
-template<typename T>
-using _io_result_t = vsm::select_t<std::is_void_v<T>, void_t, T>;
+#if 1
+template<typename O, typename M>
+auto io_result_select()
+{
+	if constexpr (requires { typename O::result_type; })
+	{
+		return vsm::tag<typename O::result_type>();
+	}
+	else if constexpr (requires { typename O::template result_type_template<M>; })
+	{
+		return vsm::tag<typename O::template result_type_template<M>>();
+	}
+	else
+	{
+		return vsm::tag<void>();
+	}
+}
 
-template<typename O>
-using io_result_t = _io_result_t<typename O::result_type>;
+template<typename O, typename M = void>
+using io_result_t = typename decltype(io_result_select<O, M>())::type;
+#else
+template<bool>
+struct io_result_select;
+
+template<>
+struct io_result_select<1>
+{
+	template<typename O, typename M>
+	using _typename = typename O::result_type;
+
+	template<typename O, typename M>
+	using _template = typename O::template result_type_template<M>;
+};
+
+template<>
+struct io_result_select<0>
+{
+	template<typename O, typename M>
+	using _typename = io_result_select<
+		requires { typename O::template result_type_template<M>; }
+	>::_template<O, M>;
+
+	template<typename O, typename M>
+	using _template = void;
+};
+
+template<typename O, typename M>
+using io_result_t = io_result_select<
+	requires { typename O::result_type; }
+>::_typename<O, M>;
+#endif
 
 
 template<typename Result>
@@ -128,8 +200,8 @@ struct io_result_ref<void>
 	}
 };
 
-template<typename O>
-using io_result_ref_t = io_result_ref<typename O::result_type>;
+template<typename O, typename M = void>
+using io_result_ref_t = io_result_ref<io_result_t<O, M>>;
 
 inline constexpr io_result_ref<void> no_result = {};
 

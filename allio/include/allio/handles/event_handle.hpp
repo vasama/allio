@@ -11,8 +11,9 @@ using detail::auto_reset_event;
 using detail::signal_event_t;
 using detail::signal_event;
 
-using detail::blocking_event_handle;
+using detail::event_handle_t;
 using detail::basic_event_handle;
+
 using detail::create_event;
 
 } // namespace allio

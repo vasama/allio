@@ -21,7 +21,6 @@ enum class event_reset_mode : uint8_t
 inline constexpr event_reset_mode manual_reset_event = event_reset_mode::manual_reset;
 inline constexpr event_reset_mode auto_reset_event = event_reset_mode::auto_reset;
 
-
 struct signal_event_t
 {
 	struct parameter_t
@@ -51,8 +50,7 @@ struct signal_event_t
 };
 inline constexpr signal_event_t signal_event = {};
 
-
-class _event_handle : public platform_handle
+class event_handle_t : public platform_handle
 {
 protected:
 	using base_type = platform_handle;
@@ -76,12 +74,12 @@ public:
 
 	struct create_t
 	{
-		using handle_type = _event_handle;
+		using handle_type = event_handle_t;
 		using result_type = void;
 
 		struct required_params_type
 		{
-			_event_handle::reset_mode reset_mode;
+			event_handle_t::reset_mode reset_mode;
 		};
 
 		using optional_params_type = signal_event_t::parameter_t;
@@ -105,89 +103,78 @@ public:
 
 	struct wait_t
 	{
-		using handle_type = _event_handle const;
+		using handle_type = event_handle_t const;
 		using result_type = void;
 		using required_params_type = no_parameters_t;
 		using optional_params_type = deadline_t;
 	};
 
-	/// @brief Wait for the event object to be signaled.
-	///        See @ref signal for more information.
-	[[nodiscard]] vsm::result<void> wait(auto&&... args) const
+	[[nodiscard]] vsm::result<void> blocking_wait(auto&&... args) const
 	{
-		return do_blocking_io(*this, no_result, io_arguments_t<wait_t>()(vsm_forward(args)...));
+		return do_blocking_io(
+			*this,
+			no_result,
+			io_args<wait_t>()(vsm_forward(args)...));
 	}
 
 
-	using async_operations = type_list_cat
+	using asynchronous_operations = type_list_cat
 	<
-		base_type::async_operations,
-		type_list
-		<
-			wait_t
-		>
+		base_type::asynchronous_operations,
+		type_list<wait_t>
 	>;
 
 protected:
-	allio_detail_default_lifetime(_event_handle);
+	allio_detail_default_lifetime(event_handle_t);
 
 	template<typename H>
-	struct sync_interface : base_type::sync_interface<H>
+	struct interface : base_type::interface<H>
 	{
-	};
-
-	template<typename H>
-	struct async_interface : base_type::async_interface<H>
-	{
-		/// @brief Wait for the event object to become signaled.
-		[[nodiscard]] io_sender<H, wait_t> wait_async(auto&&... args) const
+		/// @brief Wait for the event object to be signaled.
+		///        See @ref signal for more information.
+		[[nodiscard]] auto wait(auto&&... args) const
 		{
-			return io_sender<H, wait_t>(
+			return handle::invoke(
 				static_cast<H const&>(*this),
-				io_arguments_t<wait_t>()(vsm_forward(args)...));
+				io_args<wait_t>()(vsm_forward(args)...));
 		}
 	};
 
-private:
-	friend vsm::result<void> tag_invoke(blocking_io_t, std::derived_from<_event_handle> auto& h, io_parameters_t<create_t> const& args)
-	{
-		return handle::initialize(h, [&](_event_handle& h)
-		{
-			return do_blocking_io(h, args);
-		});
-	}
-
-protected:
 	static vsm::result<void> do_blocking_io(
-		_event_handle& h,
-		io_result_ref_t<create_t> result,
+		event_handle_t& h,
+		io_result_ref_t<create_t> r,
 		io_parameters_t<create_t> const& args);
 
 	static vsm::result<void> do_blocking_io(
-		_event_handle const& h,
-		io_result_ref_t<wait_t> result,
+		event_handle_t const& h,
+		io_result_ref_t<wait_t> r,
 		io_parameters_t<wait_t> const& args);
 };
 
-using blocking_event_handle = basic_blocking_handle<_event_handle>;
-
 template<typename Multiplexer>
-using basic_event_handle = basic_async_handle<_event_handle, Multiplexer>;
+using basic_event_handle = basic_handle<event_handle_t, Multiplexer>;
 
 
-vsm::result<blocking_event_handle> create_event(event_reset_mode const reset_mode, auto&&... args)
+vsm::result<basic_event_handle<void>> create_event(
+	event_reset_mode const reset_mode,
+	auto&&... args)
 {
-	vsm::result<blocking_event_handle> r(vsm::result_value);
-	vsm_try_void(blocking_io(*r, no_result, io_arguments_t<_event_handle::create_t>(reset_mode)(vsm_forward(args)...)));
+	vsm::result<basic_event_handle<void>> r(vsm::result_value);
+	vsm_try_void(blocking_io(
+		*r,
+		no_result,
+		io_args<event_handle_t::create_t>(reset_mode)(vsm_forward(args)...)));
 	return r;
 }
 
-template<typename Multiplexer>
-vsm::result<basic_event_handle<Multiplexer>> create_event(Multiplexer&& multiplexer, event_reset_mode const reset_mode, auto&&... args)
+template<multiplexer_for<event_handle_t> Multiplexer>
+vsm::result<basic_event_handle<multiplexer_handle_t<Multiplexer>>> create_event(
+	Multiplexer&& multiplexer,
+	event_reset_mode const reset_mode,
+	auto&&... args)
 {
-	vsm::result<basic_event_handle<Multiplexer>> r(vsm::result_value, vsm_forward(multiplexer));
-	vsm_try_void(blocking_io(*r, no_result, io_arguments_t<_event_handle::create_t>(reset_mode)(vsm_forward(args)...)));
-	return r;
+	vsm_try(event, create_event(reset_mode, vsm_forward(args)...));
+	return event.with_multiplexer(vsm_forward(multiplexer));
 }
 
 } // namespace allio::detail
