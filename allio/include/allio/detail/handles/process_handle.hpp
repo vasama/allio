@@ -255,3 +255,11 @@ vsm::result<blocking_process_handle> open();
 
 } // namespace _this_process
 } // namespace allio::detail
+
+#if vsm_os_win32
+#	include <allio/win32/detail/iocp/process_handle.hpp>
+#endif
+
+#if vsm_os_linux
+#	include <allio/linux/detail/io_uring/process_handle.hpp>
+#endif

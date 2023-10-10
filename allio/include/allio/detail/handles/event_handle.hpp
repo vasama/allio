@@ -191,3 +191,11 @@ vsm::result<basic_event_handle<Multiplexer>> create_event(Multiplexer&& multiple
 }
 
 } // namespace allio::detail
+
+#if vsm_os_win32
+#	include <allio/win32/detail/iocp/event_handle.hpp>
+#endif
+
+#if vsm_os_linux
+#	include <allio/linux/detail/io_uring/event_handle.hpp>
+#endif

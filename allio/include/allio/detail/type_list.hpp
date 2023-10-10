@@ -11,6 +11,9 @@ struct type_list
 {
 	static constexpr size_t size = sizeof...(Ts);
 
+	template<template<typename...> typename F>
+	using apply = F<Ts...>;
+
 	template<typename... Lhs, typename... Rhs>
 	friend type_list<Lhs..., Rhs...> operator+(type_list<Lhs...>, type_list<Rhs...>);
 };

@@ -7,10 +7,11 @@ include(FetchContent)
 find_package(vsm-box REQUIRED)
 find_package(vsm-core REQUIRED)
 find_package(vsm-flags REQUIRED)
-find_package(vsm-linear REQUIRED)
-find_package(vsm-literals REQUIRED)
 find_package(vsm-intrusive REQUIRED)
 find_package(vsm-intrusive_ptr REQUIRED)
+find_package(vsm-linear REQUIRED)
+find_package(vsm-literals REQUIRED)
+find_package(vsm-math REQUIRED)
 find_package(vsm-optional REQUIRED)
 find_package(vsm-result REQUIRED)
 find_package(vsm-tag_ptr REQUIRED)
@@ -63,10 +64,11 @@ vsm_add_library2(allio
 		vsm::box
 		vsm::core
 		vsm::flags
-		vsm::linear
-		vsm::literals
 		vsm::intrusive
 		vsm::intrusive_ptr
+		vsm::linear
+		vsm::literals
+		vsm::math
 		vsm::optional
 		vsm::result
 		vsm::tag_ptr
@@ -74,6 +76,7 @@ vsm_add_library2(allio
 		p2300::p2300
 
 	TEST_SOURCES
+		source/allio/test/any_multiplexer.cpp
 		source/allio/test/filesystem.hpp
 		source/allio/test/multiplexer.hpp
 		source/allio/test/network.cpp

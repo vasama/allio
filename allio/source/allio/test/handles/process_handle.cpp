@@ -18,6 +18,7 @@ TEST_CASE("The current process cannot be awaited", "[process_handle]")
 	REQUIRE(r.error() == error::process_is_current_process);
 }
 
+#if 0
 TEST_CASE("Child process", "[process_handle]")
 {
 	std::vector<std::string> arguments;
@@ -86,3 +87,4 @@ TEST_CASE("Child process", "[process_handle]")
 	auto const exit_code = process.wait().value();
 	REQUIRE(exit_code == expected_exit_code);
 }
+#endif

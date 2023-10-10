@@ -4,6 +4,7 @@
 
 #include <vsm/result.hpp>
 #include <vsm/standard.hpp>
+#include <vsm/type_traits.hpp>
 #include <vsm/utility.hpp>
 
 namespace allio::detail {
@@ -39,6 +40,15 @@ public:
 		return static_cast<base&&>(*this);
 	}
 };
+
+
+struct void_t {};
+
+template<typename T>
+using _io_result_t = vsm::select_t<std::is_void_v<T>, void_t, T>;
+
+template<typename O>
+using io_result_t = _io_result_t<typename O::result_type>;
 
 
 template<typename Result>

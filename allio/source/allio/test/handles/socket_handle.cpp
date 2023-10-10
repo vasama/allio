@@ -3,6 +3,7 @@
 
 #include <allio/path.hpp>
 #include <allio/sync_wait.hpp>
+#include <allio/test/shared_object.hpp>
 
 #include <vsm/lazy.hpp>
 
@@ -18,39 +19,7 @@
 using namespace allio;
 namespace ex = stdexec;
 
-namespace {
-template<typename T>
-class shared_object
-{
-	std::shared_ptr<T> m_ptr;
-
-public:
-	template<std::convertible_to<T> U = T>
-	shared_object(U&& value)
-		: m_ptr(std::make_shared<T>(vsm_forward(value)))
-	{
-	}
-
-	explicit shared_object(std::shared_ptr<T> ptr)
-		: m_ptr(vsm_move(ptr))
-	{
-	}
-
-	operator T const&() const
-	{
-		return *m_ptr;
-	}
-
-	T const* operator->() const
-	{
-		return m_ptr.get();
-	}
-};
-
-} // namespace
-
-
-using endpoint_type = shared_object<network_endpoint>;
+using endpoint_type = test::shared_object<network_endpoint>;
 
 // Use shared_ptr with the aliasing constructor to hide
 // the storage used for the local_address endpoint path.
@@ -72,13 +41,13 @@ static endpoint_type make_local_endpoint()
 
 	ptr->endpoint = local_address(ptr->endpoint_path);
 
-	return shared_object(std::shared_ptr<network_endpoint>(vsm_move(ptr), &ptr->endpoint));
+	return endpoint_type(std::shared_ptr<network_endpoint>(vsm_move(ptr), &ptr->endpoint));
 }
 
 static endpoint_type make_ipv4_endpoint()
 {
 	ipv4_endpoint const endpoint(ipv4_address::localhost, 51234);
-	return shared_object(std::make_shared<network_endpoint>(endpoint));
+	return endpoint_type(std::make_shared<network_endpoint>(endpoint));
 }
 
 static endpoint_type generate_endpoint()
@@ -141,6 +110,7 @@ TEST_CASE("a stream socket can connect to a listening socket", "[socket_handle][
 }
 
 
+#if 0
 template<typename Callable>
 class my_io_callback : public detail::io_callback
 {
@@ -161,8 +131,6 @@ public:
 template<typename Callable>
 my_io_callback(Callable&&) -> my_io_callback<std::decay_t<Callable>>;
 
-
-#if 0
 TEST_CASE("TEMP")
 {
 	using namespace detail;
