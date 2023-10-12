@@ -35,6 +35,16 @@ struct default_security_provider
 	public:
 		
 	};
+
+	class source_type
+	{
+		vsm::linear<secure_socket_source*> m_source;
+
+	public:
+
+	};
+
+	static vsm::result<source_type> get_default_source();
 };
 
 } // namespace allio::detail

@@ -11,10 +11,10 @@ using namespace allio::detail;
 using namespace allio::win32;
 
 using M = iocp_multiplexer;
-using H = _process_handle;
+using H = process_handle_t;
 using C = connector_t<M, H>;
 
-using wait_t = _process_handle::wait_t;
+using wait_t = process_handle_t::wait_t;
 using wait_s = operation_t<M, H, wait_t>;
 using wait_r = io_result_ref_t<wait_t>;
 

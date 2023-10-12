@@ -3,19 +3,18 @@
 #include <allio/linux/detail/unique_fd.hpp>
 
 #include <vsm/intrusive/list.hpp>
-
-
+#include <vsm/offset_ptr.hpp>
+#include <vsm/result.hpp>
 
 namespace allio::detail {
 
 class epoll_multiplexer
 {
-	struct poll_slot_base : vsm::intrusive::list_link {};
+	struct subscription_link : vsm::intrusive::list_link {};
 
 public:
-	struct operation_type : vsm::intrusive::list_link
+	class operation_type
 	{
-		
 	};
 
 private:
@@ -25,34 +24,78 @@ private:
 	};
 
 public:
-	struct connector_type
+	class connector_type
 	{
 		size_t index;
-	};
 
-
-	template<short Events>
-	class poll_slot : poll_slot_base
-	{
 		friend epoll_multiplexer;
 	};
 
+	enum class subscription_flags : uint16_t
+	{
+		read                    = 1 << 0,
+		write                   = 1 << 1,
+		exclusive               = 1 << 2,
+		multishot               = 1 << 3,
+	};
+	vsm_flag_enum_friend(subscription_flags);
+
+	class subscription : subscription_link
+	{
+		vsm::offset_ptr<operation_type, int16_t> m_operation;
+		subscription_flags m_flags;
+
+	public:
+		subscription(subscription const&) = delete;
+		subscription& operator=(subscription const&) = delete;
+
+		void bind(operation_type const& operation) const
+		{
+			m_operation = &operation;
+		}
+	};
+
 private:
+	struct file_descriptor
+	{
+		int fd;
+		uint32_t read_count;
+		uint32_t write_count;
+	};
+
 	unique_fd m_epoll;
 
+	std::deque<file_descriptor> m_file_descriptors;
+
 public:
-};
+	[[nodiscard]] vsm::result<void> subscribe(
+		connector_type const& connector,
+		subscription& subscription,
+		subscription_flags flags);
 
-struct example
-{
-	poll_slot<POLLIN> slot;
+	void unsubscribe(
+		connector_type const& connector,
+		subscription& subscription);
 
-	vsm::result<io_result> submit(M& m, C const& c)
+	class subscription_guard
 	{
-		return m.poll(c, slot, [&](poll_events_t) -> vsm::result<io_result>
+		epoll_multiplexer& m_multiplexer;
+		connector_type const& m_connector;
+		subscription& m_subscription;
+
+	public:
+		subscription_guard(subscription_guard const&) = default;
+		subscription_guard& operator=(subscription_guard const&) = default;
+
+		~subscription_guard()
 		{
-			
-		});
+			m_multiplexer.unsubscribe(m_connector, m_connector, m_subscription);
+		}
+	};
+
+
+	[[nodiscard]] vsm::result<void> poll(auto&&... args)
+	{
 	}
 };
 

@@ -180,8 +180,8 @@ public:
 protected:
 	allio_detail_default_lifetime(process_handle_t);
 
-	template<typename H>
-	struct interface : base_type::interface<H>
+	template<typename H, typename M>
+	struct interface : base_type::interface<H, typename M>
 	{
 		[[nodiscard]] auto wait(auto&&... args) const
 		{
@@ -194,22 +194,22 @@ protected:
 protected:
 	static vsm::result<void> do_blocking_io(
 		process_handle_t& h,
-		io_result_ref_t<open_t> result,
+		io_result_ref_t<open_t> r,
 		io_parameters_t<open_t> const& args);
 
 	static vsm::result<void> do_blocking_io(
 		process_handle_t& h,
-		io_result_ref_t<launch_t> result,
+		io_result_ref_t<launch_t> r,
 		io_parameters_t<launch_t> const& args);
 
 	static vsm::result<void> do_blocking_io(
 		process_handle_t const& h,
-		io_result_ref_t<wait_t> result,
+		io_result_ref_t<wait_t> r,
 		io_parameters_t<wait_t> const& args);
 };
 
 template<typename Multiplexer>
-using basic_process_handle = basic_async_handle<process_handle_t, Multiplexer>;
+using basic_process_handle = basic_handle<process_handle_t, Multiplexer>;
 
 
 vsm::result<basic_process_handle<void>> open_process(process_id const process_id, auto&&... args)
@@ -229,17 +229,17 @@ vsm::result<basic_process_handle<multiplexer_handle_t<Multiplexer>>> open_proces
 	auto&&... args)
 {
 	vsm_try(h, open_process(process_id, vsm_forward(args)...));
-	return vsm_move(h).with_multiplexer()
-	vsm::result<basic_process_handle<Multiplexer>> r(vsm::result_value);
-	vsm_try_void(blocking_io(*r, no_result, io_args<process_handle_t::open_t>(process_id)(vsm_forward(args)...)));
-	return r;
+	return vsm_move(h).with_multiplexer(vsm_forward(multiplexer));
 }
 
 
 vsm::result<basic_process_handle<void>> launch_process(path_descriptor const path, auto&&... args)
 {
 	vsm::result<basic_process_handle<void>> r(vsm::result_value);
-	vsm_try_void(blocking_io(*r, no_result, io_args<process_handle_t::launch_t>(path)(vsm_forward(args)...)));
+	vsm_try_void(blocking_io(
+		*r,
+		no_result,
+		io_args<process_handle_t::launch_t>(path)(vsm_forward(args)...)));
 	return r;
 }
 
@@ -247,7 +247,10 @@ template<typename Multiplexer>
 vsm::result<basic_process_handle<void>> launch_process(Multiplexer&& multiplexer, path_descriptor const path, auto&&... args)
 {
 	vsm::result<basic_process_handle<Multiplexer>> r(vsm::result_value);
-	vsm_try_void(blocking_io(*r, no_result, io_args<process_handle_t::launch_t>(path)(vsm_forward(args)...)));
+	vsm_try_void(blocking_io(
+		*r,
+		no_result,
+		io_args<process_handle_t::launch_t>(path)(vsm_forward(args)...)));
 	return r;
 }
 

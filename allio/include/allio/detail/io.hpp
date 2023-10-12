@@ -13,6 +13,10 @@
 
 namespace allio::detail {
 
+template<typename H, typename M>
+class basic_handle;
+
+
 struct blocking_io_t
 {
 	template<typename H, typename O>
@@ -86,25 +90,36 @@ protected:
 
 struct attach_handle_t
 {
-	template<typename M, typename H, typename S>
-	vsm::result<void> vsm_static_operator_invoke(M& m, H const& h, S& s)
-		requires vsm::tag_invocable<attach_handle_t, M&, H const&, S&>
+	template<typename M, typename H, typename C>
+	vsm::result<void> vsm_static_operator_invoke(M& m, H const& h, C& c)
+		requires vsm::tag_invocable<attach_handle_t, M&, H const&, C&>
 	{
-		return vsm::tag_invoke(attach_handle_t(), m, h, s);
+		return vsm::tag_invoke(attach_handle_t(), m, h, c);
 	}
 };
 inline constexpr attach_handle_t attach_handle = {};
 
 struct detach_handle_t
 {
-	template<typename M, typename H, typename S>
-	void vsm_static_operator_invoke(M& m, H const& h, S& s)
-		requires vsm::tag_invocable<detach_handle_t, M const&, H const&, S&>
+	template<typename M, typename H, typename C>
+	void vsm_static_operator_invoke(M& m, H const& h, C& c)
+		requires vsm::tag_invocable<detach_handle_t, M const&, H const&, C&>
 	{
-		return vsm::tag_invoke(detach_handle_t(), m, h, s);
+		return vsm::tag_invoke(detach_handle_t(), m, h, c);
 	}
 };
 inline constexpr detach_handle_t detach_handle = {};
+
+struct rebind_handle_t
+{
+	template<typename H, typename M, typename OutM>
+	vsm::result<void> vsm_static_operator_invoke(basic_handle<H, M>&& h, basic_handle<H, OutM>& out_h)
+		requires vsm::tag_invocable<rebind_handle_t, basic_handle<H, M>&&, basic_handle<H, OutM>&>
+	{
+		return vsm::tag_invoke(rebind_handle_t(), static_cast<basic_handle<H, M>&&>(h), out_h);
+	}
+};
+inline constexpr rebind_handle_t rebind_handle = {};
 
 
 struct submit_io_t

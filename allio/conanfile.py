@@ -17,6 +17,7 @@ class package(ConanFile):
 		"vsm_linear/0.1",
 		"vsm_literals/0.1",
 		"vsm_math/0.1",
+		"vsm_offset_ptr/0.1",
 		"vsm_optional/0.1",
 		"vsm_result/0.1",
 		"vsm_tag_ptr/0.1",

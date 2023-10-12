@@ -7,8 +7,11 @@ namespace allio {
 using detail::backlog_t;
 using detail::backlog;
 
-using detail::abstract_listen_handle;
+using detail::listen_handle_t;
 using detail::basic_listen_handle;
+
+using detail::raw_listen_handle_t;
+using detail::basic_raw_listen_handle;
 
 using detail::listen;
 

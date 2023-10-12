@@ -14,7 +14,7 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-vsm::result<void> _event_handle::signal() const
+vsm::result<void> event_handle_t::signal() const
 {
 	if (!*this)
 	{
@@ -33,7 +33,7 @@ vsm::result<void> _event_handle::signal() const
 	return {};
 }
 
-vsm::result<void> _event_handle::reset() const
+vsm::result<void> event_handle_t::reset() const
 {
 	if (!*this)
 	{
@@ -52,8 +52,8 @@ vsm::result<void> _event_handle::reset() const
 	return {};
 }
 
-vsm::result<void> _event_handle::do_blocking_io(
-	_event_handle& h,
+vsm::result<void> event_handle_t::do_blocking_io(
+	event_handle_t& h,
 	io_result_ref_t<create_t>,
 	io_parameters_t<create_t> const& args)
 {
@@ -102,8 +102,8 @@ vsm::result<void> _event_handle::do_blocking_io(
 	return {};
 }
 
-vsm::result<void> _event_handle::do_blocking_io(
-	_event_handle const& h,
+vsm::result<void> event_handle_t::do_blocking_io(
+	event_handle_t const& h,
 	io_result_ref_t<wait_t>,
 	io_parameters_t<wait_t> const& args)
 {

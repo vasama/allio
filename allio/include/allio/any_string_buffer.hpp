@@ -8,6 +8,8 @@
 #include <vsm/standard.hpp>
 #include <vsm/tag_invoke.hpp>
 
+#include <span>
+
 namespace allio {
 namespace detail {
 

@@ -30,6 +30,9 @@ network_endpoint socket_address_union::get_network_endpoint() const
 {
 	switch (addr.sa_family)
 	{
+	case AF_UNIX:
+		return local_address(path_view());
+
 	case AF_INET:
 		return ipv4_endpoint
 		{
@@ -145,7 +148,7 @@ vsm::result<unique_socket_with_flags> posix::socket_accept(
 		vsm_try_void(socket_poll_or_timeout(listen_socket, socket_poll_r, deadline));
 	}
 
-	addr.size = sizeof(addr.addr);
+	addr.size = sizeof(socket_address_union);
 	socket_type const socket = accept(
 		listen_socket,
 		&addr.addr,
@@ -196,7 +199,7 @@ static vsm::result<void> socket_connect_with_timeout(
 		vsm_try_void(socket_poll_or_timeout(socket, socket_poll_w, relative_deadline));
 
 		socket_address addr;
-		addr.size = sizeof(addr.addr);
+		addr.size = sizeof(socket_address_union);
 
 		// Check if the socket is connected by attempting to getting the peer address.
 		if (getpeername(socket, &addr.addr, &addr.size) == socket_error_value)

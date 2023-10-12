@@ -12,6 +12,7 @@ find_package(vsm-intrusive_ptr REQUIRED)
 find_package(vsm-linear REQUIRED)
 find_package(vsm-literals REQUIRED)
 find_package(vsm-math REQUIRED)
+find_package(vsm-offset_ptr REQUIRED)
 find_package(vsm-optional REQUIRED)
 find_package(vsm-result REQUIRED)
 find_package(vsm-tag_ptr REQUIRED)
@@ -20,14 +21,6 @@ find_package(p2300 REQUIRED)
 
 vsm_add_library2(allio
 	HEADERS
-		include/allio/detail/async_io.hpp
-		include/allio/detail/any_handle.hpp
-		include/allio/detail/api.hpp
-		include/allio/detail/dynamic_buffer.hpp
-		include/allio/detail/platform.h
-		include/allio/detail/string_ref.hpp
-		include/allio/detail/type_list.hpp
-
 		include/allio/async_result.hpp
 		include/allio/byte_io.hpp
 		include/allio/deadline.hpp
@@ -40,7 +33,6 @@ vsm_add_library2(allio
 		include/allio/handle.hpp
 		include/allio/map_handle.hpp
 		include/allio/network.hpp
-		include/allio/packet_socket_handle.hpp
 		include/allio/path.hpp
 		include/allio/path_literal.hpp
 		include/allio/path_view.hpp
@@ -49,9 +41,42 @@ vsm_add_library2(allio
 		include/allio/process_handle.hpp
 		include/allio/section_handle.hpp
 		include/allio/socket_handle.hpp
-		include/allio/stream_socket_handle.hpp
 		include/allio/step_deadline.hpp
 		include/allio/sync_wait.hpp
+		
+		include/allio/handles/datagram_handle.hpp
+		include/allio/handles/directory_handle.hpp
+		include/allio/handles/event_handle.hpp
+		include/allio/handles/file_handle.hpp
+		include/allio/handles/filesystem_handle.hpp
+		include/allio/handles/listen_handle.hpp
+		include/allio/handles/map_handle.hpp
+		include/allio/handles/opaque_handle.hpp
+		include/allio/handles/platform_handle.hpp
+		include/allio/handles/process_handle.hpp
+		include/allio/handles/section_handle.hpp
+		include/allio/handles/socket_handle.hpp
+
+		include/allio/detail/any_handle.hpp
+		include/allio/detail/api.hpp
+		include/allio/detail/dynamic_buffer.hpp
+		include/allio/detail/platform.h
+		include/allio/detail/string_ref.hpp
+		include/allio/detail/type_list.hpp
+
+		include/allio/detail/handles/datagram_handle.hpp
+		include/allio/detail/handles/directory_handle.hpp
+		include/allio/detail/handles/event_handle.hpp
+		include/allio/detail/handles/file_handle.hpp
+		include/allio/detail/handles/filesystem_handle.hpp
+		include/allio/detail/handles/listen_handle.hpp
+		include/allio/detail/handles/map_handle.hpp
+		include/allio/detail/handles/opaque_handle.hpp
+		include/allio/detail/handles/platform_handle.hpp
+		include/allio/detail/handles/process_handle.hpp
+		include/allio/detail/handles/section_handle.hpp
+		include/allio/detail/handles/socket_handle_base.hpp
+		include/allio/detail/handles/socket_handle.hpp
 
 	SOURCES
 		source/allio/impl/error.cpp
@@ -69,6 +94,7 @@ vsm_add_library2(allio
 		vsm::linear
 		vsm::literals
 		vsm::math
+		vsm::offset_ptr
 		vsm::optional
 		vsm::result
 		vsm::tag_ptr
@@ -137,10 +163,9 @@ vsm_configure(allio
 		source/allio/impl/win32/wsa_ex.cpp
 		source/allio/impl/win32/wsa_ex.hpp
 
-		source/allio/impl/posix/handles/common_socket_handle.cpp
-		source/allio/impl/posix/handles/listen_socket_handle.cpp
-		#source/allio/impl/posix/handles/packet_socket_handle.cpp
-		source/allio/impl/posix/handles/stream_socket_handle.cpp
+		source/allio/impl/posix/handles/listen_handle.cpp
+		source/allio/impl/posix/handles/socket_handle_base.cpp
+		source/allio/impl/posix/handles/socket_handle.cpp
 		source/allio/impl/win32/handles/event_handle.cpp
 		source/allio/impl/win32/handles/filesystem_handle.cpp
 		source/allio/impl/win32/handles/filesystem_handle.hpp
@@ -151,10 +176,10 @@ vsm_configure(allio
 
 		source/allio/impl/win32/iocp/event_handle.cpp
 		source/allio/impl/win32/iocp/generic_wait.cpp
-		source/allio/impl/win32/iocp/listen_socket_handle.cpp
+		source/allio/impl/win32/iocp/listen_handle.cpp
 		source/allio/impl/win32/iocp/multiplexer.cpp
 		source/allio/impl/win32/iocp/process_handle.cpp
-		source/allio/impl/win32/iocp/stream_socket_handle.cpp
+		source/allio/impl/win32/iocp/socket_handle.cpp
 
 	TEST_SOURCES
 		source/allio/test/win32/command_line.cpp

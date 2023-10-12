@@ -81,7 +81,6 @@ TEST_CASE("a stream socket can connect to a listening socket", "[socket_handle][
 	auto const server_socket = listen_socket.accept().value().socket;
 	auto const client_socket = connect_future.get().value();
 
-#if 0
 	SECTION("the server socket has no data to read")
 	{
 		signed char value = 0;
@@ -115,11 +114,10 @@ TEST_CASE("a stream socket can connect to a listening socket", "[socket_handle][
 		REQUIRE(client_socket.read_some(as_read_buffer(&value, 1)).value() == 1);
 		REQUIRE(value == 42);
 	}
-#endif
 }
 
 
-#if 0
+#if 1
 template<typename Callable>
 class my_io_callback : public detail::io_callback
 {
@@ -147,21 +145,25 @@ TEST_CASE("TEMP")
 	auto const endpoint = ipv4_endpoint(ipv4_address::localhost, 51234);
 
 	auto multiplexer = default_multiplexer::create().value();
+	auto listen_socket = listen(multiplexer, endpoint).value();
 
-	listen_socket_handle listen_socket = listen(&multiplexer, endpoint).value();
-
-	using operation_type = operation_t<default_multiplexer, listen_socket_handle, listen_socket_handle::accept_t>;
+	using operation_type = operation_t<default_multiplexer, raw_listen_handle_t, raw_listen_handle_t::accept_t>;
 
 	std::optional<operation_type> operation;
-	basic_accept_result<stream_socket_handle> result;
 
+	//TODO: The result default constructs the socket handle and its multiplexer handle.
+	//      Might need to make the multiplexer handle default constructible after all.
+	basic_accept_result<decltype(listen_socket)::socket_handle_type> result;
+
+#if 0
 	my_io_callback callback = [&](operation_base&, io_status const status)
 	{
 		notify_io(listen_socket, *operation, result, status);
 	};
 
-	//operation.emplace(&callback, io_arguments_t<listen_socket_handle::accept_t>()());
-	//REQUIRE(!submit_io(listen_socket, *operation, result).value());
+	operation.emplace(&callback, io_args<listen_socket_handle::accept_t>()());
+	REQUIRE(!submit_io(listen_socket, *operation, result).value());
+#endif
 }
 #endif
 

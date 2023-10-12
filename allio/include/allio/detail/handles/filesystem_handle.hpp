@@ -182,25 +182,25 @@ public:
 
 	vsm::result<size_t> get_current_path(any_path_buffer const output, auto&&... args) const
 	{
-		return do_blocking_io(*this, io_arguments_t<get_current_path_t>(output)(vsm_forward(args)...));
+		return do_blocking_io(
+			*this,
+			io_args<get_current_path_t>(output)(vsm_forward(args)...));
 	}
 
 	template<typename Path = path>
 	vsm::result<Path> get_current_path(auto&&... args) const
 	{
 		vsm::result<Path> r(vsm::result_value);
-		vsm_try_void(do_blocking_io(*this, io_arguments_t<get_current_path_t>(*r)(vsm_forward(args)...)));
+		vsm_try_void(do_blocking_io(
+			*this,
+			io_args<get_current_path_t>(*r)(vsm_forward(args)...)));
 		return r;
 	}
 
 
-	using async_operations = type_list_cat
-	<
-		base_type::async_operations,
-		type_list
-		<
-			open_t
-		>
+	using asynchronous_operations = type_list_cat<
+		base_type::asynchronous_operations,
+		type_list<open_t>
 	>;
 
 protected:
@@ -211,7 +211,7 @@ protected:
 protected:
 	static vsm::result<void> do_blocking_io(
 		filesystem_handle const& h,
-		io_result_ref_t<get_current_path_t> result,
+		io_result_ref_t<get_current_path_t> r,
 		io_parameters_t<get_current_path_t> const& args);
 };
 

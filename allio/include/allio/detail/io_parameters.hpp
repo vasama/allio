@@ -70,7 +70,6 @@ io_args_t<O, Args...> io_args(Args&&... args)
 }
 
 
-#if 1
 template<typename O, typename M>
 auto io_result_select()
 {
@@ -90,37 +89,6 @@ auto io_result_select()
 
 template<typename O, typename M = void>
 using io_result_t = typename decltype(io_result_select<O, M>())::type;
-#else
-template<bool>
-struct io_result_select;
-
-template<>
-struct io_result_select<1>
-{
-	template<typename O, typename M>
-	using _typename = typename O::result_type;
-
-	template<typename O, typename M>
-	using _template = typename O::template result_type_template<M>;
-};
-
-template<>
-struct io_result_select<0>
-{
-	template<typename O, typename M>
-	using _typename = io_result_select<
-		requires { typename O::template result_type_template<M>; }
-	>::_template<O, M>;
-
-	template<typename O, typename M>
-	using _template = void;
-};
-
-template<typename O, typename M>
-using io_result_t = io_result_select<
-	requires { typename O::result_type; }
->::_typename<O, M>;
-#endif
 
 
 template<typename Result>

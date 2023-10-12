@@ -127,8 +127,8 @@ public:
 protected:
 	allio_detail_default_lifetime(event_handle_t);
 
-	template<typename H>
-	struct interface : base_type::interface<H>
+	template<typename H, typename M>
+	struct interface : base_type::interface<H, M>
 	{
 		/// @brief Wait for the event object to be signaled.
 		///        See @ref signal for more information.

@@ -16,11 +16,13 @@ using namespace allio::detail;
 using namespace allio::linux;
 
 using M = io_uring_multiplexer;
-using H = _event_handle;
+using H = event_handle_t;
 using C = connector_t<M, H>;
 
-using wait_t = _event_handle::wait_t;
+using wait_t = event_handle_t::wait_t;
 using wait_s = operation_t<M, H, wait_t>;
+
+static eventfd_t dummy_event_value;
 
 static vsm::result<io_result> _submit(M& m, H const& h, C const& c, wait_s& s)
 {
@@ -60,16 +62,15 @@ static vsm::result<io_result> _submit(M& m, H const& h, C const& c, wait_s& s)
 		// Link the previous SQE to this one.
 		ctx.link_last(IOSQE_IO_LINK);
 
-		// The read overwrites the timeout value, but that's fine.
-		// It is no longer needed after the poll has completed, and
-		// will be reassigned anyway if the operation is restarted.
+		// The read value is not actually needed for anything.
+		// Just write the value into a global dummy buffer.
 		vsm_try(read_sqe, ctx.push(
 		{
 			.opcode = IORING_OP_READ,
 			.flags = fd_flags,
 			.fd = fd,
-			.addr = reinterpret_cast<uintptr_t>(&s.event_value),
-			.len = sizeof(s.event_value),
+			.addr = reinterpret_cast<uintptr_t>(&dummy_event_value),
+			.len = sizeof(dummy_event_value),
 			.user_data = ctx.get_user_data(s),
 		}));
 
@@ -96,7 +97,7 @@ vsm::result<io_result> operation_impl<M, H, wait_t>::submit(M& m, H const& h, C 
 	// If the deadline is instant just check the event synchronously.
 	if (s.args.deadline == deadline::instant())
 	{
-		return vsm::as_error_code(check_event(
+		return vsm::as_error_code(test_event(
 			unwrap_handle(h.get_platform_handle()),
 			is_auto_reset(h)));
 	}

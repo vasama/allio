@@ -63,18 +63,29 @@ protected:
 		m_native_handle.value = native.native_handle;
 	}
 
+	void close(auto&& close_platform_handle)
+	{
+		auto const handle = m_native_handle.value;
+		if (handle != native_platform_handle::null)
+		{
+			m_native_handle.value = native_platform_handle::null;
+			vsm_forward(close_platform_handle)(handle);
+		}
+
+		base_type::close();
+	}
 
 	void close()
 	{
-		if (m_native_handle.value != native_platform_handle::null)
+		close([](native_platform_handle const handle)
 		{
-			vsm_verify(close_handle(m_native_handle.value));
-		}
+			vsm_verify(close_handle(handle));
+		});
 	}
 
 
-	template<typename H>
-	struct interface : base_type::interface<H>
+	template<typename H, typename M>
+	struct interface : base_type::interface<H, M>
 	{
 		template<parameters<duplicate_parameters> P = duplicate_parameters::interface>
 		vsm::result<H> duplicate(P const& args = {}) const;

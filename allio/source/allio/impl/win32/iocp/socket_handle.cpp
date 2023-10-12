@@ -1,4 +1,4 @@
-#include <allio/win32/detail/iocp/stream_socket_handle.hpp>
+#include <allio/win32/detail/iocp/socket_handle.hpp>
 
 #include <allio/impl/posix/socket.hpp>
 #include <allio/impl/win32/iocp/socket.hpp>
@@ -11,10 +11,10 @@ using namespace allio::detail;
 using namespace allio::win32;
 
 using M = iocp_multiplexer;
-using H = _stream_socket_handle;
+using H = raw_socket_handle_t;
 using C = connector_t<M, H>;
 
-using connect_t = _stream_socket_handle::connect_t;
+using connect_t = raw_socket_handle_t::connect_t;
 using connect_s = operation_t<M, H, connect_t>;
 using connect_r = io_result_ref_t<connect_t>;
 

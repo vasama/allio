@@ -104,7 +104,7 @@ vsm::result<process_exit_code> win32::get_process_exit_code(HANDLE const handle)
 
 //TODO: Override close to handle pseudo handles.
 
-vsm::result<process_id> _process_handle::get_process_id() const
+vsm::result<process_id> process_handle_t::get_process_id() const
 {
 	DWORD const id = GetProcessId(unwrap_handle(get_platform_handle()));
 
@@ -117,8 +117,8 @@ vsm::result<process_id> _process_handle::get_process_id() const
 }
 
 
-vsm::result<void> _process_handle::do_blocking_io(
-	_process_handle& h,
+vsm::result<void> process_handle_t::do_blocking_io(
+	process_handle_t& h,
 	io_result_ref_t<open_t> const,
 	io_parameters_t<open_t> const& args)
 {
@@ -154,8 +154,8 @@ vsm::result<void> _process_handle::do_blocking_io(
 	return {};
 }
 
-vsm::result<void> _process_handle::do_blocking_io(
-	_process_handle& h,
+vsm::result<void> process_handle_t::do_blocking_io(
+	process_handle_t& h,
 	io_result_ref_t<launch_t> const result,
 	io_parameters_t<launch_t> const& args)
 {
@@ -187,8 +187,8 @@ vsm::result<void> _process_handle::do_blocking_io(
 	return {};
 }
 
-vsm::result<void> _process_handle::do_blocking_io(
-	_process_handle const& h,
+vsm::result<void> process_handle_t::do_blocking_io(
+	process_handle_t const& h,
 	io_result_ref_t<wait_t> const result,
 	io_parameters_t<wait_t> const& args)
 {
@@ -223,18 +223,18 @@ vsm::result<void> _process_handle::do_blocking_io(
 }
 
 
-blocking_process_handle const& detail::_this_process::get_handle()
+basic_process_handle<void> const& detail::_this_process::get_handle()
 {
-	static blocking_process_handle const handle = [&]()
+	static basic_process_handle<void> const handle = [&]()
 	{
-		blocking_process_handle h;
+		basic_process_handle<void> h;
 		vsm_verify(h.set_native_handle(platform_handle::native_handle_type
 		{
 			handle::native_handle_type
 			{
-				handle_flags(_process_handle::flags::not_null)
-					| _process_handle::flags::current
-					| _process_handle::impl_type::flags::pseudo_handle,
+				handle_flags(process_handle_t::flags::not_null)
+					| process_handle_t::flags::current
+					| process_handle_t::impl_type::flags::pseudo_handle,
 			},
 			wrap_handle(GetCurrentProcess()),
 		}));

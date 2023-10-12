@@ -69,7 +69,7 @@ vsm::result<bool> linux::reset_event(int const fd)
 	return true;
 }
 
-vsm::result<void> linux::check_event(int const fd, bool const auto_reset)
+vsm::result<void> linux::test_event(int const fd, bool const auto_reset)
 {
 	if (auto_reset)
 	{
@@ -178,7 +178,7 @@ vsm::result<void> _event_handle::do_blocking_io(_event_handle const& h, io_param
 
 	if (args.deadline == deadline::instant())
 	{
-		return check_event(event, auto_reset);
+		return test_event(event, auto_reset);
 	}
 
 	// The deadline must be made absolute and stepped in each iteration.
