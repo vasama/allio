@@ -236,19 +236,23 @@ public:
 private:
 	using C = connector_t<M, H>;
 	using S = operation;
-	using R = io_result_ref_t<O>;
 
-	friend vsm::result<io_result> tag_invoke(submit_io_t, M& m, H const& h, C const& c, S& s, R const r)
+	template<typename R>
+	friend vsm::result<io_result> tag_invoke(submit_io_t, M& m, H const& h, C const& c, S& s, R&& r)
+		requires requires { operation_impl<M, H, O>::submit(m, h, c, s, vsm_forward(r)); }
 	{
-		return operation_impl<M, H, O>::submit(m, h, c, s, r);
+		return operation_impl<M, H, O>::submit(m, h, c, s, vsm_forward(r));
 	}
 
-	friend vsm::result<io_result> tag_invoke(notify_io_t, M& m, H const& h, C const& c, S& s, R const r, io_status const status)
+	template<typename R>
+	friend vsm::result<io_result> tag_invoke(notify_io_t, M& m, H const& h, C const& c, S& s, R&& r, io_status const status)
+		requires requires { operation_impl<M, H, O>::notify(m, h, c, s, vsm_forward(r), status); }
 	{
-		return operation_impl<M, H, O>::notify(m, h, c, s, r, status);
+		return operation_impl<M, H, O>::notify(m, h, c, s, vsm_forward(r), status);
 	}
 
 	friend void tag_invoke(cancel_io_t, M& m, H const& h, C const& c, S& s)
+		requires requires { operation_impl<M, H, O>::cancel(m, h, c, s); }
 	{
 		return operation_impl<M, H, O>::cancel(m, h, c, s);
 	}

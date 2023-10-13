@@ -157,14 +157,21 @@ struct _basic_multiplexer_handle
 {
 	class type
 	{
-		M* m_multiplexer;
+		M* m_multiplexer = nullptr;
 
 	public:
 		using multiplexer_type = M;
 
+		type() = default;
+
 		type(M& multiplexer)
 			: m_multiplexer(&multiplexer)
 		{
+		}
+
+		explicit operator bool() const
+		{
+			return m_multiplexer != nullptr;
 		}
 
 		template<typename H, typename C>
@@ -220,7 +227,8 @@ struct _basic_multiplexer_handle
 			R&& r,
 			io_status const status)
 		{
-			return notify_io(
+			//return notify_io(
+			return tag_invoke(notify_io,
 				*m.m_multiplexer,
 				h,
 				c,
@@ -273,6 +281,9 @@ auto _multiplexer_handle(M const&)
 
 template<typename M>
 using multiplexer_handle_t = typename decltype(_multiplexer_handle(vsm_declval(M)))::type;
+
+template<typename M>
+concept multiplexer = requires { requires std::is_void_v<typename M::multiplexer_tag>; };
 
 template<typename M, typename H>
 concept multiplexer_for = true;
@@ -542,6 +553,11 @@ private:
 			if (h)
 			{
 				return vsm::unexpected(error::handle_is_not_null);
+			}
+
+			if (!h.m_multiplexer)
+			{
+				return vsm::unexpected(error::multiplexer_is_null);
 			}
 
 			basic_handle<H, void> new_h;

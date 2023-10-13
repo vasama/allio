@@ -39,9 +39,27 @@ struct _accept_result
 	static_assert(sizeof(SocketHandle) == 0);
 };
 
+template<typename SP>
+struct _accept_result<basic_handle<socket_handle_t<SP>, void>>
+{
+	struct type
+	{
+		socket_handle_t<SP> socket;
+		network_endpoint endpoint;
+	};
+
+	struct ref_type
+	{
+		socket_handle_t<SP>& socket;
+		network_endpoint& endpoint;
+	};
+};
+
 template<typename SP, typename M>
 struct _accept_result<basic_handle<socket_handle_t<SP>, M>>
 {
+	using multiplexer_type = typename M::multiplexer_type;
+
 	using listen_handle_t = detail::listen_handle_t<SP>;
 
 	template<typename OtherM = M>
@@ -52,10 +70,10 @@ struct _accept_result<basic_handle<socket_handle_t<SP>, M>>
 		socket_handle<> socket;
 		network_endpoint endpoint;
 
-		template<typename OtherM, typename H, typename C, typename S>
+		template<typename C, typename S>
 		friend vsm::result<io_result> tag_invoke(
 			submit_io_t,
-			OtherM&& m,
+			multiplexer_type& m,
 			listen_handle_t const& h,
 			C const& c,
 			S& s,
@@ -66,25 +84,26 @@ struct _accept_result<basic_handle<socket_handle_t<SP>, M>>
 				h,
 				c,
 				s,
-				ref_type{ r.socket, r.endpoint });
+				ref_type{ r.result.socket, r.result.endpoint });
 		}
 	
-		template<typename OtherM, typename H, typename C, typename S>
+		template<typename C, typename S>
 		friend vsm::result<io_result> tag_invoke(
 			notify_io_t,
-			OtherM&& m,
+			multiplexer_type& m,
 			listen_handle_t const& h,
 			C const& c,
 			S& s,
 			io_result_ref<type> const r,
 			io_status const status)
 		{
-			return notify_io(
+			//return notify_io(
+			return tag_invoke(notify_io,
 				vsm_forward(m),
 				h,
 				c,
 				s,
-				ref_type{ r.socket, r.endpoint },
+				ref_type{ r.result.socket, r.result.endpoint },
 				status);
 		}
 	};
@@ -94,10 +113,11 @@ struct _accept_result<basic_handle<socket_handle_t<SP>, M>>
 		socket_handle<>& socket;
 		network_endpoint& endpoint;
 	
-		template<typename OtherM, typename H, typename C, typename S>
+		template<multiplexer OtherM, typename C, typename S>
+			requires vsm::not_same_as<OtherM, multiplexer_type>
 		friend vsm::result<io_result> tag_invoke(
 			submit_io_t,
-			M&& m,
+			OtherM& m,
 			listen_handle_t const& h,
 			C const& c,
 			S& s,
@@ -116,10 +136,11 @@ struct _accept_result<basic_handle<socket_handle_t<SP>, M>>
 				r.socket);
 		}
 	
-		template<typename OtherM, typename H, typename C, typename S>
+		template<multiplexer OtherM, typename C, typename S>
+			requires vsm::not_same_as<OtherM, multiplexer_type>
 		friend vsm::result<io_result> tag_invoke(
 			notify_io_t,
-			M&& m,
+			OtherM& m,
 			listen_handle_t const& h,
 			C const& c,
 			S& s,
@@ -129,7 +150,8 @@ struct _accept_result<basic_handle<socket_handle_t<SP>, M>>
 			socket_handle<multiplexer_handle_t<OtherM>> socket;
 
 			return handle_result(
-				notify_io(
+				//notify_io(
+				tag_invoke(notify_io,
 					vsm_forward(m),
 					h,
 					c,

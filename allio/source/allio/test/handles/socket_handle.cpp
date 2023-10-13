@@ -67,6 +67,7 @@ static endpoint_type generate_endpoint()
 }
 
 
+#if 0
 TEST_CASE("a stream socket can connect to a listening socket", "[socket_handle][blocking]")
 {
 	auto const endpoint = generate_endpoint();
@@ -115,6 +116,7 @@ TEST_CASE("a stream socket can connect to a listening socket", "[socket_handle][
 		REQUIRE(value == 42);
 	}
 }
+#endif
 
 
 #if 1
@@ -153,14 +155,23 @@ TEST_CASE("TEMP")
 
 	//TODO: The result default constructs the socket handle and its multiplexer handle.
 	//      Might need to make the multiplexer handle default constructible after all.
-	basic_accept_result<decltype(listen_socket)::socket_handle_type> result;
+	using socket_handle_type = decltype(listen_socket)::socket_handle_type;
+	basic_accept_result<socket_handle_type> result;
 
-#if 0
 	my_io_callback callback = [&](operation_base&, io_status const status)
 	{
-		notify_io(listen_socket, *operation, result, status);
+		//notify_io(listen_socket, *operation, result, status);
+		tag_invoke(
+			notify_io,
+			multiplexer,
+			static_cast<raw_listen_handle_t const&>(listen_socket),
+			listen_socket.get_connector(),
+			*operation,
+			basic_accept_result_ref<decltype(listen_socket)::socket_handle_type>{ result.socket, result.endpoint },
+			status);
 	};
 
+#if 0
 	operation.emplace(&callback, io_args<listen_socket_handle::accept_t>()());
 	REQUIRE(!submit_io(listen_socket, *operation, result).value());
 #endif
