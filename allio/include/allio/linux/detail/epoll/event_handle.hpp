@@ -16,8 +16,8 @@ struct operation_impl<epoll_multiplexer, event_handle_t, event_handle_t::wait_t>
 
 	epoll_multiplexer::subscription subscription;
 
-	static vsm::result<io_result> submit(M& m, H const& h, C const& c, S& s);
-	static vsm::result<io_result> notify(M& m, H const& h, C const& c, S& s, io_status status);
+	static io_result2 submit(M& m, H const& h, C const& c, S& s);
+	static io_result2 notify(M& m, H const& h, C const& c, S& s, io_status status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 

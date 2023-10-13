@@ -152,29 +152,27 @@ TEST_CASE("TEMP")
 	using operation_type = operation_t<default_multiplexer, raw_listen_handle_t, raw_listen_handle_t::accept_t>;
 
 	std::optional<operation_type> operation;
-
-	//TODO: The result default constructs the socket handle and its multiplexer handle.
-	//      Might need to make the multiplexer handle default constructible after all.
-	using socket_handle_type = decltype(listen_socket)::socket_handle_type;
-	basic_accept_result<socket_handle_type> result;
+	std::optional<vsm::result<decltype(listen_socket)::accept_result_type>> result;
 
 	my_io_callback callback = [&](operation_base&, io_status const status)
 	{
-		//notify_io(listen_socket, *operation, result, status);
-		tag_invoke(
-			notify_io,
-			multiplexer,
-			static_cast<raw_listen_handle_t const&>(listen_socket),
-			listen_socket.get_connector(),
-			*operation,
-			basic_accept_result_ref<decltype(listen_socket)::socket_handle_type>{ result.socket, result.endpoint },
-			status);
+		auto r = notify_io(listen_socket, *operation, status);
+
+		if (r.has_value())
+		{
+			result = vsm_move(*r);
+		}
+		else if (r.is_pending())
+		{
+		}
+		else
+		{
+			result = vsm::unexpected(r.error());
+		}
 	};
 
-#if 0
-	operation.emplace(&callback, io_args<listen_socket_handle::accept_t>()());
-	REQUIRE(!submit_io(listen_socket, *operation, result).value());
-#endif
+	operation.emplace(callback, io_args<raw_listen_handle_t::accept_t>()());
+	REQUIRE(!submit_io(listen_socket, *operation));
 }
 #endif
 

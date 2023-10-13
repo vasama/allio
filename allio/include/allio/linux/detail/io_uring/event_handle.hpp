@@ -24,8 +24,8 @@ struct operation_impl<io_uring_multiplexer, event_handle_t, event_handle_t::wait
 	/// @brief Context for the poll operation.
 	io_uring_multiplexer::io_slot poll_slot;
 
-	static vsm::result<io_result> submit(M& m, H const& h, C const& c, S& s);
-	static vsm::result<io_result> notify(M& m, H const& h, C const& c, S& s, io_status status);
+	static io_result2 submit(M& m, H const& h, C const& c, S& s);
+	static io_result2 notify(M& m, H const& h, C const& c, S& s, io_status status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 

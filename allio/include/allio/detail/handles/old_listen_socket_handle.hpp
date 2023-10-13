@@ -117,7 +117,7 @@ protected:
 		}
 
 		template<typename M, typename S, typename C, typename SSH>
-		friend vsm::result<io_result> tag_invoke(
+		friend io_result2 tag_invoke(
 			submit_io_t,
 			M& m,
 			_listen_socket_handle const& h,
@@ -134,7 +134,7 @@ protected:
 		}
 
 		template<typename M, typename S, typename C, typename SSH>
-		friend vsm::result<io_result> tag_invoke(
+		friend io_result2 tag_invoke(
 			notify_io_t,
 			M& m,
 			_listen_socket_handle const& h,
@@ -164,7 +164,7 @@ protected:
 			};
 		}
 
-		static vsm::result<io_result> handle_accept_result(vsm::result<io_result> const r)
+		static io_result2 handle_accept_result(io_result2 const r)
 		{
 			if (r != std::error_code())
 			{

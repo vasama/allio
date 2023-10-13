@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/detail/io_parameters.hpp>
+#include <allio/detail/io_result.hpp>
 #include <allio/error.hpp>
 
 #include <vsm/assert.h>
@@ -110,50 +111,52 @@ struct detach_handle_t
 };
 inline constexpr detach_handle_t detach_handle = {};
 
+template<typename M>
 struct rebind_handle_t
 {
-	template<typename H, typename M, typename OutM>
-	vsm::result<void> vsm_static_operator_invoke(basic_handle<H, M>&& h, basic_handle<H, OutM>& out_h)
-		requires vsm::tag_invocable<rebind_handle_t, basic_handle<H, M>&&, basic_handle<H, OutM>&>
+	template<typename T>
+	vsm::result<T> vsm_static_operator_invoke(T&& object)
+		requires vsm::tag_invocable<rebind_handle_t, T&&>
 	{
-		return vsm::tag_invoke(rebind_handle_t(), static_cast<basic_handle<H, M>&&>(h), out_h);
+		return vsm::tag_invoke(rebind_handle_t(), vsm_forward(object));
 	}
 };
-inline constexpr rebind_handle_t rebind_handle = {};
+template<typename M>
+inline constexpr rebind_handle_t<M> rebind_handle = {};
 
 
 struct submit_io_t
 {
-	template<typename H, typename S, typename R>
-	vsm::result<io_result> vsm_static_operator_invoke(H& h, S& s, R&& r)
-		requires vsm::tag_invocable<submit_io_t, H&, S&, R&&>
+	template<typename H, typename S>
+	auto vsm_static_operator_invoke(H& h, S& s)
+		requires vsm::tag_invocable<submit_io_t, H&, S&>
 	{
-		return vsm::tag_invoke(submit_io_t(), h, s, vsm_forward(r));
+		return vsm::tag_invoke(submit_io_t(), h, s);
 	}
 
-	template<typename M, typename H, typename C, typename S, typename R>
-	vsm::result<io_result> vsm_static_operator_invoke(M& m, H& h, C& c, S& s, R&& r)
-		requires vsm::tag_invocable<submit_io_t, M&, H&, C&, S&, R&&>
+	template<typename M, typename H, typename C, typename S>
+	auto vsm_static_operator_invoke(M& m, H& h, C& c, S& s)
+		requires vsm::tag_invocable<submit_io_t, M&, H&, C&, S&>
 	{
-		return vsm::tag_invoke(submit_io_t(), m, h, c, s, vsm_forward(r));
+		return vsm::tag_invoke(submit_io_t(), m, h, c, s);
 	}
 };
 inline constexpr submit_io_t submit_io = {};
 
 struct notify_io_t
 {
-	template<typename H, typename S, typename R>
-	vsm::result<io_result> vsm_static_operator_invoke(H& h, S& s, R&& r, io_status const status)
-		requires vsm::tag_invocable<notify_io_t, H&, S&, R&&, io_status>
+	template<typename H, typename S>
+	auto vsm_static_operator_invoke(H& h, S& s, io_status const status)
+		requires vsm::tag_invocable<notify_io_t, H&, S&, io_status>
 	{
-		return vsm::tag_invoke(notify_io_t(), h, s, vsm_forward(r), status);
+		return vsm::tag_invoke(notify_io_t(), h, s, status);
 	}
 
-	template<typename M, typename H, typename C, typename S, typename R>
-	vsm::result<io_result> vsm_static_operator_invoke(M& m, H& h, C& c, S& s, R&& r, io_status const status)
-		requires vsm::tag_invocable<notify_io_t, M&, H&, C&, S&, R&&, io_status>
+	template<typename M, typename H, typename C, typename S>
+	auto vsm_static_operator_invoke(M& m, H& h, C& c, S& s, io_status const status)
+		requires vsm::tag_invocable<notify_io_t, M&, H&, C&, S&, io_status>
 	{
-		return vsm::tag_invoke(notify_io_t(), m, h, c, s, vsm_forward(r), status);
+		return vsm::tag_invoke(notify_io_t(), m, h, c, s, status);
 	}
 };
 inline constexpr notify_io_t notify_io = {};
@@ -190,9 +193,7 @@ inline constexpr poll_io_t poll_io = {};
 
 
 template<typename M, typename H>
-struct connector_impl
-{
-};
+struct connector_impl;
 
 template<typename M, typename H>
 class connector
@@ -209,9 +210,7 @@ using connector_t = connector<M, H>;
 
 
 template<typename M, typename H, typename O>
-struct operation_impl
-{
-};
+struct operation_impl;
 
 template<typename M, typename H, typename O>
 class operation
@@ -237,21 +236,22 @@ private:
 	using C = connector_t<M, H>;
 	using S = operation;
 
-	template<typename R>
-	friend vsm::result<io_result> tag_invoke(submit_io_t, M& m, H const& h, C const& c, S& s, R&& r)
-		requires requires { operation_impl<M, H, O>::submit(m, h, c, s, vsm_forward(r)); }
+	template<typename M2>
+	friend auto tag_invoke(submit_io_t, M2 const& m, vsm::any_cv_of<H> auto& h, C const& c, S& s)
+		//requires requires { operation_impl<M, H, O>::submit(m, h, c, s); }
 	{
-		return operation_impl<M, H, O>::submit(m, h, c, s, vsm_forward(r));
+		return operation_impl<M, H, O>::submit(m, h, c, s);
 	}
 
-	template<typename R>
-	friend vsm::result<io_result> tag_invoke(notify_io_t, M& m, H const& h, C const& c, S& s, R&& r, io_status const status)
-		requires requires { operation_impl<M, H, O>::notify(m, h, c, s, vsm_forward(r), status); }
+	template<typename M2>
+	friend auto tag_invoke(notify_io_t, M2 const& m, vsm::any_cv_of<H> auto& h, C const& c, S& s, io_status const status)
+		//requires requires { operation_impl<M, H, O>::notify(m, h, c, s, status); }
 	{
-		return operation_impl<M, H, O>::notify(m, h, c, s, vsm_forward(r), status);
+		return operation_impl<M, H, O>::notify(m, h, c, s, status);
 	}
 
-	friend void tag_invoke(cancel_io_t, M& m, H const& h, C const& c, S& s)
+	template<typename M2>
+	friend void tag_invoke(cancel_io_t, M2 const& m, H const& h, C const& c, S& s)
 		requires requires { operation_impl<M, H, O>::cancel(m, h, c, s); }
 	{
 		return operation_impl<M, H, O>::cancel(m, h, c, s);

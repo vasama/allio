@@ -116,7 +116,7 @@ vsm_add_library2(allio
 		#source/allio/test/handles/file_handle.cpp
 		#source/allio/test/handles/map_handle.cpp
 		#source/allio/test/handles/opaque_handle.cpp
-		source/allio/test/handles/process_handle.cpp
+		#source/allio/test/handles/process_handle.cpp
 		source/allio/test/handles/socket_handle.cpp
 )
 
@@ -167,18 +167,18 @@ vsm_configure(allio
 		source/allio/impl/posix/handles/socket_handle_base.cpp
 		source/allio/impl/posix/handles/socket_handle.cpp
 		source/allio/impl/win32/handles/event_handle.cpp
-		source/allio/impl/win32/handles/filesystem_handle.cpp
-		source/allio/impl/win32/handles/filesystem_handle.hpp
-		source/allio/impl/win32/handles/platform_handle.cpp
-		source/allio/impl/win32/handles/platform_handle.hpp
-		source/allio/impl/win32/handles/process_handle.cpp
-		source/allio/impl/win32/handles/process_handle.hpp
+		#source/allio/impl/win32/handles/filesystem_handle.cpp
+		#source/allio/impl/win32/handles/filesystem_handle.hpp
+		#source/allio/impl/win32/handles/platform_handle.cpp
+		#source/allio/impl/win32/handles/platform_handle.hpp
+		#source/allio/impl/win32/handles/process_handle.cpp
+		#source/allio/impl/win32/handles/process_handle.hpp
 
 		source/allio/impl/win32/iocp/event_handle.cpp
-		source/allio/impl/win32/iocp/generic_wait.cpp
+		#source/allio/impl/win32/iocp/generic_wait.cpp
 		source/allio/impl/win32/iocp/listen_handle.cpp
 		source/allio/impl/win32/iocp/multiplexer.cpp
-		source/allio/impl/win32/iocp/process_handle.cpp
+		#source/allio/impl/win32/iocp/process_handle.cpp
 		source/allio/impl/win32/iocp/socket_handle.cpp
 
 	TEST_SOURCES

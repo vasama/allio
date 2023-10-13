@@ -4,6 +4,8 @@
 #include <allio/detail/handles/socket_handle.hpp>
 #include <allio/detail/io_sender.hpp>
 
+#include <vsm/lazy.hpp>
+
 namespace allio::detail {
 
 template<typename SecurityProvider = default_security_provider>
@@ -33,161 +35,28 @@ struct backlog_t
 };
 inline constexpr backlog_t::tag_t backlog = {};
 
-template<typename SocketHandle>
+template<typename SecurityProvider, typename M>
 struct _accept_result
 {
-	static_assert(sizeof(SocketHandle) == 0);
-};
-
-template<typename SP>
-struct _accept_result<basic_handle<socket_handle_t<SP>, void>>
-{
-	struct type
-	{
-		socket_handle_t<SP> socket;
-		network_endpoint endpoint;
-	};
-
-	struct ref_type
-	{
-		socket_handle_t<SP>& socket;
-		network_endpoint& endpoint;
-	};
-};
-
-template<typename SP, typename M>
-struct _accept_result<basic_handle<socket_handle_t<SP>, M>>
-{
-	using multiplexer_type = typename M::multiplexer_type;
-
-	using listen_handle_t = detail::listen_handle_t<SP>;
-
 	template<typename OtherM = M>
-	using socket_handle = basic_handle<socket_handle_t<SP>, OtherM>;
+	using socket_handle = basic_handle<socket_handle_t<SecurityProvider>, OtherM>;
 
 	struct type
 	{
 		socket_handle<> socket;
 		network_endpoint endpoint;
 
-		template<typename C, typename S>
-		friend vsm::result<io_result> tag_invoke(
-			submit_io_t,
-			multiplexer_type& m,
-			listen_handle_t const& h,
-			C const& c,
-			S& s,
-			io_result_ref<type> const r)
+		template<typename OtherM>
+		friend vsm::result<socket_handle<OtherM>> tag_invoke(rebind_handle_t<OtherM>, type&& self)
 		{
-			return submit_io(
-				vsm_forward(m),
-				h,
-				c,
-				s,
-				ref_type{ r.result.socket, r.result.endpoint });
-		}
-	
-		template<typename C, typename S>
-		friend vsm::result<io_result> tag_invoke(
-			notify_io_t,
-			multiplexer_type& m,
-			listen_handle_t const& h,
-			C const& c,
-			S& s,
-			io_result_ref<type> const r,
-			io_status const status)
-		{
-			//return notify_io(
-			return tag_invoke(notify_io,
-				vsm_forward(m),
-				h,
-				c,
-				s,
-				ref_type{ r.result.socket, r.result.endpoint },
-				status);
+			vsm_try(socket, rebind_handle<OtherM>(vsm_move(self.socket)));
+			return vsm_lazy(type{ vsm_move(socket), self.endpoint });
 		}
 	};
-
-	struct ref_type
-	{
-		socket_handle<>& socket;
-		network_endpoint& endpoint;
-	
-		template<multiplexer OtherM, typename C, typename S>
-			requires vsm::not_same_as<OtherM, multiplexer_type>
-		friend vsm::result<io_result> tag_invoke(
-			submit_io_t,
-			OtherM& m,
-			listen_handle_t const& h,
-			C const& c,
-			S& s,
-			ref_type const r)
-		{
-			socket_handle<multiplexer_handle_t<OtherM>> socket;
-
-			return handle_result(
-				submit_io(
-					vsm_forward(m),
-					h,
-					c,
-					s,
-					ref_type{ socket, r.endpoint }),
-				socket,
-				r.socket);
-		}
-	
-		template<multiplexer OtherM, typename C, typename S>
-			requires vsm::not_same_as<OtherM, multiplexer_type>
-		friend vsm::result<io_result> tag_invoke(
-			notify_io_t,
-			OtherM& m,
-			listen_handle_t const& h,
-			C const& c,
-			S& s,
-			ref_type const r,
-			io_status const status)
-		{
-			socket_handle<multiplexer_handle_t<OtherM>> socket;
-
-			return handle_result(
-				//notify_io(
-				tag_invoke(notify_io,
-					vsm_forward(m),
-					h,
-					c,
-					s,
-					ref_type{ socket, r.endpoint },
-					status),
-				socket,
-				r.socket);
-		}
-	};
-
-	template<typename Tag, typename OtherM>
-	static vsm::result<io_result> handle_result(
-		vsm::result<io_result> const r,
-		socket_handle<OtherM>& inner_h,
-		socket_handle<>& outer_h)
-	{
-		if (!r || !*r || **r)
-		{
-			return r;
-		}
-
-		if (auto const r2 = rebind_handle(vsm_move(inner_h), outer_h); !r2)
-		{
-			return r2.error();
-		}
-
-		return r;
-	}
 };
 
-template<typename SocketHandle>
-using basic_accept_result = typename _accept_result<SocketHandle>::type;
-
-template<typename SocketHandle>
-using basic_accept_result_ref = typename _accept_result<SocketHandle>::ref_type;
+template<typename SecurityProvider, typename M>
+using accept_result = typename _accept_result<SecurityProvider, M>::type;
 
 template<typename SecurityProvider>
 class _listen_handle : public socket_handle_base<SecurityProvider>
@@ -197,6 +66,9 @@ class _listen_handle : public socket_handle_base<SecurityProvider>
 
 	template<typename M>
 	using socket_handle = basic_handle<_socket_handle_t, M>;
+
+	template<typename M>
+	using accept_result = detail::accept_result<SecurityProvider, M>;
 
 protected:
 	using base_type = socket_handle_base<SecurityProvider>;
@@ -218,7 +90,7 @@ public:
 		using handle_type = _listen_handle_t const;
 
 		template<typename M>
-		using result_type_template = basic_accept_result<socket_handle<M>>;
+		using result_type_template = accept_result<M>;
 
 		using required_params_type = no_parameters_t;
 		using optional_params_type = deadline_t;
@@ -234,7 +106,7 @@ protected:
 	struct interface : base_type::template interface<H, M>
 	{
 		using socket_handle_type = socket_handle<M>;
-		using accept_result_type = basic_accept_result<socket_handle_type>;
+		using accept_result_type = accept_result<M>;
 
 		[[nodiscard]] auto accept(auto&&... args) const
 		{
@@ -299,6 +171,7 @@ using basic_listen_handle = basic_handle<listen_handle_t<void>, Multiplexer>;
 template<typename Multiplexer>
 using basic_raw_listen_handle = basic_handle<raw_listen_handle_t, Multiplexer>;
 
+
 vsm::result<basic_listen_handle<void>> listen(
 	network_endpoint const& endpoint,
 	auto&&... args)
@@ -330,3 +203,11 @@ vsm::result<basic_listen_handle<multiplexer_handle_t<Multiplexer>>> listen(
 }
 
 } // namespace allio::detail
+
+#if vsm_os_win32
+#	include <allio/win32/detail/iocp/listen_handle.hpp>
+#endif
+
+#if vsm_os_linux
+#	include <allio/linux/detail/io_uring/listen_handle.hpp>
+#endif

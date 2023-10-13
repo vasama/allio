@@ -157,23 +157,22 @@ struct _basic_multiplexer_handle
 {
 	class type
 	{
-		M* m_multiplexer = nullptr;
+		M* m_multiplexer;
 
 	public:
 		using multiplexer_type = M;
-
-		type() = default;
 
 		type(M& multiplexer)
 			: m_multiplexer(&multiplexer)
 		{
 		}
 
-		explicit operator bool() const
+		operator M&() const
 		{
-			return m_multiplexer != nullptr;
+			return *m_multiplexer;
 		}
 
+#if 0
 		template<typename H, typename C>
 		friend vsm::result<void> tag_invoke(
 			attach_handle_t,
@@ -200,31 +199,29 @@ struct _basic_multiplexer_handle
 				c);
 		}
 
-		template<typename H, typename C, typename S, typename R>
-		friend vsm::result<io_result> tag_invoke(
+		template<typename H, typename C, typename S>
+		friend auto tag_invoke(
 			submit_io_t,
 			type const& m,
 			H& h,
 			C const& c,
-			S& s,
-			R&& r)
+			S& s)
 		{
-			return submit_io(
+			//return submit_io(
+			return tag_invoke(submit_io,
 				*m.m_multiplexer,
 				h,
 				c,
-				s,
-				vsm_forward(r));
+				s);
 		}
 
-		template<typename H, typename C, typename S, typename R>
-		friend vsm::result<io_result> tag_invoke(
+		template<typename H, typename C, typename S>
+		friend auto tag_invoke(
 			notify_io_t,
 			type const& m,
 			H& h,
 			C const& c,
 			S& s,
-			R&& r,
 			io_status const status)
 		{
 			//return notify_io(
@@ -233,12 +230,11 @@ struct _basic_multiplexer_handle
 				h,
 				c,
 				s,
-				vsm_forward(r),
 				status);
 		}
 
 		template<typename H, typename C, typename S>
-		friend vsm::result<io_result> tag_invoke(
+		friend void tag_invoke(
 			cancel_io_t,
 			type const& m,
 			H& h,
@@ -251,6 +247,7 @@ struct _basic_multiplexer_handle
 				c,
 				s);
 		}
+#endif
 	};
 };
 
@@ -284,6 +281,9 @@ using multiplexer_handle_t = typename decltype(_multiplexer_handle(vsm_declval(M
 
 template<typename M>
 concept multiplexer = requires { requires std::is_void_v<typename M::multiplexer_tag>; };
+
+template<typename M>
+concept multiplexer_handle = true;
 
 template<typename M, typename H>
 concept multiplexer_for = true;
@@ -474,6 +474,9 @@ class basic_handle<H, M> final
 	vsm_no_unique_address connector_type m_connector;
 
 public:
+	using multiplexer_handle_type = M;
+
+
 	basic_handle() = default;
 
 	template<std::convertible_to<M> T = M>
@@ -555,11 +558,6 @@ private:
 				return vsm::unexpected(error::handle_is_not_null);
 			}
 
-			if (!h.m_multiplexer)
-			{
-				return vsm::unexpected(error::multiplexer_is_null);
-			}
-
 			basic_handle<H, void> new_h;
 
 			vsm_try_void(H::do_blocking_io(
@@ -607,47 +605,45 @@ private:
 			args);
 	}
 
-	template<vsm::any_cv_of<basic_handle> Self, typename S, typename R>
-	friend vsm::result<io_result> tag_invoke(
+	template<vsm::any_cv_of<basic_handle> Self, typename S>
+	friend auto tag_invoke(
 		submit_io_t,
 		Self& h,
-		S& s,
-		R& r)
+		S& s)
 	{
-		return submit_io(
+		//return submit_io(
+		return tag_invoke(submit_io,
 			static_cast<M const&>(h.m_multiplexer),
 			static_cast<vsm::copy_cv_t<Self, H>&>(h),
 			static_cast<connector_type const&>(h.m_connector),
-			s,
-			r);
-	}
-
-	template<vsm::any_cv_of<basic_handle> Self, typename S, typename R>
-	friend vsm::result<io_result> tag_invoke(
-		notify_io_t,
-		Self& h,
-		S& s,
-		R& r,
-		io_status const status)
-	{
-		return notify_io(
-			static_cast<M const&>(h.m_multiplexer),
-			static_cast<vsm::copy_cv_t<Self, H>&>(h),
-			static_cast<connector_type const&>(h.m_connector),
-			s,
-			r,
-			status);
+			s);
 	}
 
 	template<vsm::any_cv_of<basic_handle> Self, typename S>
+	friend auto tag_invoke(
+		notify_io_t,
+		Self& h,
+		S& s,
+		io_status const status)
+	{
+		//return notify_io(
+		return tag_invoke(notify_io,
+			static_cast<M const&>(h.m_multiplexer),
+			static_cast<vsm::copy_cv_t<Self, H>&>(h),
+			static_cast<connector_type const&>(h.m_connector),
+			s,
+			status);
+	}
+
+	template<typename S>
 	friend void tag_invoke(
 		cancel_io_t,
-		Self& h,
+		H const& h,
 		S& s)
 	{
 		return cancel_io(
 			static_cast<M const&>(h.m_multiplexer),
-			static_cast<vsm::copy_cv_t<Self, H>&>(h),
+			static_cast<H const&>(h),
 			static_cast<connector_type const&>(h.m_connector),
 			s);
 	}
@@ -996,13 +992,13 @@ private:
 	}
 
 	template<typename S, typename R>
-	friend vsm::result<io_result> tag_invoke(submit_io_t, basic_async_handle const& h, S& s, R const r)
+	friend io_result2 tag_invoke(submit_io_t, basic_async_handle const& h, S& s, R const r)
 	{
 		return submit_io(*h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s, r);
 	}
 
 	template<typename S, typename R>
-	friend vsm::result<io_result> tag_invoke(notify_io_t, basic_async_handle const& h, S& s, R const r, io_status const status)
+	friend io_result2 tag_invoke(notify_io_t, basic_async_handle const& h, S& s, R const r, io_status const status)
 	{
 		//TODO: DEBUG
 		return tag_invoke(notify_io, *h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s, r, status);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vsm/assert.h>
 #include <vsm/concepts.hpp>
 #include <vsm/standard.hpp>
 #include <vsm/result.hpp>
@@ -10,11 +11,12 @@ namespace allio::detail {
 
 namespace io_result_state
 {
-	inline constexpr uint8_t completed              = 0b000;
-	inline constexpr uint8_t completed_partial      = 0b010;
-	inline constexpr uint8_t pending                = 0b011;
-	inline constexpr uint8_t failure                = 0b100;
-	inline constexpr uint8_t multiplexer_busy       = 0b101;
+	inline constexpr uint8_t completed              = 0b0000;
+	inline constexpr uint8_t completed_partial      = 0b0010;
+	inline constexpr uint8_t pending                = 0b0011;
+	inline constexpr uint8_t cancelled              = 0b0100;
+	inline constexpr uint8_t failure                = 0b1000;
+	inline constexpr uint8_t multiplexer_busy       = 0b1001;
 
 	inline constexpr uint8_t pending_flag           = 0b010;
 }
@@ -30,7 +32,7 @@ inline constexpr multiplexer_busy_t multiplexer_busy = {};
 
 union io_result_error
 {
-	unsigned char dummy;
+	struct {} dummy;
 	std::error_code error;
 };
 
@@ -48,6 +50,10 @@ protected:
 	uint8_t m_state;
 
 public:
+	using value_type = T;
+	using error_type = E;
+
+
 	io_result2(io_pending_t)
 		: m_error{ .dummy = {} }
 		, m_state(io_result_state::pending)
@@ -87,36 +93,18 @@ public:
 	}
 
 	template<typename U>
-		requires std::is_constructible_v<E, U>
-	explicit(!std::is_convertible_v<U, E>)
-	io_result2(vsm::unexpected<E>&& e)
-		: m_error{ .error = vsm_move(e).error() }
-		, m_state(io_result_state::failure)
-	{
-	}
-
-	template<typename U>
 		requires std::is_constructible_v<E, U const&>
 	explicit(!std::is_convertible_v<U const&, E>)
-	io_result2(vsm::unexpected<E> const& e)
+	io_result2(vsm::unexpected<U> const& e)
 		: m_error{ .error = e.error() }
 		, m_state(io_result_state::failure)
 	{
 	}
 
 	template<typename U>
-		requires std::is_constructible_v<E, U>
-	explicit(!std::is_convertible_v<U, E>)
-	io_result2(multiplexer_busy_t, vsm::unexpected<E>&& e)
-		: m_error{ .error = vsm_move(e).error() }
-		, m_state(io_result_state::multiplexer_busy)
-	{
-	}
-
-	template<typename U>
 		requires std::is_constructible_v<E, U const&>
 	explicit(!std::is_convertible_v<U const&, E>)
-	io_result2(multiplexer_busy_t, vsm::unexpected<E> const& e)
+	io_result2(multiplexer_busy_t, vsm::unexpected<U> const& e)
 		: m_error{ .error = e.error() }
 		, m_state(io_result_state::multiplexer_busy)
 	{
@@ -136,7 +124,8 @@ public:
 		requires std::is_constructible_v<T, U>
 	explicit(!std::is_convertible_v<U, T>)
 	io_result2(io_result2<U>&& other)
-		: m_state(other.m_state)
+		: m_error{ .dummy = {} }
+		, m_state(other.m_state)
 	{
 		if (has_value())
 		{
@@ -146,7 +135,8 @@ public:
 
 	io_result2(io_result2 const& other)
 		requires (std::is_copy_constructible_v<T> && !std::is_trivially_copyable_v<T>)
-		: m_state(other.m_state)
+		: m_error{ .dummy = {} }
+		, m_state(other.m_state)
 	{
 		if (has_value())
 		{
@@ -158,7 +148,8 @@ public:
 		requires std::is_constructible_v<T, U const&>
 	explicit(!std::is_convertible_v<U const&, T>)
 	io_result2(io_result2 const& other)
-		: m_state(other.m_state)
+		: m_error{ .dummy = {} }
+		, m_state(other.m_state)
 	{
 		if (has_value())
 		{
@@ -285,7 +276,12 @@ public:
 		return m_state & io_result_state::pending_flag;
 	}
 
-	[[nodiscard]] bool is_busy() const
+	[[nodiscard]] bool is_cancelled() const
+	{
+		return m_state == io_result_state::cancelled;
+	}
+
+	[[nodiscard]] bool is_busy_error() const
 	{
 		return m_state == io_result_state::multiplexer_busy;
 	}
@@ -293,49 +289,49 @@ public:
 	[[nodiscard]] E const& error() const
 	{
 		vsm_assert(m_state >= io_result_state::failure);
-		return m_error;
+		return m_error.error;
 	}
 
 	[[nodiscard]] explicit operator bool() const
 	{
-		return m_state <= io_result_state::pending;
+		return m_state <= io_result_state::completed_partial;
 	}
 
 
 	[[nodiscard]] T& operator*() &
 	{
 		vsm_assert(m_state <= io_result_state::completed_partial);
-		return static_cast<R&>(*this).m_value;
+		return static_cast<T&>(m_value);
 	}
 
 	[[nodiscard]] T const& operator*() const&
 	{
 		vsm_assert(m_state <= io_result_state::completed_partial);
-		return static_cast<R const&>(*this).m_value;
+		return static_cast<T const&>(m_value);
 	}
 
 	[[nodiscard]] T&& operator*() &&
 	{
 		vsm_assert(m_state <= io_result_state::completed_partial);
-		return static_cast<R&&>(*this).m_value;
+		return static_cast<T&&>(m_value);
 	}
 
 	[[nodiscard]] T const&& operator*() const&&
 	{
 		vsm_assert(m_state <= io_result_state::completed_partial);
-		return static_cast<R const&&>(*this).m_value;
+		return static_cast<T const&&>(m_value);
 	}
 
 	[[nodiscard]] T* operator->()
 	{
 		vsm_assert(m_state <= io_result_state::completed_partial);
-		return &static_cast<R&>(*this).m_value;
+		return &static_cast<T&>(m_value);
 	}
 
 	[[nodiscard]] T const* operator->() const
 	{
 		vsm_assert(m_state <= io_result_state::completed_partial);
-		return &static_cast<R const&>(*this).m_value;
+		return &static_cast<T const&>(m_value);
 	}
 };
 
@@ -349,6 +345,10 @@ protected:
 	uint8_t m_state;
 
 public:
+	using value_type = void;
+	using error_type = E;
+
+
 	io_result2(io_pending_t)
 		: m_error{ .dummy = {} }
 		, m_state(io_result_state::pending)
@@ -356,14 +356,32 @@ public:
 	}
 
 	io_result2()
-		: m_value{}
+		: m_error{ .dummy = {} }
 		, m_state(io_result_state::completed)
 	{
 	}
 
 	io_result2(io_partial_t)
-		: m_value{}
+		: m_error{ .dummy = {} }
 		, m_state(io_result_state::completed_partial)
+	{
+	}
+
+	template<typename U>
+		requires std::is_constructible_v<E, U const&>
+	explicit(!std::is_convertible_v<U const&, E>)
+		io_result2(vsm::unexpected<U> const& e)
+		: m_error{ .error = e.error() }
+		, m_state(io_result_state::failure)
+	{
+	}
+
+	template<typename U>
+		requires std::is_constructible_v<E, U const&>
+	explicit(!std::is_convertible_v<U const&, E>)
+		io_result2(multiplexer_busy_t, vsm::unexpected<U> const& e)
+		: m_error{ .error = e.error() }
+		, m_state(io_result_state::multiplexer_busy)
 	{
 	}
 
@@ -383,7 +401,12 @@ public:
 		return m_state & io_result_state::pending_flag;
 	}
 
-	[[nodiscard]] bool is_busy() const
+	[[nodiscard]] bool is_cancelled() const
+	{
+		return m_state == io_result_state::cancelled;
+	}
+
+	[[nodiscard]] bool is_busy_error() const
 	{
 		return m_state == io_result_state::multiplexer_busy;
 	}
@@ -391,12 +414,12 @@ public:
 	[[nodiscard]] E const& error() const
 	{
 		vsm_assert(m_state >= io_result_state::failure);
-		return m_error;
+		return m_error.error;
 	}
 
 	[[nodiscard]] explicit operator bool() const
 	{
-		return m_state <= io_result_state::pending;
+		return m_state <= io_result_state::completed_partial;
 	}
 
 

@@ -49,7 +49,6 @@ class io_sender
 	{
 		vsm_no_unique_address handle_type* m_handle;
 		vsm_no_unique_address operation_type m_operation;
-		vsm_no_unique_address io_result_storage<result_type> m_result;
 		vsm_no_unique_address Receiver m_receiver;
 
 	public:
@@ -64,47 +63,43 @@ class io_sender
 	private:
 		friend void tag_invoke(ex::start_t, operation& self) noexcept
 		{
-			self.handle_result(submit_io(*self.m_handle, self.m_operation, self.m_result));
+			//self.handle_result(submit_io(*self.m_handle, self.m_operation));
+			self.handle_result(tag_invoke(submit_io, *self.m_handle, self.m_operation));
 		}
 
 		void notify(operation_base& operation, io_status const status) noexcept override
 		{
 			vsm_assert(&operation == &m_operation);
-			handle_result(notify_io(*m_handle, m_operation, m_result, status));
+			handle_result(tag_invoke(notify_io, *m_handle, m_operation, status));
+			//handle_result(notify_io(*m_handle, m_operation, status));
 		}
 
-		void handle_result(vsm::result<io_result> const& r)
+		void handle_result(io_result2<result_type>&& r)
 		{
-			if (r)
+			if (r.has_value())
 			{
-				if (io_result const& v = *r)
+				// This is not a stream sender.
+				vsm_assert(!r.is_pending());
+
+				if constexpr (std::is_void_v<result_type>)
 				{
-					if (std::error_code const& e = *v)
-					{
-						if (e == std::error_code(error::async_operation_cancelled))
-						{
-							ex::set_stopped(vsm_move(m_receiver));
-						}
-						else
-						{
-							ex::set_error(vsm_move(m_receiver), r.error());
-						}
-					}
-					else
-					{
-						if constexpr (std::is_void_v<result_type>)
-						{
-							ex::set_value(vsm_move(m_receiver));
-						}
-						else
-						{
-							ex::set_value(vsm_move(m_receiver), vsm_move(m_result.result));
-						}
-					}
+					ex::set_value(vsm_move(m_receiver));
 				}
+				else
+				{
+					ex::set_value(vsm_move(m_receiver), vsm_move(*r));
+				}
+			}
+			else if (r.is_pending())
+			{
+			}
+			else if (r.is_cancelled())
+			{
+				ex::set_stopped(vsm_move(m_receiver));
 			}
 			else
 			{
+				vsm_assert(r.has_error());
 				ex::set_error(vsm_move(m_receiver), r.error());
 			}
 		}

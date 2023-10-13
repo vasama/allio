@@ -171,3 +171,11 @@ auto connect(
 }
 
 } // namespace allio::detail
+
+#if vsm_os_win32
+#	include <allio/win32/detail/iocp/socket_handle.hpp>
+#endif
+
+#if vsm_os_linux
+#	include <allio/linux/detail/io_uring/socket_handle.hpp>
+#endif

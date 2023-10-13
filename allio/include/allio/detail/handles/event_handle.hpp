@@ -74,6 +74,8 @@ public:
 
 	struct create_t
 	{
+		static constexpr bool producer = true;
+	
 		using handle_type = event_handle_t;
 		using result_type = void;
 

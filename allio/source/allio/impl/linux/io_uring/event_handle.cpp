@@ -24,7 +24,7 @@ using wait_s = operation_t<M, H, wait_t>;
 
 static eventfd_t dummy_event_value;
 
-static vsm::result<io_result> _submit(M& m, H const& h, C const& c, wait_s& s)
+static io_result2 _submit(M& m, H const& h, C const& c, wait_s& s)
 {
 	deadline relative_deadline;
 
@@ -87,7 +87,7 @@ static vsm::result<io_result> _submit(M& m, H const& h, C const& c, wait_s& s)
 	return std::nullopt;
 }
 
-vsm::result<io_result> operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s)
+io_result2 operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s)
 {
 	if (!h)
 	{
@@ -107,7 +107,7 @@ vsm::result<io_result> operation_impl<M, H, wait_t>::submit(M& m, H const& h, C 
 	return _submit(m, h, c, s);
 }
 
-vsm::result<io_result> operation_impl<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& s, io_status const status)
+io_result2 operation_impl<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& s, io_status const status)
 {
 	auto const& cqe = M::unwrap_io_status(status);
 

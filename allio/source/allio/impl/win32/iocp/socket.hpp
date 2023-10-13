@@ -24,8 +24,7 @@ inline void cancel_socket_io(SOCKET const socket, OVERLAPPED& overlapped)
 vsm::result<bool> submit_socket_io(
 	detail::iocp_multiplexer const& m,
 	detail::platform_handle const& h,
-	auto& function,
-	auto&&... args)
+	auto&& callable)
 {
 	// Check for synchronous completion support before submitting the operation.
 	// After the operation is submitted, it is no longer safe to access the handle.
@@ -33,7 +32,7 @@ vsm::result<bool> submit_socket_io(
 
 	// If using a multithreaded completion port, after this call
 	// another thread will race to complete this operation.
-	DWORD const error = function(vsm_forward(args)...);
+	DWORD const error = vsm_forward(callable)();
 
 	if (error == ERROR_IO_PENDING)
 	{

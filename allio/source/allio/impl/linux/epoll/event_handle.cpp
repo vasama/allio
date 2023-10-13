@@ -13,11 +13,11 @@ using C = connector_t<M, H>;
 using wait_t = event_handle_t::wait_t;
 using wait_s = operation_t<M, H, wait_t>;
 
-vsm::result<io_result> operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s, wait_r const r)
+io_result2 operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s, wait_r const r)
 {
 	using flags_t = epoll_multiplexer::subscription_flags;
 
-	return helper([&]() -> vsm::result<io_result>
+	return helper([&]() -> io_result2
 	{
 		flags_t flags = flags_t::read;
 
@@ -42,9 +42,9 @@ vsm::result<io_result> operation_impl<M, H, wait_t>::submit(M& m, H const& h, C 
 	});
 }
 
-vsm::result<io_result> operation_impl<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& s, wait_r const r, io_status const status)
+io_result2 operation_impl<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& s, wait_r const r, io_status const status)
 {
-	return helper([&]() -> vsm::result<io_result>
+	return helper([&]() -> io_result2
 	{
 		epoll_multiplexer::subscription_guard guard(m, s.subscription);
 
