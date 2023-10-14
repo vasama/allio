@@ -5,6 +5,32 @@
 
 namespace allio::detail {
 
+struct platform_handle_t : handle_t
+{
+	using base_type = handle_t;
+
+	struct native_type : base_type::native_type
+	{
+		native_platform_handle platform_handle;
+	};
+
+	static void zero_native_handle(native_type& h)
+	{
+		base_type::zero_native_handle(h);
+		h.platform_handle = native_platform_handle::null;
+	}
+
+	template<typename H>
+	struct abstract_interface
+	{
+		[[nodiscard]] native_platform_handle get_platform_handle() const
+		{
+			return static_cast<H const&>(*this).native().platform_handle;
+		}
+	};
+};
+
+#if 0
 class platform_handle : public handle
 {
 protected:
@@ -91,5 +117,6 @@ protected:
 		vsm::result<H> duplicate(P const& args = {}) const;
 	};
 };
+#endif
 
 } // namespace allio::detail

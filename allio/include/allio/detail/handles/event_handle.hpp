@@ -23,32 +23,88 @@ inline constexpr event_reset_mode auto_reset_event = event_reset_mode::auto_rese
 
 struct signal_event_t
 {
-	struct parameter_t
+	bool signal;
+
+	struct tag_t
 	{
-		bool signal;
+		struct argument_t
+		{
+			bool value;
+
+			friend void tag_invoke(set_argument_t, signal_event_t& args, argument_t const& value)
+			{
+				args.signal = value.value;
+			}
+		};
+
+		argument_t vsm_static_operator_invoke(bool const signal)
+		{
+			return { signal };
+		}
+
+		friend void tag_invoke(set_argument_t, signal_event_t& args, tag_t)
+		{
+			args.signal = true;
+		}
+	};
+};
+inline constexpr signal_event_t signal_event = {};
+
+struct event_handle_t2 : platform_handle_t
+{
+	using base_type = platform_handle_t;
+
+	struct create_t
+	{
+		static constexpr bool producer = true;
+
+		using handle_type = event_handle_t2;
+		using result_type = void;
+
+		struct required_params_type
+		{
+			event_reset_mode reset_mode;
+		};
+
+		using optional_params_type = signal_event_t;
 	};
 
-	struct argument_t
+	struct wait_t
 	{
-		bool signal;
+		using handle_type = event_handle_t const;
+		using result_type = void;
+		using required_params_type = no_parameters_t;
+		using optional_params_type = deadline_t;
+	};
 
-		friend void tag_invoke(set_argument_t, parameter_t& args, argument_t const& value)
+	using asynchronous_operations = type_list_cat<
+		base_type::asynchronous_operations,
+		type_list<wait_t>
+	>;
+
+	template<typename H>
+	struct abstract_interface
+	{
+		[[nodiscard]] vsm::result<void> signal() const
 		{
-			args.signal = value.signal;
+			return _signal(static_cast<H const&>(*this).native());
+		}
+
+		[[nodiscard]] vsm::result<void> reset() const
+		{
+			return _reset(static_cast<H const&>(*this).native());
 		}
 	};
 
-	argument_t vsm_static_operator_invoke(bool const signal)
+	template<typename H, typename M>
+	struct concrete_interface : base_type::concrete_interface<H, M>
 	{
-		return { signal };
-	}
+		[[nodiscard]] auto wait(auto&&... args) const
+		{
 
-	friend void tag_invoke(set_argument_t, parameter_t& args, signal_event_t)
-	{
-		args.signal = true;
-	}
+		}
+	};
 };
-inline constexpr signal_event_t signal_event = {};
 
 class event_handle_t : public platform_handle
 {
