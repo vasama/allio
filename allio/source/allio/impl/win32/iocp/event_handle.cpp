@@ -11,15 +11,14 @@ using namespace allio::win32;
 
 using M = iocp_multiplexer;
 using H = event_handle_t;
+using N = H::native_type;
 using C = connector_t<M, H>;
 
 using wait_t = event_handle_t::wait_t;
 using wait_s = operation_t<M, H, wait_t>;
 
-io_result2<void> operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s)
+io_result2<void> operation_impl<M, H, wait_t>::submit(M& m, N const& h, C const& c, wait_s& s)
 {
-	vsm_assert(h);
-
 	// Acquire wait packet.
 	vsm_try_assign(s.wait_packet, m.acquire_wait_packet());
 
@@ -37,7 +36,7 @@ io_result2<void> operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const&
 	vsm_try(already_signaled, m.submit_wait(
 		s.wait_packet.get(),
 		s.wait_slot,
-		h.get_platform_handle()));
+		h.platform_handle));
 
 	if (already_signaled)
 	{
@@ -48,7 +47,7 @@ io_result2<void> operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const&
 	return io_pending;
 }
 
-io_result2<void> operation_impl<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& s, io_status const status)
+io_result2<void> operation_impl<M, H, wait_t>::notify(M& m, N const& h, C const& c, wait_s& s, io_status const status)
 {
 	auto const wait_status = M::unwrap_io_status(status);
 	vsm_assert(&wait_status.slot == &s.wait_slot);
@@ -63,7 +62,7 @@ io_result2<void> operation_impl<M, H, wait_t>::notify(M& m, H const& h, C const&
 	return {};
 }
 
-void operation_impl<M, H, wait_t>::cancel(M& m, H const& h, C const& c, S& s)
+void operation_impl<M, H, wait_t>::cancel(M& m, N const& h, C const& c, S& s)
 {
 	(void)m.cancel_wait(s.wait_packet.get());
 }

@@ -8,10 +8,7 @@
 
 namespace allio::detail {
 
-template<typename SecurityProvider = default_security_provider>
-class listen_handle_t;
-
-struct backlog_t
+struct listen_backlog_t
 {
 	std::optional<uint32_t> backlog;
 
@@ -21,7 +18,7 @@ struct backlog_t
 		{
 			uint32_t value;
 
-			friend void tag_invoke(set_argument_t, backlog_t& args, argument_t const& value)
+			friend void tag_invoke(set_argument_t, listen_backlog_t& args, argument_t const& value)
 			{
 				args.backlog = value.value;
 			}
@@ -33,7 +30,110 @@ struct backlog_t
 		}
 	};
 };
-inline constexpr backlog_t::tag_t backlog = {};
+inline constexpr listen_backlog_t::tag_t backlog = {};
+
+template<typename SocketHandle>
+struct accept_result
+{
+	SocketHandle socket;
+	network_endpoint endpoint;
+};
+
+
+struct listen_handle_base;
+
+template<std::derived_from<listen_handle_base> Socket>
+struct basic_listen_handle_t;
+
+template<typename Socket>
+auto _accept_result(blocking_handle<basic_listen_handle_t<Socket>> const&)
+	-> blocking_handle<basic_socket_handle_t<Socket>>;
+
+template<typename Socket, typename MultiplexerHandle>
+auto _accept_result(async_handle<basic_listen_handle_t<Socket>, MultiplexerHandle> const&)
+	-> async_handle<basic_socket_handle_t<Socket>, MultiplexerHandle>;
+
+struct listen_handle_base
+{
+	struct listen_t
+	{
+		using handle_type = listen_handle_base;
+		using result_type = void;
+
+		struct required_params_type
+		{
+			network_endpoint endpoint;
+		};
+
+		using optional_params_type = listen_backlog_t;
+	};
+
+	struct accept_t
+	{
+		using handle_type = listen_handle_base const;
+
+		template<typename Handle>
+		using result_type_template = decltype(_accept_result(std::declval<Handle const&>()));
+
+		using required_params_type = no_parameters_t;
+		using optional_params_type = deadline_t;
+	};
+};
+
+template<std::derived_from<listen_handle_base> Socket>
+struct basic_listen_handle_t : Socket
+{
+
+};
+
+template<typename SocketProvider>
+struct basic_listen_handle_t : SocketProvider::handle_base_type
+{
+	using base_type = typename SocketProvider::handle_base_type;
+
+	using native_type = socket_native_type<SocketProvider>;
+
+
+	struct listen_t
+	{
+		using handle_type = basic_listen_handle_t;
+		using result_type = void;
+
+		struct required_params_type
+		{
+			network_endpoint endpoint;
+		};
+
+		using optional_params_type = backlog_t;
+	};
+
+	struct accept_t
+	{
+		using handle_type = basic_listen_handle_t const;
+
+		template<typename MultiplexerHandle>
+		using result_type_template = accept_result<SocketProvider, MultiplexerHandle>;
+
+		using required_params_type = no_parameters_t;
+		using optional_params_type = deadline_t;
+	};
+
+
+	template<typename H>
+	struct concrete_interface : base_type::template concrete_interface<H>
+	{
+		[[nodiscard]] auto accept(auto&&... args) const
+		{
+			return generic_io(
+				static_cast<H const&>(*this),
+				io_args<accept_t>()(vsm_forward(args)...));
+		}
+	};
+};
+
+#if 0
+template<typename SecurityProvider = default_security_provider>
+class listen_handle_t;
 
 template<typename SecurityProvider, typename M>
 struct _accept_result
@@ -201,6 +301,7 @@ vsm::result<basic_listen_handle<multiplexer_handle_t<Multiplexer>>> listen(
 		io_args<typename h_type::listen_t>(endpoint)(vsm_forward(args)...)));
 	return h;
 }
+#endif
 
 } // namespace allio::detail
 

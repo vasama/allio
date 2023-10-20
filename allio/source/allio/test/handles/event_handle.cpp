@@ -29,7 +29,7 @@ static vsm::result<bool> check_timeout(vsm::result<void> const r)
 	return vsm::unexpected(r.error());
 }
 
-static vsm::result<bool> wait(event_handle_t const& event, deadline const deadline = deadline::instant())
+static vsm::result<bool> wait(abstract_event_handle const& event, deadline const deadline = deadline::instant())
 {
 	return check_timeout(event.blocking_wait(deadline));
 }
@@ -170,7 +170,7 @@ TEST_CASE("auto reset event_handle signals are only observed by one wait", "[eve
 
 
 template<typename Multiplexer>
-static auto wait_detached(exec::async_scope& scope, event_handle<Multiplexer> const& event)
+static auto wait_detached(exec::async_scope& scope, async_event_handle<Multiplexer> const& event)
 {
 	class shared_bool
 	{

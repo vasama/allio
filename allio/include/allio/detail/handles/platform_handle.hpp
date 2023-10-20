@@ -9,6 +9,8 @@ struct platform_handle_t : handle_t
 {
 	using base_type = handle_t;
 
+	struct impl_type;
+
 	struct native_type : base_type::native_type
 	{
 		native_platform_handle platform_handle;
@@ -21,13 +23,15 @@ struct platform_handle_t : handle_t
 	}
 
 	template<typename H>
-	struct abstract_interface
+	struct abstract_interface : base_type::abstract_interface<H>
 	{
-		[[nodiscard]] native_platform_handle get_platform_handle() const
+		[[nodiscard]] native_platform_handle platform_handle() const
 		{
 			return static_cast<H const&>(*this).native().platform_handle;
 		}
 	};
+
+	static vsm::result<void> blocking_io(native_type& h, io_parameters_t<close_t> const& args);
 };
 
 #if 0

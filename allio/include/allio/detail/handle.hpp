@@ -20,10 +20,8 @@
 
 namespace allio::detail {
 
-struct handle_base
+struct handle_base_t
 {
-	using asynchronous_operations = type_list<>;
-
 	struct flags : handle_flags
 	{
 		flags() = delete;
@@ -42,8 +40,16 @@ struct handle_base
 	};
 };
 
-struct handle_t
+struct handle_t : handle_base_t
 {
+	using base_type = handle_base_t;
+
+	allio_handle_flags
+	(
+		not_null,
+		);
+
+
 	struct native_type
 	{
 		handle_flags flags;
@@ -51,7 +57,7 @@ struct handle_t
 
 	static bool test_native_handle(native_type const& h)
 	{
-		return flags[not_null];
+		return h.flags[flags::not_null];
 	}
 
 	static void zero_native_handle(native_type& h)
@@ -59,112 +65,26 @@ struct handle_t
 		h.flags = {};
 	}
 
-	using asynchronous_operations = type_list<>;
-};
 
-class handle : public handle_base
-{
-protected:
-	using base_type = handle_base;
-
-private:
-	vsm::linear<handle_flags> m_flags;
-
-public:
-	allio_handle_flags
-	(
-		not_null,
-		);
-
-
-	struct native_handle_type
+	struct close_t
 	{
-		handle_flags flags;
+		using handle_type = handle_t const;
+		using result_type = void;
+
+		using required_params_type = no_parameters_t;
+		using optional_params_type = no_parameters_t;
 	};
 
-	[[nodiscard]] native_handle_type get_native_handle() const
+	using asynchronous_operations = type_list<>;
+
+
+	template<typename H>
+	struct abstract_interface
 	{
-		vsm_assert(*this); //PRECONDITION
-		return
-		{
-			m_flags.value,
-		};
-	}
+	};
 
-
-	[[nodiscard]] handle_flags get_flags() const
-	{
-		vsm_assert(*this); //PRECONDITION
-		return m_flags.value;
-	}
-
-	[[nodiscard]] explicit operator bool() const
-	{
-		return m_flags.value[flags::not_null];
-	}
-
-
-	struct close_t;
-
-protected:
-	struct private_t {};
-
-
-	allio_detail_default_lifetime(handle);
-
-	explicit handle(native_handle_type const& native)
-		: m_flags(native.flags)
-	{
-	}
-
-
-#if 0
-	void set_flags(handle_flags const new_flags)&
-	{
-		vsm_assert(*this); //PRECONDITION
-		vsm_assert(new_flags[flags::not_null]); //PRECONDITION
-		m_flags.value = new_flags;
-	}
-#endif
-
-
-	[[nodiscard]] static bool check_native_handle(native_handle_type const& native)
-	{
-		return native.flags[flags::not_null];
-	}
-
-	void set_native_handle(native_handle_type const& native)&
-	{
-		m_flags.value = native.flags;
-	}
-
-	void close()
-	{
-		m_flags = handle_flags();
-	}
-
-
-	template<std::derived_from<handle> H>
-	static vsm::result<void> initialize(H& h, auto&& initializer)
-	{
-		return h._initialize(vsm_forward(initializer));
-	}
-
-	template<typename H, typename M, typename O>
-	static auto invoke(basic_handle<H, M>& h, io_parameters_t<O> const& args)
-	{
-		return h._invoke(args);
-	}
-
-	template<typename H, typename M, typename O>
-	static auto invoke(basic_handle<H, M> const& h, io_parameters_t<O> const& args)
-	{
-		return h._invoke(args);
-	}
-
-
-	template<typename H, typename M>
-	struct interface
+	template<typename H>
+	struct concrete_interface
 	{
 	};
 };
@@ -310,6 +230,12 @@ concept multiplexer_handle_for = true;
 
 
 template<typename Handle>
+class blocking_handle;
+
+template<typename Handle, multiplexer_handle_for<Handle> MultiplexerHandle>
+class async_handle;
+
+template<typename Handle>
 class abstract_handle
 	: public Handle::template abstract_interface<abstract_handle<Handle>>
 {
@@ -333,28 +259,46 @@ public:
 
 protected:
 	allio_detail_default_lifetime(abstract_handle);
+
+	[[nodiscard]] native_type& _native()
+	{
+		return m_native;
+	}
+
+	[[nodiscard]] native_type const& _native() const
+	{
+		return m_native;
+	}
+
+	template<typename H>
+	friend class blocking_handle;
+
+	template<typename H, multiplexer_handle_for<H> M>
+	friend class async_handle;
 };
 
 template<typename Handle>
-class concrete_handle
+class blocking_handle
 	: public abstract_handle<Handle>
-	, public Handle::template concrete_interface<concrete_handle<Handle>>
+	, public Handle::template concrete_interface<blocking_handle<Handle>>
 {
 	using abstract_handle_type = abstract_handle<Handle>;
 
 public:
-	concrete_handle()
+	using handle_tag_type = Handle;
+
+	blocking_handle()
 		: abstract_handle_type{}
 	{
 	}
 
-	concrete_handle(concrete_handle&& other)
+	blocking_handle(blocking_handle&& other)
 		: abstract_handle_type(static_cast<abstract_handle_type&&>(other))
 	{
 		Handle::zero_native_handle(other.m_native);
 	}
 
-	concrete_handle& operator=(concrete_handle&& other) &
+	blocking_handle& operator=(blocking_handle&& other)&
 	{
 		if (*this)
 		{
@@ -367,7 +311,7 @@ public:
 		return *this;
 	}
 
-	~concrete_handle()
+	~blocking_handle()
 	{
 		if (*this)
 		{
@@ -390,7 +334,7 @@ public:
 		return r;
 	}
 
-	[[nodiscard]] vsm::result<void> set_native_handle(typename abstract_handle_type::native_type&& handle) &
+	[[nodiscard]] vsm::result<void> set_native_handle(typename abstract_handle_type::native_type&& handle)&
 	{
 		if (*this)
 		{
@@ -408,6 +352,12 @@ public:
 	}
 
 
+	void close()
+	{
+
+	}
+
+
 	template<typename M>
 	[[nodiscard]] vsm::result<async_handle<Handle, multiplexer_handle_t<M>>> with_multiplexer(M&& multiplexer_handle)
 	{
@@ -422,7 +372,32 @@ public:
 
 		return r;
 	}
+
+private:
+	template<typename O>
+	friend vsm::result<io_result_t<O>> tag_invoke(
+		blocking_io_t,
+		handle_cv<O, blocking_handle>& h,
+		io_parameters_t<O> const& args)
+	{
+		return Handle::blocking_io(
+			h.abstract_handle_type::m_native,
+			args);
+	}
 };
+
+template<typename H, typename O>
+vsm::result<io_result_t<O>> generic_io(blocking_handle<H>& h, io_parameters_t<O> const& args)
+{
+	return blocking_io(h, args);
+}
+
+template<typename H, typename O>
+vsm::result<io_result_t<O>> generic_io(blocking_handle<H> const& h, io_parameters_t<O> const& args)
+{
+	return blocking_io(h, args);
+}
+
 
 template<typename Handle, multiplexer_handle_for<Handle> MultiplexerHandle>
 class async_handle
@@ -430,11 +405,13 @@ class async_handle
 	, public Handle::template concrete_interface<async_handle<Handle, MultiplexerHandle>>
 {
 	using abstract_handle_type = abstract_handle<Handle>;
-	using concrete_handle_type = concrete_handle<Handle>;
+	using concrete_handle_type = blocking_handle<Handle>;
 
 	using multiplexer_type = typename MultiplexerHandle::multiplexer_type;
 
 public:
+	using handle_tag_type = Handle;
+
 	using multiplexer_handle_type = MultiplexerHandle;
 	using connector_type = connector_t<multiplexer_type, Handle>;
 	static_assert(std::is_default_constructible_v<connector_type>);
@@ -500,24 +477,104 @@ public:
 		return m_connector;
 	}
 
+
+	void close()
+	{
+		//TODO: Handle detach
+		vsm_verify(Handle::blocking_io(
+			abstract_handle_type::m_native,
+			io_parameters_t<handle_t::close_t>{}));
+	}
+
 private:
-	vsm::result<void> _set_handle(abstract_handle_type&& handle)
+	vsm::result<void> _set_handle(abstract_handle_type&& h)
 	{
 		vsm_assert(!*this);
 
+		auto& h_native = h._native();
+
 		vsm_try_void(attach_handle(
-			vsm_as_const(m_multiplexer),
-			vsm_as_const(handle.m_native),
+			vsm_as_const(m_multiplexer_handle),
+			vsm_as_const(h_native),
 			m_connector));
 
-		abstract_handle_type::m_native = vsm_move(handle.m_native);
-		Handle::zero_native(handle.m_native);
+		abstract_handle_type::m_native = vsm_move(h_native);
+		Handle::zero_native_handle(h_native);
 
 		return {};
 	}
 
-	friend concrete_handle<Handle>;
+
+	template<typename O>
+		requires std::is_const_v<typename O::handle_type>
+	friend vsm::result<io_result_t<O>> tag_invoke(
+		blocking_io_t,
+		async_handle const& h,
+		io_parameters_t<O> const& args)
+	{
+		return Handle::blocking_io(
+			h._native(),
+			args);
+	}
+
+	template<typename O>
+	friend auto tag_invoke(
+		submit_io_t,
+		handle_cv<O, async_handle>& h,
+		operation_t<multiplexer_type, Handle, O>& s)
+	{
+		return submit_io(
+			vsm_as_const(h.m_multiplexer_handle),
+			h._native(),
+			h.m_connector,
+			s);
+	}
+
+	template<typename O>
+	friend io_result2<io_result_t<O, MultiplexerHandle>> tag_invoke(
+		notify_io_t,
+		handle_cv<O, async_handle>& h,
+		operation_t<multiplexer_type, Handle, O>& s,
+		io_status const status)
+	{
+		//return notify_io(
+		return tag_invoke(notify_io,
+			vsm_as_const(h.m_multiplexer_handle),
+			h._native(),
+			h.m_connector,
+			s,
+			status);
+	}
+
+	template<typename O>
+	friend io_result2<io_result_t<O, MultiplexerHandle>> tag_invoke(
+		cancel_io_t,
+		async_handle const& h,
+		operation_t<multiplexer_type, Handle, O>& s)
+	{
+		return cancel_io(
+			h.m_multiplexer_handle,
+			h._native(),
+			h.m_connector,
+			s);
+	}
+
+
+	friend blocking_handle<Handle>;
 };
+
+template<typename H, typename M, typename O>
+io_sender<async_handle<H, M>, O> generic_io(async_handle<H, M>& h, io_parameters_t<O> const& args)
+{
+	return io_sender<async_handle<H, M>, O>(h, args);
+}
+
+template<typename H, typename M, typename O>
+io_sender<async_handle<H, M>, O> generic_io(async_handle<H, M> const& h, io_parameters_t<O> const& args)
+{
+	return io_sender<async_handle<H, M>, O>(h, args);
+}
+
 
 template<bool IsVoid>
 struct _basic_handle;
@@ -526,7 +583,7 @@ template<>
 struct _basic_handle<1>
 {
 	template<typename H, typename M>
-	using type = concrete_handle<H>;
+	using type = blocking_handle<H>;
 };
 
 template<>
@@ -538,739 +595,5 @@ struct _basic_handle<0>
 
 template<typename Handle, typename MultiplexerHandle>
 using basic_handle = typename _basic_handle<std::is_void_v<MultiplexerHandle>>::template type<Handle, MultiplexerHandle>;
-
-
-#if 0
-template<typename H>
-class basic_handle<H, void> final
-	: public H
-	, public H::template interface<basic_handle<H, void>, void>
-{
-public:
-	using multiplexer_handle_type = void;
-
-
-	basic_handle() = default;
-
-	basic_handle(basic_handle&& other) = default;
-
-	basic_handle& operator=(basic_handle&& other) &
-	{
-		if (*this)
-		{
-			close();
-		}
-		H::operator=(vsm_move(other));
-		return *this;
-	}
-
-	~basic_handle()
-	{
-		if (*this)
-		{
-			close();
-		}
-	}
-
-
-	void get_multiplexer() const
-	{
-	}
-
-	void get_connector() const
-	{
-	}
-
-
-	vsm::result<typename H::native_handle_type> release_native_handle()
-	{
-		if (!*this)
-		{
-			return vsm::unexpected(error::handle_is_null);
-		}
-
-		return H::release_native_handle();
-	}
-
-	template<vsm::any_cvref_of<typename H::native_handle_type> N = typename H::native_handle_type>
-	vsm::result<void> set_native_handle(N&& native) &
-	{
-		if (*this)
-		{
-			return vsm::unexpected(error::handle_is_not_null);
-		}
-
-		if (!H::check_native_handle(vsm_as_const(native)))
-		{
-			return vsm::unexpected(error::invalid_argument);
-		}
-
-		H::set_native_handle(vsm_forward(native));
-
-		return {};
-	}
-
-	void close()
-	{
-		if (*this)
-		{
-			H::close();
-			vsm_assert(!*this);
-		}
-	}
-
-
-	template<multiplexer_for<H> M>
-	vsm::result<basic_handle<H, multiplexer_handle_t<M>>> with_multiplexer(M&& multiplexer)
-	{
-		if (!*this)
-		{
-			return vsm::unexpected(error::handle_is_null);
-		}
-
-		vsm::result<basic_handle<H, multiplexer_handle_t<M>>> r(
-			vsm::result_value,
-			vsm_forward(multiplexer));
-		vsm_try_void(r->_set_handle(static_cast<H&&>(*this)));
-		return r;
-	}
-
-private:
-	template<typename O>
-	friend vsm::result<void> tag_invoke(
-		blocking_io_t,
-		basic_handle& h,
-		io_result_ref_t<O> const r,
-		io_parameters_t<O> const& args)
-	{
-		if constexpr (O::producer)
-		{
-			if (h)
-			{
-				return vsm::unexpected(error::handle_is_not_null);
-			}
-		}
-		else
-		{
-			if (!h)
-			{
-				return vsm::unexpected(error::handle_is_null);
-			}
-		}
-
-		vsm_try_void(H::do_blocking_io(
-			static_cast<H&>(h),
-			r,
-			args));
-
-		vsm_assert(h);
-
-		return {};
-	}
-
-	template<typename O>
-	friend vsm::result<void> tag_invoke(
-		blocking_io_t,
-		basic_handle const& h,
-		io_result_ref_t<O> const r,
-		io_parameters_t<O> const& args)
-	{
-		if (!h)
-		{
-			return vsm::unexpected(error::handle_is_null);
-		}
-
-		return H::do_blocking_io(
-			static_cast<H const&>(h),
-			r,
-			args);
-	}
-
-	template<typename O>
-	vsm::result<io_result_t<O>> _invoke(io_parameters_t<O> const& args)
-	{
-		vsm::result<io_result_t<O>> r(vsm::result_value);
-		vsm_try_void(H::do_blocking_io(
-			static_cast<H&>(*this),
-			r,
-			args));
-		return r;
-	}
-
-	template<typename O>
-	vsm::result<io_result_t<O>> _invoke(io_parameters_t<O> const& args) const
-	{
-		vsm::result<io_result_t<O>> r(vsm::result_value);
-		vsm_try_void(H::do_blocking_io(
-			static_cast<H const&>(*this),
-			r,
-			args));
-		return r;
-	}
-
-	friend handle;
-
-	template<typename, typename>
-	friend class basic_handle;
-};
-
-template<typename H, typename M>
-	requires multiplexer_for<M, H>
-class basic_handle<H, M> final
-	: public H
-	, public H::template interface<basic_handle<H, M>, M>
-{
-	using multiplexer_type = typename M::multiplexer_type;
-	using connector_type = connector_t<multiplexer_type, H>;
-
-	vsm_no_unique_address M m_multiplexer = {};
-	vsm_no_unique_address connector_type m_connector;
-
-public:
-	using multiplexer_handle_type = M;
-
-
-	basic_handle() = default;
-
-	template<std::convertible_to<M> T = M>
-	explicit basic_handle(T&& multiplexer)
-		: m_multiplexer(vsm_forward(multiplexer))
-	{
-	}
-
-	basic_handle(basic_handle&& other) noexcept = default;
-
-	basic_handle& operator=(basic_handle&& other) & noexcept
-	{
-		if (*this)
-		{
-			close();
-		}
-		H::operator=(vsm_move(other));
-		return *this;
-	}
-
-	~basic_handle()
-	{
-		if (*this)
-		{
-			close();
-		}
-	}
-
-
-	[[nodiscard]] M const& get_multiplexer() const
-	{
-		return m_multiplexer;
-	}
-
-	[[nodiscard]] connector_type const& get_connector() const
-	{
-		return m_connector;
-	}
-
-
-	void close()
-	{
-		if (*this)
-		{
-			H::close();
-			vsm_assert(!*this);
-		}
-	}
-
-private:
-	vsm::result<void> _set_handle(H&& h)
-	{
-		vsm_assert(!*this);
-		vsm_try_void(attach_handle(
-			m_multiplexer,
-			static_cast<H const&>(h),
-			m_connector));
-		H::operator=(static_cast<H&&>(h));
-		return {};
-	}
-
-	template<typename O>
-	io_sender<basic_handle, O> _invoke(io_parameters_t<O> const& args) const
-	{
-		return io_sender<basic_handle, O>(*this, args);
-	}
-
-	template<typename O>
-	friend vsm::result<void> tag_invoke(
-		blocking_io_t,
-		basic_handle& h,
-		io_result_ref_t<O> const r,
-		io_parameters_t<O> const& args)
-	{
-		if constexpr (O::producer)
-		{
-			if (h)
-			{
-				return vsm::unexpected(error::handle_is_not_null);
-			}
-
-			basic_handle<H, void> new_h;
-
-			vsm_try_void(H::do_blocking_io(
-				static_cast<H&>(new_h),
-				r,
-				args));
-
-			vsm_assert(new_h);
-
-			return h._set_handle(static_cast<H&&>(new_h));
-		}
-		else
-		{
-			if (!h)
-			{
-				return vsm::unexpected(error::handle_is_null);
-			}
-
-			vsm_try_void(H::do_blocking_io(
-				static_cast<H&>(h),
-				r,
-				args));
-
-			vsm_assert(h);
-		}
-
-		return {};
-	}
-
-	template<typename O>
-	friend vsm::result<void> tag_invoke(
-		blocking_io_t,
-		basic_handle const& h,
-		io_result_ref_t<O> const r,
-		io_parameters_t<O> const& args)
-	{
-		if (!h)
-		{
-			return vsm::unexpected(error::handle_is_null);
-		}
-
-		return H::do_blocking_io(
-			static_cast<H const&>(h),
-			r,
-			args);
-	}
-
-	template<vsm::any_cv_of<basic_handle> Self, typename S>
-	friend auto tag_invoke(
-		submit_io_t,
-		Self& h,
-		S& s)
-	{
-		//return submit_io(
-		return tag_invoke(submit_io,
-			static_cast<M const&>(h.m_multiplexer),
-			static_cast<vsm::copy_cv_t<Self, H>&>(h),
-			static_cast<connector_type const&>(h.m_connector),
-			s);
-	}
-
-	template<vsm::any_cv_of<basic_handle> Self, typename S>
-	friend auto tag_invoke(
-		notify_io_t,
-		Self& h,
-		S& s,
-		io_status const status)
-	{
-		//return notify_io(
-		return tag_invoke(notify_io,
-			static_cast<M const&>(h.m_multiplexer),
-			static_cast<vsm::copy_cv_t<Self, H>&>(h),
-			static_cast<connector_type const&>(h.m_connector),
-			s,
-			status);
-	}
-
-	template<typename S>
-	friend void tag_invoke(
-		cancel_io_t,
-		H const& h,
-		S& s)
-	{
-		return cancel_io(
-			static_cast<M const&>(h.m_multiplexer),
-			static_cast<H const&>(h),
-			static_cast<connector_type const&>(h.m_connector),
-			s);
-	}
-
-	friend handle;
-
-	template<typename, typename>
-	friend class basic_handle;
-};
-#endif
-
-
-#if 0
-allio_detail_export
-template<typename H>
-class basic_blocking_handle;
-
-allio_detail_export
-template<typename H, typename M>
-class basic_async_handle;
-
-
-allio_detail_export
-template<typename H>
-class basic_blocking_handle final
-	: public H
-	, public H::template sync_interface<basic_blocking_handle<H>>
-{
-	template<typename M>
-	using async_handle_type = basic_async_handle<H, M>;
-
-public:
-	basic_blocking_handle() = default;
-
-	basic_blocking_handle(basic_blocking_handle&& other) noexcept = default;
-
-	basic_blocking_handle& operator=(basic_blocking_handle&& other) & noexcept
-	{
-		if (*this)
-		{
-			H::close();
-		}
-		H::operator=(vsm_move(other));
-		return *this;
-	}
-
-	~basic_blocking_handle()
-	{
-		if (*this)
-		{
-			H::close();
-		}
-	}
-
-
-	typename H::native_handle_type get_native_handle() const
-	{
-		vsm_assert(*this); //PRECONDITION
-		return H::get_native_handle();
-	}
-
-	vsm::result<typename H::native_handle_type> release_native_handle()
-	{
-		if (!*this)
-		{
-			return vsm::unexpected(error::handle_is_null);
-		}
-
-		return H::release_native_handle();
-	}
-
-	vsm::result<void> set_native_handle(typename H::native_handle_type const& native) &
-	{
-		if (*this)
-		{
-			return vsm::unexpected(error::handle_is_not_null);
-		}
-
-		if (!H::check_native_handle(native))
-		{
-			return vsm::unexpected(error::invalid_argument);
-		}
-
-		H::set_native_handle(native);
-
-		return {};
-	}
-
-	static vsm::result<basic_blocking_handle> from_native_handle(typename H::native_handle_type const& native)
-	{
-		if (!H::check_native_handle(native))
-		{
-			return vsm::unexpected(error::invalid_argument);
-		}
-
-		vsm::result<basic_blocking_handle> r(vsm::result_value);
-		r->H::set_native_handle(native);
-		return r;
-	}
-
-
-	template<typename M>
-	vsm::result<async_handle_type<std::remove_cvref_t<M>>> with_multiplexer(M&& multiplexer) &&
-	{
-		if (!*this)
-		{
-			return vsm::unexpected(error::handle_is_null);
-		}
-		
-		if (!multiplexer)
-		{
-			return vsm::unexpected(error::multiplexer_is_null);
-		}
-		
-		vsm::result<async_handle_type<std::remove_cvref_t<M>>> r(vsm_forward(multiplexer));
-		vsm_try_void(r->_set_handle(*this));
-		return r;
-	}
-
-private:
-	vsm::result<void> _initialize(auto&& initializer)
-	{
-		if (*this)
-		{
-			return vsm::unexpected(error::handle_is_not_null);
-		}
-
-		return vsm_forward(initializer)(*this);
-	}
-
-	void _close()
-	{
-		if (*this)
-		{
-			H::close();
-		}
-	}
-
-
-	template<typename O>
-	friend vsm::result<void> tag_invoke(
-		blocking_io_t,
-		vsm::any_cvref_of<basic_blocking_handle> auto& h,
-		io_result_ref_t<O> const result,
-		io_parameters_t<O> const& args)
-	{
-		return H::do_blocking_io(h, result, args);
-	}
-
-
-	friend class handle;
-
-	template<typename, typename>
-	friend class basic_async_handle;
-};
-
-allio_detail_export
-template<typename H, typename M>
-class basic_async_handle final
-	: public H
-	, public H::template sync_interface<basic_async_handle<H, M>>
-	, public H::template async_interface<basic_async_handle<H, M>>
-{
-	using blocking_handle_type = basic_blocking_handle<H>;
-
-public:
-	using multiplexer_pointer_type = M;
-	using multiplexer_type = multiplexer_t<M>;
-
-private:
-	using connector_type = connector_t<multiplexer_type, H>;
-
-	static_assert(std::is_default_constructible_v<M>);
-	static_assert(std::is_nothrow_move_assignable_v<M>);
-
-	vsm_no_unique_address M m_multiplexer = {};
-	vsm_no_unique_address connector_type m_connector;
-
-public:
-	basic_async_handle() = default;
-
-	basic_async_handle(blocking_handle_type&& h)
-		: H(static_cast<H&&>(h))
-	{
-	}
-
-	template<std::convertible_to<M> T = M>
-		requires vsm::no_cvref_of<T, basic_async_handle>
-	explicit basic_async_handle(T&& multiplexer)
-		: m_multiplexer(vsm_forward(multiplexer))
-	{
-	}
-
-	basic_async_handle(basic_async_handle&& other) noexcept = default;
-
-	basic_async_handle& operator=(basic_async_handle&& other) & noexcept
-	{
-		if (*this)
-		{
-			H::close();
-		}
-
-		H::operator=(vsm_move(other));
-		m_connector = vsm_move(other.m_connector);
-
-		return *this;
-	}
-
-	~basic_async_handle()
-	{
-		if (*this)
-		{
-			H::close();
-		}
-	}
-
-
-	[[nodiscard]] M const& get_multiplexer() const
-	{
-		return m_multiplexer;
-	}
-
-	[[nodiscard]] connector_type const& get_connector() const
-	{
-		return m_connector;
-	}
-
-
-	template<std::convertible_to<M> T = M>
-	vsm::result<void> set_multiplexer(T&& multiplexer) &
-	{
-		return _set_multiplexer(vsm_forward(multiplexer));
-	}
-
-	M release_multiplexer()
-	{
-		if (*this && m_multiplexer)
-		{
-			m_multiplexer->detach(static_cast<H const&>(*this), m_connector);
-		}
-
-		M multiplexer = vsm_move(m_multiplexer);
-		m_multiplexer = {};
-
-		return multiplexer;
-	}
-
-
-	vsm::result<void> set_handle(blocking_handle_type&& handle) &
-	{
-		if (*this)
-		{
-			return vsm::unexpected(error::handle_is_not_null);
-		}
-
-		return _set_handle(handle);
-	}
-
-	vsm::result<blocking_handle_type> release_handle()
-	{
-		if (!*this)
-		{
-			return vsm::unexpected(error::handle_is_null);
-		}
-
-		vsm::result<blocking_handle_type> r(vsm::result_value);
-		vsm_try_void(_release_handle(*r));
-		return r;
-	}
-
-
-private:
-	vsm::result<void> _initialize(auto&& initializer)
-	{
-		if (*this)
-		{
-			return vsm::unexpected(error::handle_is_not_null);
-		}
-
-		blocking_handle_type h;
-		vsm_try_void(vsm_forward(initializer)(h));
-		return _set_handle(h);
-	}
-
-	vsm::result<void> _set_multiplexer(M multiplexer)
-	{
-		if (!multiplexer)
-		{
-			return vsm::unexpected(error::invalid_argument);
-		}
-
-		if (*this)
-		{
-			vsm_try_void(attach_handle(
-				*vsm_as_const(m_multiplexer),
-				static_cast<H const&>(*this),
-				m_connector));
-		}
-
-		m_multiplexer = vsm_move(multiplexer);
-		return {};
-	}
-
-	vsm::result<void> _set_handle(blocking_handle_type& handle)
-	{
-		if (m_multiplexer)
-		{
-			vsm_try_void(attach_handle(*m_multiplexer, static_cast<H const&>(handle), m_connector));
-		}
-
-		this->H::operator=(static_cast<H&&>(handle));
-		return {};
-	}
-
-	void _release_handle(blocking_handle_type& handle)
-	{
-		if (m_multiplexer)
-		{
-			detach_handle(*m_multiplexer, static_cast<H const&>(*this), m_connector);
-		}
-
-		handle.H::operator=(static_cast<H&&>(*this));
-	}
-
-	void _close()
-	{
-		if (*this)
-		{
-			if (m_multiplexer)
-			{
-				m_multiplexer->detach(static_cast<H const&>(*this), m_connector);
-			}
-
-			H::close();
-		}
-	}
-
-
-	template<typename O>
-	friend vsm::result<void> tag_invoke(
-		blocking_io_t,
-		vsm::any_cvref_of<basic_async_handle> auto& h,
-		io_result_ref_t<O> const result,
-		io_parameters_t<O> const& args)
-	{
-		return H::do_blocking_io(h, result, args);
-	}
-
-	template<typename S, typename R>
-	friend io_result2 tag_invoke(submit_io_t, basic_async_handle const& h, S& s, R const r)
-	{
-		return submit_io(*h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s, r);
-	}
-
-	template<typename S, typename R>
-	friend io_result2 tag_invoke(notify_io_t, basic_async_handle const& h, S& s, R const r, io_status const status)
-	{
-		//TODO: DEBUG
-		return tag_invoke(notify_io, *h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s, r, status);
-		//return notify_io(*h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s, r, status);
-	}
-
-	template<typename S>
-	friend void tag_invoke(cancel_io_t, basic_async_handle const& h, S& s)
-	{
-		return cancel_io(*h.m_multiplexer, static_cast<H const&>(h), vsm_as_const(h.m_connector), s);
-	}
-
-
-	friend class handle;
-
-	template<typename>
-	friend class basic_blocking_handle;
-};
-#endif
 
 } // namespace allio::detail

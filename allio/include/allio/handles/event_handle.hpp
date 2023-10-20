@@ -12,7 +12,10 @@ using detail::signal_event_t;
 using detail::signal_event;
 
 using detail::event_handle_t;
-using detail::basic_event_handle;
+using detail::abstract_event_handle;
+
+template<typename MultiplexerHandle>
+using async_event_handle = detail::async_handle<event_handle_t, MultiplexerHandle>;
 
 using detail::create_event;
 

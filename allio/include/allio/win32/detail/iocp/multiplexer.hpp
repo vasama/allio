@@ -255,9 +255,9 @@ public:
 	[[nodiscard]] bool cancel_wait(win32::wait_packet packet);
 
 
-	[[nodiscard]] static bool supports_synchronous_completion(platform_handle const& h)
+	[[nodiscard]] static bool supports_synchronous_completion(platform_handle_t::native_type const& h)
 	{
-		return h.get_flags()[platform_handle::impl_type::flags::skip_completion_port_on_success];
+		return h.flags[platform_handle_t::impl_type::flags::skip_completion_port_on_success];
 	}
 
 
@@ -272,18 +272,16 @@ private:
 	[[nodiscard]] vsm::result<void> _attach_handle(native_platform_handle handle, connector_type& c);
 	//TODO: Return a vsm::result<void> instead of void as detaching can fail.
 	//      Handles should gain a multiplexer coupling aware close to avoid detaching.
-	void _detach_handle(native_platform_handle handle, connector_type& c);
+	[[nodiscard]] vsm::result<void> _detach_handle(native_platform_handle handle, connector_type& c);
 
-	template<std::derived_from<platform_handle> H>
-	friend vsm::result<void> tag_invoke(attach_handle_t, iocp_multiplexer& m, H const& h, connector_type& c)
+	friend vsm::result<void> tag_invoke(attach_handle_t, iocp_multiplexer& m, platform_handle_t::native_type const& h, connector_type& c)
 	{
-		return m._attach_handle(h.get_platform_handle(), c);
+		return m._attach_handle(h.platform_handle, c);
 	}
 
-	template<std::derived_from<platform_handle> H>
-	friend void tag_invoke(detach_handle_t, iocp_multiplexer& m, H const& h, connector_type& c)
+	friend vsm::result<void> tag_invoke(detach_handle_t, iocp_multiplexer& m, platform_handle_t::native_type const& h, connector_type& c)
 	{
-		return m._detach_handle(h.get_platform_handle(), c);
+		return m._detach_handle(h.platform_handle, c);
 	}
 
 

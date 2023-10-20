@@ -48,17 +48,23 @@ struct signal_event_t
 		}
 	};
 };
-inline constexpr signal_event_t signal_event = {};
+inline constexpr signal_event_t::tag_t signal_event = {};
 
-struct event_handle_t2 : platform_handle_t
+struct event_handle_t : platform_handle_t
 {
 	using base_type = platform_handle_t;
+
+	allio_handle_flags
+	(
+		auto_reset,
+	);
+
 
 	struct create_t
 	{
 		static constexpr bool producer = true;
 
-		using handle_type = event_handle_t2;
+		using handle_type = event_handle_t;
 		using result_type = void;
 
 		struct required_params_type
@@ -67,6 +73,30 @@ struct event_handle_t2 : platform_handle_t
 		};
 
 		using optional_params_type = signal_event_t;
+
+		using runtime_tag = bounded_runtime_t;
+	};
+
+	struct signal_t
+	{
+		using handle_type = event_handle_t const;
+		using result_type = void;
+
+		using required_params_type = no_parameters_t;
+		using optional_params_type = no_parameters_t;
+
+		using runtime_tag = bounded_runtime_t;
+	};
+
+	struct reset_t
+	{
+		using handle_type = event_handle_t const;
+		using result_type = void;
+
+		using required_params_type = no_parameters_t;
+		using optional_params_type = no_parameters_t;
+
+		using runtime_tag = bounded_runtime_t;
 	};
 
 	struct wait_t
@@ -82,30 +112,53 @@ struct event_handle_t2 : platform_handle_t
 		type_list<wait_t>
 	>;
 
+
 	template<typename H>
-	struct abstract_interface
+	struct abstract_interface : base_type::abstract_interface<H>
 	{
 		[[nodiscard]] vsm::result<void> signal() const
 		{
-			return _signal(static_cast<H const&>(*this).native());
+			return event_handle_t::blocking_io(
+				static_cast<H const&>(*this).native(),
+				io_parameters_t<signal_t>{});
 		}
 
 		[[nodiscard]] vsm::result<void> reset() const
 		{
-			return _reset(static_cast<H const&>(*this).native());
+			return event_handle_t::blocking_io(
+				static_cast<H const&>(*this).native(),
+				io_parameters_t<reset_t>{});
+		}
+
+		[[nodiscard]] vsm::result<void> blocking_wait(auto&&... args) const
+		{
+			return event_handle_t::blocking_io(
+				static_cast<H const&>(*this).native(),
+				io_args<wait_t>()(vsm_forward(args)...));
 		}
 	};
 
-	template<typename H, typename M>
-	struct concrete_interface : base_type::concrete_interface<H, M>
+	template<typename H>
+	struct concrete_interface : base_type::concrete_interface<H>
 	{
 		[[nodiscard]] auto wait(auto&&... args) const
 		{
-
+			return generic_io(
+				static_cast<H const&>(*this),
+				io_args<wait_t>()(vsm_forward(args)...));
 		}
 	};
+
+
+	using base_type::blocking_io;
+
+	static vsm::result<void> blocking_io(native_type& h, io_parameters_t<create_t> const& args);
+	static vsm::result<void> blocking_io(native_type const& h, io_parameters_t<signal_t> const& args);
+	static vsm::result<void> blocking_io(native_type const& h, io_parameters_t<reset_t> const& args);
+	static vsm::result<void> blocking_io(native_type const& h, io_parameters_t<wait_t> const& args);
 };
 
+#if 0
 class event_handle_t : public platform_handle
 {
 protected:
@@ -208,19 +261,22 @@ protected:
 		io_result_ref_t<wait_t> r,
 		io_parameters_t<wait_t> const& args);
 };
+#endif
+
+using abstract_event_handle = abstract_handle<event_handle_t>;
+using blocking_event_handle = blocking_handle<event_handle_t>;
 
 template<typename Multiplexer>
 using basic_event_handle = basic_handle<event_handle_t, Multiplexer>;
 
 
-vsm::result<basic_event_handle<void>> create_event(
+vsm::result<blocking_event_handle> create_event(
 	event_reset_mode const reset_mode,
 	auto&&... args)
 {
-	vsm::result<basic_event_handle<void>> r(vsm::result_value);
+	vsm::result<blocking_event_handle> r(vsm::result_value);
 	vsm_try_void(blocking_io(
 		*r,
-		no_result,
 		io_args<event_handle_t::create_t>(reset_mode)(vsm_forward(args)...)));
 	return r;
 }

@@ -8,6 +8,12 @@
 
 namespace allio {
 
+struct untyped_buffers_t
+{
+	untyped_buffers_storage buffers;
+};
+
+#if 0
 struct random_access_byte_io_parameters
 {
 	untyped_buffers_storage buffers;
@@ -55,5 +61,6 @@ struct gather_write_t
 	using required_params_type = stream_byte_io_parameters;
 	using optional_params_type = detail::deadline_t;
 };
+#endif
 
 } // namespace allio

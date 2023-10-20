@@ -18,7 +18,7 @@ handle_flags win32::set_file_completion_notification_modes(HANDLE const handle)
 		handle,
 		FILE_SKIP_COMPLETION_PORT_ON_SUCCESS | FILE_SKIP_SET_EVENT_ON_HANDLE))
 	{
-		using flags = platform_handle::impl_type::flags;
+		using flags = platform_handle_t::impl_type::flags;
 		flags_value |= flags::skip_completion_port_on_success;
 		flags_value |= flags::skip_handle_event_on_completion;
 	}
@@ -44,4 +44,16 @@ vsm::result<unique_handle> win32::duplicate_handle(HANDLE const handle)
 	}
 
 	return duplicate;
+}
+
+
+vsm::result<void> platform_handle_t::blocking_io(native_type& h, io_parameters_t<close_t> const& args)
+{
+	if (h.platform_handle != native_platform_handle::null)
+	{
+		unrecoverable(close_handle(h.platform_handle));
+		h.platform_handle = native_platform_handle::null;
+	}
+
+	return {};
 }

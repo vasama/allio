@@ -9,6 +9,6 @@
 
 namespace allio {
 
-using default_multiplexer_ptr = default_multiplexer*;
+using default_multiplexer_handle = detail::basic_multiplexer_handle<default_multiplexer>;
 
 } // namespace allio

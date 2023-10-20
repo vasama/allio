@@ -14,17 +14,37 @@
 
 namespace allio::detail {
 
-template<typename H, typename M>
-class basic_handle;
+struct bounded_runtime_t;
+
+
+template<bool IsConst>
+struct _handle_cv;
+
+template<>
+struct _handle_cv<0>
+{
+	template<typename H>
+	using type = H;
+};
+
+template<>
+struct _handle_cv<1>
+{
+	template<typename H>
+	using type = H const;
+};
+
+template<typename O, typename H>
+using handle_cv = typename _handle_cv<std::is_const_v<typename O::handle_type>>::template type<H>;
 
 
 struct blocking_io_t
 {
 	template<typename H, typename O>
-	auto vsm_static_operator_invoke(H& handle, io_result_ref_t<O> const result, io_parameters_t<O> const& args)
-		requires vsm::tag_invocable<blocking_io_t, H&, io_result_ref_t<O>, io_parameters_t<O> const&>
+	auto vsm_static_operator_invoke(H& handle, io_parameters_t<O> const& args)
+		requires vsm::tag_invocable<blocking_io_t, H&, io_parameters_t<O> const&>
 	{
-		return vsm::tag_invoke(blocking_io_t(), handle, result, args);
+		return vsm::tag_invoke(blocking_io_t(), handle, args);
 	}
 };
 inline constexpr blocking_io_t blocking_io = {};
@@ -233,28 +253,48 @@ public:
 	}
 
 private:
-	using C = connector_t<M, H>;
+	using N = handle_cv<O, typename H::native_type>;
+	using C = handle_cv<O, connector_t<M, H>>;
 	using S = operation;
 
-	template<typename M2>
-	friend auto tag_invoke(submit_io_t, M2 const& m, vsm::any_cv_of<H> auto& h, C const& c, S& s)
-		//requires requires { operation_impl<M, H, O>::submit(m, h, c, s); }
+	template<typename MultiplexerHandle>
+	friend auto tag_invoke(
+		submit_io_t,
+		MultiplexerHandle const& m,
+		N& h,
+		C& c,
+		S& s)
+		//requires requires { impl_type::submit(m, h, c, s); }
 	{
-		return operation_impl<M, H, O>::submit(m, h, c, s);
+		return impl_type::submit(
+			m,
+			h,
+			c,
+			s);
 	}
 
-	template<typename M2>
-	friend auto tag_invoke(notify_io_t, M2 const& m, vsm::any_cv_of<H> auto& h, C const& c, S& s, io_status const status)
-		//requires requires { operation_impl<M, H, O>::notify(m, h, c, s, status); }
+	template<typename MultiplexerHandle>
+	friend auto tag_invoke(notify_io_t,
+		MultiplexerHandle const& m,
+		N& h,
+		C& c,
+		S& s,
+		io_status const status)
+		//requires requires { impl_type::notify(m, h, c, s, status); }
 	{
-		return operation_impl<M, H, O>::notify(m, h, c, s, status);
+		return impl_type::notify(m, h, c, s, status);
 	}
 
-	template<typename M2>
-	friend void tag_invoke(cancel_io_t, M2 const& m, H const& h, C const& c, S& s)
-		requires requires { operation_impl<M, H, O>::cancel(m, h, c, s); }
+	template<typename MultiplexerHandle>
+	friend void tag_invoke(
+		cancel_io_t,
+		MultiplexerHandle const& m,
+		N const& h,
+		C const& c,
+		S& s)
+		requires requires { impl_type::cancel(m, h, c, s); }
 	{
-		return operation_impl<M, H, O>::cancel(m, h, c, s);
+		return impl_type::cancel(m, h, c, s);
 	}
 };
 

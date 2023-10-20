@@ -84,7 +84,7 @@ vsm::result<posix::unique_socket_with_flags> posix::create_socket(int const addr
 
 	if (true /*args.multiplexable*/) //TODO: Synchronous sockets
 	{
-		handle_flags |= platform_handle::impl_type::flags::synchronous;
+		handle_flags |= platform_handle_t::impl_type::flags::synchronous;
 	}
 	else
 	{

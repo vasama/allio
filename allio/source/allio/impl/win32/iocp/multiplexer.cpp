@@ -66,12 +66,12 @@ vsm::result<void> iocp_multiplexer::_attach_handle(native_platform_handle const 
 		std::bit_cast<void*>(key_context::generic));
 }
 
-void iocp_multiplexer::_detach_handle(native_platform_handle const handle, connector_type& c)
+vsm::result<void> iocp_multiplexer::_detach_handle(native_platform_handle const handle, connector_type& c)
 {
-	unrecoverable(set_completion_information(
+	return set_completion_information(
 		unwrap_handle(handle),
 		NULL,
-		nullptr));
+		nullptr);
 }
 
 
