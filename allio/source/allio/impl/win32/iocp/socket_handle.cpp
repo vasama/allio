@@ -12,15 +12,14 @@ using namespace allio::win32;
 
 using M = iocp_multiplexer;
 using H = raw_socket_handle_t;
+using N = H::native_type;
 using C = connector_t<M, H>;
 
-using connect_t = raw_socket_handle_t::connect_t;
+using connect_t = H::connect_t;
 using connect_s = operation_t<M, H, connect_t>;
 
-io_result2<void> operation_impl<M, H, connect_t>::submit(M& m, H& h, C const& c, connect_s& s)
+io_result2<void> operation_impl<M, H, connect_t>::submit(M& m, N& h, C const& c, connect_s& s)
 {
-	vsm_assert(!h);
-
 	vsm_try(addr, posix::socket_address::make(s.args.endpoint));
 	vsm_try(socket, posix::create_socket(addr.addr.sa_family));
 
@@ -63,7 +62,7 @@ io_result2<void> operation_impl<M, H, connect_t>::submit(M& m, H& h, C const& c,
 	return io_pending;
 }
 
-io_result2<void> operation_impl<M, H, connect_t>::notify(M& m, H& h, C const& c, connect_s& s, io_status const p_status)
+io_result2<void> operation_impl<M, H, connect_t>::notify(M& m, N& h, C const& c, connect_s& s, io_status const p_status)
 {
 	auto const& status = M::unwrap_io_status(p_status);
 	vsm_assert(&status.slot == &s.overlapped);
@@ -76,7 +75,7 @@ io_result2<void> operation_impl<M, H, connect_t>::notify(M& m, H& h, C const& c,
 	return {};
 }
 
-void operation_impl<M, H, connect_t>::cancel(M& m, H const& h, C const& c, S& s)
+void operation_impl<M, H, connect_t>::cancel(M& m, N const& h, C const& c, S& s)
 {
 	cancel_socket_io(posix::unwrap_socket(s.socket.get()), *s.overlapped);
 }

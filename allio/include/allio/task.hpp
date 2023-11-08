@@ -2,9 +2,9 @@
 
 #include <exec/task.hpp>
 
-namespace allio::detail {
+namespace allio {
 
 template<typename T>
 using task = exec::task<T>;
 
-} // namespace allio::detail
+} // namespace allio

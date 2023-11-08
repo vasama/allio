@@ -1,0 +1,43 @@
+#pragma once
+
+#include <allio/detail/handles/timer_handle.hpp>
+
+#include <vsm/result.hpp>
+#include <vsm/utility.hpp>
+
+namespace allio {
+
+namespace blocking {
+
+template<typename H>
+using handle = blocking_handle<H>;
+
+using timer_handle = handle<timer_t>;
+
+vsm::result<timer_handle> create_timer(auto&&... args)
+{
+	vsm::result<timer_handle> r(vsm::result_value);
+	vsm_try_void(detail::blocking_io<timer_t::create_t>(
+		*r,
+		io_args<timer_t::create_t>()(vsm_forward(args)...)));
+	return r;
+}
+
+} // namespace blocking
+
+namespace async {
+
+template<typename H, typename M>
+using handle = async_handle<H, M>;
+
+template<typename MultiplexerHandle>
+using basic_timer_handle = handle<timer_t, MultiplexerHandle>;
+
+auto create_timer(auto&&... args)
+{
+	return io_handle_sender<timer_t, timer_t::create_t>(
+		io_args<timer_t::create_t>()(vsm_forward(args)...));
+}
+
+} // namespace async
+} // namespace allio

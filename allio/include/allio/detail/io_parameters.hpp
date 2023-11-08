@@ -16,20 +16,13 @@ struct io_parameters_t
 	: O::required_params_type
 	, O::optional_params_type
 {
-	io_parameters_t() = default;
-
-	explicit io_parameters_t(auto&&... args)
-		: O::required_params_type{ { vsm_forward(args) }... }
-		, O::optional_params_type{}
-	{
-	}
 };
 
 template<typename O>
 	requires
 		std::is_same_v<typename O::required_params_type, no_parameters_t> &&
 		std::is_same_v<typename O::optional_params_type, no_parameters_t>
-struct io_parameters_t<O>
+struct io_parameters_t<O> : no_parameters_t
 {
 };
 
@@ -56,7 +49,7 @@ public:
 	{
 		return m_args([&](auto&&... required_args) -> io_parameters_t<O>
 		{
-			io_parameters_t<O> r(vsm_forward(required_args)...);
+			io_parameters_t<O> r{ { { vsm_forward(required_args) }... } };
 			(set_argument(r, vsm_forward(optional_args)), ...);
 			return r;
 		});
@@ -70,25 +63,21 @@ io_args_t<O, Args...> io_args(Args&&... args)
 }
 
 
-template<typename O, typename M>
+template<typename O, typename H, typename M>
 auto io_result_select()
 {
 	if constexpr (requires { typename O::result_type; })
 	{
 		return vsm::tag<typename O::result_type>();
 	}
-	else if constexpr (requires { typename O::template result_type_template<M>; })
-	{
-		return vsm::tag<typename O::template result_type_template<M>>();
-	}
 	else
 	{
-		return vsm::tag<void>();
+		return vsm::tag<typename O::template result_type_template<H, M>>();
 	}
 }
 
-template<typename O, typename M = void>
-using io_result_t = typename decltype(io_result_select<O, M>())::type;
+template<typename O, typename H, typename M = void>
+using io_result_t = typename decltype(io_result_select<O, H, M>())::type;
 
 
 template<typename Result>
@@ -168,8 +157,8 @@ struct io_result_ref<void>
 	}
 };
 
-template<typename O, typename M = void>
-using io_result_ref_t = io_result_ref<io_result_t<O, M>>;
+template<typename O, typename H, typename M = void>
+using io_result_ref_t = io_result_ref<io_result_t<O, H, M>>;
 
 inline constexpr io_result_ref<void> no_result = {};
 

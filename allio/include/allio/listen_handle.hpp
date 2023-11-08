@@ -7,6 +7,6 @@ namespace allio {
 
 allio_detail_export
 template<typename Multiplexer = default_multiplexer_handle>
-using listen_handle = basic_listen_handle<Multiplexer>;
+using listen_handle = detail::basic_handle<listen_handle_t, Multiplexer>;
 
 } // namespace allio

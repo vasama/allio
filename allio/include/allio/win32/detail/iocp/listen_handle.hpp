@@ -17,18 +17,19 @@ struct operation_impl<iocp_multiplexer, raw_listen_handle_t, raw_listen_handle_t
 {
 	using M = iocp_multiplexer;
 	using H = raw_listen_handle_t;
-	using O = raw_listen_handle_t::accept_t;
+	using N = H::native_type;
+	using O = H::accept_t;
 	using C = connector_t<M, H>;
 	using S = operation_t<M, H, O>;
-	using R = accept_result<void, basic_multiplexer_handle<M>>;
+	using R = accept_result<async_handle<typename H::socket_handle_tag, basic_multiplexer_handle<M>>>;
 
 	unique_wrapped_socket socket;
 	iocp_multiplexer::overlapped overlapped;
 	std::byte address_storage[256];
 
-	static io_result2<R> submit(M& m, H const& h, C const& c, S& s);
-	static io_result2<R> notify(M& m, H const& h, C const& c, S& s, io_status status);
-	static void cancel(M& m, H const& h, C const& c, S& s);
+	static io_result2<R> submit(M& m, N const& h, C const& c, S& s);
+	static io_result2<R> notify(M& m, N const& h, C const& c, S& s, io_status status);
+	static void cancel(M& m, N const& h, C const& c, S& s);
 };
 
 } // namespace allio::detail

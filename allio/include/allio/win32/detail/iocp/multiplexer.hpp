@@ -286,6 +286,11 @@ private:
 
 
 	[[nodiscard]] vsm::result<bool> _poll(io_parameters_t<poll_t> const& args);
+
+	friend vsm::result<bool> tag_invoke(poll_io_t, iocp_multiplexer& m, auto&&... args)
+	{
+		return m._poll(io_args<poll_t>()(vsm_forward(args)...));
+	}
 };
 
 } // namespace allio::detail

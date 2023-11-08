@@ -92,6 +92,40 @@ public:
 	{
 	}
 
+	template<vsm::constructible_to<T> U>
+	explicit(!std::is_convertible_v<U, T>)
+	io_result2(vsm::result<T>&& result)
+		: m_error{ .dummy = {} }
+	{
+		if (result)
+		{
+			new (&m_value) T(vsm_move(*result));
+			m_state = io_result_state::completed;
+		}
+		else
+		{
+			m_error.error = result.error();
+			m_state = io_result_state::failure;
+		}
+	}
+
+	template<vsm::constructible_to<T> U>
+	explicit(!std::is_convertible_v<U, T>)
+	io_result2(vsm::result<T> const& result)
+		: m_error{ .dummy = {} }
+	{
+		if (result)
+		{
+			new (&m_value) T(*result);
+			m_state = io_result_state::completed;
+		}
+		else
+		{
+			m_error.error = result.error();
+			m_state = io_result_state::failure;
+		}
+	}
+
 	template<typename U>
 		requires std::is_constructible_v<E, U const&>
 	explicit(!std::is_convertible_v<U const&, E>)
@@ -110,9 +144,11 @@ public:
 	{
 	}
 
+	io_result2(io_result2&& other) = default;
 	io_result2(io_result2&& other)
 		requires (std::is_move_constructible_v<T> && !std::is_trivially_copyable_v<T>)
-		: m_state(other.m_state)
+		: m_error(other.m_error)
+		, m_state(other.m_state)
 	{
 		if (has_value())
 		{
@@ -124,7 +160,7 @@ public:
 		requires std::is_constructible_v<T, U>
 	explicit(!std::is_convertible_v<U, T>)
 	io_result2(io_result2<U>&& other)
-		: m_error{ .dummy = {} }
+		: m_error(other.m_error)
 		, m_state(other.m_state)
 	{
 		if (has_value())
@@ -133,9 +169,10 @@ public:
 		}
 	}
 
+	io_result2(io_result2 const& other) = default;
 	io_result2(io_result2 const& other)
 		requires (std::is_copy_constructible_v<T> && !std::is_trivially_copyable_v<T>)
-		: m_error{ .dummy = {} }
+		: m_error(other.m_error)
 		, m_state(other.m_state)
 	{
 		if (has_value())
@@ -148,7 +185,7 @@ public:
 		requires std::is_constructible_v<T, U const&>
 	explicit(!std::is_convertible_v<U const&, T>)
 	io_result2(io_result2 const& other)
-		: m_error{ .dummy = {} }
+		: m_error(other.m_error)
 		, m_state(other.m_state)
 	{
 		if (has_value())
@@ -157,6 +194,7 @@ public:
 		}
 	}
 
+	io_result2& operator=(io_result2&& other) & = default;
 	io_result2& operator=(io_result2&& other) &
 		requires (std::is_move_constructible_v<T> && std::is_move_assignable_v<T> && !std::is_trivially_copyable_v<T>)
 	{
@@ -204,6 +242,7 @@ public:
 		return *this;
 	}
 
+	io_result2& operator=(io_result2 const& other) & = default;
 	io_result2& operator=(io_result2 const& other) &
 		requires (std::is_copy_constructible_v<T> && std::is_copy_assignable_v<T> && !std::is_trivially_copyable_v<T>)
 	{
@@ -251,6 +290,7 @@ public:
 		return *this;
 	}
 
+	~io_result2() = default;
 	~io_result2()
 		requires (!std::is_trivially_destructible_v<T>)
 	{
@@ -365,6 +405,20 @@ public:
 		: m_error{ .dummy = {} }
 		, m_state(io_result_state::completed_partial)
 	{
+	}
+
+	io_result2(vsm::result<void> const& result)
+		: m_error{ .dummy = {} }
+	{
+		if (result)
+		{
+			m_state = io_result_state::completed;
+		}
+		else
+		{
+			m_state = io_result_state::failure;
+			m_error.error = result.error();
+		}
 	}
 
 	template<typename U>

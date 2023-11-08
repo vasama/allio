@@ -23,7 +23,7 @@ inline void cancel_socket_io(SOCKET const socket, OVERLAPPED& overlapped)
 
 vsm::result<bool> submit_socket_io(
 	detail::iocp_multiplexer const& m,
-	detail::platform_handle const& h,
+	detail::platform_handle_t::native_type const& h,
 	auto&& callable)
 {
 	// Check for synchronous completion support before submitting the operation.

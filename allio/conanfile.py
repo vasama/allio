@@ -22,5 +22,5 @@ class package(ConanFile):
 		"vsm_result/0.1",
 		"vsm_tag_ptr/0.1",
 		"vsm_unique_resource/0.1",
-		"p2300/460978414d1f46a4248cabecdc59dcdaba5c84d1"
+		"p2300/998badf5925a6616d8c59193b184776424cd79d1"
 	)

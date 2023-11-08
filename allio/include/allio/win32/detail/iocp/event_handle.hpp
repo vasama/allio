@@ -32,7 +32,7 @@ struct operation_impl<iocp_multiplexer, event_handle_t, event_handle_t::wait_t>
 	using M = iocp_multiplexer;
 	using H = event_handle_t;
 	using N = H::native_type;
-	using O = event_handle_t::wait_t;
+	using O = H::wait_t;
 	using C = connector_t<M, H>;
 	using S = operation_t<M, H, O>;
 

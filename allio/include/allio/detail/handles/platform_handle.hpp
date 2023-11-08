@@ -31,7 +31,7 @@ struct platform_handle_t : handle_t
 		}
 	};
 
-	static vsm::result<void> blocking_io(native_type& h, io_parameters_t<close_t> const& args);
+	static vsm::result<void> blocking_io(close_t, native_type& h, io_parameters_t<close_t> const& args);
 };
 
 #if 0

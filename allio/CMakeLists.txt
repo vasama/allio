@@ -137,6 +137,7 @@ vsm_configure(allio
 	SOURCES
 		source/allio/impl/posix/socket.cpp
 		source/allio/impl/posix/socket.hpp
+		source/allio/impl/posix/unique_socket.cpp
 		source/allio/impl/win32/completion_port.cpp
 		source/allio/impl/win32/completion_port.hpp
 		source/allio/impl/win32/command_line.cpp
@@ -164,7 +165,6 @@ vsm_configure(allio
 		source/allio/impl/win32/wsa_ex.hpp
 
 		source/allio/impl/posix/handles/listen_handle.cpp
-		source/allio/impl/posix/handles/socket_handle_base.cpp
 		source/allio/impl/posix/handles/socket_handle.cpp
 		source/allio/impl/win32/handles/event_handle.cpp
 		#source/allio/impl/win32/handles/filesystem_handle.cpp
@@ -176,7 +176,7 @@ vsm_configure(allio
 
 		source/allio/impl/win32/iocp/event_handle.cpp
 		#source/allio/impl/win32/iocp/generic_wait.cpp
-		#source/allio/impl/win32/iocp/listen_handle.cpp
+		source/allio/impl/win32/iocp/listen_handle.cpp
 		source/allio/impl/win32/iocp/multiplexer.cpp
 		#source/allio/impl/win32/iocp/process_handle.cpp
 		source/allio/impl/win32/iocp/socket_handle.cpp

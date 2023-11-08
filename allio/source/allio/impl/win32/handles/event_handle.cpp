@@ -14,7 +14,7 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-vsm::result<void> event_handle_t::blocking_io(native_type& h, io_parameters_t<create_t> const& args)
+vsm::result<void> event_handle_t::blocking_io(create_t, native_type& h, io_parameters_t<create_t> const& args)
 {
 	vsm_try_void(kernel_init());
 
@@ -51,7 +51,7 @@ vsm::result<void> event_handle_t::blocking_io(native_type& h, io_parameters_t<cr
 	return {};
 }
 
-vsm::result<void> event_handle_t::blocking_io(native_type const& h, io_parameters_t<signal_t> const& args)
+vsm::result<void> event_handle_t::blocking_io(signal_t, native_type const& h, io_parameters_t<signal_t> const& args)
 {
 	NTSTATUS const status = NtSetEvent(
 		unwrap_handle(h.platform_handle),
@@ -65,7 +65,7 @@ vsm::result<void> event_handle_t::blocking_io(native_type const& h, io_parameter
 	return {};
 }
 
-vsm::result<void> event_handle_t::blocking_io(native_type const& h, io_parameters_t<reset_t> const& args)
+vsm::result<void> event_handle_t::blocking_io(reset_t, native_type const& h, io_parameters_t<reset_t> const& args)
 {
 	NTSTATUS const status = NtResetEvent(
 		unwrap_handle(h.platform_handle),
@@ -79,7 +79,7 @@ vsm::result<void> event_handle_t::blocking_io(native_type const& h, io_parameter
 	return {};
 }
 
-vsm::result<void> event_handle_t::blocking_io(native_type const& h, io_parameters_t<wait_t> const& args)
+vsm::result<void> event_handle_t::blocking_io(wait_t, native_type const& h, io_parameters_t<wait_t> const& args)
 {
 	NTSTATUS const status = win32::NtWaitForSingleObject(
 		unwrap_handle(h.platform_handle),

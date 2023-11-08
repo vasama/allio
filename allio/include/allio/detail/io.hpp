@@ -17,37 +17,44 @@ namespace allio::detail {
 struct bounded_runtime_t;
 
 
-template<bool IsConst>
+template<bool IsMutable>
 struct _handle_cv;
 
 template<>
 struct _handle_cv<0>
 {
-	template<typename H>
-	using type = H;
+	template<typename T>
+	using type = T const;
 };
 
 template<>
 struct _handle_cv<1>
 {
-	template<typename H>
-	using type = H const;
+	template<typename T>
+	using type = T;
 };
 
-template<typename O, typename H>
-using handle_cv = typename _handle_cv<std::is_const_v<typename O::handle_type>>::template type<H>;
+template<typename O>
+inline constexpr bool is_mutating = requires { typename O::mutation_tag; };
+
+template<typename O, typename T>
+using handle_cv = typename _handle_cv<is_mutating<O>>::template type<T>;
 
 
+template<typename O>
 struct blocking_io_t
 {
-	template<typename H, typename O>
+	template<typename H>
 	auto vsm_static_operator_invoke(H& handle, io_parameters_t<O> const& args)
-		requires vsm::tag_invocable<blocking_io_t, H&, io_parameters_t<O> const&>
+		//requires vsm::tag_invocable<blocking_io_t, H&, io_parameters_t<O> const&>
 	{
-		return vsm::tag_invoke(blocking_io_t(), handle, args);
+		//return vsm::tag_invoke(blocking_io_t(), handle, args);
+		return tag_invoke(blocking_io_t(), handle, args);
 	}
 };
-inline constexpr blocking_io_t blocking_io = {};
+
+template<typename O>
+inline constexpr blocking_io_t<O> blocking_io = {};
 
 
 using io_result = std::optional<std::error_code>;
@@ -145,6 +152,7 @@ template<typename M>
 inline constexpr rebind_handle_t<M> rebind_handle = {};
 
 
+template<typename O>
 struct submit_io_t
 {
 	template<typename H, typename S>
@@ -161,8 +169,11 @@ struct submit_io_t
 		return vsm::tag_invoke(submit_io_t(), m, h, c, s);
 	}
 };
-inline constexpr submit_io_t submit_io = {};
 
+template<typename O>
+inline constexpr submit_io_t<O> submit_io = {};
+
+template<typename O>
 struct notify_io_t
 {
 	template<typename H, typename S>
@@ -179,8 +190,11 @@ struct notify_io_t
 		return vsm::tag_invoke(notify_io_t(), m, h, c, s, status);
 	}
 };
-inline constexpr notify_io_t notify_io = {};
 
+template<typename O>
+inline constexpr notify_io_t<O> notify_io = {};
+
+template<typename O>
 struct cancel_io_t
 {
 	template<typename H, typename S>
@@ -197,16 +211,18 @@ struct cancel_io_t
 		return vsm::tag_invoke(cancel_io_t(), m, h, c, s);
 	}
 };
-inline constexpr cancel_io_t cancel_io = {};
+
+template<typename O>
+inline constexpr cancel_io_t<O> cancel_io = {};
 
 
 struct poll_io_t
 {
 	template<typename Multiplexer, typename... Args>
-	vsm::result<void> vsm_static_operator_invoke(Multiplexer& m, Args&&... args)
-		requires vsm::tag_invocable<poll_io_t, Multiplexer&, Args&&...>
+	vsm::result<bool> vsm_static_operator_invoke(Multiplexer&& m, Args&&... args)
+		requires vsm::tag_invocable<poll_io_t, Multiplexer&&, Args&&...>
 	{
-		return vsm::tag_invoke(poll_io_t(), m, vsm_forward(args)...);
+		return vsm::tag_invoke(poll_io_t(), vsm_forward(m), vsm_forward(args)...);
 	}
 };
 inline constexpr poll_io_t poll_io = {};
@@ -259,7 +275,7 @@ private:
 
 	template<typename MultiplexerHandle>
 	friend auto tag_invoke(
-		submit_io_t,
+		submit_io_t<O>,
 		MultiplexerHandle const& m,
 		N& h,
 		C& c,
@@ -274,7 +290,8 @@ private:
 	}
 
 	template<typename MultiplexerHandle>
-	friend auto tag_invoke(notify_io_t,
+	friend auto tag_invoke(
+		notify_io_t<O>,
 		MultiplexerHandle const& m,
 		N& h,
 		C& c,
@@ -287,7 +304,7 @@ private:
 
 	template<typename MultiplexerHandle>
 	friend void tag_invoke(
-		cancel_io_t,
+		cancel_io_t<O>,
 		MultiplexerHandle const& m,
 		N const& h,
 		C const& c,
@@ -300,6 +317,31 @@ private:
 
 template<typename M, typename H, typename O>
 using operation_t = operation<M, H, O>;
+
+
+template<typename M, typename H, typename O>
+	requires std::same_as<typename O::runtime_tag, bounded_runtime_t>
+struct operation_impl<M, H, O>
+{
+	using N = handle_cv<O, typename H::native_type>;
+	using C = connector_t<M, H>;
+	using S = operation_t<M, H, O>;
+	using R = io_result_t<O, H, M>;
+
+	static io_result2<R> submit(M&, N& h, C const&, S& s)
+	{
+		return H::blocking_io(O(), h, s.args);
+	}
+
+	static io_result2<R> notify(M&, N& h, C const&, S&, io_status)
+	{
+		vsm_unreachable();
+	}
+
+	static void cancel(M&, N const& h, C const&, S&)
+	{
+	}
+};
 
 
 template<typename M>

@@ -6,16 +6,27 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::posix;
 
-vsm::result<void> raw_listen_handle_t::do_blocking_io(
-	raw_listen_handle_t& h,
-	io_result_ref_t<listen_t>,
-	io_parameters_t<listen_t> const& args)
+using accept_result_type = accept_result<blocking_handle<raw_socket_handle_t>>;
+
+vsm::result<void> raw_listen_handle_t::blocking_io(
+	close_t,
+	native_type& h,
+	io_parameters_t<close_t> const& args)
 {
-	if (h)
+	if (h.platform_handle != native_platform_handle::null)
 	{
-		return vsm::unexpected(error::handle_is_not_null);
+		unrecoverable(posix::close_socket(unwrap_socket(h.platform_handle)));
+		h.platform_handle = native_platform_handle::null;
 	}
 
+	return {};
+}
+
+vsm::result<void> raw_listen_handle_t::blocking_io(
+	listen_t,
+	native_type& h,
+	io_parameters_t<listen_t> const& args)
+{
 	vsm_try(addr, socket_address::make(args.endpoint));
 	vsm_try(socket, create_socket(addr.addr.sa_family));
 
@@ -24,52 +35,39 @@ vsm::result<void> raw_listen_handle_t::do_blocking_io(
 		addr,
 		args.backlog ? &*args.backlog : nullptr));
 
-	raw_socket_handle_t::native_handle_type native =
+	h = platform_handle_t::native_type
 	{
 		{
-			{
-				flags::not_null | socket.flags,
-			},
-			wrap_socket(socket.socket.get()),
+			flags::not_null | socket.flags,
 		},
+		wrap_socket(socket.socket.release()),
 	};
-
-	vsm_assert(h.check_native_handle(native));
-	h.set_native_handle(vsm_move(native));
-
-	(void)socket.socket.release();
 
 	return {};
 }
 
-vsm::result<void> raw_listen_handle_t::do_blocking_io(
-	raw_listen_handle_t const& h,
-	io_result_ref_t<accept_t> const result,
+vsm::result<accept_result_type> raw_listen_handle_t::blocking_io(
+	accept_t,
+	native_type const& h,
 	io_parameters_t<accept_t> const& args)
 {
-	if (!h)
-	{
-		return vsm::unexpected(error::handle_is_null);
-	}
-
 	socket_address addr;
 	vsm_try(socket, socket_accept(
-		unwrap_socket(h.get_platform_handle()),
+		unwrap_socket(h.platform_handle),
 		addr,
 		args.deadline));
 
-	vsm_verify(result.result.socket.set_native_handle(
+	return vsm_lazy(accept_result_type
 	{
-		{
+		blocking_handle<raw_socket_handle_t>(
+			adopt_handle_t(),
+			vsm_lazy(platform_handle_t::native_type
 			{
-				handle_flags(flags::not_null) | socket.flags,
-			},
-			wrap_socket(socket.socket.get()),
-		}
-	}));
-	(void)socket.socket.release();
-
-	result.result.endpoint = addr.get_network_endpoint();
-
-	return {};
+				{
+					flags::not_null | socket.flags,
+				},
+				wrap_socket(socket.socket.release()),
+			})),
+		addr.get_network_endpoint(),
+	});
 }

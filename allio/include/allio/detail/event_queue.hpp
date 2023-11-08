@@ -32,8 +32,47 @@ class basic_event_queue
 			: vtable_and_cancel(ptr_type(&vtable, false))
 		{
 		}
+
+		operation_base(operation_base const&) = delete;
+		operation_base& operator=(operation_base const&) = delete;
 	};
 
+public:
+	class abstract_event : operation_base
+	{
+		using operation_base::operation_base;
+		friend basic_event_queue;
+	};
+
+	template<typename Implementation>
+	class event : public abstract_event
+	{
+	protected:
+		event()
+			: abstract_event(vtable)
+		{
+		}
+
+	private:
+		static void _set_value(operation_base& self)
+		{
+			static_cast<Implementation&>(self).set_value();
+		}
+
+		static void _set_stopped(operation_base& self)
+		{
+			static_cast<Implementation&>(self).set_stopped();
+		}
+
+		static constexpr operation_vtable vtable =
+		{
+			.set_value = _set_value,
+			.set_stopped = _set_stopped,
+		};
+	};
+
+private:
+#if 0
 	template<typename R>
 	class operation : operation_base
 	{
@@ -137,6 +176,7 @@ class basic_event_queue
 		friend bool operator==(scheduler const&, scheduler const&) = default;
 	};
 	static_assert(ex::scheduler<scheduler>);
+#endif
 
 	Event m_event;
 	vsm::intrusive::mpsc_queue<operation_base> m_mpsc_queue;
@@ -152,24 +192,20 @@ public:
 	}
 
 	basic_event_queue(basic_event_queue&&) = default;
-	basic_event_queue& operator=(basic_event_queue&&) = default;
+	basic_event_queue& operator=(basic_event_queue&&) & = default;
 
-	~basic_event_queue()
+
+	void schedule(abstract_event& event)
 	{
-#if 0
-		m_forward_list.splice_back(m_mpsc_queue.pop_all());
-
-		for (operation_base& operation : m_forward_list)
+		if (m_mpsc_queue.push_back(&event))
 		{
-			operation.vtable.set_stopped(operation);
+			m_event();
 		}
-#endif
 	}
 
-
-	scheduler get_scheduler()
+	void schedule_relaxed(abstract_event& event)
 	{
-		return scheduler(*this);
+		m_forward_list.push_back(&event);
 	}
 
 

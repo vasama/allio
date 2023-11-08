@@ -31,7 +31,7 @@ static vsm::result<bool> check_timeout(vsm::result<void> const r)
 
 static vsm::result<bool> wait(abstract_event_handle const& event, deadline const deadline = deadline::instant())
 {
-	return check_timeout(event.blocking_wait(deadline));
+	return check_timeout(event.wait_blocking(deadline));
 }
 
 static event_reset_mode get_reset_mode(bool const manual_reset)

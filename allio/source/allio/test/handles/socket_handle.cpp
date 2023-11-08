@@ -1,12 +1,17 @@
 #include <allio/listen_handle.hpp>
 #include <allio/socket_handle.hpp>
 
+#include <allio/get_multiplexer.hpp>
 #include <allio/path.hpp>
-//#include <allio/sync_wait.hpp>
+#include <allio/sync_wait.hpp>
+#include <allio/task.hpp>
+#include <allio/via.hpp>
+
 #include <allio/test/shared_object.hpp>
 
 #include <vsm/lazy.hpp>
 
+#include <exec/env.hpp>
 #include <exec/task.hpp>
 
 #include <catch2/catch_all.hpp>
@@ -67,16 +72,18 @@ static endpoint_type generate_endpoint()
 }
 
 
-#if 0
 TEST_CASE("a stream socket can connect to a listening socket", "[socket_handle][blocking]")
 {
+	using socket_handle_tag = raw_socket_handle_t;
+	using listen_handle_tag = raw_listen_handle_t;
+
 	auto const endpoint = generate_endpoint();
 
-	auto const listen_socket = listen(endpoint).value();
+	auto const listen_socket = listen_blocking<listen_handle_tag>(endpoint).value();
 
 	auto connect_future = std::async(std::launch::async, [&]()
 	{
-		return connect(endpoint);
+		return connect_blocking<socket_handle_tag>(endpoint);
 	});
 
 	auto const server_socket = listen_socket.accept().value().socket;
@@ -116,10 +123,9 @@ TEST_CASE("a stream socket can connect to a listening socket", "[socket_handle][
 		REQUIRE(value == 42);
 	}
 }
-#endif
 
 
-#if 1
+#if 0
 template<typename Callable>
 class my_io_callback : public detail::io_callback
 {
@@ -147,7 +153,7 @@ TEST_CASE("TEMP")
 	auto const endpoint = ipv4_endpoint(ipv4_address::localhost, 51234);
 
 	auto multiplexer = default_multiplexer::create().value();
-	auto listen_socket = listen(multiplexer, endpoint).value();
+	auto listen_socket = raw_listen_blocking(endpoint).value().with_multiplexer(multiplexer).value();
 
 	using operation_type = operation_t<default_multiplexer, raw_listen_handle_t, raw_listen_handle_t::accept_t>;
 
@@ -156,7 +162,7 @@ TEST_CASE("TEMP")
 
 	my_io_callback callback = [&](operation_base&, io_status const status)
 	{
-		auto r = notify_io(listen_socket, *operation, status);
+		auto r = notify_io<raw_listen_handle_t::accept_t>(listen_socket, *operation, status);
 
 		if (r.has_value())
 		{
@@ -172,45 +178,58 @@ TEST_CASE("TEMP")
 	};
 
 	operation.emplace(callback, io_args<raw_listen_handle_t::accept_t>()());
-	REQUIRE(!submit_io(listen_socket, *operation));
+	REQUIRE(!submit_io<raw_listen_handle_t::accept_t>(listen_socket, *operation));
 }
 #endif
 
 
-#if 0
+//TODO: Get rid of this when the MSVC bug is fixed.
+#ifdef _MSC_VER
+#	define allio_await_move std::move
+#else
+#	define allio_await_move
+#endif
+
+#if 1
 TEST_CASE("", "[socket_handle][async]")
 {
 	auto const endpoint = generate_endpoint();
 
 	auto multiplexer = default_multiplexer::create().value();
 
-	sync_wait(multiplexer, [&]() -> exec::task<void>
+	sync_wait(multiplexer, [&]() -> task<void>
 	{
-		listen_socket_handle const listen_socket = listen(&multiplexer, endpoint).value();
-		stream_socket_handle server_socket;
+		using S = decltype(raw_listen(endpoint));
+		using E = decltype(exec::make_env(exec::with(get_multiplexer, default_multiplexer_handle(multiplexer))));
+		static_assert(ex::sender_in<S, E>);
+
+		auto const listen_socket = co_await via(multiplexer)(raw_listen(endpoint));
+		//auto const listen_socket = co_await raw_listen(endpoint);
+		typename decltype(listen_socket)::socket_handle_type server_socket(multiplexer);
 
 		co_await ex::when_all(
-			[&]() -> exec::task<void>
+			[&]() -> task<void>
 			{
-				stream_socket_handle& socket = server_socket;
+				auto& socket = server_socket;
 
-				socket = (co_await listen_socket.accept_async()).socket;
+				socket = allio_await_move(co_await listen_socket.accept()).socket;
 
 				signed char request_data;
-				REQUIRE(co_await socket.read_some_async(as_read_buffer(&request_data, 1)) == 1);
+				REQUIRE(co_await socket.read_some(as_read_buffer(&request_data, 1)) == 1);
 
 				signed char const reply_data = -request_data;
-				REQUIRE(co_await socket.write_some_async(as_write_buffer(&reply_data, 1)) == 1);
+				REQUIRE(co_await socket.write_some(as_write_buffer(&reply_data, 1)) == 1);
 			}(),
-			[&]() -> exec::task<void>
+			[&]() -> task<void>
 			{
-				stream_socket_handle const socket = co_await connect_async(endpoint);
+				auto const socket = co_await via(multiplexer)(raw_connect(endpoint));
+				//auto const socket = co_await raw_connect(endpoint);
 
 				signed char const request_data = 42;
-				REQUIRE(co_await socket.write_some_async(as_write_buffer(&request_data, 1)) == 1);
+				REQUIRE(co_await socket.write_some(as_write_buffer(&request_data, 1)) == 1);
 
 				signed char reply_data;
-				REQUIRE(co_await socket.read_some_async(as_read_buffer(&reply_data, 1)) == 1);
+				REQUIRE(co_await socket.read_some(as_read_buffer(&reply_data, 1)) == 1);
 
 				REQUIRE(reply_data == -42);
 			}());
@@ -218,16 +237,7 @@ TEST_CASE("", "[socket_handle][async]")
 }
 #endif
 
-
 #if 0
-//TODO: Get rid of this when the MSVC bug is fixed.
-#ifdef _MSC_VER
-#	define allio_await_move(...) ::std::move(__VA_ARGS__)
-#else
-#	define allio_await_move(...) (__VA_ARGS__)
-#endif
-
-
 static path get_temp_path(std::string_view const name)
 {
 	return path((std::filesystem::temp_directory_path() / name).string());
