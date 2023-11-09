@@ -14,6 +14,10 @@
 
 namespace allio::detail {
 
+struct producer_t;
+struct consumer_t;
+struct modifier_t;
+
 struct bounded_runtime_t;
 
 
@@ -35,10 +39,22 @@ struct _handle_cv<1>
 };
 
 template<typename O>
-inline constexpr bool is_mutating = requires { typename O::mutation_tag; };
+concept mutation = requires { typename O::mutation_tag; };
+
+template<typename O>
+concept producer = mutation<O> && std::is_same_v<typename O::mutation_tag, producer_t>;
+
+template<typename O>
+concept consumer = mutation<O> && std::is_same_v<typename O::mutation_tag, consumer_t>;
+
+template<typename O>
+concept modifier = mutation<O> && std::is_same_v<typename O::mutation_tag, modifier_t>;
+
+template<typename O>
+concept observer = !mutation<O>;
 
 template<typename O, typename T>
-using handle_cv = typename _handle_cv<is_mutating<O>>::template type<T>;
+using handle_cv = typename _handle_cv<mutation<O>>::template type<T>;
 
 
 template<typename O>
@@ -319,8 +335,8 @@ template<typename M, typename H, typename O>
 using operation_t = operation<M, H, O>;
 
 
-template<typename M, typename H, typename O>
-	requires std::same_as<typename O::runtime_tag, bounded_runtime_t>
+template<typename M, typename H, observer O>
+	requires std::is_same_v<typename O::runtime_tag, bounded_runtime_t>
 struct operation_impl<M, H, O>
 {
 	using N = handle_cv<O, typename H::native_type>;
@@ -328,12 +344,12 @@ struct operation_impl<M, H, O>
 	using S = operation_t<M, H, O>;
 	using R = io_result_t<O, H, M>;
 
-	static io_result2<R> submit(M&, N& h, C const&, S& s)
+	static io_result2<R> submit(M&, N& h, C&, S& s)
 	{
-		return H::blocking_io(O(), h, s.args);
+		return blocking_io<O>(h, s.args);
 	}
 
-	static io_result2<R> notify(M&, N& h, C const&, S&, io_status)
+	static io_result2<R> notify(M&, N& h, C&, S& s, io_status)
 	{
 		vsm_unreachable();
 	}

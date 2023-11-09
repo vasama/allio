@@ -7,10 +7,10 @@ using namespace allio::detail;
 using namespace allio::linux;
 
 using M = epoll_multiplexer;
-using H = event_handle_t;
+using H = event_t;
 using C = connector_t<M, H>;
 
-using wait_t = event_handle_t::wait_t;
+using wait_t = event_t::wait_t;
 using wait_s = operation_t<M, H, wait_t>;
 
 io_result2 operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s, wait_r const r)

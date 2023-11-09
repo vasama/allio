@@ -14,14 +14,17 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-vsm::result<void> event_handle_t::blocking_io(create_t, native_type& h, io_parameters_t<create_t> const& args)
+vsm::result<void> event_t::blocking_io(
+	create_t,
+	native_type& h,
+	io_parameters_t<create_t> const& args)
 {
 	vsm_try_void(kernel_init());
 
 	handle_flags flags = flags::none;
 	EVENT_TYPE event_type = NotificationEvent;
 
-	if (args.reset_mode == event_reset_mode::auto_reset)
+	if (args.mode == event_mode::auto_reset)
 	{
 		flags |= flags::auto_reset;
 		event_type = SynchronizationEvent;
@@ -40,7 +43,7 @@ vsm::result<void> event_handle_t::blocking_io(create_t, native_type& h, io_param
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
-	h = platform_handle_t::native_type
+	h = platform_object_t::native_type
 	{
 		{
 			flags::not_null | flags,
@@ -51,7 +54,10 @@ vsm::result<void> event_handle_t::blocking_io(create_t, native_type& h, io_param
 	return {};
 }
 
-vsm::result<void> event_handle_t::blocking_io(signal_t, native_type const& h, io_parameters_t<signal_t> const& args)
+vsm::result<void> event_t::blocking_io(
+	signal_t,
+	native_type const& h,
+	io_parameters_t<signal_t> const& args)
 {
 	NTSTATUS const status = NtSetEvent(
 		unwrap_handle(h.platform_handle),
@@ -65,7 +71,10 @@ vsm::result<void> event_handle_t::blocking_io(signal_t, native_type const& h, io
 	return {};
 }
 
-vsm::result<void> event_handle_t::blocking_io(reset_t, native_type const& h, io_parameters_t<reset_t> const& args)
+vsm::result<void> event_t::blocking_io(
+	reset_t,
+	native_type const& h,
+	io_parameters_t<reset_t> const& args)
 {
 	NTSTATUS const status = NtResetEvent(
 		unwrap_handle(h.platform_handle),
@@ -79,7 +88,10 @@ vsm::result<void> event_handle_t::blocking_io(reset_t, native_type const& h, io_
 	return {};
 }
 
-vsm::result<void> event_handle_t::blocking_io(wait_t, native_type const& h, io_parameters_t<wait_t> const& args)
+vsm::result<void> event_t::blocking_io(
+	wait_t,
+	native_type const& h,
+	io_parameters_t<wait_t> const& args)
 {
 	NTSTATUS const status = win32::NtWaitForSingleObject(
 		unwrap_handle(h.platform_handle),
@@ -87,7 +99,7 @@ vsm::result<void> event_handle_t::blocking_io(wait_t, native_type const& h, io_p
 		kernel_timeout(args.deadline));
 
 	//TODO: Check for STATUS_TIMEOUT in other places where it might be missing.
-	//TODO: Replace NT_SUCCESS with one that checks for non-zero for debug purposes.
+	//TODO: Replace NT_SUCCESS with one including a debug hook for warning and information statuses.
 	if (status == STATUS_TIMEOUT)
 	{
 		return vsm::unexpected(error::async_operation_timed_out);

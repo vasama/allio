@@ -28,14 +28,17 @@ vsm::result<void> raw_listen_handle_t::blocking_io(
 	io_parameters_t<listen_t> const& args)
 {
 	vsm_try(addr, socket_address::make(args.endpoint));
-	vsm_try(socket, create_socket(addr.addr.sa_family));
+
+	vsm_try(socket, create_socket(
+		addr.addr.sa_family,
+		/* multiplexable: */ false));
 
 	vsm_try_void(socket_listen(
 		socket.socket.get(),
 		addr,
-		args.backlog ? &*args.backlog : nullptr));
+		args.backlog));
 
-	h = platform_handle_t::native_type
+	h = platform_object_t::native_type
 	{
 		{
 			flags::not_null | socket.flags,
@@ -61,7 +64,7 @@ vsm::result<accept_result_type> raw_listen_handle_t::blocking_io(
 	{
 		blocking_handle<raw_socket_handle_t>(
 			adopt_handle_t(),
-			vsm_lazy(platform_handle_t::native_type
+			vsm_lazy(platform_object_t::native_type
 			{
 				{
 					flags::not_null | socket.flags,

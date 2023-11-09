@@ -16,10 +16,10 @@ using namespace allio::detail;
 using namespace allio::linux;
 
 using M = io_uring_multiplexer;
-using H = event_handle_t;
+using H = event_t;
 using C = connector_t<M, H>;
 
-using wait_t = event_handle_t::wait_t;
+using wait_t = event_t::wait_t;
 using wait_s = operation_t<M, H, wait_t>;
 
 static eventfd_t dummy_event_value;
@@ -42,6 +42,8 @@ static io_result2 _submit(M& m, H const& h, C const& c, wait_s& s)
 
 	auto const [fd, fd_flags] = ctx.get_fd(c, h.get_platform_handle());
 
+	// Polling is required even in auto reset mode
+	// because the event is opened in non-blocking mode.
 	vsm_try(poll_sqe, ctx.push(
 	{
 		.opcode = IORING_OP_POLL_ADD,

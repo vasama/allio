@@ -54,8 +54,8 @@ public:
 	};
 
 
-	using asynchronous_operations = type_list_cat<
-		base_type::asynchronous_operations,
+	using operations = type_list_cat<
+		base_type::operations,
 		type_list<bind_t, send_t, receive_t>>;
 
 protected:

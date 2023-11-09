@@ -5,8 +5,7 @@
 
 #include <vsm/box.hpp>
 
-namespace allio {
-namespace detail {
+namespace allio::detail {
 
 enum class directory_stream_native_handle : uintptr_t
 {
@@ -18,16 +17,16 @@ struct directory_entry
 {
 	file_kind kind;
 	file_id_64 node_id;
-	input_string_view name;
+	any_string_view name;
 
-	vsm::result<size_t> get_name(output_string_ref output) const;
+	vsm::result<size_t> get_name(any_string_buffer buffer) const;
 
 	template<typename String = std::string>
 	vsm::result<String> get_name() const
 	{
-		String string = {};
-		vsm_try_discard(get_name(string));
-		return static_cast<String&&>(string);
+		vsm::result<String> r(vsm::result_value);
+		vsm_try_discard(get_name(*r));
+		return r;
 	}
 };
 
@@ -134,63 +133,57 @@ public:
 	}
 };
 
-class directory_stream_buffer
+
+struct directory_restart_t
 {
+	bool restart;
+
+	struct tag_t
+	{
+		struct argument_t
+		{
+			bool value;
+
+			friend void tag_invoke(set_argument_t, directory_restart_t& args, argument_t const& value)
+			{
+				args.restart = value.value;
+			}
+		};
+
+		argument_t vsm_static_operator_invoke(bool const restart)
+		{
+			return { restart };
+		}
+
+		friend void tag_invoke(set_argument_t, directory_restart_t& args, tag_t)
+		{
+			args.restart = true;
+		}
+	};
 };
+inline constexpr directory_restart_t::tag_t directory_restart = {};
 
-class _directory_handle : public filesystem_handle
+struct directory_t : fs_object_t
 {
-protected:
-	using base_type = filesystem_handle;
+	using base_type = fs_object_t;
 
-public:
-	struct read_t;
+	struct read_t
+	{
+		using result_type = directory_stream_view;
 
-	#define allio_directory_handle_fetch_parameters(type, data, ...) \
-		type(allio::detail::directory_handle_base, read_parameters) \
-		data(bool,                  restart,        false) \
-		data(::allio::deadline,     deadline)
+		struct required_params_type
+		{
+			read_buffer buffer;
+		};
 
-	allio_interface_parameters(allio_directory_handle_fetch_parameters);
+		using optional_params_type = directory_restart_t;
+	};
 
-
-	using async_operations = type_list_cat
+	using operations = type_list_cat
 	<
-		base_type::async_operations,
-		type_list
-		<
-			read_t
-		>
+		base_type::operations,
+		type_list<read_t>
 	>;
-
-protected:
-	allio_detail_default_lifetime(_directory_handle);
-
-	template<typename H>
-	struct sync_interface : base_type::sync_interface<H>
-	{
-		template<parameters<read_parameters> P = read_parameters::interface>
-		vsm::result<directory_stream_view> read(read_buffer const buffer, P const& args = {}) const;
-	};
-
-	template<typename M, typename H>
-	struct async_interface : base_type::async_interface<M, H>
-	{
-		template<parameters<read_parameters> P = read_parameters::interface>
-		basic_sender<M, H, read_t> read_async(read_buffer const buffer, P const& args = {}) const;
-	};
 };
 
-} // namespace detail
-
-template<>
-struct io_operation_traits<directory_handle::read_t>
-{
-	using handle_type = directory_handle const;
-	using result_type = directory_stream_view;
-	using params_type = directory_handle::read_parameters;
-
-	read_buffer buffer;
-};
-
-} // namespace allio
+} // namespace allio::detail

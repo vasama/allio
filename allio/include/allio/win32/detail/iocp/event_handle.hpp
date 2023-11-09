@@ -3,13 +3,15 @@
 #include <allio/detail/handles/event_handle.hpp>
 #include <allio/win32/detail/iocp/multiplexer.hpp>
 
+#include <allio/win32/detail/iocp/wait.hpp>
+
 namespace allio::detail {
 
 template<>
-struct connector_impl<iocp_multiplexer, event_handle_t>
+struct connector_impl<iocp_multiplexer, event_t>
 {
 	using M = iocp_multiplexer;
-	using H = event_handle_t;
+	using H = event_t;
 	using N = H::native_type;
 	using C = connector_t<M, H>;
 
@@ -27,17 +29,16 @@ struct connector_impl<iocp_multiplexer, event_handle_t>
 };
 
 template<>
-struct operation_impl<iocp_multiplexer, event_handle_t, event_handle_t::wait_t>
+struct operation_impl<iocp_multiplexer, event_t, event_t::wait_t>
 {
 	using M = iocp_multiplexer;
-	using H = event_handle_t;
+	using H = event_t;
 	using N = H::native_type;
 	using O = H::wait_t;
 	using C = connector_t<M, H>;
 	using S = operation_t<M, H, O>;
 
-	win32::unique_wait_packet wait_packet;
-	iocp_multiplexer::wait_slot wait_slot;
+	iocp_wait_state wait_state;
 
 	static io_result2<void> submit(M& m, N const& h, C const& c, S& s);
 	static io_result2<void> notify(M& m, N const& h, C const& c, S& s, io_status status);

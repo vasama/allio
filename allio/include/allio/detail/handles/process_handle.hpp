@@ -171,9 +171,9 @@ public:
 #endif
 
 
-	using asynchronous_operations = type_list_cat
+	using operations = type_list_cat
 	<
-		base_type::asynchronous_operations,
+		base_type::operations,
 		type_list<wait_t>
 	>;
 

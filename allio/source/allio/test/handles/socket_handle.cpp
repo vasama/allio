@@ -79,11 +79,11 @@ TEST_CASE("a stream socket can connect to a listening socket", "[socket_handle][
 
 	auto const endpoint = generate_endpoint();
 
-	auto const listen_socket = listen_blocking<listen_handle_tag>(endpoint).value();
+	auto const listen_socket = blocking::listen<listen_handle_tag>(endpoint).value();
 
 	auto connect_future = std::async(std::launch::async, [&]()
 	{
-		return connect_blocking<socket_handle_tag>(endpoint);
+		return blocking::connect<socket_handle_tag>(endpoint);
 	});
 
 	auto const server_socket = listen_socket.accept().value().socket;
@@ -193,16 +193,14 @@ TEST_CASE("TEMP")
 #if 1
 TEST_CASE("", "[socket_handle][async]")
 {
+	using namespace async;
+
 	auto const endpoint = generate_endpoint();
 
 	auto multiplexer = default_multiplexer::create().value();
 
 	sync_wait(multiplexer, [&]() -> task<void>
 	{
-		using S = decltype(raw_listen(endpoint));
-		using E = decltype(exec::make_env(exec::with(get_multiplexer, default_multiplexer_handle(multiplexer))));
-		static_assert(ex::sender_in<S, E>);
-
 		auto const listen_socket = co_await via(multiplexer)(raw_listen(endpoint));
 		//auto const listen_socket = co_await raw_listen(endpoint);
 		typename decltype(listen_socket)::socket_handle_type server_socket(multiplexer);
@@ -233,6 +231,8 @@ TEST_CASE("", "[socket_handle][async]")
 
 				REQUIRE(reply_data == -42);
 			}());
+
+		int xx = 0;
 	}());
 }
 #endif

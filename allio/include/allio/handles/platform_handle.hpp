@@ -4,6 +4,6 @@
 
 namespace allio {
 
-using detail::platform_handle_t;
+using detail::platform_object_t;
 
 } // namespace allio

@@ -3,9 +3,19 @@
 #include <allio/byte_io.hpp>
 #include <allio/detail/handles/filesystem_handle.hpp>
 
-namespace allio {
-namespace detail {
+namespace allio::detail {
 
+struct file_t : fs_object_t
+{
+	using base_type = fs_object_t;
+
+	using operations = type_list_cat<
+		base_type::operations
+		//TODO: file operations
+	>;
+};
+
+#if 0
 class _file_handle : public filesystem_handle
 {
 protected:
@@ -56,6 +66,6 @@ protected:
 		basic_sender<M, H, gather_write_at_t> write_at_async(file_size const offset, write_buffer const buffer, P const& args = {}) const;
 	};
 };
+#endif
 
-} // namespace detail
-} // namespace allio
+} // namespace allio::detail

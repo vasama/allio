@@ -3,77 +3,98 @@
 #include <allio/detail/handles/file_handle.hpp>
 #include <allio/memory.hpp>
 
-namespace allio {
-namespace detail {
+#include <vsm/standard.hpp>
 
-class _section_handle : public platform_handle
+namespace allio::detail {
+
+struct protection_parameter_t
 {
-protected:
-	using base_type = platform_handle;
+	detail::protection protection;
 
-private:
-	vsm::linear<protection> m_protection;
-
-public:
-	struct native_handle_type : base_type::native_handle_type
+	struct tag_t
 	{
-		protection protection;
+		struct argument_t
+		{
+			detail::protection value;
+			
+			friend void tag_invoke(set_argument_t, protection_parameter_t& args, argument_t const& value)
+			{
+				args.protection = value.value;
+			}
+		};
+
+		argument_t vsm_static_operator_invoke(detail::protection const protection)
+		{
+			return { protection };
+		}
+	};
+};
+inline constexpr protection_parameter_t::tag_t section_protection;
+
+struct section_t : platform_object_t
+{
+	using base_type = platform_object_t;
+
+	struct native_type : base_type::native_type
+	{
+		detail::protection protection;
 	};
 
-	[[nodiscard]] native_handle_type get_native_handle() const
+	struct create_t
 	{
-		return
+		using mutation_tag = producer_t;
+
+		struct required_params_type
 		{
-			base_type::get_native_handle(),
-			m_protection.value,
+			file_handle const* backing_file;
+			file_size maximum_size;
 		};
-	}
 
+		using optional_params_type = protection_parameter_t;
+	};
 
-	[[nodiscard]] protection get_protection() const
-	{
-		vsm_assert(*this); //PRECONDITION
-		return m_protection.value;
-	}
-
-
-	struct create_t;
-
-	#define allio_section_handle_create_parameters(type, data, ...) \
-		type(allio::section_handle, create_parameters) \
-		allio_platform_handle_create_parameters(__VA_ARGS__, __VA_ARGS__) \
-		data(::allio::protection, protection, ::allio::protection::read_write) \
-
-	allio_interface_parameters(allio_section_handle_create_parameters);
-
-protected:
-	allio_detail_default_lifetime(_section_handle);
-
-	_section_handle(private_t, native_handle_type const& native)
-		: base_type(native)
-		, m_protection(native.protection)
-	{
-	}
+	using operations = type_list_cat<
+		base_type::operations,
+		type_list<create_t>
+	>;
 
 	template<typename H>
-	struct sync_interface : base_type::sync_interface<H>
+	struct abstract_interface : base_type::abstract_interface<H>
 	{
-		template<parameters<create_parameters> P = create_parameters::interface>
-		vsm::result<void> create(P const& args) &;
+		[[nodiscard]] detail::protection protection() const
+		{
+			return static_cast<H const&>(*this).native().native_type::protection;
+		}
 	};
 };
 
-} // namespace detail
+namespace _section_blocking {
 
-template<>
-struct io_operation_traits<section_handle::create_t>
+using section_handle = blocking_handle<section_t>;
+
+vsm::result<section_handle> create_section(
+	file_size const maximum_size,
+	auto&&... args)
 {
-	using handle_type = section_handle;
-	using result_type = void;
-	using params_type = section_handle::create_parameters;
+	vsm::result<section_handle> r(vsm::result_value);
+	vsm_try_void(blocking_io<section_t::create_t>(
+		*r,
+		io_args<section_t::create_t>(nullptr, maximum_size)(vsm_forward(args)...)));
+	return r;
+}
 
-	file_handle const* backing_file;
-	file_size maximum_size;
-};
+vsm::result<section_handle> create_section(
+	_file_blocking::file_handle const& backing_file,
+	file_size const maximum_size,
+	auto&&... args)
+{
+	vsm::result<section_handle> r(vsm::result_value);
+	vsm_try_void(blocking_io<section_t::create_t>(
+		*r,
+		io_args<section_t::create_t>(&backing_file, maximum_size)(vsm_forward(args)...)));
+	return r;
+}
 
-} // namespace allio
+} // namespace _section_blocking
+
+} // namespace allio::detail

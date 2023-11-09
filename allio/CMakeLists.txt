@@ -127,6 +127,7 @@ vsm_configure(allio
 		include/allio/win32/detail/iocp/byte_io.hpp
 		include/allio/win32/detail/iocp/event_handle.hpp
 		include/allio/win32/detail/iocp/multiplexer.hpp
+		include/allio/win32/detail/iocp/wait.hpp
 		include/allio/win32/kernel_error.hpp
 		include/allio/win32/platform.hpp
 		include/allio/win32/detail/path.hpp
@@ -180,6 +181,7 @@ vsm_configure(allio
 		source/allio/impl/win32/iocp/multiplexer.cpp
 		#source/allio/impl/win32/iocp/process_handle.cpp
 		source/allio/impl/win32/iocp/socket_handle.cpp
+		source/allio/impl/win32/iocp/wait.cpp
 
 	TEST_SOURCES
 		source/allio/test/win32/command_line.cpp

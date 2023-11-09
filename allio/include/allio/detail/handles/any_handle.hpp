@@ -25,7 +25,7 @@ struct any_handle_t : BaseHandleTag
 
 	using virtual_table_type = any_handle_virtual_table<
 		BaseHandleTag,
-		typename BaseHandleTag::asynchronous_operations>;
+		typename BaseHandleTag::operations>;
 
 	struct native_type : base_type::native_type
 	{
@@ -59,7 +59,7 @@ struct connector_impl<Multiplexer, any_handle_t<BaseHandleTag>>
 		void                          (cancel_io_t, virtual_object<handle_cv<Os, N>>, virtual_object<C const>, operation_t<M, H, Os>&)...
 	>;
 
-	using virtual_table_type = typename BaseHandleTag::asynchronous_operations::template apply<virtual_table_template>;
+	using virtual_table_type = typename BaseHandleTag::operations::template apply<virtual_table_template>;
 
 	virtual_table_type const* virtual_table;
 };

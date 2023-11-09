@@ -3,10 +3,8 @@
 #include <allio/default_multiplexer.hpp>
 #include <allio/handles/datagram_handle.hpp>
 
-namespace allio {
+namespace allio::async {
 
-allio_detail_export
-template<typename Multiplexer = default_multiplexer_handle>
-using datagram_handle = basic_datagram_handle<Multiplexer>;
+using datagram_socket_handle = basic_datagram_socket_handle<default_multiplexer_handle>;
 
-} // namespace allio
+} // namespace allio::async

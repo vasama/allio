@@ -4,9 +4,7 @@
 
 namespace allio {
 
+using detail::fs_object_t;
 using detail::path_descriptor;
-using detail::at;
-
-using detail::filesystem_handle;
 
 } // namespace allio

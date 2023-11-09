@@ -4,10 +4,14 @@
 
 namespace allio {
 
+using detail::section_protection_t;
+using detail::section_protection;
+
+using detail::section_t;
+using detail::abstract_section_handle;
+
 using section_handle = basic_blocking_handle<detail::_section_handle>;
 
-
-template<parameters<section_handle::create_parameters> P = section_handle::create_parameters::interface>
-vsm::result<section_handle> create_section(file_size const maximum_size, P const& args = {});
+namespace blocking { using namespace detail::_section_blocking; }
 
 } // namespace allio

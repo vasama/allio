@@ -2,6 +2,7 @@
 
 #include <allio/detail/handles/socket_handle.hpp>
 #include <allio/win32/detail/iocp/multiplexer.hpp>
+#include <allio/win32/detail/wsa.hpp>
 
 #include <allio/detail/unique_socket.hpp>
 
@@ -23,10 +24,11 @@ struct operation_impl<iocp_multiplexer, raw_socket_handle_t, raw_socket_handle_t
 	using S = operation_t<M, H, O>;
 
 	unique_wrapped_socket socket;
+	handle_flags socket_flags;
 	iocp_multiplexer::overlapped overlapped;
 
-	static io_result2<void> submit(M& m, N& h, C const& c, S& s);
-	static io_result2<void> notify(M& m, N& h, C const& c, S& s, io_status status);
+	static io_result2<void> submit(M& m, N& h, C& c, S& s);
+	static io_result2<void> notify(M& m, N& h, C& c, S& s, io_status status);
 	static void cancel(M& m, N const& h, C const& c, S& s);
 };
 
@@ -39,6 +41,9 @@ struct operation_impl<iocp_multiplexer, raw_socket_handle_t, raw_socket_handle_t
 	using O = H::read_some_t;
 	using C = connector_t<M, H>;
 	using S = operation_t<M, H, O>;
+
+	wsa_buffers_storage<8> buffers;
+	iocp_multiplexer::overlapped overlapped;
 
 	static io_result2<size_t> submit(M& m, N const& h, C const& c, S& s);
 	static io_result2<size_t> notify(M& m, N const& h, C const& c, S& s, io_status status);
@@ -54,6 +59,9 @@ struct operation_impl<iocp_multiplexer, raw_socket_handle_t, raw_socket_handle_t
 	using O = H::write_some_t;
 	using C = connector_t<M, H>;
 	using S = operation_t<M, H, O>;
+
+	wsa_buffers_storage<8> buffers;
+	iocp_multiplexer::overlapped overlapped;
 
 	static io_result2<size_t> submit(M& m, N const& h, C const& c, S& s);
 	static io_result2<size_t> notify(M& m, N const& h, C const& c, S& s, io_status status);

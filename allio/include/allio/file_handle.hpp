@@ -3,11 +3,8 @@
 #include <allio/default_multiplexer.hpp>
 #include <allio/handles/file_handle.hpp>
 
-#include allio_detail_default_handle_include(file_handle)
+namespace allio::async {
 
-namespace allio {
+using file_handle = basic_file_handle<default_multiplexer_handle>;
 
-allio_detail_export
-using async_file_handle = basic_file_handle<default_multiplexer>;
-
-} // namespace allio
+} // namespace allio::async

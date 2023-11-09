@@ -48,17 +48,17 @@ vsm_flag_enum(file_sharing);
 
 enum class file_caching : uint8_t
 {
-	none                                                    = 0,
+	none                                = 0,
 };
 
 enum class file_flags : uint32_t
 {
-	none                                                    = 0,
-	unlink_on_first_close                                   = 1 << 0,
-	disable_safety_barriers                                 = 1 << 1,
-	disable_safety_unlinks                                  = 1 << 2,
-	disable_prefetching                                     = 1 << 3,
-	maximum_prefetching                                     = 1 << 4,
+	none                                = 0,
+	unlink_on_first_close               = 1 << 0,
+	disable_safety_barriers             = 1 << 1,
+	disable_safety_unlinks              = 1 << 2,
+	disable_prefetching                 = 1 << 3,
+	maximum_prefetching                 = 1 << 4,
 
 #if vsm_os_win32
 #	define allio_detail_win32_flag(x) 1 << x
@@ -66,8 +66,8 @@ enum class file_flags : uint32_t
 #	define allio_detail_win32_flag(x) 0
 #endif
 
-	win_disable_unlink_emulation                            = allio_detail_win32_flag(24),
-	win_disable_sparse_file_creation                        = allio_detail_win32_flag(25),
+	win_disable_unlink_emulation        = allio_detail_win32_flag(24),
+	win_disable_sparse_file_creation    = allio_detail_win32_flag(25),
 
 #undef allio_detail_win32_flag
 };
@@ -80,40 +80,39 @@ enum class path_kind : uint32_t
 #	define allio_detail_win32_flag(x) 0
 #endif
 
-	win_nt                                                  = allio_detail_win32_flag(0),
-	win_guid                                                = allio_detail_win32_flag(1),
-	win_dos                                                 = allio_detail_win32_flag(2),
+	windows_nt                      = allio_detail_win32_flag(0),
+	windows_guid                    = allio_detail_win32_flag(1),
+	windows_dos                     = allio_detail_win32_flag(2),
 
 #undef allio_detail_win32_flag
 
-	any = win_nt | win_guid | win_dos,
+	any = windows_nt | windows_guid | windows_dos,
 };
 vsm_flag_enum(path_kind);
 
+
+struct fs_object_t;
+
 struct path_descriptor
 {
-	filesystem_handle const* base;
+	native_platform_handle base;
 	any_path_view path;
 
 	template<std::convertible_to<any_path_view> Path>
 	path_descriptor(Path const& path)
-		: base(nullptr)
+		: base(native_platform_handle::null)
 		, path(path)
 	{
 	}
 
+	//TODO: Constrain base to handle to fs_object_t
 	template<std::convertible_to<any_path_view> Path>
-	path_descriptor(filesystem_handle const& base, Path const& path)
-		: base(&base)
+	path_descriptor(auto const& base, Path const& path)
+		: base(base.native().platform_object_t::native_type::platform_handle)
 		, path(path)
 	{
 	}
 };
-
-inline path_descriptor at(filesystem_handle const& location, any_path_view const path)
-{
-	return path_descriptor(location, path);
-}
 
 
 struct file_mode_t
@@ -143,79 +142,73 @@ struct file_flags_t
 
 struct path_kind_t
 {
-	detail::path_kind kind = detail::path_kind::any;
+	detail::path_kind path_kind = detail::path_kind::any;
 };
 
 
-class filesystem_handle : public platform_handle
+struct fs_object_t : platform_object_t
 {
-protected:
-	using base_type = platform_handle;
+	using base_type = platform_object_t;
 
-public:
 	struct open_t
 	{
-		using handle_type = filesystem_handle;
-		using result_type = void;
-		using required_params_type = no_parameters_t;
-		using optional_params_type = parameters_t<
+		using mutation_tag = producer_t;
+
+		struct required_params_type
+		{
+			path_descriptor path;
+		};
+
+		using optional_params_type = parameters_t
+		<
 			file_mode_t,
 			file_creation_t,
 			file_sharing_t,
 			file_caching_t,
-			file_flags_t>;
+			file_flags_t
+		>;
 	};
-
 
 	struct get_current_path_t
 	{
-		using handle_type = filesystem_handle const;
 		using result_type = size_t;
-
+		
 		struct required_params_type
 		{
 			any_path_buffer buffer;
 		};
-
+		
 		using optional_params_type = path_kind_t;
 	};
 
-	vsm::result<size_t> get_current_path(any_path_buffer const output, auto&&... args) const
-	{
-		return do_blocking_io(
-			*this,
-			io_args<get_current_path_t>(output)(vsm_forward(args)...));
-	}
-
-	template<typename Path = path>
-	vsm::result<Path> get_current_path(auto&&... args) const
-	{
-		vsm::result<Path> r(vsm::result_value);
-		vsm_try_void(do_blocking_io(
-			*this,
-			io_args<get_current_path_t>(*r)(vsm_forward(args)...)));
-		return r;
-	}
-
-
-	using asynchronous_operations = type_list_cat<
-		base_type::asynchronous_operations,
-		type_list<open_t>
+	using operations = type_list_cat<
+		base_type::operations,
+		type_list<open_t, get_current_path_t>
 	>;
 
-protected:
-	allio_detail_default_lifetime(filesystem_handle);
+	template<typename H>
+	struct abstract_interface : base_type::abstract_interface<H>
+	{
+		[[nodiscard]] vsm::result<size_t> get_current_path(any_path_buffer const buffer, auto&&... args)
+		{
+			return blocking_io<get_current_path_t>(
+				static_cast<H const&>(*this),
+				io_args<get_current_path_t>(buffer)(vsm_forward(args)...));
+		}
 
-	using platform_handle::platform_handle;
+		template<typename Path>
+		[[nodiscard]] vsm::result<Path> get_current_path(auto&&... args)
+		{
+			vsm::result<Path> r(vsm::result_value);
+			vsm_try_discard(get_current_path(any_path_buffer(*r), vsm_forward(args)...));
+			return r;
+		}
+	};
 
-protected:
-	static vsm::result<void> do_blocking_io(
-		filesystem_handle const& h,
-		io_result_ref_t<get_current_path_t> r,
+	static vsm::result<void> blocking_io(
+		get_current_path_t,
+		native_type const& h,
 		io_parameters_t<get_current_path_t> const& args);
 };
-
-
-vsm::result<file_attributes> query_file_attributes(path_descriptor path);
 
 } // namespace allio::detail

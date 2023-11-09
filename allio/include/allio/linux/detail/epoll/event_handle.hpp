@@ -6,11 +6,11 @@
 namespace allio::detail {
 
 template<>
-struct operation_impl<epoll_multiplexer, event_handle_t, event_handle_t::wait_t>
+struct operation_impl<epoll_multiplexer, event_t, event_t::wait_t>
 {
 	using M = epoll_multiplexer;
-	using H = event_handle_t;
-	using O = event_handle_t::wait_t;
+	using H = event_t;
+	using O = event_t::wait_t;
 	using C = connector_t<M, H>;
 	using S = operation_t<M, H, O>;
 

@@ -4,7 +4,7 @@
 
 namespace allio::detail {
 
-struct platform_handle_t::impl_type : base_type::impl_type
+struct platform_object_t::impl_type : base_type::impl_type
 {
 	allio_handle_implementation_flags
 	(

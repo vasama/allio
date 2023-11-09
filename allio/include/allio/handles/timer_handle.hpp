@@ -9,9 +9,6 @@ namespace allio {
 
 namespace blocking {
 
-template<typename H>
-using handle = blocking_handle<H>;
-
 using timer_handle = handle<timer_t>;
 
 vsm::result<timer_handle> create_timer(auto&&... args)
@@ -27,13 +24,10 @@ vsm::result<timer_handle> create_timer(auto&&... args)
 
 namespace async {
 
-template<typename H, typename M>
-using handle = async_handle<H, M>;
-
 template<typename MultiplexerHandle>
 using basic_timer_handle = handle<timer_t, MultiplexerHandle>;
 
-auto create_timer(auto&&... args)
+ex::sender auto create_timer(auto&&... args)
 {
 	return io_handle_sender<timer_t, timer_t::create_t>(
 		io_args<timer_t::create_t>()(vsm_forward(args)...));

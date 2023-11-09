@@ -26,7 +26,10 @@ vsm::result<void> raw_socket_handle_t::blocking_io(
 	io_parameters_t<connect_t> const& args)
 {
 	vsm_try(addr, socket_address::make(args.endpoint));
-	vsm_try(socket, create_socket(addr.addr.sa_family));
+
+	vsm_try(socket, create_socket(
+		addr.addr.sa_family,
+		/* multiplexable: */ false));
 
 	vsm_try_void(socket_connect(
 		socket.socket.get(),
@@ -35,9 +38,9 @@ vsm::result<void> raw_socket_handle_t::blocking_io(
 
 	h = native_type
 	{
-		platform_handle_t::native_type
+		platform_object_t::native_type
 		{
-			handle_t::native_type
+			object_t::native_type
 			{
 				flags::not_null | socket.flags,
 			},

@@ -5,13 +5,13 @@
 
 namespace allio::detail {
 
-struct timer_t : platform_handle_t
+struct timer_t : platform_object_t
 {
-	using base_type = platform_handle_t;
+	using base_type = platform_object_t;
 
 	struct create_t
 	{
-		using is_mutation = void;
+		using mutation_tag = producer_t;
 		
 		using required_params_type = no_parameters_t;
 		using optional_params_type = no_parameters_t;
@@ -19,8 +19,8 @@ struct timer_t : platform_handle_t
 		using runtime_tag = bounded_runtime_t;
 	};
 
-	using asynchronous_operations = type_list_cat<
-		base_type::asynchronous_operations,
+	using operations = type_list_cat<
+		base_type::operations,
 		type_list<create_t>
 	>;
 

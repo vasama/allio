@@ -6,9 +6,10 @@ namespace allio {
 
 using detail::datagram_read_result;
 
-using detail::abstract_datagram_handle;
-using detail::basic_datagram_handle;
+using detail::datagram_socket_t;
+using detail::abstract_datagram_socket_handle;
 
-using detail::bind;
+namespace blocking { using namespace _datagram_socket_blocking; }
+namespace async { using namespace _datagram_socket_async; }
 
 } // namespace allio

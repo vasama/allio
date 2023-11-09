@@ -64,7 +64,9 @@ static vsm::result<void> wsa_startup()
 	return {};
 }
 
-vsm::result<posix::unique_socket_with_flags> posix::create_socket(int const address_family)
+vsm::result<posix::unique_socket_with_flags> posix::create_socket(
+	int const address_family,
+	bool const multiplexable)
 {
 	vsm_try_void(wsa_startup());
 
@@ -82,13 +84,13 @@ vsm::result<posix::unique_socket_with_flags> posix::create_socket(int const addr
 	DWORD flags = WSA_FLAG_NO_HANDLE_INHERIT;
 	handle_flags handle_flags = {};
 
-	if (true /*args.multiplexable*/) //TODO: Synchronous sockets
+	if (multiplexable)
 	{
-		handle_flags |= platform_handle_t::impl_type::flags::synchronous;
+		flags |= WSA_FLAG_OVERLAPPED;
 	}
 	else
 	{
-		flags |= WSA_FLAG_OVERLAPPED;
+		handle_flags |= platform_object_t::impl_type::flags::synchronous;
 	}
 
 	SOCKET const raw_socket = WSASocketW(
@@ -106,7 +108,7 @@ vsm::result<posix::unique_socket_with_flags> posix::create_socket(int const addr
 
 	unique_socket socket(raw_socket);
 
-	if (flags & WSA_FLAG_OVERLAPPED)
+	if (multiplexable)
 	{
 		//TODO: Set multiplexable completion modes.
 		//handle_flags |= set_multiplexable_completion_modes(socket);

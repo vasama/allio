@@ -71,7 +71,7 @@ public:
 		operation_type* m_operation = nullptr;
 
 	public:
-		void set_operation(operation_type& operation) &
+		void bind(operation_type& operation) &
 		{
 			m_operation = &operation;
 		}
@@ -94,27 +94,37 @@ private:
 		static_assert(buffer_size >= win32_type_traits<IO_STATUS_BLOCK>::size);
 
 	protected:
-		alignas(uintptr_t) std::byte m_buffer [buffer_size];
+		alignas(uintptr_t) std::byte m_buffer[buffer_size];
 
 	public:
+		T* get()
+		{
+			return std::launder(reinterpret_cast<T*>(m_buffer));
+		}
+
+		T const* get() const
+		{
+			return std::launder(reinterpret_cast<T const*>(m_buffer));
+		}
+
 		T& operator*()
 		{
-			return reinterpret_cast<T&>(m_buffer);
+			return *get();
 		}
 
 		T const& operator*() const
 		{
-			return reinterpret_cast<T const&>(m_buffer);
+			return *get();
 		}
 
 		T* operator->()
 		{
-			return reinterpret_cast<T*>(m_buffer);
+			return get();
 		}
 
 		T const* operator->() const
 		{
-			return reinterpret_cast<T const*>(m_buffer);
+			return get();
 		}
 	};
 
@@ -192,6 +202,12 @@ public:
 	}
 
 
+	[[nodiscard]] vsm::result<void> attach_handle(native_platform_handle handle, connector_type& c);
+
+	//TODO: Handles should gain a multiplexer coupling aware close to avoid detaching.
+	[[nodiscard]] vsm::result<void> detach_handle(native_platform_handle handle, connector_type& c);
+
+
 	/// @brief Attempt to cancel a pending I/O operation described by handle and slot.
 	/// @return True if the operation was cancelled before its completion.
 	/// @note A completion event is queued regardless of whether the operation was cancelled.
@@ -218,7 +234,7 @@ public:
 				m_multiplexer->release_wait_packet(vsm_move(*wait_packet));
 			}
 		};
-		vsm::unique_resource<win32::unique_wait_packet*, deleter> m_wait_packet;
+		std::unique_ptr<win32::unique_wait_packet, deleter> m_wait_packet;
 
 	public:
 		explicit wait_packet_lease(iocp_multiplexer& multiplexer, win32::unique_wait_packet& wait_packet)
@@ -252,12 +268,12 @@ public:
 	/// @brief Attempt to cancel a wait operation started on the specified slot.
 	/// @return True if the operation was cancelled before its completion.
 	/// @note A completion event is queued regardless of whether the operation was cancelled.
-	[[nodiscard]] bool cancel_wait(win32::wait_packet packet);
+	bool cancel_wait(win32::wait_packet packet);
 
 
-	[[nodiscard]] static bool supports_synchronous_completion(platform_handle_t::native_type const& h)
+	[[nodiscard]] static bool supports_synchronous_completion(platform_object_t::native_type const& h)
 	{
-		return h.flags[platform_handle_t::impl_type::flags::skip_completion_port_on_success];
+		return h.flags[platform_object_t::impl_type::flags::skip_completion_port_on_success];
 	}
 
 
@@ -268,20 +284,14 @@ private:
 	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(iocp_multiplexer const& other);
 
 
-	//TODO: Take native_platform_handle instead of platform_handle.
-	[[nodiscard]] vsm::result<void> _attach_handle(native_platform_handle handle, connector_type& c);
-	//TODO: Return a vsm::result<void> instead of void as detaching can fail.
-	//      Handles should gain a multiplexer coupling aware close to avoid detaching.
-	[[nodiscard]] vsm::result<void> _detach_handle(native_platform_handle handle, connector_type& c);
-
-	friend vsm::result<void> tag_invoke(attach_handle_t, iocp_multiplexer& m, platform_handle_t::native_type const& h, connector_type& c)
+	friend vsm::result<void> tag_invoke(attach_handle_t, iocp_multiplexer& m, platform_object_t::native_type const& h, connector_type& c)
 	{
-		return m._attach_handle(h.platform_handle, c);
+		return m.attach_handle(h.platform_handle, c);
 	}
 
-	friend vsm::result<void> tag_invoke(detach_handle_t, iocp_multiplexer& m, platform_handle_t::native_type const& h, connector_type& c)
+	friend vsm::result<void> tag_invoke(detach_handle_t, iocp_multiplexer& m, platform_object_t::native_type const& h, connector_type& c)
 	{
-		return m._detach_handle(h.platform_handle, c);
+		return m.detach_handle(h.platform_handle, c);
 	}
 
 

@@ -81,4 +81,7 @@ struct file_attributes
 	file_time last_node_modify_time;
 };
 
+
+vsm::result<file_attributes> query_file_attributes(path_descriptor path);
+
 } // namespace allio

@@ -29,7 +29,7 @@ TEST_CASE("wait packet can be used to wait for events", "[wait_packet][win32][ke
 	bool const initially_signaled = GENERATE(false, true);
 	CAPTURE(initially_signaled);
 
-	auto const event = create_event(
+	auto const event = blocking::create_event(
 		auto_reset_event,
 		signal_event(initially_signaled)).value();
 

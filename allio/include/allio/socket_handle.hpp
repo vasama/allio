@@ -3,10 +3,9 @@
 #include <allio/default_multiplexer.hpp>
 #include <allio/handles/socket_handle.hpp>
 
-namespace allio {
+namespace allio::async {
 
-allio_detail_export
-template<typename Multiplexer = default_multiplexer_handle>
-using socket_handle = detail::basic_handle<socket_handle_t, Multiplexer>;
+using socket_handle = basic_socket_handle<default_multiplexer_handle>;
+using raw_socket_handle = basic_raw_socket_handle<default_multiplexer_handle>;
 
-} // namespace allio
+} // namespace allio::async

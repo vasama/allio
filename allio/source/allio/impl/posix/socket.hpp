@@ -73,12 +73,20 @@ struct unique_socket_with_flags
 	handle_flags flags;
 };
 
-vsm::result<unique_socket_with_flags> create_socket(int address_family);
+vsm::result<unique_socket_with_flags> create_socket(int address_family, bool multiplexable);
 
 vsm::result<void> socket_listen(
 	socket_type socket,
 	socket_address const& addr,
 	uint32_t const* backlog);
+
+vsm::result<void> socket_listen(
+	socket_type const socket,
+	socket_address const& addr,
+	std::same_as<std::optional<uint32_t>> auto const& backlog)
+{
+	return socket_listen(socket, addr, backlog ? &*backlog : nullptr);
+}
 
 vsm::result<unique_socket_with_flags> socket_accept(
 	socket_type listen_socket,

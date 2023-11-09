@@ -4,19 +4,18 @@
 
 namespace allio {
 
-using detail::event_reset_mode;
+using detail::event_mode;
 using detail::manual_reset_event;
 using detail::auto_reset_event;
 
 using detail::signal_event_t;
 using detail::signal_event;
 
-using detail::event_handle_t;
+using detail::event_t;
+
 using detail::abstract_event_handle;
 
-template<typename MultiplexerHandle>
-using async_event_handle = detail::async_handle<event_handle_t, MultiplexerHandle>;
-
-using detail::create_event;
+namespace blocking { using namespace detail::_event_blocking; }
+namespace async { using namespace detail::_event_async; }
 
 } // namespace allio
