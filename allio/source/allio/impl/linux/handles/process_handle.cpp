@@ -1,8 +1,8 @@
-#include <allio/impl/linux/process_handle.hpp>
+#include <allio/impl/linux/process.hpp>
 
 #include <allio/impl/linux/api_string.hpp>
 #include <allio/impl/linux/error.hpp>
-#include <allio/impl/linux/filesystem_handle.hpp>
+#include <allio/impl/linux/fs_object.hpp>
 #include <allio/impl/linux/kernel/proc.hpp>
 #include <allio/linux/timeout.hpp>
 

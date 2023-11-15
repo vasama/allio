@@ -1,4 +1,4 @@
-#include <allio/impl/linux/platform_handle.hpp>
+#include <allio/impl/linux/platform_object.hpp>
 
 #include <allio/impl/linux/error.hpp>
 #include <allio/linux/detail/unique_fd.hpp>

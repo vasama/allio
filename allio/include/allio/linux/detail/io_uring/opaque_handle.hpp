@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/handles/opaque_handle.hpp>
+#include <allio/handles/opaque_object.hpp>
 #include <allio/linux/io_uring/multiplexer.hpp>
 
 namespace allio {

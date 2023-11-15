@@ -151,13 +151,33 @@ vsm::result<bool> iocp_multiplexer::submit_wait(
 	return already_signaled;
 }
 
-bool iocp_multiplexer::cancel_wait(wait_packet const packet)
+bool iocp_multiplexer::cancel_wait(wait_packet const packet, wait_slot& slot)
 {
-	return unrecoverable(
-		cancel_wait_packet(
-			unwrap_wait_packet(packet),
-			/* remove_queued_completion: */ false),
-		/* default_value: */ false);
+	auto const r = cancel_wait_packet(
+		unwrap_wait_packet(packet),
+		/* remove_queued_completion: */ false);
+
+	if (!r)
+	{
+		unrecoverable_error(r.error());
+		return false;
+	}
+
+	if (*r)
+	{
+		// If the wait was cancelled before its completion,
+		// a completion event must be queued manually.
+		//TODO: Instead of going through the OS,
+		//      it might be better to queue this in user space.
+		vsm_verify(set_io_completion(
+			m_completion_port.value,
+			std::bit_cast<void*>(key_context::wait_packet),
+			/* apc_context: */ &slot,
+			STATUS_CANCELLED,
+			/* completion_information: */ 0));
+	}
+
+	return true;
 }
 
 

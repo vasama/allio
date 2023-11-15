@@ -1,4 +1,4 @@
-#include <allio/map_handle.hpp>
+#include <allio/map.hpp>
 
 #include <allio/win32/kernel_error.hpp>
 #include <allio/win32/platform.hpp>

@@ -510,12 +510,12 @@ private:
 	}
 
 	template<typename O>
-	friend io_result2<io_result_t<O, Handle, MultiplexerHandle>> tag_invoke(
+	friend void tag_invoke(
 		cancel_io_t<O>,
 		async_handle const& h,
 		operation_t<multiplexer_type, Handle, O>& s)
 	{
-		return cancel_io<O>(
+		cancel_io<O>(
 			h.m_multiplexer_handle,
 			h._native(),
 			h.m_connector,

@@ -2,7 +2,7 @@
 
 #include <allio/any_multiplexer.hpp>
 #include <allio/default_multiplexer.hpp>
-#include <allio/event_handle.hpp>
+#include <allio/event.hpp>
 
 #include <exec/async_scope.hpp>
 

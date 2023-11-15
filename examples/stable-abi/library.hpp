@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/opaque_handle.hpp>
+#include <allio/opaque_object.hpp>
 
 namespace example::library {
 

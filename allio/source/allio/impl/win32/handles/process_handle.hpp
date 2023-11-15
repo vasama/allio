@@ -1,9 +1,9 @@
 #pragma once
 
-#include <allio/handles/process_handle.hpp>
+#include <allio/handles/process.hpp>
 
-#include <allio/handles/filesystem_handle.hpp>
-#include <allio/win32/handles/process_handle.hpp>
+#include <allio/handles/fs_object.hpp>
+#include <allio/win32/handles/process.hpp>
 #include <allio/win32/detail/unique_handle.hpp>
 
 #include <win32.h>

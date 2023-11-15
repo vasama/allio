@@ -11,6 +11,23 @@
 
 namespace allio::win32 {
 
+using detail::wsa_address_storage;
+
+template<typename AddressBuffer, size_t Size>
+AddressBuffer& new_wsa_address_buffer(wsa_address_storage<Size>& storage)
+{
+	static_assert(sizeof(wsa_address_storage<Size>) >= sizeof(AddressBuffer));
+	static_assert(alignof(wsa_address_storage<Size>) >= alignof(AddressBuffer));
+	return *new (storage.storage) AddressBuffer;
+}
+
+template<typename AddressBuffer, size_t Size>
+AddressBuffer& get_wsa_address_buffer(wsa_address_storage<Size>& storage)
+{
+	return *std::launder(reinterpret_cast<AddressBuffer*>(storage.storage));
+}
+
+
 inline vsm::result<void> transform_wsa_buffers(untyped_buffers const buffers, WSABUF* const wsa_buffers)
 {
 	bool size_out_of_range = false;

@@ -3,7 +3,7 @@
 #include <allio/detail/event_queue.hpp>
 #include <allio/detail/execution.hpp>
 #include <allio/detail/get_multiplexer.hpp>
-#include <allio/detail/handles/event_handle.hpp>
+#include <allio/detail/handles/event.hpp>
 
 #include <vsm/assert.h>
 #include <vsm/intrusive/mpsc_queue.hpp>
@@ -285,9 +285,9 @@ struct context
 			return scheduler(*self.m_context);
 		}
 
-		friend MultiplexerHandle tag_invoke(get_multiplexer_t, env const& self) noexcept
+		friend MultiplexerHandle const& tag_invoke(get_multiplexer_t, env const& self) noexcept
 		{
-			return self.m_context->multiplexer;
+			return self.m_context->event_queue.multiplexer();
 		}
 	};
 };
@@ -435,7 +435,8 @@ auto sync_wait(event_queue<MultiplexerHandle>& event_queue, Sender&& sender)
 
 struct sync_wait_t
 {
-	template<typename Multiplexer, typename Sender>
+	//TODO: Constrain using ex::sender_in
+	template<typename Multiplexer, ex::sender Sender>
 	auto vsm_static_operator_invoke(Multiplexer&& multiplexer, Sender&& sender)
 		-> std::optional<_sync_wait::result<multiplexer_handle_t<Multiplexer>, Sender&&>>
 	{

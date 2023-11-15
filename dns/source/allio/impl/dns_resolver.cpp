@@ -1,5 +1,7 @@
 #include <allio/dns_resolver.hpp>
 
+#include <vsm/lazy.hpp>
+
 #include <bit>
 #include <concepts>
 
@@ -72,6 +74,11 @@ struct dns_resource_record
 	dns_u16 record_class;
 	dns_u32 time_to_live;
 	dns_u16 data_size;
+};
+
+struct dns_resource_record_aaaa
+{
+	uint8_t data[16];
 };
 
 } // namespace
@@ -242,37 +249,38 @@ vsm::result<void> dns_query::start_query(dns_query* const query)
 	size_t const binary_domain_name_size =
 		write_domain_name(query->domain_name, binary_domain_name);
 
-	dns_question const question_a =
+	// Send question A
 	{
-		.question_type = dns_convert(dns_type::a),
-		.question_class = dns_convert(dns_class::in),
-	};
-	write_buffer const write_buffers_a[] =
-	{
-		as_write_buffer(&header),
-		as_write_buffer(binary_domain_name, binary_domain_name_size),
-		as_write_buffer(&question_a),
-	};
+		dns_question const question_a =
+		{
+			.question_type = dns_convert(dns_type::a),
+			.question_class = dns_convert(dns_class::in),
+		};
+		write_buffer const write_buffers_a[] =
+		{
+			as_write_buffer(&header),
+			as_write_buffer(binary_domain_name, binary_domain_name_size),
+			as_write_buffer(&question_a),
+		};
+		vsm_try_void(m_udp_socket.send_to(address, write_buffers_a));
+	}
 
-	dns_question const question_aaaa =
+	// Send question AAAA
 	{
-		.question_type = dns_convert(dns_type::a),
-		.question_class = dns_convert(dns_class::in),
-	};
-	write_buffer const write_buffers_aaaa[] =
-	{
-		as_write_buffer(&header),
-		as_write_buffer(binary_domain_name, binary_domain_name_size),
-		as_write_buffer(&question_aaaa),
-	};
+		dns_question const question_aaaa =
+		{
+			.question_type = dns_convert(dns_type::aaaa),
+			.question_class = dns_convert(dns_class::in),
+		};
+		write_buffer const write_buffers_aaaa[] =
+		{
+			as_write_buffer(&header),
+			as_write_buffer(binary_domain_name, binary_domain_name_size),
+			as_write_buffer(&question_aaaa),
+		};
+		vsm_try_void(m_udp_socket.send_to(address, write_buffers_aaaa));
+	}
 
-	packet_write_buffer const write_buffers[] =
-	{
-		{ write_buffers(write_buffers_a, 3), &address },
-		{ write_buffers(write_buffers_aaaa, 3), &address },
-	};
-
-	vsm_try_void(m_udp_socket.write(packet_write_buffers(write_buffers)));
 	vsm_verify(m_queries.insert(query).inserted);
 
 	return {};
@@ -285,7 +293,7 @@ struct response_buffer
 	uint8_t const* pos;
 	uint8_t const* end;
 
-	uint8_t const* consume(size_t const size);
+	vsm::result<uint8_t const*> consume(size_t const size);
 };
 
 template<typename T>
@@ -294,13 +302,93 @@ static vsm::result<T> read_struct(response_buffer& buffer)
 	vsm::result<T> r(vsm::result_value);
 	if (static_cast<ptrdiff_t>(sizeof(T)) > buffer.end - buffer.pos)
 	{
-		return vsm::unexpected(malformed_packet);
+		return vsm::unexpected(dns_error::invalid_response);
 	}
 	memcpy(&*r, buffer.pos, sizeof(T));
 	buffer.pos += sizeof(T);
 }
 
-static vsm::result<std::string_view> read_domain_name(response_buffer& buffer, domain_name& name);
+template<std::unsigned_integral T>
+static vsm::result<T> read_uint(response_buffer& buffer)
+{
+	vsm_try(data, read_struct<dns_uint<T>>(buffer));
+	return dns_convert(data);
+}
+
+
+static vsm::result<std::string_view> read_domain_name(response_buffer& buffer, domain_name& name)
+{
+	static constexpr uint8_t ctrl_mask                  = 0b11000000;
+	static constexpr uint8_t ctrl_pointer               = 0b11000000;
+
+	response_buffer local_buffer;
+	response_buffer* p_buffer = &buffer;
+
+	while (true)
+	{
+		if (p_buffer->pos == p_buffer->end)
+		{
+			return vsm::unexpected(dns_error::invalid_response);
+		}
+	
+		if (uint8_t const ctrl = *p_buffer->pos & ctrl_mask)
+		{
+			if (ctrl != ctrl_pointer)
+			{
+				return vsm::unexpected(dns_error::invalid_response);
+			}
+	
+			vsm_try(offset, read_uint<uint16_t>(*p_buffer));
+
+			if (offset > p_buffer->end - p_buffer->beg)
+			{
+				return vsm::unexpected(dns_error::invalid_response);
+			}
+	
+			local_buffer =
+			{
+				.beg = p_buffer->beg,
+				.pos = p_buffer->beg + offset,
+				.end = p_buffer->end,
+			};
+			p_buffer = &local_buffer;
+		}
+		else
+		{
+			uint8_t name_size = 0;
+			for (std::span<char> const name_data = name.m_data;;)
+			{
+				vsm_try(label_size, read_uint<uint8_t>(*p_buffer));
+
+				if ((label_size & ctrl_mask) != 0)
+				{
+					return vsm::unexpected(dns_error::invalid_response);
+				}
+
+				if (name_size + label_size >= domain_name::max_fqdn_size)
+				{
+					return vsm::unexpected(dns_error::invalid_response);
+				}
+
+				uint8_t const offset = name_size;
+				name_size += label_size + 1;
+
+				name_data[offset + label_size] = '.';
+
+				if (label_size == 0)
+				{
+					break;
+				}
+
+				vsm_try(label_data, p_buffer->consume(label_size));
+				memcpy(name_data.subspan(name_size, label_size).data(), label_data, label_size);
+			}
+			name.m_size = name_size;
+
+			return name;
+		}
+	}
+}
 
 static vsm::result<response_buffer> consume_record_data(response_buffer& buffer, size_t const size)
 {
@@ -309,8 +397,10 @@ static vsm::result<response_buffer> consume_record_data(response_buffer& buffer,
 }
 
 
-vsm::result<void> dns_resolver::handle_query_result(network_endpoint const& server_address, std::span<uint8_t const> const packet)
+dns_result<dns_response_parser> dns_response_parser::parse(std::span<uint8_t const> const response_data)
 {
+	result<dns_response_parser> r = vsm_lazy(dns_response_parser());
+
 	vsm_try(header, read_struct<dns_header>(buffer));
 	uint16_t const bitfield = dns_convert(header.bitfield);
 
@@ -319,29 +409,32 @@ vsm::result<void> dns_resolver::handle_query_result(network_endpoint const& serv
 		static constexpr required_bitfield_mask =
 			dns_header::response | dns_header::opcode_mask | dns_header::recursion_desired;
 
-		// The packet must represent a response and we always ask for recursion.
+		// The packet must represent a response and recursion is always requested.
 		static constexpr required_bitfield_value =
 			dns_header::response | dns_header::recursion_desired;
 
 		if ((bitfield & required_bitfield_mask) != required_bitfield_value)
 		{
-			return vsm::unexpected(unsolicited_packet);
+			return vsm::unexpected(dns_error::unsolicited_response);
 		}
 	}
 
+	r->m_transaction_id = dns_convert(header.transaction_id);
 
+#if 0
 	// Find the pending query by the transaction id in the response.
-	dns_query* const query = m_queries.find(dns_convert(header.transaction_id));
+	dns_query* const query = m_queries.find();
 
 	if (query == nullptr)
 	{
-		return vsm::unexpected(invalid_response);
+		return vsm::unexpected(dns_error::invalid_response);
 	}
 
 	if (server_address != query->m_server_address)
 	{
-		return vsm::unexpected(invalid_response);
+		return vsm::unexpected(dns_error::invalid_response);
 	}
+#endif
 
 
 	// Check the response question validity.
@@ -350,7 +443,7 @@ vsm::result<void> dns_resolver::handle_query_result(network_endpoint const& serv
 		// Query packets contain exactly one question each.
 		if (dns_convert(header.question_count) != 1)
 		{
-			return vsm::unexpected(invalid_response);
+			return vsm::unexpected(dns_error::invalid_response);
 		}
 
 		domain_name question_name;
@@ -359,59 +452,117 @@ vsm::result<void> dns_resolver::handle_query_result(network_endpoint const& serv
 
 		if (question.question_class != dns_class::in)
 		{
-			return vsm::unexpected(invalid_response);
+			return vsm::unexpected(dns_error::invalid_response);
 		}
 
 		//TODO: Check that this record type is actually being resolved by this query.
 
 		if (domain_name != query->m_domain_name)
 		{
-			return vsm::unexpected(invalid_response);
+			return vsm::unexpected(dns_error::invalid_response);
 		}
 
 		return question.question_type;
 	}());
 
-	std::optional<uint16_t> address_record_offset;
-	std::optional<uint16_t> canonical_record_offset;
-	std::optional<uint16_t> authority_record_offset;
-	bool got_ns = false;
-	bool got_cname = false;
+	r->m_answer_count = dns_convert(header.answer_count);
 
-	domain_name canonical_name;
-	ipv4_address answer_address_a;
-	ipv6_address answer_address_aaaa;
+	return r;
+}
 
-	for (size_t i = 0, c = dns_convert(header.answer_count); i < c; ++i)
+dns_result<dns_record> dns_response_parser::parse_record()
+{
+	if (m_answer_count == 0)
 	{
-		domain_name record_name;
-		vsm_try_void(read_domain_name(buffer, record_name));
-		vsm_try(record, read_struct<dns_resource_record>(buffer));
-		vsm_try(record_data, consume_record_data(buffer, record.data_size));
-
-		if (record.record_class != dns_class::in)
-		{
-			return vsm::unexpected(invalid_response);
-		}
-
-		switch (record.record_type)
-		{
-		case dns_type::a:
-			break;
-
-		case dns_type::aaaa:
-			break;
-
-		case dns_type::cname:
-			break;
-
-		case dns_type::ns:
-			break;
-		}
-
-		if (record_name == query->m_domain_name)
-		{
-
-		}
+		return vsm::unexpected(dns_error::invalid_response);
 	}
+
+	response_buffer buffer =
+	{
+		.beg = m_beg,
+		.pos = m_pos,
+		.end = m_end,
+	};
+
+	domain_name record_name;
+	vsm_try_void(read_domain_name(buffer, record_name));
+
+	if (record_name != query->m_domain_name)
+	{
+		return vsm::unexpected(dns_error::invalid_response);
+	}
+
+	vsm_try(record, read_struct<dns_resource_record>(buffer));
+	vsm_try(record_data, consume_record_data(buffer, record.data_size));
+
+	if (record.record_class != dns_class::in)
+	{
+		return vsm::unexpected(dns_error::invalid_response);
+	}
+
+	auto const update_parser = [&]()
+	{
+		m_pos = buffer.pos;
+		--m_answer_count;
+	};
+
+	switch (record.record_type)
+	{
+	case dns_type::a:
+		{
+			vsm_try(address, read_uint<uint32_t>(record_data));
+			update_parser();
+			return vsm_lazy(dns_record(record.time_to_live, ipv4_address(address)));
+		}
+
+	case dns_type::aaaa:
+		{
+			vsm_try(address, read_struct<dns_resource_record_aaaa>(record_data));
+			update_parser();
+			return vsm_lazy(dns_record(record.time_to_live, ipv6_address(address)));
+		}
+
+	case dns_type::cname:
+		{
+			domain_name name;
+			vsm_try_void(read_domain_name(record_data, name));
+			update_parser();
+			return vsm_lazy(dns_record(record.time_to_live, dns_record::canonical_name_t(), name));
+		}
+
+	case dns_type::ns:
+		{
+			domain_name name;
+			vsm_try_void(read_domain_name(record_data, name));
+			update_parser();
+			return vsm_lazy(dns_record(record.time_to_live, dns_record::nameserver_name_t(), name));
+		}
+
+	default:
+		return vsm::unexpected(dns_error::invalid_response);
+	}
+}
+
+
+vsm::result<void> dns_resolver::handle_datagram(
+	std::span<uint8_t const> const data,
+	network_endpoint const& source_endpoint)
+{
+	vsm_try(parser, dns_response_parser::parse(data));
+
+	dns_resolve_query* const query = m_queries.find(parser.transaction_id());
+
+	if (query == nullptr)
+	{
+		return vsm::unexpected(dns_error::unsolicited_response);
+	}
+
+	if (source_endpoint != query->server_endpoint)
+	{
+		return vsm::unexpected(dns_error::unsolicited_response);
+	}
+
+	query->m_handle_response(*query, parser);
+
+	return {};
 }

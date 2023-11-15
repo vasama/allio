@@ -1,8 +1,8 @@
 #pragma once
 
-#include <allio/filesystem_handle.hpp>
+#include <allio/fs_object.hpp>
 
-#include <allio/impl/linux/platform_handle.hpp>
+#include <allio/impl/linux/platform_object.hpp>
 
 #include <fcntl.h>
 

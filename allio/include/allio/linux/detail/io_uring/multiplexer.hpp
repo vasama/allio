@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/detail/handles/platform_handle.hpp>
+#include <allio/detail/handles/platform_object.hpp>
 #include <allio/detail/io.hpp>
 #include <allio/linux/detail/unique_fd.hpp>
 #include <allio/linux/detail/unique_mmap.hpp>

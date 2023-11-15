@@ -2,7 +2,7 @@
 
 #include <allio/detail/io.hpp>
 #include <allio/multiplexer.hpp>
-#include <allio/win32/handles/platform_handle.hpp>
+#include <allio/win32/handles/platform_object.hpp>
 #include <allio/win32/detail/unique_handle.hpp>
 #include <allio/win32/detail/win32_fwd.hpp>
 #include <allio/win32/wait_packet.hpp>
@@ -161,13 +161,18 @@ public:
 	}
 
 private:
-	// IOCP handles cannot be duplicated, so the sharing is implemented in user space.
 	struct shared_state_t : vsm::intrusive_ref_count
 	{
 		unique_handle completion_port;
 	};
 
+	// @brief The shared state owns the completion port object.
+	//        Multiple iocp_multiplexers can share the same completion port.
+	//        completion port handles cannot be duplicated,
+	//        so the sharing must be implemented in user space.
 	vsm::intrusive_ptr<shared_state_t> m_shared_state;
+
+	/// @brief Non-owning copy of the completion port handle.
 	vsm::linear<HANDLE> m_completion_port;
 
 
@@ -242,9 +247,9 @@ public:
 		{
 		}
 
-		/// @brief Retain the leased wait_packet.
+		/// @brief Release lease on the wait_packet.
 		///        The wait packet will not be returned to the multiplexer.
-		void retain()
+		void release()
 		{
 			(void)m_wait_packet.release();
 		}
@@ -268,7 +273,7 @@ public:
 	/// @brief Attempt to cancel a wait operation started on the specified slot.
 	/// @return True if the operation was cancelled before its completion.
 	/// @note A completion event is queued regardless of whether the operation was cancelled.
-	bool cancel_wait(win32::wait_packet packet);
+	bool cancel_wait(win32::wait_packet packet, wait_slot& slot);
 
 
 	[[nodiscard]] static bool supports_synchronous_completion(platform_object_t::native_type const& h)

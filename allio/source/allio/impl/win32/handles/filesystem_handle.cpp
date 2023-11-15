@@ -1,4 +1,4 @@
-#include <allio/impl/win32/handles/filesystem_handle.hpp>
+#include <allio/impl/win32/handles/fs_object.hpp>
 
 #include <allio/impl/new.hpp>
 #include <allio/impl/transcode.hpp>

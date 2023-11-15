@@ -1,4 +1,4 @@
-#include <allio/impl/win32/handles/platform_handle.hpp>
+#include <allio/impl/win32/handles/platform_object.hpp>
 
 #include <allio/impl/win32/error.hpp>
 

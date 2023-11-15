@@ -395,6 +395,13 @@ extern NTSTATUS(NTAPI* NtCreateIoCompletion)(
 	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
 	_In_opt_ ULONG Count);
 
+extern NTSTATUS(NTAPI* NtSetIoCompletion)(
+	_In_ HANDLE IoCompletionPort,
+	_In_ PVOID CompletionKey,
+	_In_ PVOID ApcContext,
+	_In_ NTSTATUS CompletionStatus,
+	_In_ ULONG CompletionInformation);
+
 extern NTSTATUS(NTAPI* NtRemoveIoCompletion)(
 	_In_ HANDLE IoCompletionHandle,
 	_Out_ PVOID *CompletionKey,

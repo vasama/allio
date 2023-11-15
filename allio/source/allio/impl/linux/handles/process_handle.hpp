@@ -1,9 +1,9 @@
 #pragma once
 
-#include <allio/process_handle.hpp>
+#include <allio/process.hpp>
 
-#include <allio/filesystem_handle.hpp>
-#include <allio/impl/linux/platform_handle.hpp>
+#include <allio/fs_object.hpp>
+#include <allio/impl/linux/platform_object.hpp>
 #include <allio/linux/detail/unique_fd.hpp>
 
 #include <allio/linux/detail/undef.i>

@@ -21,6 +21,7 @@ using namespace allio::win32;
 	X(NtWriteFile,                              ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtCancelIoFileEx,                         ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtCreateIoCompletion,                     ntdll       __VA_OPT__(, __VA_ARGS__)) \
+	X(NtSetIoCompletion,                        ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtRemoveIoCompletion,                     ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtRemoveIoCompletionEx,                   ntdll       __VA_OPT__(, __VA_ARGS__)) \
 	X(NtCreateWaitCompletionPacket,             ntdll       __VA_OPT__(, __VA_ARGS__)) \

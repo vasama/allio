@@ -1,8 +1,6 @@
-cmake_minimum_required(VERSION 3.23.0)
+cmake_minimum_required(VERSION 3.23)
 
 project(allio)
-
-include(FetchContent)
 
 find_package(vsm-box REQUIRED)
 find_package(vsm-core REQUIRED)
@@ -25,37 +23,37 @@ vsm_add_library2(allio
 		include/allio/byte_io.hpp
 		include/allio/deadline.hpp
 		include/allio/default_multiplexer.hpp
-		include/allio/directory_handle.hpp
-		include/allio/event_handle.hpp
+		include/allio/directory.hpp
+		include/allio/event.hpp
 		include/allio/filesystem.hpp
-		include/allio/filesystem_handle.hpp
-		include/allio/file_handle.hpp
+		include/allio/fs_object.hpp
+		include/allio/file.hpp
 		include/allio/handle.hpp
-		include/allio/map_handle.hpp
+		include/allio/map.hpp
 		include/allio/network.hpp
 		include/allio/path.hpp
 		include/allio/path_literal.hpp
 		include/allio/path_view.hpp
-		include/allio/platform_handle.hpp
+		include/allio/platform_object.hpp
 		include/allio/platform.hpp
-		include/allio/process_handle.hpp
-		include/allio/section_handle.hpp
-		include/allio/socket_handle.hpp
+		include/allio/process.hpp
+		include/allio/section.hpp
+		include/allio/socket.hpp
 		include/allio/step_deadline.hpp
 		include/allio/sync_wait.hpp
 		
-		include/allio/handles/datagram_handle.hpp
-		include/allio/handles/directory_handle.hpp
-		include/allio/handles/event_handle.hpp
-		include/allio/handles/file_handle.hpp
-		include/allio/handles/filesystem_handle.hpp
-		include/allio/handles/listen_handle.hpp
-		include/allio/handles/map_handle.hpp
-		include/allio/handles/opaque_handle.hpp
-		include/allio/handles/platform_handle.hpp
-		include/allio/handles/process_handle.hpp
-		include/allio/handles/section_handle.hpp
-		include/allio/handles/socket_handle.hpp
+		include/allio/handles/datagram_socket.hpp
+		include/allio/handles/directory.hpp
+		include/allio/handles/event.hpp
+		include/allio/handles/file.hpp
+		include/allio/handles/fs_object.hpp
+		include/allio/handles/listen_socket.hpp
+		include/allio/handles/map.hpp
+		include/allio/handles/opaque_object.hpp
+		include/allio/handles/platform_object.hpp
+		include/allio/handles/process.hpp
+		include/allio/handles/section.hpp
+		include/allio/handles/socket.hpp
 
 		include/allio/detail/any_handle.hpp
 		include/allio/detail/api.hpp
@@ -64,19 +62,19 @@ vsm_add_library2(allio
 		include/allio/detail/string_ref.hpp
 		include/allio/detail/type_list.hpp
 
-		include/allio/detail/handles/datagram_handle.hpp
-		include/allio/detail/handles/directory_handle.hpp
-		include/allio/detail/handles/event_handle.hpp
-		include/allio/detail/handles/file_handle.hpp
-		include/allio/detail/handles/filesystem_handle.hpp
-		include/allio/detail/handles/listen_handle.hpp
-		include/allio/detail/handles/map_handle.hpp
-		include/allio/detail/handles/opaque_handle.hpp
-		include/allio/detail/handles/platform_handle.hpp
-		include/allio/detail/handles/process_handle.hpp
-		include/allio/detail/handles/section_handle.hpp
+		include/allio/detail/handles/datagram_socket.hpp
+		include/allio/detail/handles/directory.hpp
+		include/allio/detail/handles/event.hpp
+		include/allio/detail/handles/file.hpp
+		include/allio/detail/handles/fs_object.hpp
+		include/allio/detail/handles/listen_socket.hpp
+		include/allio/detail/handles/map.hpp
+		include/allio/detail/handles/opaque_object.hpp
+		include/allio/detail/handles/platform_object.hpp
+		include/allio/detail/handles/process.hpp
+		include/allio/detail/handles/section.hpp
 		include/allio/detail/handles/socket_handle_base.hpp
-		include/allio/detail/handles/socket_handle.hpp
+		include/allio/detail/handles/socket.hpp
 
 	SOURCES
 		source/allio/impl/error.cpp
@@ -111,6 +109,7 @@ vsm_add_library2(allio
 		source/allio/test/sync_wait.cpp
 		source/allio/test/task.hpp
 	
+		source/allio/test/handles/datagram_socket.cpp
 		#source/allio/test/handles/directory_handle.cpp
 		source/allio/test/handles/event_handle.cpp
 		#source/allio/test/handles/file_handle.cpp
@@ -125,7 +124,7 @@ vsm_configure(allio
 	
 	HEADERS
 		include/allio/win32/detail/iocp/byte_io.hpp
-		include/allio/win32/detail/iocp/event_handle.hpp
+		include/allio/win32/detail/iocp/event.hpp
 		include/allio/win32/detail/iocp/multiplexer.hpp
 		include/allio/win32/detail/iocp/wait.hpp
 		include/allio/win32/kernel_error.hpp
@@ -165,17 +164,19 @@ vsm_configure(allio
 		source/allio/impl/win32/wsa_ex.cpp
 		source/allio/impl/win32/wsa_ex.hpp
 
+		source/allio/impl/posix/handles/datagram_socket.cpp
 		source/allio/impl/posix/handles/listen_handle.cpp
 		source/allio/impl/posix/handles/socket_handle.cpp
 		source/allio/impl/win32/handles/event_handle.cpp
 		#source/allio/impl/win32/handles/filesystem_handle.cpp
-		#source/allio/impl/win32/handles/filesystem_handle.hpp
+		#source/allio/impl/win32/handles/fs_object.hpp
 		source/allio/impl/win32/handles/platform_handle.cpp
-		source/allio/impl/win32/handles/platform_handle.hpp
+		source/allio/impl/win32/handles/platform_object.hpp
 		#source/allio/impl/win32/handles/process_handle.cpp
-		#source/allio/impl/win32/handles/process_handle.hpp
+		#source/allio/impl/win32/handles/process.hpp
 
 		source/allio/impl/win32/iocp/event_handle.cpp
+		source/allio/impl/win32/iocp/datagram_socket.cpp
 		#source/allio/impl/win32/iocp/generic_wait.cpp
 		source/allio/impl/win32/iocp/listen_handle.cpp
 		source/allio/impl/win32/iocp/multiplexer.cpp
@@ -195,7 +196,7 @@ vsm_configure(allio
 	PLATFORM Linux
 	
 	HEADERS
-		include/allio/linux/detail/io_uring/event_handle.hpp
+		include/allio/linux/detail/io_uring/event.hpp
 		include/allio/linux/detail/io_uring/multiplexer.hpp
 		include/allio/linux/platform.hpp
 		include/allio/linux/timespec.hpp
@@ -215,17 +216,17 @@ vsm_configure(allio
 		source/allio/impl/linux/error.hpp
 		source/allio/impl/linux/event_handle.cpp
 		#source/allio/impl/linux/filesystem_handle.cpp
-		#source/allio/impl/linux/filesystem_handle.hpp
+		#source/allio/impl/linux/fs_object.hpp
 		#source/allio/impl/linux/file_handle.cpp
 		#source/allio/impl/linux/map_handle.cpp
 		source/allio/impl/linux/memory.cpp
 		#source/allio/impl/linux/platform_handle.cpp
-		#source/allio/impl/linux/platform_handle.hpp
+		#source/allio/impl/linux/platform_object.hpp
 		source/allio/impl/linux/platform.cpp
 		#source/allio/impl/linux/posix_socket.cpp
 		#source/allio/impl/linux/posix_socket.hpp
 		#source/allio/impl/linux/process_handle.cpp
-		#source/allio/impl/linux/process_handle.hpp
+		#source/allio/impl/linux/process.hpp
 		#source/allio/impl/linux/section_handle.cpp
 		#source/allio/impl/linux/sync_byte_io.cpp
 		source/allio/impl/linux/unique_fd.cpp
@@ -239,7 +240,6 @@ vsm_configure(allio
 	TEST_SOURCES
 		source/allio/test/linux/io_uring.cpp
 )
-
 
 target_compile_definitions(allio_test
 	PRIVATE

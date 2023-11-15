@@ -1,7 +1,7 @@
 #pragma once
 
 #include <allio/win32/detail/unique_handle.hpp>
-#include <allio/win32/handles/platform_handle.hpp>
+#include <allio/win32/handles/platform_object.hpp>
 #include <allio/win32/platform.hpp>
 
 #include <vsm/utility.hpp>

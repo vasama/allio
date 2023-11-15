@@ -66,4 +66,3 @@ vsm::result<bool> win32::cancel_wait_packet(
 
 	return status != STATUS_PENDING;
 }
-

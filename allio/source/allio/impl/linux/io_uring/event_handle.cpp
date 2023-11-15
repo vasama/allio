@@ -1,7 +1,7 @@
-#include <allio/linux/detail/io_uring/event_handle.hpp>
+#include <allio/linux/detail/io_uring/event.hpp>
 
 #include <allio/impl/linux/error.hpp>
-#include <allio/impl/linux/event_handle.hpp>
+#include <allio/impl/linux/event.hpp>
 #include <allio/impl/linux/kernel/io_uring.hpp>
 #include <allio/linux/io_uring_record_context.hpp>
 #include <allio/linux/platform.hpp>

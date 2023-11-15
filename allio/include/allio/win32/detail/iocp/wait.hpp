@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/detail/handles/platform_handle.hpp>
+#include <allio/detail/handles/platform_object.hpp>
 #include <allio/win32/detail/iocp/multiplexer.hpp>
 
 namespace allio::detail {

@@ -14,6 +14,7 @@ TEST_CASE("IPv4 addresses can be parsed from text", "[network]")
 	REQUIRE(ipv4_address::parse("0.0.0.0").value() == ipv4_address::unspecified);
 	REQUIRE(ipv4_address::parse("127.0.0.1").value() == ipv4_address::localhost);
 	REQUIRE(ipv4_address::parse("255.255.255.255").value() == ipv4_address(0xff'ff'ff'ff));
+	REQUIRE(ipv4_address::parse("123.45.67.89").value() == ipv4_address(0x7b'2d'43'59));
 	REQUIRE(!ipv4_address::parse("127.0.0.256"));
 	REQUIRE(!ipv4_address::parse("127.0.0.1:80"));
 
@@ -35,7 +36,7 @@ TEST_CASE("IPv6 addresses can be parsed from text", "[network]")
 
 	static constexpr auto make_address = [&](std::same_as<int> auto const... i)
 	{
-		return ipv6_address((ipv6_address::integer_type(0) | ... | (ipv6_address::integer_type(1) << i)));
+		return ipv6_address((ipv6_address::uint_type(0) | ... | (ipv6_address::uint_type(1) << i)));
 	};
 
 	REQUIRE(ipv6_address::parse("::0").value() == ipv6_address::unspecified);
@@ -47,10 +48,13 @@ TEST_CASE("IPv6 addresses can be parsed from text", "[network]")
 	REQUIRE(ipv6_address::parse("0:1::1:0").value() == make_address(96, 16));
 	REQUIRE(
 		ipv6_address::parse("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff").value() ==
-		ipv6_address(~ipv6_address::integer_type(0)));
+		ipv6_address(~ipv6_address::uint_type(0)));
 	REQUIRE(
 		ipv6_address::parse("2001:DB8:AC10:FE01::").value() ==
-		ipv6_address(ipv6_address::integer_type(0x2001'0DB8'AC10'FE01) << 64));
+		ipv6_address(ipv6_address::uint_type(0x2001'0DB8'AC10'FE01) << 64));
+	REQUIRE(
+		ipv6_address::parse("::0123:4567:89AB:CDEF").value() ==
+		ipv6_address(ipv6_address::uint_type(0x0123'4567'89AB'CDEF)));
 	REQUIRE(!ipv6_address::parse("::10000"));
 	REQUIRE(!ipv6_address::parse("1"));
 	REQUIRE(!ipv6_address::parse("::"));

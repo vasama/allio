@@ -1,4 +1,4 @@
-#include <allio/impl/linux/filesystem_handle.hpp>
+#include <allio/impl/linux/fs_object.hpp>
 
 #include <allio/impl/linux/api_string.hpp>
 #include <allio/impl/linux/error.hpp>

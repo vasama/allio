@@ -168,13 +168,13 @@ constexpr bool _parse_ipv6_address(vsm::literal_parser& p, ipv6_address& r)
 		}
 	}
 
-	ipv6_address::integer_type const h64 =
+	ipv6_address::uint_type const h64 =
 		static_cast<uint64_t>(hexadectets[0]) << 48 |
 		static_cast<uint64_t>(hexadectets[1]) << 32 |
 		static_cast<uint64_t>(hexadectets[2]) << 16 |
 		static_cast<uint64_t>(hexadectets[3]);
 
-	ipv6_address::integer_type const l64 =
+	ipv6_address::uint_type const l64 =
 		static_cast<uint64_t>(hexadectets[4]) << 48 |
 		static_cast<uint64_t>(hexadectets[5]) << 32 |
 		static_cast<uint64_t>(hexadectets[6]) << 16 |

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/platform_handle.hpp>
+#include <allio/platform_object.hpp>
 #include <allio/win32/detail/win32_fwd.hpp>
 
 #include <bit>

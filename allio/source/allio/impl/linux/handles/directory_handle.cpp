@@ -1,8 +1,8 @@
-#include <allio/directory_handle.hpp>
+#include <allio/directory.hpp>
 
 #include <allio/impl/linux/api_string.hpp>
 #include <allio/impl/linux/error.hpp>
-#include <allio/impl/linux/filesystem_handle.hpp>
+#include <allio/impl/linux/fs_object.hpp>
 
 #include <vsm/standard.hpp>
 

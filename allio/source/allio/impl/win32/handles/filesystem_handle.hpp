@@ -1,8 +1,8 @@
 #pragma once
 
-#include <allio/handles/filesystem_handle.hpp>
+#include <allio/handles/fs_object.hpp>
 
-#include <allio/impl/win32/handles/platform_handle.hpp>
+#include <allio/impl/win32/handles/platform_object.hpp>
 
 namespace allio::win32 {
 

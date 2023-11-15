@@ -23,6 +23,11 @@ public:
 	{
 	}
 
+	T const& get() const
+	{
+		return *m_ptr;
+	}
+
 	operator T const&() const
 	{
 		return *m_ptr;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/impl/win32/filesystem_handle.hpp>
+#include <allio/impl/win32/fs_object.hpp>
 
 #include <vsm/utility.hpp>
 

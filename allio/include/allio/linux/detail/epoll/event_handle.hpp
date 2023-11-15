@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/detail/handles/event_handle.hpp>
+#include <allio/detail/handles/event.hpp>
 #include <allio/linux/detail/epoll/multiplexer.hpp>
 
 namespace allio::detail {

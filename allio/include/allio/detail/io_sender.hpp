@@ -8,6 +8,8 @@
 #include <vsm/standard.hpp>
 #include <vsm/type_traits.hpp>
 
+#include <optional>
+
 namespace allio::detail {
 
 template<typename E>
@@ -46,16 +48,18 @@ class io_sender
 	using result_type = io_result_t<O, H, M>;
 
 	template<typename Receiver>
-	class operation : io_callback
+	class operation : io_callback, ex::__in_place_stoppable_base<operation<Receiver>>
 	{
-		handle_type* m_handle;
+		using stoppable_base = ex::__in_place_stoppable_base<operation<Receiver>>;
+
+		handle_type& m_handle;
 		vsm_no_unique_address operation_type m_operation;
 		vsm_no_unique_address Receiver m_receiver;
 
 	public:
 		explicit operation(auto&& sender, auto&& receiver)
 			noexcept(noexcept(Receiver(vsm_forward(receiver))))
-			: m_handle(sender.m_handle)
+			: m_handle(*sender.m_handle)
 			, m_operation(*this, vsm_forward(sender).m_args)
 			, m_receiver(vsm_forward(receiver))
 		{
@@ -64,22 +68,39 @@ class io_sender
 	private:
 		friend void tag_invoke(ex::start_t, operation& self) noexcept
 		{
-			self.handle_result(submit_io<O>(*self.m_handle, self.m_operation));
+			auto r = submit_io<O>(self.m_handle, self.m_operation);
+
+			if (r.is_pending())
+			{
+				// This is not a stream sender.
+				vsm_assert(!r.has_value());
+
+				self.stoppable_base::register_stoppable(ex::get_stop_token(ex::get_env(self.m_receiver)));
+			}
+			else
+			{
+				self.handle_result(vsm_move(r));
+			}
 		}
 
 		void notify(operation_base& operation, io_status const status) noexcept override
 		{
 			vsm_assert(&operation == &m_operation);
-			handle_result(notify_io<O>(*m_handle, m_operation, status));
+
+			auto r = notify_io<O>(m_handle, m_operation, status);
+
+			// This is not a stream sender.
+			vsm_assert(!r.is_pending());
+
+			stoppable_base::deregister_stoppable();
+
+			handle_result(vsm_move(r));
 		}
 
 		void handle_result(io_result2<result_type>&& r)
 		{
 			if (r.has_value())
 			{
-				// This is not a stream sender.
-				vsm_assert(!r.is_pending());
-
 				if constexpr (std::is_void_v<result_type>)
 				{
 					ex::set_value(vsm_move(m_receiver));
@@ -89,19 +110,22 @@ class io_sender
 					ex::set_value(vsm_move(m_receiver), vsm_move(*r));
 				}
 			}
-			else if (r.is_pending())
-			{
-			}
 			else if (r.is_cancelled())
 			{
 				ex::set_stopped(vsm_move(m_receiver));
 			}
 			else
 			{
-				vsm_assert(r.has_error());
 				ex::set_error(vsm_move(m_receiver), r.error());
 			}
 		}
+
+		void on_stop_requested()
+		{
+			cancel_io<O>(m_handle, m_operation);
+		}
+
+		friend stoppable_base;
 	};
 
 	handle_type* m_handle;
@@ -152,8 +176,10 @@ class io_handle_sender
 	using params_type = io_parameters_t<O>;
 
 	template<typename MultiplexerHandle, typename Receiver>
-	class operation : io_callback
+	class operation : io_callback, ex::__in_place_stoppable_base<operation<MultiplexerHandle, Receiver>>
 	{
+		using stoppable_base = ex::__in_place_stoppable_base<operation<MultiplexerHandle, Receiver>>;
+
 		using handle_type = async_handle<H, MultiplexerHandle>;
 		using multiplexer_type = typename MultiplexerHandle::multiplexer_type;
 		using operation_type = operation_t<multiplexer_type, H, O>;
@@ -173,26 +199,40 @@ class io_handle_sender
 	private:
 		friend void tag_invoke(ex::start_t, operation& self) noexcept
 		{
-			self.handle_result(submit_io<O>(self.m_handle, self.m_operation));
+			auto r = submit_io<O>(self.m_handle, self.m_operation);
+
+			if (r.is_pending())
+			{
+				// This is not a stream sender.
+				vsm_assert(!r.has_value());
+
+				self.stoppable_base::register_stoppable(ex::get_stop_token(ex::get_env(self.m_receiver)));
+			}
+			else
+			{
+				self.handle_result(vsm_move(r));
+			}
 		}
 
 		void notify(operation_base& operation, io_status const status) noexcept override
 		{
 			vsm_assert(&operation == &m_operation);
-			handle_result(notify_io<O>(m_handle, m_operation, status));
+
+			auto r = notify_io<O>(m_handle, m_operation, status);
+
+			// This is not a stream sender.
+			vsm_assert(!r.is_pending());
+
+			stoppable_base::deregister_stoppable();
+
+			handle_result(vsm_move(r));
 		}
 
 		void handle_result(io_result2<void> const& r)
 		{
 			if (r.has_value())
 			{
-				// This is not a stream sender.
-				vsm_assert(!r.is_pending());
-
 				ex::set_value(vsm_move(m_receiver), vsm_move(m_handle));
-			}
-			else if (r.is_pending())
-			{
 			}
 			else if (r.is_cancelled())
 			{
@@ -200,10 +240,16 @@ class io_handle_sender
 			}
 			else
 			{
-				vsm_assert(r.has_error());
 				ex::set_error(vsm_move(m_receiver), r.error());
 			}
 		}
+
+		void on_stop_requested()
+		{
+			cancel_io<O>(m_handle, m_operation);
+		}
+
+		friend stoppable_base;
 	};
 
 	vsm_no_unique_address params_type m_args;

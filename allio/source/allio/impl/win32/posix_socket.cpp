@@ -1,7 +1,8 @@
 #include <allio/impl/posix/socket.hpp>
 
 #include <allio/detail/dynamic_buffer.hpp>
-#include <allio/impl/win32/handles/platform_handle.hpp>
+#include <allio/impl/win32/handles/platform_object.hpp>
+#include <allio/impl/win32/wsa.hpp>
 #include <allio/impl/win32/wsa_ex.hpp>
 
 #include <vsm/lazy.hpp>
@@ -66,20 +67,11 @@ static vsm::result<void> wsa_startup()
 
 vsm::result<posix::unique_socket_with_flags> posix::create_socket(
 	int const address_family,
+	int const type,
+	int protocol,
 	bool const multiplexable)
 {
 	vsm_try_void(wsa_startup());
-
-	int protocol = 0;
-
-	//TODO: UDP support
-	switch (address_family)
-	{
-	case AF_INET:
-	case AF_INET6:
-		protocol = IPPROTO_TCP;
-		break;
-	}
 
 	DWORD flags = WSA_FLAG_NO_HANDLE_INHERIT;
 	handle_flags handle_flags = {};
@@ -95,7 +87,7 @@ vsm::result<posix::unique_socket_with_flags> posix::create_socket(
 
 	SOCKET const raw_socket = WSASocketW(
 		address_family,
-		SOCK_STREAM,
+		type,
 		protocol,
 		/* lpProtocolInfo: */ nullptr,
 		/* group: */ 0,
@@ -209,51 +201,18 @@ vsm::result<void> posix::socket_set_non_blocking(socket_type const socket, bool 
 	return {};
 }
 
-// The layout of WSABUF necessitates a copy.
-static vsm::result<void> transform_wsa_buffers(untyped_buffers const buffers, WSABUF* const wsa_buffers)
-{
-	bool size_out_of_range = false;
-
-	std::transform(
-		buffers.begin(),
-		buffers.end(),
-		wsa_buffers,
-		[&](untyped_buffer const buffer) -> WSABUF
-		{
-			if (buffer.size() > std::numeric_limits<ULONG>::max())
-			{
-				size_out_of_range = true;
-			}
-
-			return WSABUF
-			{
-				.len = static_cast<ULONG>(buffer.size()),
-				.buf = static_cast<CHAR*>(const_cast<void*>(buffer.data())),
-			};
-		}
-	);
-
-	if (size_out_of_range)
-	{
-		return vsm::unexpected(error::invalid_argument);
-	}
-
-	return {};
-}
-
 vsm::result<size_t> posix::socket_scatter_read(socket_type const socket, untyped_buffers const buffers)
 {
-	detail::dynamic_buffer<WSABUF, 64> wsa_buffers_storage;
-	vsm_try(wsa_buffers, wsa_buffers_storage.reserve(buffers.size()));
-	vsm_try_void(transform_wsa_buffers(buffers, wsa_buffers));
+	wsa_buffers_storage<64> buffers_storage;
+	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
 
 	DWORD flags = 0;
 
 	DWORD transferred;
 	int const r = WSARecv(
 		socket,
-		wsa_buffers,
-		buffers.size(),
+		wsa_buffers.data(),
+		wsa_buffers.size(),
 		&transferred,
 		&flags,
 		/* lpOverlapped: */ nullptr,
@@ -269,21 +228,121 @@ vsm::result<size_t> posix::socket_scatter_read(socket_type const socket, untyped
 
 vsm::result<size_t> posix::socket_gather_write(socket_type const socket, untyped_buffers const buffers)
 {
-	detail::dynamic_buffer<WSABUF, 64> wsa_buffers_storage;
-	vsm_try(wsa_buffers, wsa_buffers_storage.reserve(buffers.size()));
-	vsm_try_void(transform_wsa_buffers(buffers, wsa_buffers));
+	wsa_buffers_storage<64> buffers_storage;
+	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
 
 	DWORD transferred;
 	int const r = WSASend(
 		socket,
-		wsa_buffers,
-		buffers.size(),
+		wsa_buffers.data(),
+		wsa_buffers.size(),
 		&transferred,
 		/* dwFlags: */ 0,
 		/* lpOverlapped: */ nullptr,
 		/* lpCompletionRoutine: */ nullptr);
 
 	if (r == SOCKET_ERROR)
+	{
+		return vsm::unexpected(get_last_socket_error());
+	}
+
+	return transferred;
+}
+
+vsm::result<void> posix::socket_send_to(
+	socket_type const socket,
+	socket_address const& addr,
+	untyped_buffers const buffers)
+{
+	wsa_buffers_storage<64> buffers_storage;
+	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
+
+#if 0
+	if (buffers.size() > std::numeric_limits<ULONG>::max())
+	{
+		//TODO: Use a better error code?
+		return vsm::unexpected(error::invalid_argument);
+	}
+
+	WSAMSG message =
+	{
+		.name = &const_cast<sockaddr&>(addr.addr),
+		.namelen = addr.size,
+		.lpBuffers = wsa_buffers.data(),
+		.dwBufferCount = static_cast<ULONG>(wsa_buffers.size()),
+	};
+
+	DWORD transferred;
+	if (DWORD const error = wsa_send_msg(socket, &message, &transferred))
+	{
+		return vsm::unexpected(static_cast<socket_error>(error));
+	}
+	//TODO: Assert transferred against total buffers size.
+#endif
+
+	DWORD transferred;
+	if (WSASendTo(
+		socket,
+		wsa_buffers.data(),
+		wsa_buffers.size(),
+		&transferred,
+		/* dwFlags: */ 0,
+		&addr.addr,
+		addr.size,
+		/* lpOverlapped: */ nullptr,
+		/* lpCompletionRoutine */ nullptr) == SOCKET_ERROR)
+	{
+		return vsm::unexpected(get_last_socket_error());
+	}
+
+	return {};
+}
+
+vsm::result<size_t> posix::socket_receive_from(
+	socket_type const socket,
+	socket_address& addr,
+	untyped_buffers const buffers)
+{
+	wsa_buffers_storage<64> buffers_storage;
+	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
+
+#if 0
+	if (buffers.size() > std::numeric_limits<ULONG>::max())
+	{
+		//TODO: Use a better error code?
+		return vsm::unexpected(error::invalid_argument);
+	}
+
+	WSAMSG message =
+	{
+		.name = &addr.addr,
+		.namelen = sizeof(socket_address_union),
+		.lpBuffers = wsa_buffers.data(),
+		.dwBufferCount = static_cast<ULONG>(wsa_buffers.size()),
+	};
+
+	DWORD transferred;
+	if (DWORD const error = wsa_recv_msg(socket, &message, &transferred))
+	{
+		return vsm::unexpected(static_cast<socket_error>(error));
+	}
+#endif
+
+	DWORD transferred;
+	DWORD flags = 0;
+
+	addr.size = sizeof(socket_address_union);
+
+	if (WSARecvFrom(
+		socket,
+		wsa_buffers.data(),
+		wsa_buffers.size(),
+		&transferred,
+		&flags,
+		&addr.addr,
+		&addr.size,
+		/* lpOverlapped: */ nullptr,
+		/* lpCompletionRoutine: */ nullptr) == SOCKET_ERROR)
 	{
 		return vsm::unexpected(get_last_socket_error());
 	}
@@ -314,7 +373,7 @@ vsm::result<void> allio::packet_scatter_read(io::parameters_with_result<io::pack
 	WSAMSG message =
 	{
 		.name = &addr.addr,
-		.namelen = sizeof(addr),
+		.namelen = sizeof(socket_address_union),
 		.lpBuffers = wsa_buffers,
 		.dwBufferCount = static_cast<uint32_t>(buffers.size()),
 	};

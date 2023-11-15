@@ -1,6 +1,6 @@
-#include <allio/linux/detail/epoll/event_handle.hpp>
+#include <allio/linux/detail/epoll/event.hpp>
 
-#include <allio/impl/linux/handles/event_handle.hpp>
+#include <allio/impl/linux/handles/event.hpp>
 
 using namespace allio;
 using namespace allio::detail;

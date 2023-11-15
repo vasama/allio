@@ -2,7 +2,7 @@
 
 #error
 
-#include <allio/platform_handle.hpp>
+#include <allio/platform_object.hpp>
 #include <allio/linux/detail/unique_fd.hpp>
 #include <allio/linux/platform.hpp>
 

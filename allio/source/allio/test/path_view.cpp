@@ -225,24 +225,35 @@ TEST_CASE("path_view standard compliance 1", "[path_view]")
 
 
 #ifdef __GLIBCXX__
-	// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=106452
-	// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=106461
-
-	//TODO: Constrain this workaround only to earlier versions once libstdc++ is fixed.
 	// libstdc++ incorrectly handles paths starting with multiple slashes.
+	// The presence of these bugs is detected automatically.
+
+	// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=106452
+	static bool const libstdcxx_bug_106452 = []()
+	{
+		return !(
+			std::filesystem::path("//").begin()->string() == "/"
+		);
+	}();
+
+	// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=106461
+	static bool const libstdcxx_bug_106461 = []()
+	{
+		return !(
+			std::filesystem::path("//.").parent_path().string() == "//"
+		);
+	}();
 
 	bool const libstdcxx_long_root = buffer.starts_with("//");
 	bool const libstdcxx_only_root = buffer.find_first_not_of("/") == std::string::npos;
 
-#	define allio_libstdcxx_workaround_prologue(...) if (!(__VA_ARGS__)) {
-#	define allio_libstdcxx_workaround_epilogue }
+#	define allio_if_not_libstdcxx_bug(bug, ...) if (!(libstdcxx_bug_ ## bug) || !(__VA_ARGS__))
 #else
-#	define allio_libstdcxx_workaround_prologue(...)
-#	define allio_libstdcxx_workaround_epilogue
+#	define allio_if_not_libstdcxx_bug(bug, ...) if (true)
 #endif
 
 
-	// Path properties.
+	// Path properties
 	{
 #define allio_property(property) \
 	CHECK(a_path.property() == s_path.property())
@@ -258,17 +269,24 @@ TEST_CASE("path_view standard compliance 1", "[path_view]")
 		allio_property(root_directory);
 		allio_property(root_name);
 		allio_property(relative_path);
-		allio_libstdcxx_workaround_prologue(libstdcxx_long_root && !libstdcxx_only_root)
-		allio_property(parent_path);
-		allio_libstdcxx_workaround_epilogue
+
+		// This bug affects cases such as "//." where a slash denoting the filesystem root
+		// directory is followed by one or more redundant slashes and one or more components.
+		allio_if_not_libstdcxx_bug(106452, libstdcxx_long_root && !libstdcxx_only_root)
+		{
+			allio_property(parent_path);
+		}
+
 		allio_property(filename);
 		allio_property(stem);
 		allio_property(extension);
 #undef allio_property
 	}
 
-	allio_libstdcxx_workaround_prologue(libstdcxx_long_root && libstdcxx_only_root)
-	// Iteration.
+	// This bug affects cases such as "//" where a slash denoting the filesystem root
+	// directory is followed by one or more redundant slashes and no other components.
+	allio_if_not_libstdcxx_bug(106461, libstdcxx_long_root && libstdcxx_only_root)
+	// Iteration
 	{
 		auto const predicate = [](path_view const lhs, std::filesystem::path const& rhs)
 		{
@@ -280,9 +298,8 @@ TEST_CASE("path_view standard compliance 1", "[path_view]")
 		CHECK(std::ranges::equal(a_range, s_path, predicate));
 		CHECK(std::ranges::equal(reverse_range(a_range), reverse_range(s_path), predicate));
 	}
-	allio_libstdcxx_workaround_epilogue
 
-	// Trailing separators.
+	// Trailing separators
 	{
 		bool const has_trailing_separators =
 			a_path.has_relative_path() &&
@@ -301,7 +318,7 @@ TEST_CASE("path_view standard compliance 1", "[path_view]")
 	}
 
 #if 0
-	// Lexical normalization.
+	// Lexical normalization
 	{
 		std::string normal_buffer;
 
@@ -318,7 +335,7 @@ TEST_CASE("path_view standard compliance 1", "[path_view]")
 		bool const s_is_lexically_normal = s_normal_string == s_path_string;
 		CHECK(a_is_lexically_normal == s_is_lexically_normal);
 
-		// Relative comparison.
+		// Relative comparison
 		{
 			int const a_cmp = a_path.compare(a_normal);
 			int const s_cmp = s_path.compare(s_normal);
@@ -356,7 +373,7 @@ TEST_CASE("path_view standard compliance 2", "[path_view]")
 	CAPTURE(l_buffer);
 	CAPTURE(r_buffer);
 
-	// Combine.
+	// Path combining
 	{
 		path_combine_result const combine_result = combine_path(a_l_path, a_r_path);
 

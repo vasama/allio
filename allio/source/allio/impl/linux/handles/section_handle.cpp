@@ -1,7 +1,7 @@
-#include <allio/section_handle.hpp>
+#include <allio/section.hpp>
 
 #include <allio/impl/linux/dup.hpp>
-#include <allio/impl/linux/platform_handle.hpp>
+#include <allio/impl/linux/platform_object.hpp>
 #include <allio/linux/platform.hpp>
 
 #include <allio/linux/detail/undef.i>

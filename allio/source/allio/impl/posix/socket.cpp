@@ -125,10 +125,7 @@ vsm::result<void> posix::socket_listen(
 		? std::min<uint32_t>(*p_backlog, std::numeric_limits<int>::max())
 		: SOMAXCONN;
 
-	if (::bind(socket, &addr.addr, addr.size) == socket_error_value)
-	{
-		return vsm::unexpected(get_last_socket_error());
-	}
+	vsm_try_void(socket_bind(socket, addr));
 
 	if (::listen(socket, backlog) == socket_error_value)
 	{

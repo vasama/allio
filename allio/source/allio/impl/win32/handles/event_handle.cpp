@@ -1,4 +1,4 @@
-#include <allio/detail/handles/event_handle.hpp>
+#include <allio/detail/handles/event.hpp>
 
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>

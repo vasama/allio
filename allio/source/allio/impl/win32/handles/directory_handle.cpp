@@ -1,4 +1,4 @@
-#include <allio/impl/win32/directory_handle.hpp>
+#include <allio/impl/win32/directory.hpp>
 
 #include <allio/impl/win32/encoding.hpp>
 #include <allio/impl/win32/kernel.hpp>

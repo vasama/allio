@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/handles/process_handle.hpp>
+#include <allio/handles/process.hpp>
 #include <allio/linux/io_uring/multiplexer.hpp>
 
 namespace allio {

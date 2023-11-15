@@ -39,7 +39,7 @@ public:
 		return m_data[l];
 	}
 
-	auto operator<=>(file_id_128 const&) const = default;
+	friend auto operator<=>(file_id_128 const&, file_id_128 const&) = default;
 };
 
 
@@ -82,6 +82,6 @@ struct file_attributes
 };
 
 
-vsm::result<file_attributes> query_file_attributes(path_descriptor path);
+//vsm::result<file_attributes> query_file_attributes(path_descriptor path);
 
 } // namespace allio

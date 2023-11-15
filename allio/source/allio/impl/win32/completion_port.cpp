@@ -58,6 +58,28 @@ vsm::result<void> win32::set_completion_information(
 	return {};
 }
 
+vsm::result<void> win32::set_io_completion(
+	HANDLE const completion_port,
+	void* const key_context,
+	void* const apc_context,
+	NTSTATUS const completion_status,
+	ULONG const completion_information)
+{
+	NTSTATUS const status = NtSetIoCompletion(
+		completion_port,
+		key_context,
+		apc_context,
+		completion_status,
+		completion_information);
+
+	if (!NT_SUCCESS(status))
+	{
+		return vsm::unexpected(static_cast<kernel_error>(status));
+	}
+
+	return {};
+}
+
 vsm::result<size_t> win32::remove_io_completions(
 	HANDLE const completion_port,
 	std::span<FILE_IO_COMPLETION_INFORMATION> const buffer,

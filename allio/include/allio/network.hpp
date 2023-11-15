@@ -94,20 +94,20 @@ using network_port_t = uint16_t;
 class ipv4_address
 {
 public:
-	using integer_type = uint32_t;
+	using uint_type = uint32_t;
 
 private:
-	integer_type m_addr;
+	uint_type m_addr;
 
 public:
 	ipv4_address() = default;
 
-	explicit constexpr ipv4_address(integer_type const integer)
+	explicit constexpr ipv4_address(uint_type const integer)
 		: m_addr(integer)
 	{
 	}
 
-	constexpr integer_type integer() const
+	constexpr uint_type integer() const
 	{
 		return m_addr;
 	}
@@ -142,20 +142,20 @@ using ipv6_zone_t = uint32_t;
 class ipv6_address
 {
 public:
-	using integer_type = vsm::uint128_t;
+	using uint_type = vsm::uint128_t;
 
 private:
-	integer_type m_addr;
+	uint_type m_addr;
 
 public:
 	ipv6_address() = default;
 
-	explicit constexpr ipv6_address(integer_type const integer)
+	explicit constexpr ipv6_address(uint_type const integer)
 		: m_addr(integer)
 	{
 	}
 
-	constexpr integer_type integer() const
+	constexpr uint_type integer() const
 	{
 		return m_addr;
 	}
@@ -186,6 +186,46 @@ struct ipv6_endpoint
 };
 
 
+class ip_address
+{
+	network_address_kind m_kind;
+	union
+	{
+		ipv4_address m_ipv4;
+		ipv6_address m_ipv6;
+	};
+
+public:
+	constexpr ip_address(ipv4_address const& address)
+		: m_kind(network_address_kind::ipv4)
+		, m_ipv4(address)
+	{
+	}
+
+	constexpr ip_address(ipv6_address const& address)
+		: m_kind(network_address_kind::ipv6)
+		, m_ipv6(address)
+	{
+	}
+
+
+	[[nodiscard]] constexpr network_address_kind kind() const
+	{
+		return m_kind;
+	}
+	
+	[[nodiscard]] constexpr ipv4_address const& ipv4() const
+	{
+		vsm_assert(m_kind == network_address_kind::ipv4);
+	}
+	
+	[[nodiscard]] constexpr ipv6_address const& ipv6() const
+	{
+		vsm_assert(m_kind == network_address_kind::ipv6);
+	}
+};
+
+
 struct null_endpoint_t {};
 inline constexpr null_endpoint_t null_endpoint = {};
 
@@ -202,6 +242,12 @@ class network_endpoint
 
 public:
 	constexpr network_endpoint()
+		: m_kind(network_address_kind::null)
+		, m_null{}
+	{
+	}
+
+	constexpr network_endpoint(null_endpoint_t)
 		: m_kind(network_address_kind::null)
 		, m_null{}
 	{

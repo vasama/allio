@@ -29,7 +29,7 @@ io_result2<void> iocp_wait_state::submit(M& m, N const& h, S& s)
 
 	// The wait is now pending so the wait packet must retained until completion.
 	// Otherwise the lease automatically releases the wait packet back to the multiplexer.
-	lease.retain();
+	lease.release();
 
 	return io_pending;
 }
@@ -51,6 +51,6 @@ io_result2<void> iocp_wait_state::notify(M& m, N const& h, S& s, io_status const
 
 void iocp_wait_state::cancel(M& m, N const& h, S& s)
 {
-	m.cancel_wait(wait_packet.get());
+	m.cancel_wait(wait_packet.get(), wait_slot);
 	m.release_wait_packet(vsm_move(wait_packet));
 }

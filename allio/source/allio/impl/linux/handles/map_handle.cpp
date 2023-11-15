@@ -1,4 +1,4 @@
-#include <allio/map_handle.hpp>
+#include <allio/map.hpp>
 
 #include <allio/impl/linux/error.hpp>
 #include <allio/linux/detail/unique_fd.hpp>

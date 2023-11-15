@@ -1,7 +1,7 @@
 #pragma once
 
 #include <allio/detail/execution.hpp>
-#include <allio/detail/handles/event_handle.hpp>
+#include <allio/detail/handles/event.hpp>
 
 #include <vsm/concepts.hpp>
 #include <vsm/standard.hpp>

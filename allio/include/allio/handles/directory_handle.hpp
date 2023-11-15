@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/detail/handles/directory_handle.hpp>
+#include <allio/detail/handles/directory.hpp>
 
 namespace allio {
 

@@ -1,4 +1,4 @@
-#include <allio/file_handle.hpp>
+#include <allio/file.hpp>
 
 #include <allio/impl/sync_byte_io.hpp>
 #include <allio/impl/win32/sync_filesystem_handle.hpp>

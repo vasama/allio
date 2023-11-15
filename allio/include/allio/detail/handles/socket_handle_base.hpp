@@ -1,7 +1,7 @@
 #pragma once
 
 #include <allio/detail/default_security_provider.hpp>
-#include <allio/detail/handles/platform_handle.hpp>
+#include <allio/detail/handles/platform_object.hpp>
 #include <allio/network.hpp>
 #include <allio/platform.hpp>
 

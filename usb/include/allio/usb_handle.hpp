@@ -2,7 +2,7 @@
 
 #include <allio/async_fwd.hpp>
 #include <allio/byte_io.hpp>
-#include <allio/platform_handle.hpp>
+#include <allio/platform_object.hpp>
 
 namespace allio {
 namespace detail {

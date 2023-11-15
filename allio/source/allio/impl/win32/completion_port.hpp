@@ -18,9 +18,16 @@ vsm::result<void> set_completion_information(
 	HANDLE completion_port,
 	void* key_context);
 
+vsm::result<void> set_io_completion(
+	HANDLE completion_port,
+	void* key_context,
+	void* apc_context,
+	NTSTATUS completion_status,
+	ULONG completion_information);
+
 vsm::result<size_t> remove_io_completions(
-	HANDLE const completion_port,
-	std::span<FILE_IO_COMPLETION_INFORMATION> const buffer,
-	deadline const deadline);
+	HANDLE completion_port,
+	std::span<FILE_IO_COMPLETION_INFORMATION> buffer,
+	deadline deadline);
 
 } // namespace allio::win32

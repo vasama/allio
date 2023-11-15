@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/directory_handle.hpp>
+#include <allio/directory.hpp>
 
 namespace allio::paths {
 

@@ -73,7 +73,54 @@ struct unique_socket_with_flags
 	handle_flags flags;
 };
 
-vsm::result<unique_socket_with_flags> create_socket(int address_family, bool multiplexable);
+inline vsm::result<int> choose_protocol(int const address_family, int const type)
+{
+	switch (address_family)
+	{
+	case AF_UNIX:
+		return 0;
+
+	case AF_INET:
+	case AF_INET6:
+		switch (type)
+		{
+		case SOCK_STREAM:
+			return IPPROTO_TCP;
+
+		case SOCK_DGRAM:
+			return IPPROTO_UDP;
+		}
+		break;
+	}
+
+	//TODO: Use better error code.
+	return vsm::unexpected(error::invalid_argument);
+}
+
+vsm::result<unique_socket_with_flags> create_socket(
+	int address_family,
+	int type,
+	int protocol,
+	bool multiplexable);
+
+inline vsm::result<void> socket_bind(
+	socket_type const socket,
+	socket_address_union const& addr,
+	socket_address_size_type const size)
+{
+	if (::bind(socket, &addr.addr, size) == socket_error_value)
+	{
+		return vsm::unexpected(get_last_socket_error());
+	}
+	return {};
+}
+
+inline vsm::result<void> socket_bind(
+	socket_type const socket,
+	socket_address const& addr)
+{
+	return socket_bind(socket, addr, addr.size);
+}
 
 vsm::result<void> socket_listen(
 	socket_type socket,
@@ -123,7 +170,14 @@ vsm::result<void> socket_set_non_blocking(socket_type socket, bool non_blocking)
 vsm::result<size_t> socket_scatter_read(socket_type socket, untyped_buffers buffers);
 vsm::result<size_t> socket_gather_write(socket_type socket, untyped_buffers buffers);
 
-//vsm::result<void> packet_scatter_read(io::parameters_with_result<io::packet_scatter_read> const& args);
-//vsm::result<void> packet_gather_write(io::parameters_with_result<io::packet_gather_write> const& args);
+vsm::result<void> socket_send_to(
+	socket_type socket,
+	socket_address const& address,
+	untyped_buffers buffers);
+
+vsm::result<size_t> socket_receive_from(
+	socket_type socket,
+	socket_address& address,
+	untyped_buffers buffers);
 
 } // namespace allio::posix

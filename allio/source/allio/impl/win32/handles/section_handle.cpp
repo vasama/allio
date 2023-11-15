@@ -1,7 +1,7 @@
-#include <allio/section_handle.hpp>
+#include <allio/section.hpp>
 
 #include <allio/impl/win32/kernel.hpp>
-#include <allio/impl/win32/platform_handle.hpp>
+#include <allio/impl/win32/platform_object.hpp>
 #include <allio/win32/detail/unique_handle.hpp>
 #include <allio/win32/kernel_error.hpp>
 #include <allio/win32/platform.hpp>
