@@ -157,7 +157,7 @@ struct listen_socket_t : basic_listen_socket_t<object_t, socket_t>
 using abstract_listen_handle = abstract_handle<listen_socket_t>;
 
 
-namespace _listen_blocking {
+namespace _listen_b {
 
 using listen_handle = blocking_handle<listen_socket_t>;
 
@@ -179,9 +179,9 @@ vsm::result<raw_listen_handle> raw_listen(network_endpoint const& endpoint, auto
 	return listne<raw_listen_socket_t>(endpoint, vsm_forward(args)...);
 }
 
-} // namespace _listen_blocking
+} // namespace _listen_b
 
-namespace _listen_async {
+namespace _listen_a {
 
 template<typename MultiplexerHandle>
 using basic_listen_handle = async_handle<listen_socket_t, MultiplexerHandle>;
@@ -202,7 +202,7 @@ ex::sender auto raw_listen(network_endpoint const& endpoint, auto&&... args)
 	return listen<raw_listen_socket_t>(endpoint, vsm_forward(args)...);
 }
 
-} // namespace _listen_async
+} // namespace _listen_a
 
 } // namespace allio::detail
 

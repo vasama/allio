@@ -170,7 +170,7 @@ struct event_t : platform_object_t
 
 using abstract_event_handle = abstract_handle<event_t>;
 
-namespace _event_blocking {
+namespace _event_b {
 
 using event_handle = blocking_handle<event_t>;
 
@@ -183,9 +183,9 @@ vsm::result<event_handle> create_event(event_mode const mode, auto&&... args)
 	return r;
 }
 
-} // namespace _event_blocking
+} // namespace _event_b
 
-namespace _event_async {
+namespace _event_a {
 
 template<typename MultiplexerHandle>
 using basic_event_handle = async_handle<event_t, MultiplexerHandle>;
@@ -196,7 +196,7 @@ ex::sender auto create_event(event_mode const mode, auto&&... args)
 		io_args<event_t::create_t>(mode)(vsm_forward(args)...));
 }
 
-} // namespace _event_async
+} // namespace _event_a
 
 } // namespace allio::detail
 

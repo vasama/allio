@@ -11,9 +11,16 @@ vsm_offset_ptr/0.1
 vsm_optional/0.1
 vsm_result/0.1
 vsm_tag_ptr/0.1
-vsm_tools/0.1
 vsm_unique_resource/0.1
-p2300/5a8b956f698b2004ad091c4e5b50205cdad3050b
+p2300/6fda0d5553c046c7b69733d652cc5a8827ca9e1a
+
+# tls/openssl
+openssl/[^3.1.4]
+
+# tls/s2n
+#s2n/[^1.3.55]
+
+catch2/[^3.4]
 
 [generators]
 CMakeDeps

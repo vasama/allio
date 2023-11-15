@@ -68,7 +68,7 @@ struct section_t : platform_object_t
 	};
 };
 
-namespace _section_blocking {
+namespace _section_b {
 
 using section_handle = blocking_handle<section_t>;
 
@@ -84,7 +84,7 @@ vsm::result<section_handle> create_section(
 }
 
 vsm::result<section_handle> create_section(
-	_file_blocking::file_handle const& backing_file,
+	_file_b::file_handle const& backing_file,
 	file_size const maximum_size,
 	auto&&... args)
 {
@@ -95,6 +95,6 @@ vsm::result<section_handle> create_section(
 	return r;
 }
 
-} // namespace _section_blocking
+} // namespace _section_b
 
 } // namespace allio::detail

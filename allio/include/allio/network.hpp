@@ -217,11 +217,13 @@ public:
 	[[nodiscard]] constexpr ipv4_address const& ipv4() const
 	{
 		vsm_assert(m_kind == network_address_kind::ipv4);
+		return m_ipv4;
 	}
 	
 	[[nodiscard]] constexpr ipv6_address const& ipv6() const
 	{
 		vsm_assert(m_kind == network_address_kind::ipv6);
+		return m_ipv6;
 	}
 };
 

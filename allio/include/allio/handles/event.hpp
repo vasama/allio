@@ -15,7 +15,7 @@ using detail::event_t;
 
 using detail::abstract_event_handle;
 
-namespace blocking { using namespace detail::_event_blocking; }
-namespace async { using namespace detail::_event_async; }
+namespace blocking { using namespace detail::_event_b; }
+namespace async { using namespace detail::_event_a; }
 
 } // namespace allio

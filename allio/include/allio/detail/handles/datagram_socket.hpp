@@ -158,7 +158,7 @@ struct datagram_socket_t : basic_datagram_socket_t<object_t>
 using abstract_datagram_socket_handle = abstract_handle<datagram_socket_t>;
 
 
-namespace _datagram_socket_blocking {
+namespace _datagram_socket_b {
 
 using datagram_socket_handle = blocking_handle<datagram_socket_t>;
 
@@ -180,9 +180,9 @@ vsm::result<raw_datagram_socket_handle> raw_bind(network_endpoint const& endpoin
 	return bind<raw_datagram_socket_t>(endpoint, vsm_forward(args)...);
 }
 
-} // namespace _datagram_socket_blocking
+} // namespace _datagram_socket_b
 
-namespace _datagram_socket_async {
+namespace _datagram_socket_a {
 
 template<typename MultiplexerHandle>
 using basic_datagram_socket_handle = async_handle<datagram_socket_t, MultiplexerHandle>;
@@ -203,7 +203,7 @@ ex::sender auto raw_bind(network_endpoint const& endpoint, auto&&... args)
 	return bind<raw_datagram_socket_t>(endpoint, vsm_forward(args)...);
 }
 
-} // namespace _datagram_socket_async
+} // namespace _datagram_socket_a
 
 } // namespace allio::detail
 

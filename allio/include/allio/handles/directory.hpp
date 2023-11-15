@@ -29,7 +29,7 @@ vsm::result<directory_handle> open_current_directory();
 
 } // namespace this_process
 
-namespace blocking { using namespace _directory_blocking; }
-namespace async { using namespace _directory_async; }
+namespace blocking { using namespace _directory_b; }
+namespace async { using namespace _directory_a; }
 
 } // namespace allio

@@ -144,7 +144,7 @@ struct socket_t : basic_socket_t<object_t>
 using abstract_socket_handle = abstract_handle<socket_t>;
 
 
-namespace _socket_blocking {
+namespace _socket_b {
 
 using socket_handle = blocking_handle<socket_t>;
 
@@ -166,9 +166,9 @@ vsm::result<raw_socket_handle> raw_connect(network_endpoint const& endpoint, aut
 	return connect<raw_socket_t>(endpoint, vsm_forward(args)...);
 }
 
-} // namespace _socket_blocking
+} // namespace _socket_b
 
-namespace _socket_async {
+namespace _socket_a {
 
 template<typename MultiplexerHandle>
 using basic_socket_handle = async_handle<socket_t, MultiplexerHandle>;
@@ -189,7 +189,7 @@ ex::sender auto raw_connect(network_endpoint const& endpoint, auto&&... args)
 	return connect<raw_socket_t>(endpoint, vsm_forward(args)...);
 }
 
-} // namespace _socket_async
+} // namespace _socket_a
 
 } // namespace allio::detail
 

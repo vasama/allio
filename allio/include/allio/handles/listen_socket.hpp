@@ -13,7 +13,7 @@ using detail::abstract_listen_handle;
 using detail::raw_listen_socket_t;
 using detail::abstract_raw_listen_handle;
 
-namespace blocking { using namespace detail::_listen_blocking; }
-namespace async { using namespace detail::_listen_async; }
+namespace blocking { using namespace detail::_listen_b; }
+namespace async { using namespace detail::_listen_a; }
 
 } // namespace allio

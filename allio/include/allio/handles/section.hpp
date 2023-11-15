@@ -12,6 +12,6 @@ using detail::abstract_section_handle;
 
 using section_handle = basic_blocking_handle<detail::_section_handle>;
 
-namespace blocking { using namespace detail::_section_blocking; }
+namespace blocking { using namespace detail::_section_b; }
 
 } // namespace allio

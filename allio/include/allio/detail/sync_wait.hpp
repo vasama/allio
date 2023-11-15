@@ -64,7 +64,7 @@ public:
 	template<std::convertible_to<MultiplexerHandle> Multiplexer>
 	[[nodiscard]] static vsm::result<event_queue> create(Multiplexer&& multiplexer)
 	{
-		vsm_try(event, _event_blocking::create_event(auto_reset_event));
+		vsm_try(event, _event_b::create_event(auto_reset_event));
 		vsm_try(async_event, vsm_move(event).via(vsm_forward(multiplexer)));
 		return vsm_lazy(event_queue(vsm_move(async_event)));
 	}

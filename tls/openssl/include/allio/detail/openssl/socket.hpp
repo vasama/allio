@@ -65,9 +65,9 @@ struct operation_impl<M, openssl_socket_t, openssl_socket_t::connect_t>
 	>
 	variant;
 
-	static io_result2<void> _enter(M& m, N& h, C& c, S& s, size_t const transferred)
+	static io_result2<void> _enter(M& m, N& h, C& c, S& s)
 	{
-		vsm_try(data_request, openssl_connect(*h.context, transferred));
+		vsm_try(data_request, openssl_connect(h.context));
 		switch (data_request)
 		{
 		case openssl_data_request::read:
@@ -157,9 +157,9 @@ struct operation_impl<M, openssl_socket_t, openssl_socket_t::disconnect_t>
 	>
 	variant;
 
-	static io_result2<void> _enter(M& m, N& h, C& c, S& s, size_t const transferred)
+	static io_result2<void> _enter(M& m, N& h, C& c, S& s)
 	{
-		vsm_try(data_request, openssl_connect(*h.context, transferred));
+		vsm_try(data_request, openssl_connect(h.context));
 		switch (data_request)
 		{
 		case openssl_data_request::read:
@@ -255,13 +255,13 @@ struct operation_impl<M, openssl_socket_t, openssl_socket_t::read_some_t>
 	>
 	variant;
 
-	static io_result2<void> _enter(M& m, N& h, C& c, S& s, size_t const transferred)
+	static io_result2<void> _enter(M& m, N& h, C& c, S& s
 	{
 		auto const buffers = s.args.buffers.buffers();
 		for (; s.buffer_index < buffers.size(); ++s.buffer_index)
 		{
 			auto const buffer = buffers[s.buffer_index];
-			vsm_try(data_request, openssl_read(*h.context, buffer.data(), buffer.size(), transferred));
+			vsm_try(data_request, openssl_read(*h.context, buffer.data(), buffer.size()));
 			switch (data_request)
 			{
 			case openssl_data_request::read:
@@ -323,13 +323,13 @@ struct operation_impl<M, openssl_socket_t, openssl_socket_t::write_some_t>
 	>
 	variant;
 
-	static io_result2<void> _enter(M& m, N& h, C& c, S& s, size_t const transferred)
+	static io_result2<void> _enter(M& m, N& h, C& c, S& s
 	{
 		auto const buffers = s.args.buffers.buffers();
 		for (; s.buffer_index < buffers.size(); ++s.buffer_index)
 		{
 			auto const buffer = buffers[s.buffer_index];
-			vsm_try(data_request, openssl_write(*h.context, buffer.data(), buffer.size(), transferred));
+			vsm_try(data_request, openssl_write(*h.context, buffer.data(), buffer.size()));
 			switch (data_request)
 			{
 			case openssl_data_request::read:

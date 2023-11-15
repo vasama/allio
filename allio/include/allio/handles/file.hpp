@@ -6,8 +6,8 @@ namespace allio {
 
 using detail::file_t;
 
-namespace blocking { using namespace _file_blocking; }
-namespace async { using namespace _file_async; }
+namespace blocking { using namespace _file_b; }
+namespace async { using namespace _file_a; }
 
 #if 0
 using file_handle = basic_blocking_handle<detail::_file_handle>;
