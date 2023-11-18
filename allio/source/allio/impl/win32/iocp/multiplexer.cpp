@@ -129,7 +129,7 @@ vsm::result<bool> iocp_multiplexer::submit_wait(
 	wait_slot& slot,
 	native_platform_handle const handle)
 {
-	vsm_assert(slot.m_operation != nullptr);
+	vsm_assert(slot.m_handler != nullptr);
 
 	vsm_try(already_signaled, associate_wait_packet(
 		unwrap_wait_packet(packet),
@@ -209,15 +209,12 @@ vsm::result<bool> iocp_multiplexer::_poll(io_parameters_t<poll_t> const& args)
 				io_slot& slot = *std::launder(reinterpret_cast<io_slot*>(
 					reinterpret_cast<uintptr_t>(entry.ApcContext) - io_status_block_offset));
 
-				vsm_assert(slot.m_operation != nullptr);
-				operation_type& operation = *slot.m_operation;
-
-				io_status_type status =
+				vsm_assert(slot.m_handler != nullptr);
+				slot.m_handler->notify(io_status_type
 				{
 					.slot = slot,
 					.status = entry.IoStatusBlock.Status,
-				};
-				operation.notify(io_status(status));
+				});
 			}
 			break;
 
@@ -225,15 +222,12 @@ vsm::result<bool> iocp_multiplexer::_poll(io_parameters_t<poll_t> const& args)
 			{
 				wait_slot& slot = *static_cast<wait_slot*>(entry.ApcContext);
 
-				vsm_assert(slot.m_operation != nullptr);
-				operation_type& operation = *slot.m_operation;
-
-				io_status_type status =
+				vsm_assert(slot.m_handler != nullptr);
+				slot.m_handler->notify(io_status_type
 				{
 					.slot = slot,
 					.status = entry.IoStatusBlock.Status,
-				};
-				operation.notify(io_status(status));
+				});
 			}
 			break;
 		}

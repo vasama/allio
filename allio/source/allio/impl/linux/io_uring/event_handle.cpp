@@ -24,7 +24,7 @@ using wait_s = operation_t<M, H, wait_t>;
 
 static eventfd_t dummy_event_value;
 
-static io_result2 _submit(M& m, H const& h, C const& c, wait_s& s)
+static io_result _submit(M& m, H const& h, C const& c, wait_s& s)
 {
 	deadline relative_deadline;
 
@@ -80,7 +80,7 @@ static io_result2 _submit(M& m, H const& h, C const& c, wait_s& s)
 		ctx.set_cqe_skip_success(*poll_sqe);
 		ctx.set_cqe_skip_success_emulation(s.poll_slot);
 
-		// The read CQE can be skipped when it is canceled.
+		// The read CQE can be skipped when it is cancelled.
 		ctx.set_cqe_skip_success_linked_emulation(*read_sqe);
 	}
 
@@ -89,7 +89,7 @@ static io_result2 _submit(M& m, H const& h, C const& c, wait_s& s)
 	return std::nullopt;
 }
 
-io_result2 operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s)
+io_result operation<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s)
 {
 	if (!h)
 	{
@@ -109,7 +109,7 @@ io_result2 operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wa
 	return _submit(m, h, c, s);
 }
 
-io_result2 operation_impl<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& s, io_status const status)
+io_result operation<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& s, io_status const status)
 {
 	auto const& cqe = M::unwrap_io_status(status);
 
@@ -207,7 +207,7 @@ io_result2 operation_impl<M, H, wait_t>::notify(M& m, H const& h, C const& c, wa
 #endif
 }
 
-void operation_impl<M, H, wait_t>::cancel(M& m, H const& h, C const& c, S& s)
+void operation<M, H, wait_t>::cancel(M& m, H const& h, C const& c, S& s)
 {
 	//TODO: Cancel
 	//m.cancel_io(s.poll_slot);

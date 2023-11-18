@@ -8,22 +8,7 @@ using namespace allio::posix;
 
 using accept_result_type = accept_result<blocking_handle<raw_socket_t>>;
 
-vsm::result<void> raw_listen_socket_t::blocking_io(
-	close_t,
-	native_type& h,
-	io_parameters_t<close_t> const& args)
-{
-	if (h.platform_handle != native_platform_handle::null)
-	{
-		unrecoverable(posix::close_socket(unwrap_socket(h.platform_handle)));
-		h.platform_handle = native_platform_handle::null;
-	}
-
-	return {};
-}
-
-vsm::result<void> raw_listen_socket_t::blocking_io(
-	listen_t,
+vsm::result<void> raw_listen_socket_t::listen(
 	native_type& h,
 	io_parameters_t<listen_t> const& args)
 {
@@ -41,19 +26,21 @@ vsm::result<void> raw_listen_socket_t::blocking_io(
 		addr,
 		args.backlog));
 
-	h = platform_object_t::native_type
+	h = native_type
 	{
+		platform_object_t::native_type
 		{
-			flags::not_null | flags,
-		},
-		wrap_socket(socket.release()),
+			{
+				flags::not_null | flags,
+			},
+			wrap_socket(socket.release()),
+		}
 	};
 
 	return {};
 }
 
-vsm::result<accept_result_type> raw_listen_socket_t::blocking_io(
-	accept_t,
+vsm::result<accept_result_type> raw_listen_socket_t::accept(
 	native_type const& h,
 	io_parameters_t<accept_t> const& args)
 {
@@ -65,15 +52,33 @@ vsm::result<accept_result_type> raw_listen_socket_t::blocking_io(
 
 	return vsm_lazy(accept_result_type
 	{
-		blocking_handle<raw_socket_t>(
+		blocking_handle<raw_socket_t>
+		(
 			adopt_handle_t(),
-			vsm_lazy(platform_object_t::native_type
+			raw_socket_t::native_type
 			{
+				platform_object_t::native_type
 				{
-					flags::not_null | socket.flags,
-				},
-				wrap_socket(socket.socket.release()),
-			})),
+					{
+						flags::not_null | socket.flags,
+					},
+					wrap_socket(socket.socket.release()),
+				}
+			}
+		),
 		addr.get_network_endpoint(),
 	});
+}
+
+vsm::result<void> raw_listen_socket_t::close(
+	native_type& h,
+	io_parameters_t<close_t> const& args)
+{
+	if (h.platform_handle != native_platform_handle::null)
+	{
+		unrecoverable(posix::close_socket(unwrap_socket(h.platform_handle)));
+		h.platform_handle = native_platform_handle::null;
+	}
+
+	return {};
 }

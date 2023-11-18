@@ -8,26 +8,28 @@
 namespace allio::detail {
 
 template<>
-struct connector_impl<iocp_multiplexer, process_handle_t>
+struct connector<iocp_multiplexer, process_handle_t>
+	: iocp_multiplexer::connector_type
 {
 	using M = iocp_multiplexer;
 	using H = process_handle_t;
 	using C = connector_t<M, H>;
 
-	friend vsm::result<void> tag_invoke(attach_handle_t, M&, H const&, C&)
+	static vsm::result<void> attach(M&, H const&, C&)
 	{
 		// Process objects cannot be associated with an IOCP.
 		// Instead waits are performed using wait packet objects.
 		return {};
 	}
 
-	friend void tag_invoke(detach_handle_t, M&, H const&, C&)
+	static vsm::result<void> detach(M&, H const&, C&)
 	{
 	}
 };
 
 template<>
-struct operation_impl<iocp_multiplexer, process_handle_t, process_handle_t::wait_t>
+struct operation<iocp_multiplexer, process_handle_t, process_handle_t::wait_t>
+	: iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
 	using H = process_handle_t;

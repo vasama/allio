@@ -150,7 +150,7 @@ public:
 	/// @brief Emulate skipping of CQEs of linked operations on failure.
 	///        The CQE associated with this SQE is skipped if the result is ECANCELED.
 	///        The primary purpose of skipping the CQE is to avoid extending the lifetime
-	///        of the associated io_data until all linked operations are canceled.
+	///        of the associated io_data until all linked operations are cancelled.
 	/// @pre @param sqe has associated user data. CQEs without user data are always skipped.
 	/// @note This prevents the direct manual cancellation of the affected operation.
 	void set_cqe_skip_success_linked_emulation(io_uring_sqe& sqe)

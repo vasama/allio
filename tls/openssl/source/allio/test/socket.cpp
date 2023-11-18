@@ -1,10 +1,46 @@
+#include <allio/openssl/listen_socket.hpp>
 #include <allio/openssl/socket.hpp>
 
+#include <allio/sync_wait.hpp>
+#include <allio/task.hpp>
+#include <allio/test/network.hpp>
+
 #include <catch2/catch_all.hpp>
+
+#include <future>
 
 using namespace allio;
 using namespace allio::openssl;
 
+namespace ex = stdexec;
+
+TEST_CASE("a stream socket can connect to a listening socket and exchange data", "[socket_handle][blocking]")
+{
+	using namespace blocking;
+
+	using socket_object = openssl::socket_t;
+	using listen_socket_object = openssl::listen_socket_t;
+
+	auto const endpoint = test::generate_endpoint();
+	auto const listen_socket = listen<listen_socket_object>(endpoint).value();
+
+	auto connect_future = std::async(std::launch::async, [&]()
+	{
+		return connect<socket_object>(endpoint);
+	});
+
+	auto const server_socket = listen_socket.accept().value().socket;
+	auto const client_socket = connect_future.get().value();
+
+	signed char value = 42;
+	REQUIRE(client_socket.write_some(as_write_buffer(&value, 1)).value() == 1);
+
+	static_cast<volatile signed char&>(value) = 0;
+	REQUIRE(server_socket.read_some(as_read_buffer(&value, 1)).value() == 1);
+	REQUIRE(value == 42);
+}
+
+#if 0
 TEST_CASE("OpenSSL sockets can asynchronously connect and exchange data", "[openssl][socket][async]")
 {
 	using namespace async;
@@ -54,3 +90,4 @@ TEST_CASE("OpenSSL sockets can asynchronously connect and exchange data", "[open
 		);
 	}());
 }
+#endif

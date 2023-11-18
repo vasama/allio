@@ -1,7 +1,6 @@
 #include <allio/listen_socket.hpp>
 #include <allio/socket.hpp>
 
-#include <allio/get_multiplexer.hpp>
 #include <allio/sync_wait.hpp>
 #include <allio/task.hpp>
 #include <allio/test/network.hpp>

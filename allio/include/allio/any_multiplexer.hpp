@@ -205,8 +205,8 @@ struct operation_vtable
 
 	using handle_type = typename O::handle_type;
 
-	io_result2(*submit)(void* m, handle_type& h, C const& c, S& s, void* r, io_status status);
-	io_result2(*notify)(void* m, handle_type& h, C const& c, S& s, void* r);
+	io_result(*submit)(void* m, handle_type& h, C const& c, S& s, void* r, io_status status);
+	io_result(*notify)(void* m, handle_type& h, C const& c, S& s, void* r);
 	void                  (*cancel)(void* m, handle_type& h, C const& c, S& s);
 
 	template<typename M>
@@ -218,7 +218,7 @@ struct operation_vtable
 	}
 
 	template<typename M>
-	static io_result2 _submit(
+	static io_result _submit(
 		void* const m,
 		handle_type& h,
 		C const& c,
@@ -243,7 +243,7 @@ struct operation_vtable
 	}
 
 	template<typename M>
-	static io_result2 _notify(
+	static io_result _notify(
 		void* const m,
 		handle_type& h,
 		C const& c,
@@ -400,7 +400,7 @@ struct handle
 		}
 	
 		template<typename H, typename O>
-		friend io_result2 tag_invoke(
+		friend io_result tag_invoke(
 			submit_io_t,
 			type const& m,
 			H&& h,
@@ -417,7 +417,7 @@ struct handle
 		}
 	
 		template<typename H, typename O>
-		friend io_result2 tag_invoke(
+		friend io_result tag_invoke(
 			notify_io_t,
 			type const& m,
 			H&& h,

@@ -30,4 +30,7 @@ struct get_multiplexer_t : ex::__query<get_multiplexer_t>
 };
 inline constexpr get_multiplexer_t get_multiplexer = {};
 
+template<typename Receiver>
+using current_multiplexer_t = std::decay_t<std::invoke_result_t<get_multiplexer_t, ex::env_of_t<Receiver>>>;
+
 } // namespace allio::detail

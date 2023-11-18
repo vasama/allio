@@ -8,26 +8,28 @@
 namespace allio::detail {
 
 template<>
-struct connector_impl<iocp_multiplexer, _opaque_handle>
+struct connector<iocp_multiplexer, _opaque_handle>
+	: iocp_multiplexer::connector_type
 {
 	using M = iocp_multiplexer;
 	using H = platform_handle;
 	using C = connector_t<M, H>;
 
-	friend vsm::result<void> tag_invoke(attach_handle_t, M&, H const&, C&)
+	static vsm::result<void> attach(M&, H const&, C&)
 	{
 		// Opaque handles are not associated with an IOCP.
 		// Instead waits are performed using wait packet objects.
 		return {};
 	}
 
-	friend void tag_invoke(detach_handle_t, M&, H const&, C&)
+	static vsm::result<void> detach(M&, H const&, C&)
 	{
 	}
 };
 
 template<>
-struct operation_impl<iocp_multiplexer, _opaque_handle, _opaque_handle::poll_t>
+struct operation<iocp_multiplexer, _opaque_handle, _opaque_handle::poll_t>
+	: iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
 	using H = _event_handle;

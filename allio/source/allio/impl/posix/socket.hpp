@@ -167,17 +167,17 @@ inline vsm::result<void> socket_poll_or_timeout(
 
 vsm::result<void> socket_set_non_blocking(socket_type socket, bool non_blocking);
 
-vsm::result<size_t> socket_scatter_read(socket_type socket, untyped_buffers buffers);
-vsm::result<size_t> socket_gather_write(socket_type socket, untyped_buffers buffers);
-
-vsm::result<void> socket_send_to(
-	socket_type socket,
-	socket_address const& address,
-	untyped_buffers buffers);
+vsm::result<size_t> socket_scatter_read(socket_type socket, read_buffers buffers);
+vsm::result<size_t> socket_gather_write(socket_type socket, write_buffers buffers);
 
 vsm::result<size_t> socket_receive_from(
 	socket_type socket,
 	socket_address& address,
-	untyped_buffers buffers);
+	read_buffers buffers);
+
+vsm::result<void> socket_send_to(
+	socket_type socket,
+	socket_address const& address,
+	write_buffers buffers);
 
 } // namespace allio::posix

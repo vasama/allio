@@ -11,11 +11,11 @@ using H = platform_object_t;
 using N = H::native_type;
 using S = iocp_wait_state;
 
-io_result2<void> iocp_wait_state::submit(M& m, N const& h, S& s)
+io_result<void> iocp_wait_state::submit(M& m, N const& h, S& s, io_handler<M>& handler)
 {
 	vsm_try(lease, m.lease_wait_packet(wait_packet));
 
-	wait_slot.bind(s);
+	wait_slot.bind(handler);
 
 	vsm_try(already_signaled, m.submit_wait(
 		wait_packet.get(),
@@ -31,12 +31,11 @@ io_result2<void> iocp_wait_state::submit(M& m, N const& h, S& s)
 	// Otherwise the lease automatically releases the wait packet back to the multiplexer.
 	lease.release();
 
-	return io_pending;
+	return io_pending(error::async_operation_pending);
 }
 
-io_result2<void> iocp_wait_state::notify(M& m, N const& h, S& s, io_status const p_status)
+io_result<void> iocp_wait_state::notify(M& m, N const& h, S& s, M::io_status_type const status)
 {
-	auto const& status = m.unwrap_io_status(p_status);
 	vsm_assert(&status.slot == &wait_slot);
 
 	m.release_wait_packet(vsm_move(wait_packet));

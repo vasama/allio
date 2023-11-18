@@ -26,17 +26,17 @@ struct bind_t
 	using optional_params_type = no_parameters_t;
 };
 
-struct send_to_t
-{
-	using result_type = void;
-	using required_params_type = parameters_t<network_endpoint_t, untyped_buffers_t>;
-	using optional_params_type = deadline_t;
-};
-
 struct receive_from_t
 {
 	using result_type = receive_result;
-	using required_params_type = untyped_buffers_t;
+	using required_params_type = read_buffers_t;
+	using optional_params_type = deadline_t;
+};
+
+struct send_to_t
+{
+	using result_type = void;
+	using required_params_type = parameters_t<network_endpoint_t, write_buffers_t>;
 	using optional_params_type = deadline_t;
 };
 
@@ -48,8 +48,8 @@ struct basic_datagram_socket_t : BaseObject
 	using base_type = BaseObject;
 
 	using bind_t = socket_io::bind_t;
-	using send_to_t = socket_io::send_to_t;
 	using receive_from_t = socket_io::receive_from_t;
+	using send_to_t = socket_io::send_to_t;
 
 	using operations = type_list_cat
 	<
@@ -61,10 +61,24 @@ struct basic_datagram_socket_t : BaseObject
 			receive_from_t
 		>
 	>;
-	
+
 	template<typename H, typename M>
 	struct concrete_interface : base_type::template concrete_interface<H, M>
 	{
+		[[nodiscard]] auto receive_from(read_buffer const buffer, auto&&... args) const
+		{
+			return generic_io<receive_from_t>(
+				static_cast<H const&>(*this),
+				io_args<receive_from_t>(buffer)(vsm_forward(args)...));
+		}
+
+		[[nodiscard]] auto receive_from(read_buffers const buffers, auto&&... args) const
+		{
+			return generic_io<receive_from_t>(
+				static_cast<H const&>(*this),
+				io_args<receive_from_t>(buffers)(vsm_forward(args)...));
+		}
+
 		[[nodiscard]] auto send(write_buffer const buffer, auto&&... args) const
 		{
 			return generic_io<send_to_t>(
@@ -92,20 +106,6 @@ struct basic_datagram_socket_t : BaseObject
 				static_cast<H const&>(*this),
 				io_args<send_to_t>(endpoint, buffers)(vsm_forward(args)...));
 		}
-
-		[[nodiscard]] auto receive_from(read_buffer const buffer, auto&&... args) const
-		{
-			return generic_io<receive_from_t>(
-				static_cast<H const&>(*this),
-				io_args<receive_from_t>(buffer)(vsm_forward(args)...));
-		}
-
-		[[nodiscard]] auto receive_from(read_buffers const buffers, auto&&... args) const
-		{
-			return generic_io<receive_from_t>(
-				static_cast<H const&>(*this),
-				io_args<receive_from_t>(buffers)(vsm_forward(args)...));
-		}
 	};
 };
 
@@ -123,27 +123,56 @@ struct raw_datagram_socket_t : basic_datagram_socket_t<platform_object_t>
 {
 	using base_type = basic_datagram_socket_t<platform_object_t>;
 
-	using base_type::blocking_io;
+	struct native_type : base_type::native_type
+	{
+		friend vsm::result<void> tag_invoke(
+			blocking_io_t<bind_t>,
+			native_type& h,
+			io_parameters_t<bind_t> const& args)
+		{
+			return raw_datagram_socket_t::bind(h, args);
+		}
+	
+		friend vsm::result<receive_result> tag_invoke(
+			blocking_io_t<receive_from_t>,
+			native_type const& h,
+			io_parameters_t<receive_from_t> const& args)
+		{
+			return raw_datagram_socket_t::receive_from(h, args);
+		}
+	
+		friend vsm::result<void> tag_invoke(
+			blocking_io_t<send_to_t>,
+			native_type const& h,
+			io_parameters_t<send_to_t> const& args)
+		{
+			return raw_datagram_socket_t::send_to(h, args);
+		}
+	
+		friend vsm::result<void> tag_invoke(
+			blocking_io_t<close_t>,
+			native_type& h,
+			io_parameters_t<close_t> const& args)
+		{
+			return raw_datagram_socket_t::close(h, args);
+		}
+	};
 
-	static vsm::result<void> blocking_io(
-		close_t,
-		native_type& h,
-		io_parameters_t<close_t> const& args);
-
-	static vsm::result<void> blocking_io(
-		bind_t,
+	static vsm::result<void> bind(
 		native_type& h,
 		io_parameters_t<bind_t> const& args);
 
-	static vsm::result<void> blocking_io(
-		send_to_t,
+	static vsm::result<receive_result> receive_from(
+		native_type const& h,
+		io_parameters_t<receive_from_t> const& args);
+
+	static vsm::result<void> send_to(
 		native_type const& h,
 		io_parameters_t<send_to_t> const& args);
 
-	static vsm::result<receive_result> blocking_io(
-		receive_from_t,
-		native_type const& h,
-		io_parameters_t<receive_from_t> const& args);
+	static vsm::result<void> close(
+		native_type& h,
+		io_parameters_t<close_t> const& args);
 };
 using abstract_raw_datagram_socket_handle = abstract_handle<raw_datagram_socket_t>;
 

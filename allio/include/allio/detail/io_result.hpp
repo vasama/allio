@@ -2,8 +2,9 @@
 
 #include <vsm/assert.h>
 #include <vsm/concepts.hpp>
-#include <vsm/standard.hpp>
 #include <vsm/result.hpp>
+#include <vsm/standard.hpp>
+#include <vsm/utility.hpp>
 
 #include <cstdint>
 
@@ -11,41 +12,141 @@ namespace allio::detail {
 
 namespace io_result_state
 {
-	inline constexpr uint8_t completed              = 0b0000;
-	inline constexpr uint8_t completed_partial      = 0b0010;
-	inline constexpr uint8_t pending                = 0b0011;
-	inline constexpr uint8_t cancelled              = 0b0100;
-	inline constexpr uint8_t failure                = 0b1000;
-	inline constexpr uint8_t multiplexer_busy       = 0b1001;
-
-	inline constexpr uint8_t pending_flag           = 0b010;
+	inline constexpr uint8_t has_value              = 1 << 0;
+	inline constexpr uint8_t pending                = 1 << 1;
+	inline constexpr uint8_t cancelled              = 1 << 2;
 }
 
-struct io_pending_t {};
-inline constexpr io_pending_t io_pending = {};
-
-struct io_partial_t {};
-inline constexpr io_partial_t io_partial = {};
-
-struct multiplexer_busy_t {};
-inline constexpr multiplexer_busy_t multiplexer_busy = {};
-
-union io_result_error
+template<typename E>
+class io_pending
 {
-	struct {} dummy;
-	std::error_code error;
+	E m_error;
+
+public:
+	explicit io_pending(auto&& error)
+		: m_error(vsm_forward(error))
+	{
+	}
+
+	auto&& error(this auto&& self)
+	{
+		return vsm_forward(self).m_error;
+	}
 };
 
-template<typename T>
-class io_result2
+template<typename E>
+io_pending(E) -> io_pending<E>;
+
+template<typename E>
+class io_cancelled
 {
-	using E = std::error_code;
+	E m_error;
+
+public:
+	explicit io_cancelled(auto&& error)
+		: m_error(vsm_forward(error))
+	{
+	}
+
+	auto&& error(this auto&& self)
+	{
+		return vsm_forward(self).m_error;
+	}
+};
+
+template<typename E>
+io_cancelled(E) -> io_cancelled<E>;
+
+template<template<typename> typename Template, typename T>
+T _unexpected_value(Template<T> const&);
+
+template<typename T>
+using unexpected_value_t = vsm::copy_cvref_t<T, decltype(_unexpected_value(std::declval<T const&>()))>;
+
+template<template<typename...> typename Template, typename... Args>
+void _any_cvref_of_template(Template<Args...> const&);
+
+template<typename T, template<typename...> typename Template>
+concept any_cvref_of_template = requires (T const& t) { _any_cvref_of_template<Template>(t); };
+
+template<typename T>
+concept non_trivial_move =
+	std::is_move_constructible_v<T> &&
+	std::is_move_assignable_v<T> &&
+	!std::is_trivially_copyable_v<T>;
+
+template<typename T>
+concept non_trivial_copy =
+	std::is_copy_constructible_v<T> &&
+	std::is_copy_assignable_v<T> &&
+	!std::is_trivially_copyable_v<T>;
+
+template<typename T>
+concept noexcept_move =
+	std::is_nothrow_move_constructible_v<T> &&
+	std::is_nothrow_move_assignable_v<T>;
+
+template<typename T>
+concept noexcept_copy =
+	std::is_nothrow_copy_constructible_v<T> &&
+	std::is_nothrow_copy_assignable_v<T>;
+
+template<typename T, typename E>
+class io_result_base;
+
+template<typename T, typename R>
+concept other_io_result = vsm::no_cvref_of<T, R> && any_cvref_of_template<T, io_result_base>;
+
+template<typename T1, typename E1, typename R2>
+inline constexpr bool constructible =
+	std::is_constructible_v<
+		T1,
+		vsm::copy_cvref_t<R2, typename std::remove_cvref_t<R2>::value_type>> &&
+	std::is_constructible_v<
+		E1,
+		vsm::copy_cvref_t<R2, typename std::remove_cvref_t<R2>::error_type>>;
+
+template<typename E1, typename R2>
+inline constexpr bool constructible<void, E1, R2> =
+	std::is_void_v<typename std::remove_cvref_t<R2>::value_type> &&
+	std::is_constructible_v<
+		E1,
+		vsm::copy_cvref_t<R2, typename std::remove_cvref_t<R2>::error_type>>;
+
+template<typename T1, typename E1, typename R2>
+inline constexpr bool convertible =
+	std::is_convertible_v<
+		vsm::copy_cvref_t<R2, typename std::remove_cvref_t<R2>::value_type>,
+		T1> &&
+	std::is_convertible_v<
+		vsm::copy_cvref_t<R2, typename std::remove_cvref_t<R2>::error_type>,
+		E1>;
+
+template<typename E1, typename R2>
+inline constexpr bool convertible<void, E1, R2> =
+	std::is_void_v<typename std::remove_cvref_t<R2>::value_type> &&
+	std::is_convertible_v<
+		vsm::copy_cvref_t<R2, typename std::remove_cvref_t<R2>::error_type>,
+		E1>;
+
+struct io_result_void
+{
+	io_result_void() = default;
+	io_result_void(vsm::no_cvref_of<io_result_void> auto&&) = delete;
+	io_result_void& operator=(vsm::no_cvref_of<io_result_void> auto&&) = delete;
+};
+
+template<typename T, typename E>
+class io_result_base
+{
+	using V = vsm::select_t<std::is_void_v<T>, io_result_void, T>;
 
 protected:
 	union
 	{
-		io_result_error m_error;
-		T m_value;
+		struct {} m_dummy;
+		V m_value;
+		E m_error;
 	};
 	uint8_t m_state;
 
@@ -54,437 +155,407 @@ public:
 	using error_type = E;
 
 
-	io_result2(io_pending_t)
-		: m_error{ .dummy = {} }
+	io_result_base()
+		requires std::is_default_constructible_v<V>
+		: m_value{}
+		, m_state(io_result_state::has_value)
+	{
+	}
+
+	template<vsm::no_cvref_of<io_result_base> U = T>
+		requires std::is_constructible_v<T, U>
+	explicit(!std::is_convertible_v<U, T>)
+	io_result_base(U&& value)
+		: m_value(vsm_forward(value))
+		, m_state(io_result_state::has_value)
+	{
+	}
+
+	template<any_cvref_of_template<vsm::unexpected> U>
+		requires std::is_constructible_v<E, unexpected_value_t<U>>
+	explicit(!std::is_convertible_v<unexpected_value_t<U>, E>)
+	io_result_base(U&& unexpected)
+		: m_error(vsm_forward(unexpected).error())
+		, m_state(0)
+	{
+	}
+
+	template<any_cvref_of_template<io_pending> U>
+		requires std::is_constructible_v<E, unexpected_value_t<U>>
+	explicit(!std::is_convertible_v<unexpected_value_t<U>, E>)
+	io_result_base(U&& pending)
+		: m_error(vsm_forward(pending).error())
 		, m_state(io_result_state::pending)
 	{
 	}
 
-	io_result2()
-		requires std::is_default_constructible_v<T>
-		: m_value{}
-		, m_state(io_result_state::completed)
+	template<any_cvref_of_template<io_cancelled> U>
+		requires std::is_constructible_v<E, unexpected_value_t<U>>
+	explicit(!std::is_convertible_v<unexpected_value_t<U>, E>)
+	io_result_base(U&& cancelled)
+		: m_error(vsm_forward(cancelled).error())
+		, m_state(io_result_state::cancelled)
 	{
 	}
 
-	io_result2(io_partial_t)
-		requires std::is_default_constructible_v<T>
-		: m_value{}
-		, m_state(io_result_state::completed_partial)
+	template<typename... Args>
+		requires std::is_constructible_v<V, Args...>
+	explicit io_result_base(std::in_place_t, Args&&... args)
+		: m_value(vsm_forward(args)...)
+		, m_state(io_result_state::has_value)
 	{
 	}
 
-	template<vsm::no_cvref_of<io_result2> U = T>
-		requires std::is_constructible_v<T, U>
-	explicit(!std::is_convertible_v<U, T>)
-	io_result2(U&& value)
-		: m_value(vsm_forward(value))
-		, m_state(io_result_state::completed)
+	template<typename... Args>
+		requires std::is_constructible_v<E, Args...>
+	explicit io_result_base(std::unexpect_t, Args&&... args)
+		: m_error(vsm_forward(args)...)
+		, m_state(0)
 	{
 	}
 
-	template<vsm::no_cvref_of<io_result2> U = T>
-		requires std::is_constructible_v<T, U>
-	explicit(!std::is_convertible_v<U, T>)
-	io_result2(io_partial_t, U&& value)
-		: m_value(vsm_forward(value))
-		, m_state(io_result_state::completed_partial)
+	template<any_cvref_of_template<vsm::expected> U>
+		requires constructible<T, E, U>
+	explicit(!convertible<T, E, U>)
+	io_result_base(U&& other)
+		: m_dummy{}
 	{
-	}
-
-	template<vsm::constructible_to<T> U>
-	explicit(!std::is_convertible_v<U, T>)
-	io_result2(vsm::result<T>&& result)
-		: m_error{ .dummy = {} }
-	{
-		if (result)
+		if (other)
 		{
-			new (&m_value) T(vsm_move(*result));
-			m_state = io_result_state::completed;
-		}
-		else
-		{
-			m_error.error = result.error();
-			m_state = io_result_state::failure;
-		}
-	}
-
-	template<vsm::constructible_to<T> U>
-	explicit(!std::is_convertible_v<U, T>)
-	io_result2(vsm::result<T> const& result)
-		: m_error{ .dummy = {} }
-	{
-		if (result)
-		{
-			new (&m_value) T(*result);
-			m_state = io_result_state::completed;
-		}
-		else
-		{
-			m_error.error = result.error();
-			m_state = io_result_state::failure;
-		}
-	}
-
-	template<typename U>
-		requires std::is_constructible_v<E, U const&>
-	explicit(!std::is_convertible_v<U const&, E>)
-	io_result2(vsm::unexpected<U> const& e)
-		: m_error{ .error = e.error() }
-		, m_state(io_result_state::failure)
-	{
-	}
-
-	template<typename U>
-		requires std::is_constructible_v<E, U const&>
-	explicit(!std::is_convertible_v<U const&, E>)
-	io_result2(multiplexer_busy_t, vsm::unexpected<U> const& e)
-		: m_error{ .error = e.error() }
-		, m_state(io_result_state::multiplexer_busy)
-	{
-	}
-
-	io_result2(io_result2&& other) = default;
-	io_result2(io_result2&& other)
-		requires (std::is_move_constructible_v<T> && !std::is_trivially_copyable_v<T>)
-		: m_error(other.m_error)
-		, m_state(other.m_state)
-	{
-		if (has_value())
-		{
-			new (&m_value) T(vsm_move(other.m_value));
-		}
-	}
-
-	template<vsm::not_same_as<T> U>
-		requires std::is_constructible_v<T, U>
-	explicit(!std::is_convertible_v<U, T>)
-	io_result2(io_result2<U>&& other)
-		: m_error(other.m_error)
-		, m_state(other.m_state)
-	{
-		if (has_value())
-		{
-			new (&m_value) T(vsm_move(other.m_value));
-		}
-	}
-
-	io_result2(io_result2 const& other) = default;
-	io_result2(io_result2 const& other)
-		requires (std::is_copy_constructible_v<T> && !std::is_trivially_copyable_v<T>)
-		: m_error(other.m_error)
-		, m_state(other.m_state)
-	{
-		if (has_value())
-		{
-			new (&m_value) T(other.m_value);
-		}
-	}
-
-	template<vsm::not_same_as<T> U>
-		requires std::is_constructible_v<T, U const&>
-	explicit(!std::is_convertible_v<U const&, T>)
-	io_result2(io_result2 const& other)
-		: m_error(other.m_error)
-		, m_state(other.m_state)
-	{
-		if (has_value())
-		{
-			new (&m_value) T(other.m_value);
-		}
-	}
-
-	io_result2& operator=(io_result2&& other) & = default;
-	io_result2& operator=(io_result2&& other) &
-		requires (std::is_move_constructible_v<T> && std::is_move_assignable_v<T> && !std::is_trivially_copyable_v<T>)
-	{
-		if (has_value() && other.has_value())
-		{
-			m_value = vsm_move(other.m_value);
-		}
-		else
-		{
-			if (has_value())
+			if constexpr (std::is_void_v<T>)
 			{
-				m_value.~T();
-				m_error = other.m_error;
+				new (&m_value) V{};
 			}
 			else
 			{
-				new (&m_value) T(vsm_move(other.m_value));
+				new (&m_value) V(vsm_forward(other).value());
 			}
-			m_state = other.m_state;
+			m_state = io_result_state::has_value;
 		}
-		return *this;
+		else
+		{
+			new (&m_error) E(vsm_forward(other).error());
+			m_state = 0;
+		}
 	}
 
-	template<vsm::not_same_as<T> U>
+	template<other_io_result<io_result_base> U>
+		requires constructible<T, E, U>
+	explicit(!convertible<T, E, U>)
+	io_result_base(U&& other)
+		: m_dummy{}
+		, m_state(other.m_state)
+	{
+		construct(vsm_forward(other));
+	}
+
+	io_result_base(io_result_base&& other) = default;
+	io_result_base(io_result_base&& other)
+		noexcept(noexcept_move<T> && noexcept_move<E>)
+		requires non_trivial_move<T> || non_trivial_move<E>
+		: m_dummy{}
+		, m_state(other.m_state)
+	{
+		construct(vsm_move(other));
+	}
+
+	io_result_base(io_result_base const& other) = default;
+	io_result_base(io_result_base const& other)
+		noexcept(noexcept_copy<T> && noexcept_copy<E>)
+		requires non_trivial_copy<T> || non_trivial_copy<E>
+		: m_dummy{}
+		, m_state(other.m_state)
+	{
+		construct(other);
+	}
+
+
+	template<vsm::no_cvref_of<io_result_base> U = T>
 		requires std::is_convertible_v<U, T>
-	io_result2& operator=(io_result2<U>&& other) &
+	io_result_base& operator=(U&& value) &
 	{
-		if (has_value() && other.has_value())
+		assign_value(vsm_forward(value));
+		return *this;
+	}
+	
+	template<any_cvref_of_template<vsm::unexpected> U>
+		requires std::is_convertible_v<unexpected_value_t<U>, E>
+	io_result_base& operator=(U&& unexpected) &
+	{
+		assign_error(vsm_forward(unexpected).error());
+		m_state = 0;
+		return *this;
+	}
+	
+	template<any_cvref_of_template<io_pending> U>
+		requires std::is_convertible_v<unexpected_value_t<U>, E>
+	io_result_base& operator=(U&& pending) &
+	{
+		assign_error(vsm_forward(pending).error());
+		m_state = io_result_state::pending;
+		return *this;
+	}
+	
+	template<any_cvref_of_template<io_cancelled> U>
+		requires std::is_convertible_v<unexpected_value_t<U>, E>
+	io_result_base& operator=(U&& cancelled) &
+	{
+		assign_error(vsm_forward(cancelled).error());
+		m_state = io_result_state::cancelled;
+		return *this;
+	}
+
+	template<any_cvref_of_template<vsm::expected> U>
+		requires convertible<T, E, U>
+	io_result_base& operator=(U&& other) &
+	{
+		if (m_state & io_result_state::has_value)
 		{
-			m_value = vsm_move(other.m_value);
+			if (other)
+			{
+				if constexpr (std::is_void_v<T>)
+				{
+				}
+				else
+				{
+					m_value = vsm_forward(other).value();
+				}
+				m_state = io_result_state::has_value;
+			}
+			else
+			{
+				new (&m_error) E(vsm_forward(other).error());
+				m_state = 0;
+			}
 		}
 		else
 		{
-			if (has_value())
+			if (other)
 			{
-				m_value.~T();
-				m_error = other.m_error;
+				if constexpr (std::is_void_v<T>)
+				{
+					new (&m_value) V{};
+				}
+				else
+				{
+					new (&m_value) V(vsm_forward(other).value());
+				}
+				m_state = io_result_state::has_value;
 			}
 			else
 			{
-				new (&m_value) T(vsm_move(other.m_value));
+				m_error = vsm_forward(other).error();
+				m_state = 0;
 			}
-			m_state = other.m_state;
 		}
+	}
+
+	template<other_io_result<io_result_base> U>
+		requires convertible<T, E, U>
+	io_result_base& operator=(U&& other) &
+	{
+		assign(vsm_forward(other));
 		return *this;
 	}
 
-	io_result2& operator=(io_result2 const& other) & = default;
-	io_result2& operator=(io_result2 const& other) &
-		requires (std::is_copy_constructible_v<T> && std::is_copy_assignable_v<T> && !std::is_trivially_copyable_v<T>)
+	io_result_base& operator=(io_result_base&& other) & = default;
+	io_result_base& operator=(io_result_base&& other) &
+		noexcept(noexcept_move<V> && noexcept_move<E>)
+		requires non_trivial_move<V> || non_trivial_move<E>
 	{
-		if (has_value() && other.has_value())
-		{
-			m_value = other.m_value;
-		}
-		else if (has_value())
-		{
-			if (has_value())
-			{
-				m_value.~T();
-				m_error = other.m_error;
-			}
-			else
-			{
-				new (&m_value) T(other.m_value);
-			}
-			m_state = other.m_state;
-		}
+		assign(vsm_move(other));
 		return *this;
 	}
 
-	template<vsm::not_same_as<T> U>
-		requires std::is_convertible_v<U const&, T>
-	io_result2& operator=(io_result2<U> const& other) &
+	io_result_base& operator=(io_result_base const& other) & = default;
+	io_result_base& operator=(io_result_base const& other) &
+		noexcept(noexcept_copy<V> && noexcept_copy<E>)
+		requires non_trivial_copy<V> || non_trivial_copy<E>
 	{
-		if (has_value() && other.has_value())
-		{
-			m_value = other.m_value;
-		}
-		else if (has_value())
-		{
-			if (has_value())
-			{
-				m_value.~T();
-				m_error = other.m_error;
-			}
-			else
-			{
-				new (&m_value) T(other.m_value);
-			}
-			m_state = other.m_state;
-		}
+		assign(vsm_move(other));
 		return *this;
 	}
+	
 
-	~io_result2() = default;
-	~io_result2()
-		requires (!std::is_trivially_destructible_v<T>)
+	~io_result_base() = default;
+	~io_result_base()
+		requires (!std::is_trivially_destructible_v<V> || !std::is_trivially_destructible_v<E>)
 	{
-		if (has_value())
+		if (m_state & io_result_state::has_value)
 		{
-			m_value.~T();
+			m_value.~V();
+		}
+		else
+		{
+			m_error.~E();
 		}
 	}
 
 
 	[[nodiscard]] bool has_value() const
 	{
-		return m_state <= io_result_state::completed_partial;
+		return (m_state & io_result_state::has_value) != 0;
 	}
-	
+
 	[[nodiscard]] bool has_error() const
 	{
-		return m_state >= io_result_state::pending;
+		return (m_state & io_result_state::has_value) == 0;
 	}
 
 	[[nodiscard]] bool is_pending() const
 	{
-		return m_state & io_result_state::pending_flag;
+		return (m_state & io_result_state::pending) != 0;
 	}
 
 	[[nodiscard]] bool is_cancelled() const
 	{
-		return m_state == io_result_state::cancelled;
+		return (m_state & io_result_state::cancelled) != 0;
 	}
 
-	[[nodiscard]] bool is_busy_error() const
+	[[nodiscard]] operator bool() const
 	{
-		return m_state == io_result_state::multiplexer_busy;
-	}
-
-	[[nodiscard]] E const& error() const
-	{
-		vsm_assert(m_state >= io_result_state::failure);
-		return m_error.error;
-	}
-
-	[[nodiscard]] explicit operator bool() const
-	{
-		return m_state <= io_result_state::completed_partial;
+		return (m_state & io_result_state::has_value) != 0;
 	}
 
 
-	[[nodiscard]] T& operator*() &
+	[[nodiscard]] auto&& error(this auto&& self)
 	{
-		vsm_assert(m_state <= io_result_state::completed_partial);
-		return static_cast<T&>(m_value);
+		vsm_assert((self.m_state & io_result_state::has_value) == 0);
+		return vsm_forward(self).m_error;
 	}
 
-	[[nodiscard]] T const& operator*() const&
+	template<typename Self>
+	[[nodiscard]] vsm::expected<T, E> discard_flags(this Self&& self)
 	{
-		vsm_assert(m_state <= io_result_state::completed_partial);
-		return static_cast<T const&>(m_value);
+		if (self.m_state & io_result_state::has_value)
+		{
+			if constexpr (std::is_void_v<T>)
+			{
+				return {};
+			}
+			else
+			{
+				return vsm::expected<T, E>(vsm::result_value, vsm_forward(self).m_value);
+			}
+		}
+		else
+		{
+			return vsm::expected<T, E>(vsm::result_error, vsm_forward(self).m_error);
+		}
 	}
 
-	[[nodiscard]] T&& operator*() &&
+private:
+	void construct(auto&& other)
 	{
-		vsm_assert(m_state <= io_result_state::completed_partial);
-		return static_cast<T&&>(m_value);
+		if (other.m_state & io_result_state::has_value)
+		{
+			new (&m_value) T(vsm_forward(other).m_value);
+		}
+		else
+		{
+			new (&m_error) E(vsm_forward(other).m_error);
+		}
 	}
 
-	[[nodiscard]] T const&& operator*() const&&
+	void assign(auto&& other)
 	{
-		vsm_assert(m_state <= io_result_state::completed_partial);
-		return static_cast<T const&&>(m_value);
+		if (m_state & io_result_state::has_value)
+		{
+			if (other.m_state & io_result_state::has_value)
+			{
+				m_value = vsm_forward(other).m_value;
+			}
+			else
+			{
+				m_value.~V();
+				new (&m_error) E(vsm_forward(other).m_error);
+			}
+		}
+		else
+		{
+			if (other.m_state & io_result_state::has_value)
+			{
+				m_error.~E();
+				new (&m_value) V(vsm_forward(other).m_value);
+			}
+			else
+			{
+				m_error = vsm_forward(other).m_error;
+			}
+		}
+		m_state = other.m_state;
 	}
 
-	[[nodiscard]] T* operator->()
+	void assign_value(auto&& value)
 	{
-		vsm_assert(m_state <= io_result_state::completed_partial);
-		return &static_cast<T&>(m_value);
+		if (m_state & io_result_state::has_value)
+		{
+			m_value = vsm_forward(value);
+		}
+		else
+		{
+			m_error.~E();
+			new (&m_value) V(vsm_forward(value));
+		}
 	}
 
-	[[nodiscard]] T const* operator->() const
+	void assign_error(auto&& error)
 	{
-		vsm_assert(m_state <= io_result_state::completed_partial);
-		return &static_cast<T const&>(m_value);
+		if (m_state & io_result_state::has_value)
+		{
+			m_value.~V();
+			new (&m_error) E(vsm_forward(error));
+		}
+		else
+		{
+			m_error = vsm_forward(error);
+		}
 	}
 };
 
-template<>
-class io_result2<void>
+template<typename T, typename E = std::error_code>
+class io_result final : public io_result_base<T, E>
 {
-	using E = std::error_code;
-
-protected:
-	io_result_error m_error;
-	uint8_t m_state;
+	using base = io_result_base<T, E>;
 
 public:
-	using value_type = void;
-	using error_type = E;
+	using base::base;
 
-
-	io_result2(io_pending_t)
-		: m_error{ .dummy = {} }
-		, m_state(io_result_state::pending)
+	[[nodiscard]] auto&& value(this auto&& self)
 	{
+		vsm_assert((self.m_state & io_result_state::has_value) != 0);
+		return vsm_forward(self).m_value;
 	}
 
-	io_result2()
-		: m_error{ .dummy = {} }
-		, m_state(io_result_state::completed)
+	[[nodiscard]] auto&& operator*(this auto&& self)
 	{
+		vsm_assert((self.m_state & io_result_state::has_value) != 0);
+		return vsm_forward(self).m_value;
 	}
 
-	io_result2(io_partial_t)
-		: m_error{ .dummy = {} }
-		, m_state(io_result_state::completed_partial)
+	[[nodiscard]] auto*& operator->(this auto&& self)
 	{
+		vsm_assert((self.m_state & io_result_state::has_value) != 0);
+		return &self.m_value;
 	}
+};
 
-	io_result2(vsm::result<void> const& result)
-		: m_error{ .dummy = {} }
-	{
-		if (result)
-		{
-			m_state = io_result_state::completed;
-		}
-		else
-		{
-			m_state = io_result_state::failure;
-			m_error.error = result.error();
-		}
-	}
+template<typename E>
+class io_result<void, E> final : public io_result_base<void, E>
+{
+	using base = io_result_base<void, E>;
 
-	template<typename U>
-		requires std::is_constructible_v<E, U const&>
-	explicit(!std::is_convertible_v<U const&, E>)
-		io_result2(vsm::unexpected<U> const& e)
-		: m_error{ .error = e.error() }
-		, m_state(io_result_state::failure)
-	{
-	}
-
-	template<typename U>
-		requires std::is_constructible_v<E, U const&>
-	explicit(!std::is_convertible_v<U const&, E>)
-		io_result2(multiplexer_busy_t, vsm::unexpected<U> const& e)
-		: m_error{ .error = e.error() }
-		, m_state(io_result_state::multiplexer_busy)
-	{
-	}
-
-
-	[[nodiscard]] bool has_value() const
-	{
-		return m_state <= io_result_state::completed_partial;
-	}
-	
-	[[nodiscard]] bool has_error() const
-	{
-		return m_state >= io_result_state::pending;
-	}
-
-	[[nodiscard]] bool is_pending() const
-	{
-		return m_state & io_result_state::pending_flag;
-	}
-
-	[[nodiscard]] bool is_cancelled() const
-	{
-		return m_state == io_result_state::cancelled;
-	}
-
-	[[nodiscard]] bool is_busy_error() const
-	{
-		return m_state == io_result_state::multiplexer_busy;
-	}
-
-	[[nodiscard]] E const& error() const
-	{
-		vsm_assert(m_state >= io_result_state::failure);
-		return m_error.error;
-	}
-
-	[[nodiscard]] explicit operator bool() const
-	{
-		return m_state <= io_result_state::completed_partial;
-	}
-
+public:
+	using base::base;
 
 	void value() const
 	{
-		vsm_assert(m_state <= io_result_state::completed_partial);
+		vsm_assert((base::m_state & io_result_state::has_value) != 0);
 	}
 
 	void operator*() const
 	{
-		vsm_assert(m_state <= io_result_state::completed_partial);
+		vsm_assert((base::m_state & io_result_state::has_value) != 0);
 	}
 };
 

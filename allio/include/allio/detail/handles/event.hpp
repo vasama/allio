@@ -59,7 +59,6 @@ struct event_t : platform_object_t
 		auto_reset,
 	);
 
-
 	struct create_t
 	{
 		using mutation_tag = producer_t;
@@ -113,21 +112,72 @@ struct event_t : platform_object_t
 	>;
 
 
+	struct native_type : base_type::native_type
+	{
+		friend vsm::result<void> tag_invoke(
+			blocking_io_t<create_t>,
+			native_type& h,
+			io_parameters_t<create_t> const& args)
+		{
+			return event_t::create(h, args);
+		}
+		
+		friend vsm::result<void> tag_invoke(
+			blocking_io_t<signal_t>,
+			native_type const& h,
+			io_parameters_t<signal_t> const& args)
+		{
+			return event_t::signal(h, args);
+		}
+		
+		friend vsm::result<void> tag_invoke(
+			blocking_io_t<reset_t>,
+			native_type const& h,
+			io_parameters_t<reset_t> const& args)
+		{
+			return event_t::reset(h, args);
+		}
+		
+		friend vsm::result<void> tag_invoke(
+			blocking_io_t<wait_t>,
+			native_type const& h,
+			io_parameters_t<wait_t> const& args)
+		{
+			return event_t::wait(h, args);
+		}
+	};
+
+
+	static vsm::result<void> create(
+		native_type& h,
+		io_parameters_t<create_t> const& args);
+
+	static vsm::result<void> signal(
+		native_type const& h,
+		io_parameters_t<signal_t> const& args);
+
+	static vsm::result<void> reset(
+		native_type const& h,
+		io_parameters_t<reset_t> const& args);
+
+	static vsm::result<void> wait(
+		native_type const& h,
+		io_parameters_t<wait_t> const& args);
+
+
 	template<typename H>
 	struct abstract_interface : base_type::abstract_interface<H>
 	{
 		[[nodiscard]] vsm::result<void> signal() const
 		{
-			return blocking_io(
-				signal_t(),
+			return event_t::signal(
 				static_cast<H const&>(*this).native(),
 				io_parameters_t<signal_t>());
 		}
 
 		[[nodiscard]] vsm::result<void> reset() const
 		{
-			return blocking_io(
-				reset_t(),
+			return event_t::reset(
 				static_cast<H const&>(*this).native(),
 				io_parameters_t<reset_t>());
 		}
@@ -143,29 +193,6 @@ struct event_t : platform_object_t
 				io_args<wait_t>()(vsm_forward(args)...));
 		}
 	};
-
-
-	using base_type::blocking_io;
-
-	static vsm::result<void> blocking_io(
-		create_t,
-		native_type& h,
-		io_parameters_t<create_t> const& args);
-
-	static vsm::result<void> blocking_io(
-		signal_t,
-		native_type const& h,
-		io_parameters_t<signal_t> const& args);
-
-	static vsm::result<void> blocking_io(
-		reset_t,
-		native_type const& h,
-		io_parameters_t<reset_t> const& args);
-
-	static vsm::result<void> blocking_io(
-		wait_t,
-		native_type const& h,
-		io_parameters_t<wait_t> const& args);
 };
 
 using abstract_event_handle = abstract_handle<event_t>;

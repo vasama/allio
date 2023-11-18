@@ -28,7 +28,8 @@ AddressBuffer& get_wsa_address_buffer(wsa_address_storage<Size>& storage)
 }
 
 
-inline vsm::result<void> transform_wsa_buffers(untyped_buffers const buffers, WSABUF* const wsa_buffers)
+template<vsm::any_cv_of<std::byte> T>
+inline vsm::result<void> transform_wsa_buffers(basic_buffers<T> const buffers, WSABUF* const wsa_buffers)
 {
 	bool size_out_of_range = false;
 
@@ -36,7 +37,7 @@ inline vsm::result<void> transform_wsa_buffers(untyped_buffers const buffers, WS
 		buffers.begin(),
 		buffers.end(),
 		wsa_buffers,
-		[&](untyped_buffer const buffer) -> WSABUF
+		[&](basic_buffer<T> const buffer) -> WSABUF
 		{
 			if (buffer.size() > std::numeric_limits<ULONG>::max())
 			{
@@ -46,7 +47,7 @@ inline vsm::result<void> transform_wsa_buffers(untyped_buffers const buffers, WS
 			return WSABUF
 			{
 				.len = static_cast<ULONG>(buffer.size()),
-				.buf = static_cast<CHAR*>(const_cast<void*>(buffer.data())),
+				.buf = reinterpret_cast<CHAR*>(const_cast<std::byte*>(buffer.data())),
 			};
 		}
 	);
@@ -59,10 +60,10 @@ inline vsm::result<void> transform_wsa_buffers(untyped_buffers const buffers, WS
 	return {};
 }
 
-template<size_t StorageSize>
+template<vsm::any_cv_of<std::byte> T, size_t StorageSize>
 vsm::result<std::span<WSABUF>> make_wsa_buffers(
 	detail::_wsa_buffers_storage<StorageSize>& storage,
-	untyped_buffers const buffers)
+	basic_buffers<T> const buffers)
 {
 	vsm_try(wsa_buffers, storage.reserve(buffers.size()));
 	vsm_try_void(transform_wsa_buffers(buffers, wsa_buffers));

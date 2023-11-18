@@ -20,12 +20,13 @@ using socket_handle_type = async_handle<raw_socket_t, basic_multiplexer_handle<M
 using accept_result_type = accept_result<socket_handle_type>;
 
 using listen_t = H::listen_t;
-using listen_i = operation_impl<M, H, listen_t>;
+using listen_i = operation<M, H, listen_t>;
 using listen_s = operation_t<M, H, listen_t>;
+using listen_a = io_parameters_t<listen_t>;
 
-io_result2<void> listen_i::submit(M& m, N& h, C& c, listen_s& s)
+io_result<void> listen_i::submit(M& m, N& h, C& c, listen_s& s, listen_a const& args, io_handler<M>& handler)
 {
-	vsm_try(addr, posix::socket_address::make(s.args.endpoint));
+	vsm_try(addr, posix::socket_address::make(args.endpoint));
 	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_STREAM));
 
 	vsm_try_bind((socket, flags), posix::create_socket(
@@ -37,24 +38,27 @@ io_result2<void> listen_i::submit(M& m, N& h, C& c, listen_s& s)
 	vsm_try_void(posix::socket_listen(
 		socket.get(),
 		addr,
-		s.args.backlog));
+		args.backlog));
 
 	vsm_try_void(m.attach_handle(
 		posix::wrap_socket(socket.get()),
 		c));
 
-	h = platform_object_t::native_type
+	h = N
 	{
+		platform_object_t::native_type
 		{
-			H::flags::not_null | flags,
-		},
-		posix::wrap_socket(socket.release()),
+			{
+				H::flags::not_null | flags,
+			},
+			posix::wrap_socket(socket.release()),
+		}
 	};
 
 	return {};
 }
 
-io_result2<void> listen_i::notify(M& m, N& h, C& c, listen_s& s, io_status const p_status)
+io_result<void> listen_i::notify(M& m, N& h, C& c, listen_s& s, listen_a const& args, M::io_status_type const status)
 {
 	vsm_unreachable();
 }
@@ -64,10 +68,11 @@ void listen_i::cancel(M& m, N const& h, C const& c, listen_s& s)
 }
 
 using accept_t = H::accept_t;
-using accept_i = operation_impl<M, H, accept_t>;
+using accept_i = operation<M, H, accept_t>;
 using accept_s = operation_t<M, H, accept_t>;
+using accept_a = io_parameters_t<accept_t>;
 
-static io_result2<accept_result_type> make_accept_result(
+static io_result<accept_result_type> make_accept_result(
 	M& m,
 	unique_wrapped_socket socket,
 	handle_flags const flags,
@@ -82,12 +87,15 @@ static io_result2<accept_result_type> make_accept_result(
 		socket_handle_type
 		(
 			adopt_handle_t(),
-			platform_object_t::native_type
+			raw_socket_t::native_type
 			{
+				platform_object_t::native_type
 				{
-					H::flags::not_null | flags,
+					{
+						H::flags::not_null | flags,
+					},
+					socket.release(),
 				},
-				socket.release(),
 			},
 			m,
 			vsm_move(c)
@@ -96,7 +104,7 @@ static io_result2<accept_result_type> make_accept_result(
 	});
 }
 
-io_result2<accept_result_type> accept_i::submit(M& m, N const& h, C const& c, accept_s& s)
+io_result<accept_result_type> accept_i::submit(M& m, N const& h, C const& c, accept_s& s, accept_a const& args, io_handler<M>& handler)
 {
 	SOCKET const listen_socket = posix::unwrap_socket(h.platform_handle);
 	//TODO: Cache the address family.
@@ -118,7 +126,7 @@ io_result2<accept_result_type> accept_i::submit(M& m, N const& h, C const& c, ac
 
 	auto& addr_buffer = new_wsa_address_buffer<wsa_accept_address_buffer>(s.address_storage);
 
-	s.overlapped.bind(s);
+	s.overlapped.bind(handler);
 
 	// If using a multithreaded completion port, after this call
 	// another thread will race to complete this operation.
@@ -136,12 +144,11 @@ io_result2<accept_result_type> accept_i::submit(M& m, N const& h, C const& c, ac
 		return make_accept_result(m, vsm_move(s.socket), s.socket_flags, addr_buffer.remote);
 	}
 
-	return io_pending;
+	return io_pending(error::async_operation_pending);
 }
 
-io_result2<accept_result_type> accept_i::notify(M& m, N const& h, C const& c, accept_s& s, io_status const p_status)
+io_result<accept_result_type> accept_i::notify(M& m, N const& h, C const& c, accept_s& s, accept_a const& args, M::io_status_type const status)
 {
-	auto const& status = M::unwrap_io_status(p_status);
 	vsm_assert(&status.slot == &s.overlapped);
 
 	if (!NT_SUCCESS(status.status))

@@ -8,7 +8,8 @@
 namespace allio::detail {
 
 template<>
-struct operation_impl<io_uring_multiplexer, event_t, event_t::wait_t>
+struct operation<io_uring_multiplexer, event_t, event_t::wait_t>
+	: io_uring_multiplexer::operation_type
 {
 	using M = io_uring_multiplexer;
 	using H = event_t;
@@ -24,8 +25,8 @@ struct operation_impl<io_uring_multiplexer, event_t, event_t::wait_t>
 	/// @brief Context for the poll operation.
 	io_uring_multiplexer::io_slot poll_slot;
 
-	static io_result2 submit(M& m, H const& h, C const& c, S& s);
-	static io_result2 notify(M& m, H const& h, C const& c, S& s, io_status status);
+	static io_result submit(M& m, H const& h, C const& c, S& s);
+	static io_result notify(M& m, H const& h, C const& c, S& s, io_status status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 

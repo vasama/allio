@@ -37,6 +37,15 @@ struct accept_result
 {
 	SocketHandle socket;
 	network_endpoint endpoint;
+
+	template<typename ToSocketHandle>
+	friend vsm::result<accept_result<ToSocketHandle>> tag_invoke(
+		rebind_handle_t<accept_result<ToSocketHandle>>,
+		accept_result&& self)
+	{
+		vsm_try(new_socket, rebind_handle<ToSocketHandle>(vsm_move(self.socket)));
+		return vsm_lazy(accept_result<ToSocketHandle>{ vsm_move(new_socket), self.endpoint });
+	}
 };
 
 namespace socket_io {
@@ -56,7 +65,7 @@ struct listen_t
 struct accept_t
 {
 	template<typename H, typename M>
-	using result_type_template = accept_result<basic_handle<typename H::socket_object, M>>;
+	using result_type_template = accept_result<basic_handle<typename H::socket_object_type, M>>;
 
 	using required_params_type = no_parameters_t;
 	using optional_params_type = deadline_t;
@@ -64,9 +73,11 @@ struct accept_t
 
 } // namespace socket_io
 
-template<std::derived_from<object_t> BaseObject, typename SocketHandleTag>
+template<std::derived_from<object_t> BaseObject, typename SocketObject>
 struct basic_listen_socket_t : BaseObject
 {
+	using socket_object_type = SocketObject;
+
 	using base_type = BaseObject;
 
 	using listen_t = socket_io::listen_t;
@@ -85,7 +96,7 @@ struct basic_listen_socket_t : BaseObject
 	template<typename H, typename M>
 	struct concrete_interface : base_type::template concrete_interface<H, M>
 	{
-		using socket_handle_type = basic_handle<SocketHandleTag, M>;
+		using socket_handle_type = basic_handle<SocketObject, M>;
 		using accept_result_type = accept_result<socket_handle_type>;
 
 		[[nodiscard]] auto accept(auto&&... args) const
@@ -97,8 +108,8 @@ struct basic_listen_socket_t : BaseObject
 	};
 };
 
-template<typename BaseObject, typename SocketHandleTag>
-void _listen_socket_object(basic_listen_socket_t<BaseObject, SocketHandleTag> const&);
+template<typename BaseObject, typename SocketObject>
+void _listen_socket_object(basic_listen_socket_t<BaseObject, SocketObject> const&);
 
 template<typename T>
 concept listen_socket_object = requires (T const& t)
@@ -110,34 +121,52 @@ concept listen_socket_object = requires (T const& t)
 
 struct raw_listen_socket_t : basic_listen_socket_t<platform_object_t, raw_socket_t>
 {
-	using socket_object = raw_socket_t;
-
 	using base_type = basic_listen_socket_t<platform_object_t, raw_socket_t>;
 
-	using base_type::blocking_io;
+	struct native_type : base_type::native_type
+	{
+		friend vsm::result<void> tag_invoke(
+			blocking_io_t<listen_t>,
+			native_type& h,
+			io_parameters_t<listen_t> const& args)
+		{
+			return raw_listen_socket_t::listen(h, args);
+		}
 
-	static vsm::result<void> blocking_io(
-		object_t::close_t,
+		friend vsm::result<accept_result<blocking_handle<raw_socket_t>>> tag_invoke(
+			blocking_io_t<accept_t>,
+			native_type const& h,
+			io_parameters_t<accept_t> const& args)
+		{
+			return raw_listen_socket_t::accept(h, args);
+		}
+
+		friend vsm::result<void> tag_invoke(
+			blocking_io_t<close_t>,
+			native_type& h,
+			io_parameters_t<close_t> const& args)
+		{
+			return raw_listen_socket_t::close(h, args);
+		}
+	};
+
+	static vsm::result<void> listen(
 		native_type& h,
-		io_parameters_t<object_t::close_t> const& args);
+		io_parameters_t<listen_t> const& args);
 
-	static vsm::result<void> blocking_io(
-		socket_io::listen_t,
-		native_type& h,
-		io_parameters_t<socket_io::listen_t> const& args);
-
-	static vsm::result<accept_result<blocking_handle<socket_object>>> blocking_io(
-		socket_io::accept_t,
+	static vsm::result<accept_result<blocking_handle<raw_socket_t>>> accept(
 		native_type const& h,
-		io_parameters_t<socket_io::accept_t> const& args);
+		io_parameters_t<accept_t> const& args);
+
+	static vsm::result<void> close(
+		native_type& h,
+		io_parameters_t<close_t> const& args);
 };
 using abstract_raw_listen_handle = abstract_handle<raw_listen_socket_t>;
 
 
 struct listen_socket_t : basic_listen_socket_t<object_t, socket_t>
 {
-	using socket_object = socket_t;
-
 	using base_type = basic_listen_socket_t<object_t, socket_t>;
 
 	struct native_type : base_type::native_type
@@ -149,7 +178,7 @@ struct listen_socket_t : basic_listen_socket_t<object_t, socket_t>
 		native_type& h,
 		io_parameters_t<socket_io::listen_t> const& args);
 
-	static vsm::result<accept_result<blocking_handle<socket_object>>> blocking_io(
+	static vsm::result<accept_result<blocking_handle<socket_t>>> blocking_io(
 		socket_io::accept_t,
 		native_type const& h,
 		io_parameters_t<socket_io::accept_t> const& args);

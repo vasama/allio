@@ -31,14 +31,14 @@ struct disconnect_t
 struct stream_read_t
 {
 	using result_type = size_t;
-	using required_params_type = untyped_buffers_t;
+	using required_params_type = read_buffers_t;
 	using optional_params_type = deadline_t;
 };
 
 struct stream_write_t
 {
 	using result_type = size_t;
-	using required_params_type = untyped_buffers_t;
+	using required_params_type = write_buffers_t;
 	using optional_params_type = deadline_t;
 };
 
@@ -113,15 +113,56 @@ struct raw_socket_t : basic_socket_t<platform_object_t>
 {
 	using base_type = basic_socket_t<platform_object_t>;
 
-	using base_type::blocking_io;
+	struct native_type : base_type::native_type
+	{
+		friend vsm::result<void> tag_invoke(
+			blocking_io_t<connect_t>,
+			native_type& h,
+			io_parameters_t<connect_t> const& args)
+		{
+			return raw_socket_t::connect(h, args);
+		}
 
-	static vsm::result<void> blocking_io(object_t::close_t, native_type& h, io_parameters_t<object_t::close_t> const& args);
+		friend vsm::result<size_t> tag_invoke(
+			blocking_io_t<read_some_t>,
+			native_type const& h,
+			io_parameters_t<read_some_t> const& args)
+		{
+			return raw_socket_t::read_some(h, args);
+		}
 
-	static vsm::result<void> blocking_io(socket_io::connect_t, native_type& h, io_parameters_t<socket_io::connect_t> const& args);
-	static vsm::result<void> blocking_io(socket_io::disconnect_t, native_type& h, io_parameters_t<socket_io::disconnect_t> const& args);
+		friend vsm::result<size_t> tag_invoke(
+			blocking_io_t<write_some_t>,
+			native_type const& h,
+			io_parameters_t<write_some_t> const& args)
+		{
+			return raw_socket_t::write_some(h, args);
+		}
 
-	static vsm::result<size_t> blocking_io(socket_io::stream_read_t, native_type const& h, io_parameters_t<socket_io::stream_read_t> const& args);
-	static vsm::result<size_t> blocking_io(socket_io::stream_write_t, native_type const& h, io_parameters_t<socket_io::stream_write_t> const& args);
+		friend vsm::result<void> tag_invoke(
+			blocking_io_t<close_t>,
+			native_type& h,
+			io_parameters_t<close_t> const& args)
+		{
+			return raw_socket_t::close(h, args);
+		}
+	};
+
+	static vsm::result<void> connect(
+		native_type& h,
+		io_parameters_t<connect_t> const& args);
+
+	static vsm::result<size_t> read_some(
+		native_type const& h,
+		io_parameters_t<read_some_t> const& args);
+
+	static vsm::result<size_t> write_some(
+		native_type const& h,
+		io_parameters_t<write_some_t> const& args);
+
+	static vsm::result<void> close(
+		native_type& h,
+		io_parameters_t<close_t> const& args);
 };
 using abstract_raw_socket_handle = abstract_handle<raw_socket_t>;
 

@@ -47,7 +47,9 @@ vsm::result<unique_handle> win32::duplicate_handle(HANDLE const handle)
 }
 
 
-vsm::result<void> platform_object_t::blocking_io(close_t, native_type& h, io_parameters_t<close_t> const& args)
+vsm::result<void> platform_object_t::close(
+	native_type& h,
+	io_parameters_t<close_t> const& args)
 {
 	if (h.platform_handle != native_platform_handle::null)
 	{

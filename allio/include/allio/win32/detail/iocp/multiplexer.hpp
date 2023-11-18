@@ -46,34 +46,26 @@ inline constexpr max_concurrent_threads_t max_concurrent_threads;
 class iocp_multiplexer final
 {
 public:
-	using multiplexer_tag = void;
+	using is_multiplexer = void;
 
-	class connector_type
+	struct io_status_type;
+
+	class connector_type : public connector_base
 	{
 	};
 
 	class operation_type : public operation_base
 	{
-	protected:
-		using operation_base::operation_base;
-		operation_type(operation_type const&) = default;
-		operation_type& operator=(operation_type const&) = default;
-		~operation_type() = default;
-
-	private:
-		using operation_base::notify;
-
-		friend class iocp_multiplexer;
 	};
 
 	class io_slot
 	{
-		operation_type* m_operation = nullptr;
+		io_handler<iocp_multiplexer>* m_handler = nullptr;
 
 	public:
-		void bind(operation_type& operation) &
+		void bind(io_handler<iocp_multiplexer>& handler) &
 		{
-			m_operation = &operation;
+			m_handler = &handler;
 		}
 
 	protected:
@@ -154,11 +146,6 @@ public:
 		io_slot& slot;
 		NTSTATUS status;
 	};
-
-	static io_status_type const& unwrap_io_status(io_status const status)
-	{
-		return status.unwrap<io_status_type>();
-	}
 
 private:
 	struct shared_state_t : vsm::intrusive_ref_count

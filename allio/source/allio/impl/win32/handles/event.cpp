@@ -14,8 +14,7 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-vsm::result<void> event_t::blocking_io(
-	create_t,
+vsm::result<void> event_t::create(
 	native_type& h,
 	io_parameters_t<create_t> const& args)
 {
@@ -43,19 +42,21 @@ vsm::result<void> event_t::blocking_io(
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
-	h = platform_object_t::native_type
+	h = native_type
 	{
+		platform_object_t::native_type
 		{
-			flags::not_null | flags,
-		},
-		wrap_handle(handle.release()),
+			{
+				flags::not_null | flags,
+			},
+			wrap_handle(handle.release()),
+		}
 	};
 
 	return {};
 }
 
-vsm::result<void> event_t::blocking_io(
-	signal_t,
+vsm::result<void> event_t::signal(
 	native_type const& h,
 	io_parameters_t<signal_t> const& args)
 {
@@ -71,8 +72,7 @@ vsm::result<void> event_t::blocking_io(
 	return {};
 }
 
-vsm::result<void> event_t::blocking_io(
-	reset_t,
+vsm::result<void> event_t::reset(
 	native_type const& h,
 	io_parameters_t<reset_t> const& args)
 {
@@ -88,8 +88,7 @@ vsm::result<void> event_t::blocking_io(
 	return {};
 }
 
-vsm::result<void> event_t::blocking_io(
-	wait_t,
+vsm::result<void> event_t::wait(
 	native_type const& h,
 	io_parameters_t<wait_t> const& args)
 {

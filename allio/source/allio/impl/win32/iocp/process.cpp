@@ -30,17 +30,17 @@ static io_result handle_result(H const& h, wait_r const result, io_result const 
 	));
 }
 
-io_result operation_impl<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s, wait_r const r)
+io_result operation<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s, wait_r const r)
 {
 	return handle_result(h, r, s.wait_state.submit(m, h, s));
 }
 
-io_result operation_impl<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& s, wait_r const r, io_status const status)
+io_result operation<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& s, wait_r const r, io_status const status)
 {
 	return handle_result(h, r, s.wait_state.notify(m, h, s, status));
 }
 
-void operation_impl<M, H, wait_t>::cancel(M& m, H const& h, C const& c, S& s)
+void operation<M, H, wait_t>::cancel(M& m, H const& h, C const& c, S& s)
 {
 	s.wait_state.cancel(m, h, s);
 }

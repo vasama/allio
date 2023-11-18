@@ -6,7 +6,8 @@
 namespace allio::detail {
 
 template<>
-struct operation_impl<epoll_multiplexer, event_t, event_t::wait_t>
+struct operation<epoll_multiplexer, event_t, event_t::wait_t>
+	: epoll_multiplexer::operation_type
 {
 	using M = epoll_multiplexer;
 	using H = event_t;
@@ -16,8 +17,8 @@ struct operation_impl<epoll_multiplexer, event_t, event_t::wait_t>
 
 	epoll_multiplexer::subscription subscription;
 
-	static io_result2 submit(M& m, H const& h, C const& c, S& s);
-	static io_result2 notify(M& m, H const& h, C const& c, S& s, io_status status);
+	static io_result submit(M& m, H const& h, C const& c, S& s);
+	static io_result notify(M& m, H const& h, C const& c, S& s, io_status status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 

@@ -18,25 +18,29 @@ using C = connector_t<M, H>;
 
 
 using connect_t = H::connect_t;
-using connect_i = operation_impl<M, H, connect_t>;
+using connect_i = operation<M, H, connect_t>;
 using connect_s = operation_t<M, H, connect_t>;
+using connect_a = io_parameters_t<connect_t>;
 
-static H::native_type make_native_handle(unique_wrapped_socket& socket, handle_flags const flags)
+static N make_native_handle(unique_wrapped_socket& socket, handle_flags const flags)
 {
-	return platform_object_t::native_type
+	return N
 	{
+		platform_object_t::native_type
 		{
-			H::flags::not_null | flags,
-		},
-		socket.release(),
+			{
+				H::flags::not_null | flags,
+			},
+			socket.release(),
+		}
 	};
 
 	return {};
 }
 
-io_result2<void> connect_i::submit(M& m, N& h, C& c, connect_s& s)
+io_result<void> connect_i::submit(M& m, N& h, C& c, connect_s& s, connect_a const& args, io_handler<M>& handler)
 {
-	vsm_try(addr, posix::socket_address::make(s.args.endpoint));
+	vsm_try(addr, posix::socket_address::make(args.endpoint));
 	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_STREAM));
 
 	vsm_try_bind((socket, flags), posix::create_socket(
@@ -63,7 +67,7 @@ io_result2<void> connect_i::submit(M& m, N& h, C& c, connect_s& s)
 	overlapped.Pointer = nullptr;
 	overlapped.hEvent = NULL;
 
-	s.overlapped.bind(s);
+	s.overlapped.bind(handler);
 
 	// If using a multithreaded completion port, after this call
 	// another thread will race to complete this operation.
@@ -81,12 +85,11 @@ io_result2<void> connect_i::submit(M& m, N& h, C& c, connect_s& s)
 		return {};
 	}
 
-	return io_pending;
+	return io_pending(error::async_operation_pending);
 }
 
-io_result2<void> connect_i::notify(M& m, N& h, C& c, connect_s& s, io_status const p_status)
+io_result<void> connect_i::notify(M& m, N& h, C& c, connect_s& s, connect_a const& args, M::io_status_type const status)
 {
-	auto const& status = M::unwrap_io_status(p_status);
 	vsm_assert(&status.slot == &s.overlapped);
 
 	if (!NT_SUCCESS(status.status))
@@ -123,12 +126,13 @@ static size_t get_transfer_result(N const& h, M::overlapped& overlapped)
 }
 
 using read_t = H::read_some_t;
-using read_i = operation_impl<M, H, read_t>;
+using read_i = operation<M, H, read_t>;
 using read_s = operation_t<M, H, read_t>;
+using read_a = io_parameters_t<read_t>;
 
-io_result2<size_t> read_i::submit(M& m, N const& h, C const& c, read_s& s)
+io_result<size_t> read_i::submit(M& m, N const& h, C const& c, read_s& s, read_a const& args, io_handler<M>& handler)
 {
-	vsm_try(wsa_buffers, make_wsa_buffers(s.buffers, s.args.buffers.buffers()));
+	vsm_try(wsa_buffers, make_wsa_buffers(s.buffers, args.buffers.buffers()));
 
 	DWORD transferred;
 	DWORD flags = 0;
@@ -137,7 +141,7 @@ io_result2<size_t> read_i::submit(M& m, N const& h, C const& c, read_s& s)
 	overlapped.Pointer = nullptr;
 	overlapped.hEvent = NULL;
 
-	s.overlapped.bind(s);
+	s.overlapped.bind(handler);
 
 	// If using a multithreaded completion port, after this call
 	// another thread will race to complete this operation.
@@ -163,12 +167,11 @@ io_result2<size_t> read_i::submit(M& m, N const& h, C const& c, read_s& s)
 		return transferred;
 	}
 
-	return io_pending;
+	return io_pending(error::async_operation_pending);
 }
 
-io_result2<size_t> read_i::notify(M& m, N const& h, C const& c, read_s& s, io_status const p_status)
+io_result<size_t> read_i::notify(M& m, N const& h, C const& c, read_s& s, read_a const& args, M::io_status_type const status)
 {
-	auto const& status = M::unwrap_io_status(p_status);
 	vsm_assert(&status.slot == &s.overlapped);
 
 	if (!NT_SUCCESS(status.status))
@@ -185,14 +188,14 @@ void read_i::cancel(M& m, N const& h, C const& c, read_s& s)
 }
 
 
-
 using write_t = H::write_some_t;
-using write_i = operation_impl<M, H, write_t>;
+using write_i = operation<M, H, write_t>;
 using write_s = operation_t<M, H, write_t>;
+using write_a = io_parameters_t<write_t>;
 
-io_result2<size_t> write_i::submit(M& m, N const& h, C const& c, write_s& s)
+io_result<size_t> write_i::submit(M& m, N const& h, C const& c, write_s& s, write_a const& args, io_handler<M>& handler)
 {
-	vsm_try(wsa_buffers, make_wsa_buffers(s.buffers, s.args.buffers.buffers()));
+	vsm_try(wsa_buffers, make_wsa_buffers(s.buffers, args.buffers.buffers()));
 
 	DWORD transferred;
 
@@ -200,7 +203,7 @@ io_result2<size_t> write_i::submit(M& m, N const& h, C const& c, write_s& s)
 	overlapped.Pointer = nullptr;
 	overlapped.hEvent = NULL;
 
-	s.overlapped.bind(s);
+	s.overlapped.bind(handler);
 
 	// If using a multithreaded completion port, after this call
 	// another thread will race to complete this operation.
@@ -225,12 +228,11 @@ io_result2<size_t> write_i::submit(M& m, N const& h, C const& c, write_s& s)
 		return transferred;
 	}
 
-	return io_pending;
+	return io_pending(error::async_operation_pending);
 }
 
-io_result2<size_t> write_i::notify(M& m, N const& h, C const& c, write_s& s, io_status const p_status)
+io_result<size_t> write_i::notify(M& m, N const& h, C const& c, write_s& s, write_a const& args, M::io_status_type const status)
 {
-	auto const& status = M::unwrap_io_status(p_status);
 	vsm_assert(&status.slot == &s.overlapped);
 
 	if (!NT_SUCCESS(status.status))

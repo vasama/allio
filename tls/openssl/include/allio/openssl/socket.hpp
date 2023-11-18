@@ -1,6 +1,7 @@
 #pragma once
 
-#include <allio/detail/openssl/socket.hpp>
+#include <allio/handles/socket.hpp>
+#include <allio/openssl/detail/socket.hpp>
 
 namespace allio::openssl {
 

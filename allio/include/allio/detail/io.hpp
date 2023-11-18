@@ -21,23 +21,6 @@ struct modifier_t;
 struct bounded_runtime_t;
 
 
-template<bool IsMutable>
-struct _handle_cv;
-
-template<>
-struct _handle_cv<0>
-{
-	template<typename T>
-	using type = T const;
-};
-
-template<>
-struct _handle_cv<1>
-{
-	template<typename T>
-	using type = T;
-};
-
 template<typename O>
 concept mutation = requires { typename O::mutation_tag; };
 
@@ -53,8 +36,26 @@ concept modifier = mutation<O> && std::is_same_v<typename O::mutation_tag, modif
 template<typename O>
 concept observer = !mutation<O>;
 
+
+template<bool IsMutable>
+struct _handle_const;
+
+template<>
+struct _handle_const<0>
+{
+	template<typename T>
+	using type = T const;
+};
+
+template<>
+struct _handle_const<1>
+{
+	template<typename T>
+	using type = T;
+};
+
 template<typename O, typename T>
-using handle_cv = typename _handle_cv<mutation<O>>::template type<T>;
+using handle_const_t = typename _handle_const<mutation<O>>::template type<T>;
 
 
 template<typename O>
@@ -73,63 +74,55 @@ template<typename O>
 inline constexpr blocking_io_t<O> blocking_io = {};
 
 
-using io_result = std::optional<std::error_code>;
+template<typename Handler, typename Status>
+using basic_io_callback = void(Handler& handler, Status&& status) noexcept;
 
-class operation_base;
-
-
-class io_status
+template<typename Status>
+class basic_io_handler
 {
-	struct _io_status;
+	using callback_type = basic_io_callback<basic_io_handler, Status>;
 
-	_io_status* m_status;
+	callback_type* m_callback;
 
 public:
-	template<typename Status>
-	explicit io_status(Status& status)
-		: m_status(reinterpret_cast<_io_status*>(&status))
+	explicit basic_io_handler(callback_type& callback)
+		: m_callback(callback)
 	{
 	}
 
-	template<typename Status>
-	Status& unwrap() const
+	void notify(Status&& status) & noexcept
 	{
-		return *reinterpret_cast<Status*>(m_status);
+		m_callback(*this, vsm_move(status));
 	}
 };
 
-class io_callback
+template<typename Status, typename Handler>
+class basic_io_handler_base : protected basic_io_handler<Status>
 {
-public:
-	virtual void notify(operation_base& s, io_status status) noexcept = 0;
+	using io_handler_type = basic_io_handler<Status>;
 
 protected:
-	io_callback() = default;
-	io_callback(io_callback const&) = default;
-	io_callback& operator=(io_callback const&) = default;
-	~io_callback() = default;
-};
-
-class operation_base
-{
-	io_callback* m_callback;
-
-protected:
-	explicit operation_base(io_callback& callback)
-		: m_callback(&callback)
+	basic_io_handler_base()
+		: io_handler_type(_notify)
 	{
 	}
 
-	operation_base(operation_base const&) = delete;
-	operation_base& operator=(operation_base const&) = delete;
+	basic_io_handler_base(basic_io_handler_base const&) = default;
+	basic_io_handler_base& operator=(basic_io_handler_base const&) = default;
+	~basic_io_handler_base() = default;
 
-	~operation_base() = default;
-
-	void notify(io_status const status)
+private:
+	static void _notify(io_handler_type& self, Status&& status) noexcept
 	{
-		m_callback->notify(*this, status);
+		static_cast<Handler&>(static_cast<io_handler_type&>(self)).notify(vsm_move(status));
 	}
 };
+
+template<typename Multiplexer>
+using io_handler = basic_io_handler<typename Multiplexer::io_status_type>;
+
+template<typename Multiplexer, typename Handler>
+using io_handler_base = basic_io_handler_base<typename Multiplexer::io_status_type, Handler>;
 
 
 struct attach_handle_t
@@ -154,63 +147,62 @@ struct detach_handle_t
 };
 inline constexpr detach_handle_t detach_handle = {};
 
-template<typename M>
+template<typename To>
 struct rebind_handle_t
 {
-	template<typename T>
-	vsm::result<T> vsm_static_operator_invoke(T&& object)
-		requires vsm::tag_invocable<rebind_handle_t, T&&>
+	template<vsm::any_cvref_of<To> From>
+	friend From&& tag_invoke(From&& from)
 	{
-		return vsm::tag_invoke(rebind_handle_t(), vsm_forward(object));
+		return vsm_forward(from);
+	}
+
+	template<typename From, typename MultiplexerHandle>
+	vsm::result<To> vsm_static_operator_invoke(From&& from, MultiplexerHandle&& multiplexer)
+		requires vsm::tag_invocable<rebind_handle_t, From&&, MultiplexerHandle&&>
+	{
+		return vsm::tag_invoke(rebind_handle_t(), vsm_forward(from), vsm_forward(multiplexer));
 	}
 };
-template<typename M>
-inline constexpr rebind_handle_t<M> rebind_handle = {};
+template<typename To>
+inline constexpr rebind_handle_t<To> rebind_handle = {};
 
 
-template<typename O>
 struct submit_io_t
 {
-	template<typename H, typename S>
-	auto vsm_static_operator_invoke(H& h, S& s)
-		requires vsm::tag_invocable<submit_io_t, H&, S&>
+	template<typename H, typename S, typename Args, typename Handler>
+	auto vsm_static_operator_invoke(H& h, S& s, Args const& args, Handler& handler)
+		requires vsm::tag_invocable<submit_io_t, H&, S&, Args const&, Handler&>
 	{
-		return vsm::tag_invoke(submit_io_t(), h, s);
+		return vsm::tag_invoke(submit_io_t(), h, s, args, handler);
 	}
 
-	template<typename M, typename H, typename C, typename S>
-	auto vsm_static_operator_invoke(M& m, H& h, C& c, S& s)
-		requires vsm::tag_invocable<submit_io_t, M&, H&, C&, S&>
+	template<typename M, typename H, typename C, typename S, typename Args, typename Handler>
+	auto vsm_static_operator_invoke(M& m, H& h, C& c, S& s, Args const& args, Handler& handler)
+		requires vsm::tag_invocable<submit_io_t, M&, H&, C&, S&, Args const&, Handler&>
 	{
-		return vsm::tag_invoke(submit_io_t(), m, h, c, s);
+		return vsm::tag_invoke(submit_io_t(), m, h, c, s, args, handler);
 	}
 };
+inline constexpr submit_io_t submit_io = {};
 
-template<typename O>
-inline constexpr submit_io_t<O> submit_io = {};
-
-template<typename O>
 struct notify_io_t
 {
-	template<typename H, typename S>
-	auto vsm_static_operator_invoke(H& h, S& s, io_status const status)
-		requires vsm::tag_invocable<notify_io_t, H&, S&, io_status>
+	template<typename H, typename S, typename Args, typename Status>
+	auto vsm_static_operator_invoke(H& h, S& s, Args const& args, Status&& status)
+		requires vsm::tag_invocable<notify_io_t, H&, S&, Args const&, Status&&>
 	{
-		return vsm::tag_invoke(notify_io_t(), h, s, status);
+		return vsm::tag_invoke(notify_io_t(), h, s, args, vsm_forward(status));
 	}
 
-	template<typename M, typename H, typename C, typename S>
-	auto vsm_static_operator_invoke(M& m, H& h, C& c, S& s, io_status const status)
-		requires vsm::tag_invocable<notify_io_t, M&, H&, C&, S&, io_status>
+	template<typename M, typename H, typename C, typename S, typename Args, typename Status>
+	auto vsm_static_operator_invoke(M& m, H& h, C& c, S& s, Args const& args, Status&& status)
+		requires vsm::tag_invocable<notify_io_t, M&, H&, C&, S&, Args const&, Status&&>
 	{
-		return vsm::tag_invoke(notify_io_t(), m, h, c, s, status);
+		return vsm::tag_invoke(notify_io_t(), m, h, c, s, args, vsm_forward(status));
 	}
 };
+inline constexpr notify_io_t notify_io = {};
 
-template<typename O>
-inline constexpr notify_io_t<O> notify_io = {};
-
-template<typename O>
 struct cancel_io_t
 {
 	template<typename H, typename S>
@@ -227,9 +219,7 @@ struct cancel_io_t
 		return vsm::tag_invoke(cancel_io_t(), m, h, c, s);
 	}
 };
-
-template<typename O>
-inline constexpr cancel_io_t<O> cancel_io = {};
+inline constexpr cancel_io_t cancel_io = {};
 
 
 struct poll_io_t
@@ -244,92 +234,97 @@ struct poll_io_t
 inline constexpr poll_io_t poll_io = {};
 
 
-template<typename M, typename H>
-struct connector_impl;
+struct connector_base
+{
+	template<std::derived_from<connector_base> C>
+	friend auto tag_invoke(
+		attach_handle_t,
+		auto const& m,
+		auto const& h,
+		C& c)
+	{
+		return C::attach(m, h, c);
+	}
+
+	template<std::derived_from<connector_base> C>
+	friend auto tag_invoke(
+		detach_handle_t,
+		auto const& m,
+		auto const& h,
+		C& c)
+	{
+		return C::detach(m, h, c);
+	}
+};
 
 template<typename M, typename H>
-class connector
-	: public M::connector_type
-	, public connector_impl<M, H>
-{
-	using impl_type = connector_impl<M, H>;
-	static_assert(std::is_default_constructible_v<impl_type>);
-	friend impl_type;
-};
+struct connector;
 
 template<typename M, typename H>
 using connector_t = connector<M, H>;
 
 
-template<typename M, typename H, typename O>
-struct operation_impl;
-
-template<typename M, typename H, typename O>
-class operation
-	: public M::operation_type
-	, public operation_impl<M, H, O>
+struct operation_base
 {
-	using impl_type = operation_impl<M, H, O>;
-	static_assert(std::is_default_constructible_v<impl_type>);
-	friend impl_type;
-
-	using params_type = io_parameters_t<O>;
-	vsm_no_unique_address params_type args;
-
-public:
-	template<std::convertible_to<params_type> Args>
-	explicit operation(io_callback& callback, Args&& args)
-		: M::operation_type(callback)
-		, args(vsm_forward(args))
-	{
-	}
-
-private:
-	using N = handle_cv<O, typename H::native_type>;
-	using C = handle_cv<O, connector_t<M, H>>;
-	using S = operation;
-
-	template<typename MultiplexerHandle>
+	template<std::derived_from<operation_base> S, typename IoStatus>
 	friend auto tag_invoke(
-		submit_io_t<O>,
-		MultiplexerHandle const& m,
-		N& h,
-		C& c,
-		S& s)
+		submit_io_t,
+		auto& m,
+		auto& h,
+		std::derived_from<connector_base> auto& c,
+		S& s,
+		auto const& args,
+		basic_io_handler<IoStatus>& handler)
 		//requires requires { impl_type::submit(m, h, c, s); }
 	{
-		return impl_type::submit(
+		return S::submit(
+			m,
+			h,
+			c,
+			s,
+			args,
+			handler);
+	}
+
+	template<std::derived_from<operation_base> S>
+	friend auto tag_invoke(
+		notify_io_t,
+		auto& m,
+		auto& h,
+		std::derived_from<connector_base> auto& c,
+		S& s,
+		auto const& args,
+		auto&& status)
+		//requires requires { impl_type::notify(m, h, c, s, status); }
+	{
+		return S::notify(
+			m,
+			h,
+			c,
+			s,
+			args,
+			vsm_forward(status));
+	}
+
+	template<std::derived_from<operation_base> S>
+	friend void tag_invoke(
+		cancel_io_t,
+		auto& m,
+		auto const& h,
+		std::derived_from<connector_base> auto const& c,
+		S& s)
+		//requires requires { impl_type::cancel(m, h, c, s); }
+	{
+		return S::cancel(
 			m,
 			h,
 			c,
 			s);
 	}
-
-	template<typename MultiplexerHandle>
-	friend auto tag_invoke(
-		notify_io_t<O>,
-		MultiplexerHandle const& m,
-		N& h,
-		C& c,
-		S& s,
-		io_status const status)
-		//requires requires { impl_type::notify(m, h, c, s, status); }
-	{
-		return impl_type::notify(m, h, c, s, status);
-	}
-
-	template<typename MultiplexerHandle>
-	friend void tag_invoke(
-		cancel_io_t<O>,
-		MultiplexerHandle const& m,
-		N const& h,
-		C const& c,
-		S& s)
-		requires requires { impl_type::cancel(m, h, c, s); }
-	{
-		return impl_type::cancel(m, h, c, s);
-	}
 };
+
+template<typename M, typename H, typename O>
+struct operation;
 
 template<typename M, typename H, typename O>
 using operation_t = operation<M, H, O>;
@@ -337,19 +332,19 @@ using operation_t = operation<M, H, O>;
 
 template<typename M, typename H, observer O>
 	requires std::is_same_v<typename O::runtime_tag, bounded_runtime_t>
-struct operation_impl<M, H, O>
+struct operation<M, H, O>
 {
-	using N = handle_cv<O, typename H::native_type>;
-	using C = connector_t<M, H>;
+	using N = typename H::native_type const;
+	using C = connector_t<M, H> const;
 	using S = operation_t<M, H, O>;
 	using R = io_result_t<O, H, M>;
 
-	static io_result2<R> submit(M&, N& h, C&, S& s)
+	static io_result<R> submit(M&, N& h, C&, S& s)
 	{
 		return blocking_io<O>(h, s.args);
 	}
 
-	static io_result2<R> notify(M&, N& h, C&, S& s, io_status)
+	static io_result<R> notify(M&, N& h, C&, S& s, typename M::io_status_type&& status)
 	{
 		vsm_unreachable();
 	}

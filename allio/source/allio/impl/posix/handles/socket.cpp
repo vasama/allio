@@ -6,22 +6,7 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::posix;
 
-vsm::result<void> raw_socket_t::blocking_io(
-	close_t,
-	native_type& h,
-	io_parameters_t<close_t> const& args)
-{
-	if (h.platform_handle != native_platform_handle::null)
-	{
-		unrecoverable(posix::close_socket(unwrap_socket(h.platform_handle)));
-		h.platform_handle = native_platform_handle::null;
-	}
-
-	return {};
-}
-
-vsm::result<void> raw_socket_t::blocking_io(
-	connect_t,
+vsm::result<void> raw_socket_t::connect(
 	native_type& h,
 	io_parameters_t<connect_t> const& args)
 {
@@ -39,28 +24,22 @@ vsm::result<void> raw_socket_t::blocking_io(
 		addr,
 		args.deadline));
 
-	h = platform_object_t::native_type
+	h = native_type
 	{
-		object_t::native_type
+		platform_object_t::native_type
 		{
-			flags::not_null | flags,
-		},
-		wrap_socket(socket.release()),
+			object_t::native_type
+			{
+				flags::not_null | flags,
+			},
+			wrap_socket(socket.release()),
+		}
 	};
 
 	return {};
 }
 
-vsm::result<void> raw_socket_t::blocking_io(
-	disconnect_t,
-	native_type& h,
-	io_parameters_t<disconnect_t> const& args)
-{
-	return blocking_io(close_t(), h, {});
-}
-
-vsm::result<size_t> raw_socket_t::blocking_io(
-	read_some_t,
+vsm::result<size_t> raw_socket_t::read_some(
 	native_type const& h,
 	io_parameters_t<read_some_t> const& args)
 {
@@ -74,8 +53,7 @@ vsm::result<size_t> raw_socket_t::blocking_io(
 	return socket_scatter_read(socket, args.buffers.buffers());
 }
 
-vsm::result<size_t> raw_socket_t::blocking_io(
-	write_some_t,
+vsm::result<size_t> raw_socket_t::write_some(
 	native_type const& h,
 	io_parameters_t<write_some_t> const& args)
 {
@@ -87,4 +65,17 @@ vsm::result<size_t> raw_socket_t::blocking_io(
 	}
 
 	return socket_gather_write(socket, args.buffers.buffers());
+}
+
+vsm::result<void> raw_socket_t::close(
+	native_type& h,
+	io_parameters_t<close_t> const& args)
+{
+	if (h.platform_handle != native_platform_handle::null)
+	{
+		unrecoverable(posix::close_socket(unwrap_socket(h.platform_handle)));
+		h.platform_handle = native_platform_handle::null;
+	}
+
+	return {};
 }

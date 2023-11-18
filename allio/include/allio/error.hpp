@@ -61,6 +61,7 @@ enum class error
 	not_enough_memory,
 	no_buffer_space,
 	filename_too_long,
+	async_operation_pending,
 	async_operation_cancelled,
 	async_operation_not_in_progress,
 	//TODO: Rename. Not necessarily asynchronous.

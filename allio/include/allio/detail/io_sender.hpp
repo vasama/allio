@@ -36,23 +36,28 @@ template<typename R>
 using set_value_signature = typename _set_value_signature<std::is_void_v<R>>::template type<R>;
 
 
-template<typename H, typename M, typename O>
+template<typename H, multiplexer_handle M, typename O>
 class io_sender
 {
-	using handle_type = handle_cv<O, async_handle<H, M>>;
+	using handle_type = handle_const_t<O, async_handle<H, M>>;
 	using multiplexer_type = typename M::multiplexer_type;
 
 	using operation_type = operation_t<multiplexer_type, H, O>;
+	using io_status_type = typename multiplexer_type::io_status_type;
 
 	using params_type = io_parameters_t<O>;
 	using result_type = io_result_t<O, H, M>;
 
 	template<typename Receiver>
-	class operation : io_callback, ex::__in_place_stoppable_base<operation<Receiver>>
+	class operation
+		: io_handler_base<multiplexer_type, operation<Receiver>>
+		, ex::__in_place_stoppable_base<operation<Receiver>>
 	{
+		using io_handler_type = io_handler<multiplexer_type>;
 		using stoppable_base = ex::__in_place_stoppable_base<operation<Receiver>>;
 
 		handle_type& m_handle;
+		vsm_no_unique_address params_type m_args;
 		vsm_no_unique_address operation_type m_operation;
 		vsm_no_unique_address Receiver m_receiver;
 
@@ -60,7 +65,7 @@ class io_sender
 		explicit operation(auto&& sender, auto&& receiver)
 			noexcept(noexcept(Receiver(vsm_forward(receiver))))
 			: m_handle(*sender.m_handle)
-			, m_operation(*this, vsm_forward(sender).m_args)
+			, m_args(vsm_forward(sender).m_args)
 			, m_receiver(vsm_forward(receiver))
 		{
 		}
@@ -68,14 +73,19 @@ class io_sender
 	private:
 		friend void tag_invoke(ex::start_t, operation& self) noexcept
 		{
-			auto r = submit_io<O>(self.m_handle, self.m_operation);
+			auto r = submit_io(
+				self.m_handle,
+				self.m_operation,
+				vsm_as_const(self.m_args),
+				static_cast<io_handler_type&>(self));
 
 			if (r.is_pending())
 			{
 				// This is not a stream sender.
 				vsm_assert(!r.has_value());
 
-				self.stoppable_base::register_stoppable(ex::get_stop_token(ex::get_env(self.m_receiver)));
+				self.stoppable_base::register_stoppable(
+					ex::get_stop_token(ex::get_env(self.m_receiver)));
 			}
 			else
 			{
@@ -83,11 +93,13 @@ class io_sender
 			}
 		}
 
-		void notify(operation_base& operation, io_status const status) noexcept override
+		void notify(io_status_type&& status) noexcept
 		{
-			vsm_assert(&operation == &m_operation);
-
-			auto r = notify_io<O>(m_handle, m_operation, status);
+			auto r = notify_io(
+				m_handle,
+				m_operation,
+				vsm_as_const(m_args),
+				vsm_move(status));
 
 			// This is not a stream sender.
 			vsm_assert(!r.is_pending());
@@ -97,7 +109,7 @@ class io_sender
 			handle_result(vsm_move(r));
 		}
 
-		void handle_result(io_result2<result_type>&& r)
+		void handle_result(io_result<result_type>&& r)
 		{
 			if (r.has_value())
 			{
@@ -122,9 +134,10 @@ class io_sender
 
 		void on_stop_requested()
 		{
-			cancel_io<O>(m_handle, m_operation);
+			cancel_io(m_handle, m_operation);
 		}
 
+		friend io_handler_base<multiplexer_type, operation<Receiver>>;
 		friend stoppable_base;
 	};
 
@@ -147,13 +160,13 @@ public:
 	{
 	}
 
-	template<typename R>
-	friend auto tag_invoke(
+	template<ex::receiver Receiver>
+	friend operation<std::decay_t<Receiver>> tag_invoke(
 		ex::connect_t,
 		vsm::any_cvref_of<io_sender> auto&& sender,
-		R&& receiver)
+		Receiver&& receiver)
 	{
-		return operation<std::decay_t<R>>(vsm_forward(sender), vsm_forward(receiver));
+		return operation<std::decay_t<Receiver>>(vsm_forward(sender), vsm_forward(receiver));
 	}
 };
 
@@ -175,23 +188,30 @@ class io_handle_sender
 {
 	using params_type = io_parameters_t<O>;
 
-	template<typename MultiplexerHandle, typename Receiver>
-	class operation : io_callback, ex::__in_place_stoppable_base<operation<MultiplexerHandle, Receiver>>
+	template<multiplexer_handle MultiplexerHandle, typename Receiver>
+	class operation
+		: io_handler_base<
+			typename MultiplexerHandle::multiplexer_type,
+			operation<MultiplexerHandle, Receiver>>
+		, ex::__in_place_stoppable_base<operation<MultiplexerHandle, Receiver>>
 	{
 		using stoppable_base = ex::__in_place_stoppable_base<operation<MultiplexerHandle, Receiver>>;
 
 		using handle_type = async_handle<H, MultiplexerHandle>;
 		using multiplexer_type = typename MultiplexerHandle::multiplexer_type;
 		using operation_type = operation_t<multiplexer_type, H, O>;
+		using io_status_type = typename multiplexer_type::io_status_type;
+		using io_handler_type = io_handler<multiplexer_type>;
 
 		handle_type m_handle;
+		vsm_no_unique_address params_type m_args;
 		vsm_no_unique_address operation_type m_operation;
 		vsm_no_unique_address Receiver m_receiver;
 
 	public:
-		explicit operation(auto&& sender, auto&& receiver, auto&& multiplexer)
-			: m_handle(vsm_forward(multiplexer))
-			, m_operation(*this, vsm_forward(sender).m_args)
+		explicit operation(auto&& sender, auto&& receiver)
+			: m_handle(get_multiplexer(ex::get_env(receiver)))
+			, m_args(vsm_forward(sender).m_args)
 			, m_receiver(vsm_forward(receiver))
 		{
 		}
@@ -199,14 +219,19 @@ class io_handle_sender
 	private:
 		friend void tag_invoke(ex::start_t, operation& self) noexcept
 		{
-			auto r = submit_io<O>(self.m_handle, self.m_operation);
+			auto r = submit_io(
+				self.m_handle,
+				self.m_operation,
+				vsm_as_const(self.m_args),
+				static_cast<io_handler_type&>(self));
 
 			if (r.is_pending())
 			{
 				// This is not a stream sender.
 				vsm_assert(!r.has_value());
 
-				self.stoppable_base::register_stoppable(ex::get_stop_token(ex::get_env(self.m_receiver)));
+				self.stoppable_base::register_stoppable(
+					ex::get_stop_token(ex::get_env(self.m_receiver)));
 			}
 			else
 			{
@@ -214,11 +239,13 @@ class io_handle_sender
 			}
 		}
 
-		void notify(operation_base& operation, io_status const status) noexcept override
+		void notify(io_status_type&& status) noexcept
 		{
-			vsm_assert(&operation == &m_operation);
-
-			auto r = notify_io<O>(m_handle, m_operation, status);
+			auto r = notify_io(
+				m_handle,
+				m_operation,
+				vsm_as_const(m_args),
+				vsm_move(status));
 
 			// This is not a stream sender.
 			vsm_assert(!r.is_pending());
@@ -228,7 +255,7 @@ class io_handle_sender
 			handle_result(vsm_move(r));
 		}
 
-		void handle_result(io_result2<void> const& r)
+		void handle_result(io_result<void> const& r)
 		{
 			if (r.has_value())
 			{
@@ -246,9 +273,10 @@ class io_handle_sender
 
 		void on_stop_requested()
 		{
-			cancel_io<O>(m_handle, m_operation);
+			cancel_io(m_handle, m_operation);
 		}
 
+		friend io_handler_base<multiplexer_type, operation<MultiplexerHandle, Receiver>>;
 		friend stoppable_base;
 	};
 
@@ -271,17 +299,15 @@ public:
 	{
 	}
 
-	template<typename Receiver>
-	friend auto tag_invoke(
+	template<ex::receiver Receiver>
+	friend operation<current_multiplexer_t<Receiver>, std::decay_t<Receiver>> tag_invoke(
 		ex::connect_t,
 		vsm::any_cvref_of<io_handle_sender> auto&& sender,
 		Receiver&& receiver)
 	{
-		auto&& multiplexer_handle = get_multiplexer(ex::get_env(receiver));
-		return operation<std::decay_t<decltype(multiplexer_handle)>, std::decay_t<Receiver>>(
+		return operation<current_multiplexer_t<Receiver>, std::decay_t<Receiver>>(
 			vsm_forward(sender),
-			vsm_forward(receiver),
-			vsm_forward(multiplexer_handle));
+			vsm_forward(receiver));
 	}
 };
 

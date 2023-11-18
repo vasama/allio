@@ -201,7 +201,7 @@ vsm::result<void> posix::socket_set_non_blocking(socket_type const socket, bool 
 	return {};
 }
 
-vsm::result<size_t> posix::socket_scatter_read(socket_type const socket, untyped_buffers const buffers)
+vsm::result<size_t> posix::socket_scatter_read(socket_type const socket, read_buffers const buffers)
 {
 	wsa_buffers_storage<64> buffers_storage;
 	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
@@ -226,7 +226,7 @@ vsm::result<size_t> posix::socket_scatter_read(socket_type const socket, untyped
 	return transferred;
 }
 
-vsm::result<size_t> posix::socket_gather_write(socket_type const socket, untyped_buffers const buffers)
+vsm::result<size_t> posix::socket_gather_write(socket_type const socket, write_buffers const buffers)
 {
 	wsa_buffers_storage<64> buffers_storage;
 	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
@@ -249,59 +249,10 @@ vsm::result<size_t> posix::socket_gather_write(socket_type const socket, untyped
 	return transferred;
 }
 
-vsm::result<void> posix::socket_send_to(
-	socket_type const socket,
-	socket_address const& addr,
-	untyped_buffers const buffers)
-{
-	wsa_buffers_storage<64> buffers_storage;
-	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
-
-#if 0
-	if (buffers.size() > std::numeric_limits<ULONG>::max())
-	{
-		//TODO: Use a better error code?
-		return vsm::unexpected(error::invalid_argument);
-	}
-
-	WSAMSG message =
-	{
-		.name = &const_cast<sockaddr&>(addr.addr),
-		.namelen = addr.size,
-		.lpBuffers = wsa_buffers.data(),
-		.dwBufferCount = static_cast<ULONG>(wsa_buffers.size()),
-	};
-
-	DWORD transferred;
-	if (DWORD const error = wsa_send_msg(socket, &message, &transferred))
-	{
-		return vsm::unexpected(static_cast<socket_error>(error));
-	}
-	//TODO: Assert transferred against total buffers size.
-#endif
-
-	DWORD transferred;
-	if (WSASendTo(
-		socket,
-		wsa_buffers.data(),
-		wsa_buffers.size(),
-		&transferred,
-		/* dwFlags: */ 0,
-		&addr.addr,
-		addr.size,
-		/* lpOverlapped: */ nullptr,
-		/* lpCompletionRoutine */ nullptr) == SOCKET_ERROR)
-	{
-		return vsm::unexpected(get_last_socket_error());
-	}
-
-	return {};
-}
-
 vsm::result<size_t> posix::socket_receive_from(
 	socket_type const socket,
 	socket_address& addr,
-	untyped_buffers const buffers)
+	read_buffers const buffers)
 {
 	wsa_buffers_storage<64> buffers_storage;
 	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
@@ -348,6 +299,55 @@ vsm::result<size_t> posix::socket_receive_from(
 	}
 
 	return transferred;
+}
+
+vsm::result<void> posix::socket_send_to(
+	socket_type const socket,
+	socket_address const& addr,
+	write_buffers const buffers)
+{
+	wsa_buffers_storage<64> buffers_storage;
+	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
+
+#if 0
+	if (buffers.size() > std::numeric_limits<ULONG>::max())
+	{
+		//TODO: Use a better error code?
+		return vsm::unexpected(error::invalid_argument);
+	}
+
+	WSAMSG message =
+	{
+		.name = &const_cast<sockaddr&>(addr.addr),
+		.namelen = addr.size,
+		.lpBuffers = wsa_buffers.data(),
+		.dwBufferCount = static_cast<ULONG>(wsa_buffers.size()),
+	};
+
+	DWORD transferred;
+	if (DWORD const error = wsa_send_msg(socket, &message, &transferred))
+	{
+		return vsm::unexpected(static_cast<socket_error>(error));
+	}
+	//TODO: Assert transferred against total buffers size.
+#endif
+
+	DWORD transferred;
+	if (WSASendTo(
+		socket,
+		wsa_buffers.data(),
+		wsa_buffers.size(),
+		&transferred,
+		/* dwFlags: */ 0,
+		&addr.addr,
+		addr.size,
+		/* lpOverlapped: */ nullptr,
+		/* lpCompletionRoutine */ nullptr) == SOCKET_ERROR)
+	{
+		return vsm::unexpected(get_last_socket_error());
+	}
+
+	return {};
 }
 
 #if 0

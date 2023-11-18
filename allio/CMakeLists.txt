@@ -102,6 +102,7 @@ vsm_add_library(allio
 	TEST_SOURCES
 		source/allio/test/any_multiplexer.cpp
 		source/allio/test/filesystem.hpp
+		source/allio/test/io_result.cpp
 		source/allio/test/multiplexer.hpp
 		source/allio/test/network.cpp
 		source/allio/test/path_view.cpp
