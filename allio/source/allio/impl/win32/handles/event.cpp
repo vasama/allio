@@ -16,14 +16,14 @@ using namespace allio::win32;
 
 vsm::result<void> event_t::create(
 	native_type& h,
-	io_parameters_t<create_t> const& args)
+	io_parameters_t<event_t, event_io::create_t> const& a)
 {
 	vsm_try_void(kernel_init());
 
 	handle_flags flags = flags::none;
 	EVENT_TYPE event_type = NotificationEvent;
 
-	if (args.mode == event_mode::auto_reset)
+	if (a.mode == event_mode::auto_reset)
 	{
 		flags |= flags::auto_reset;
 		event_type = SynchronizationEvent;
@@ -35,7 +35,7 @@ vsm::result<void> event_t::create(
 		EVENT_ALL_ACCESS,
 		/* ObjectAttributes: */ nullptr,
 		event_type,
-		args.signal);
+		a.signal);
 
 	if (!NT_SUCCESS(status))
 	{
@@ -58,7 +58,7 @@ vsm::result<void> event_t::create(
 
 vsm::result<void> event_t::signal(
 	native_type const& h,
-	io_parameters_t<signal_t> const& args)
+	io_parameters_t<event_t, event_io::signal_t> const&)
 {
 	NTSTATUS const status = NtSetEvent(
 		unwrap_handle(h.platform_handle),
@@ -74,7 +74,7 @@ vsm::result<void> event_t::signal(
 
 vsm::result<void> event_t::reset(
 	native_type const& h,
-	io_parameters_t<reset_t> const& args)
+	io_parameters_t<event_t, event_io::reset_t> const&)
 {
 	NTSTATUS const status = NtResetEvent(
 		unwrap_handle(h.platform_handle),
@@ -90,12 +90,12 @@ vsm::result<void> event_t::reset(
 
 vsm::result<void> event_t::wait(
 	native_type const& h,
-	io_parameters_t<wait_t> const& args)
+	io_parameters_t<event_t, event_io::wait_t> const& a)
 {
 	NTSTATUS const status = win32::NtWaitForSingleObject(
 		unwrap_handle(h.platform_handle),
 		/* Alertable: */ false,
-		kernel_timeout(args.deadline));
+		kernel_timeout(a.deadline));
 
 	//TODO: Check for STATUS_TIMEOUT in other places where it might be missing.
 	//TODO: Replace NT_SUCCESS with one including a debug hook for warning and information statuses.

@@ -231,17 +231,13 @@ TEST_CASE("path_view standard compliance 1", "[path_view]")
 	// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=106452
 	static bool const libstdcxx_bug_106452 = []()
 	{
-		return !(
-			std::filesystem::path("//").begin()->string() == "/"
-		);
+		return !( std::filesystem::path("//").begin()->string() == "/" );
 	}();
 
 	// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=106461
 	static bool const libstdcxx_bug_106461 = []()
 	{
-		return !(
-			std::filesystem::path("//.").parent_path().string() == "//"
-		);
+		return !( std::filesystem::path("//.").parent_path().string() == "//" );
 	}();
 
 	bool const libstdcxx_long_root = buffer.starts_with("//");

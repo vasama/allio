@@ -4,7 +4,7 @@
 
 namespace allio::detail {
 
-struct openssl_context;
+struct openssl_ssl;
 
 struct openssl_datagram_socket_t : basic_datagram_socket_t<object_t>
 {
@@ -12,7 +12,7 @@ struct openssl_datagram_socket_t : basic_datagram_socket_t<object_t>
 
 	struct native_type : raw_datagram_socket_t::native_type
 	{
-		openssl_context* context;
+		openssl_ssl* context;
 	};
 
 	static vsm::result<void> blocking_io(

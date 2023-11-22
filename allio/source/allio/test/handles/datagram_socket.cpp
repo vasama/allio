@@ -14,6 +14,7 @@ static bool is_supported_address_kind(network_address_kind const kind)
 #if vsm_os_win32
 	if (kind == network_address_kind::local)
 	{
+		// Windows does not support unix datagram sockets.
 		return false;
 	}
 #endif

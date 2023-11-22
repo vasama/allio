@@ -1,5 +1,6 @@
 #pragma once
 
+#include <allio/deadline.hpp>
 #include <allio/detail/handles/listen_socket.hpp>
 
 namespace allio {

@@ -8,74 +8,68 @@
 namespace allio::detail {
 
 template<>
-struct connector<iocp_multiplexer, raw_listen_socket_t>
+struct async_connector<iocp_multiplexer, raw_listen_socket_t>
 	: iocp_multiplexer::connector_type
 {
 };
 
 template<>
-struct operation<iocp_multiplexer, raw_listen_socket_t, raw_listen_socket_t::listen_t>
+struct async_operation<iocp_multiplexer, raw_listen_socket_t, socket_io::listen_t>
 	: iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
-	using H = raw_listen_socket_t;
-	using O = H::listen_t;
-	using N = H::native_type;
-	using C = connector_t<M, H>;
-	using S = operation_t<M, H, O>;
-	using A = io_parameters_t<O>;
+	using H = raw_listen_socket_t::native_type;
+	using C = async_connector_t<M, raw_listen_socket_t>;
+	using S = async_operation_t<M, raw_listen_socket_t, socket_io::listen_t>;
+	using A = io_parameters_t<raw_listen_socket_t, socket_io::listen_t>;
 
-	static io_result<void> submit(M& m, N& h, C& c, S& s, A const& args, io_handler<M>& handler);
-	static io_result<void> notify(M& m, N& h, C& c, S& s, A const& args, M::io_status_type status);
-	static void cancel(M& m, N const& h, C const& c, S& s);
+	static io_result<void> submit(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler);
+	static io_result<void> notify(M& m, H& h, C& c, S& s, A const& a, M::io_status_type status);
+	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 
 template<>
-struct operation<iocp_multiplexer, raw_listen_socket_t, raw_listen_socket_t::accept_t>
+struct async_operation<iocp_multiplexer, raw_listen_socket_t, socket_io::accept_t>
 	: iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
-	using H = raw_listen_socket_t;
-	using O = H::accept_t;
-	using N = H::native_type const;
-	using C = connector_t<M, H> const;
-	using S = operation_t<M, H, O>;
-	using A = io_parameters_t<O>;
-	using R = accept_result<async_handle<typename H::socket_object_type, basic_multiplexer_handle<M>>>;
+	using H = raw_listen_socket_t::native_type const;
+	using C = async_connector_t<M, raw_listen_socket_t> const;
+	using S = async_operation_t<M, raw_listen_socket_t, socket_io::accept_t>;
+	using A = io_parameters_t<raw_listen_socket_t, socket_io::accept_t>;
+	using R = accept_result<async_handle<typename raw_listen_socket_t::socket_object_type, basic_multiplexer_handle<M>>>;
 
 	unique_wrapped_socket socket;
 	handle_flags socket_flags;
 	wsa_address_storage<256> address_storage;
 	iocp_multiplexer::overlapped overlapped;
 
-	static io_result<R> submit(M& m, N const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
-	static io_result<R> notify(M& m, N const& h, C const& c, S& s, A const& args, M::io_status_type status);
-	static void cancel(M& m, N const& h, C const& c, S& s);
+	static io_result<R> submit(M& m, H const& h, C const& c, S& s, A const& a, io_handler<M>& handler);
+	static io_result<R> notify(M& m, H const& h, C const& c, S& s, A const& a, M::io_status_type status);
+	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 
 template<>
-struct operation<iocp_multiplexer, raw_listen_socket_t, raw_listen_socket_t::close_t>
+struct async_operation<iocp_multiplexer, raw_listen_socket_t, close_t>
 	: iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
-	using H = raw_listen_socket_t;
-	using O = H::close_t;
-	using N = H::native_type;
-	using C = connector_t<M, H>;
-	using S = operation_t<M, H, O>;
-	using A = io_parameters_t<O>;
+	using H = raw_listen_socket_t::native_type;
+	using C = async_connector_t<M, raw_listen_socket_t>;
+	using S = async_operation_t<M, raw_listen_socket_t, close_t>;
+	using A = io_parameters_t<raw_listen_socket_t, close_t>;
 
-	static io_result<void> submit(M& m, N& h, C const& c, S& s, A const& args, io_handler<M>& handler)
+	static io_result<void> submit(M&, H& h, C const&, S&, A const& a, io_handler<M>&)
 	{
-		return H::close(h, args);
+		return raw_listen_socket_t::close(h, a);
 	}
 
-	static io_result<void> notify(M& m, N& h, C const& c, S& s, A const& args, M::io_status_type status)
+	static io_result<void> notify(M&, H&, C const&, S&, A const&, M::io_status_type)
 	{
 		vsm_unreachable();
 	}
 
-	static void cancel(M& m, N const& h, C const& c, S& s)
+	static void cancel(M&, H const&, C const&, S&)
 	{
 	}
 };

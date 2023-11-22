@@ -12,10 +12,10 @@ using namespace allio::win32;
 
 using M = iocp_multiplexer;
 using H = process_handle_t;
-using C = connector_t<M, H>;
+using C = async_connector_t<M, H>;
 
 using wait_t = process_handle_t::wait_t;
-using wait_s = operation_t<M, H, wait_t>;
+using wait_s = async_operation_t<M, H, wait_t>;
 using wait_r = io_result_ref_t<wait_t>;
 
 static io_result handle_result(H const& h, wait_r const result, io_result const wait_result)

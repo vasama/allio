@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/byte_io_buffers.hpp>
+#include <allio/deadline.hpp>
 #include <allio/detail/platform.h>
 #include <allio/network.hpp>
 
@@ -70,7 +71,7 @@ using unique_socket = vsm::unique_resource<socket_type, socket_deleter, invalid_
 struct unique_socket_with_flags
 {
 	unique_socket socket;
-	handle_flags flags;
+	detail::handle_flags flags;
 };
 
 inline vsm::result<int> choose_protocol(int const address_family, int const type)

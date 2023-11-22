@@ -17,10 +17,10 @@ using namespace allio::linux;
 
 using M = io_uring_multiplexer;
 using H = event_t;
-using C = connector_t<M, H>;
+using C = async_connector_t<M, H>;
 
 using wait_t = event_t::wait_t;
-using wait_s = operation_t<M, H, wait_t>;
+using wait_s = async_operation_t<M, H, wait_t>;
 
 static eventfd_t dummy_event_value;
 

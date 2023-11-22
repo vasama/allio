@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/detail/parameters2.hpp>
+#include <allio/detail/parameters.hpp>
 
 #include <vsm/assert.h>
 
@@ -150,9 +150,12 @@ struct deadline_t
 {
 	detail::deadline deadline;
 
-	friend void tag_invoke(set_argument_t, deadline_t& self, detail::deadline const deadline)
+	friend void tag_invoke(
+		set_argument_t,
+		deadline_t& args,
+		detail::deadline const deadline)
 	{
-		self.deadline = deadline;
+		args.deadline = deadline;
 	}
 };
 

@@ -1,5 +1,7 @@
 #include <allio/error.hpp>
 
+#include <format>
+
 #include <cinttypes>
 
 using namespace allio;
@@ -39,12 +41,7 @@ std::string detail::error_category::message(int const code) const
 	case error::process_is_current_process:
 		return "The provided process handle refers to the current process.";
 	}
-
-	char string[64];
-	int const string_size = sprintf(string,
-		"Unrecognized error code: %08" PRIX32, static_cast<uint32_t>(code));
-
-	return std::string(string, string_size);
+	return std::format("Unrecognized error code: {:08X}", static_cast<uint32_t>(code));
 }
 
 std::error_condition detail::error_category::default_error_condition(int const code) const noexcept

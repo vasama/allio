@@ -36,17 +36,17 @@ template<typename R>
 using set_value_signature = typename _set_value_signature<std::is_void_v<R>>::template type<R>;
 
 
-template<typename H, multiplexer_handle M, typename O>
+template<object Object, multiplexer_handle MultiplexerHandle, operation_c Operation>
 class io_sender
 {
-	using handle_type = handle_const_t<O, async_handle<H, M>>;
-	using multiplexer_type = typename M::multiplexer_type;
+	using handle_type = handle_const_t<Operation, async_handle<Object, MultiplexerHandle>>;
+	using multiplexer_type = typename MultiplexerHandle::multiplexer_type;
 
-	using operation_type = operation_t<multiplexer_type, H, O>;
+	using operation_type = async_operation_t<multiplexer_type, Object, Operation>;
 	using io_status_type = typename multiplexer_type::io_status_type;
 
-	using params_type = io_parameters_t<O>;
-	using result_type = io_result_t<O, H, M>;
+	using params_type = io_parameters_t<Object, Operation>;
+	using result_type = io_result_t<Object, Operation, MultiplexerHandle>;
 
 	template<typename Receiver>
 	class operation
@@ -170,25 +170,35 @@ public:
 	}
 };
 
-template<typename O, typename H, typename M>
-io_sender<H, M, O> generic_io(async_handle<H, M>& h, io_parameters_t<O> const& args)
+template<
+	operation_c Operation,
+	object Object,
+	multiplexer_handle_for<Object> MultiplexerHandle>
+io_sender<Object, MultiplexerHandle, Operation> generic_io(
+	async_handle<Object, MultiplexerHandle>& h,
+	io_parameters_t<Object, Operation> const& a)
 {
-	return io_sender<H, M, O>(h, args);
+	return io_sender<Object, MultiplexerHandle, Operation>(h, a);
 }
 
-template<typename O, typename H, typename M>
-io_sender<H, M, O> generic_io(async_handle<H, M> const& h, io_parameters_t<O> const& args)
+template<
+	operation_c Operation,
+	object Object,
+	multiplexer_handle_for<Object> MultiplexerHandle>
+io_sender<Object, MultiplexerHandle, Operation> generic_io(
+	async_handle<Object, MultiplexerHandle> const& h,
+	io_parameters_t<Object, Operation> const& a)
 {
-	return io_sender<H, M, O>(h, args);
+	return io_sender<Object, MultiplexerHandle, Operation>(h, a);
 }
 
 
-template<typename H, typename O>
+template<object Object, producer Operation>
 class io_handle_sender
 {
-	using params_type = io_parameters_t<O>;
+	using params_type = io_parameters_t<Object, Operation>;
 
-	template<multiplexer_handle MultiplexerHandle, typename Receiver>
+	template<multiplexer_handle_for<Object> MultiplexerHandle, ex::receiver Receiver>
 	class operation
 		: io_handler_base<
 			typename MultiplexerHandle::multiplexer_type,
@@ -197,9 +207,9 @@ class io_handle_sender
 	{
 		using stoppable_base = ex::__in_place_stoppable_base<operation<MultiplexerHandle, Receiver>>;
 
-		using handle_type = async_handle<H, MultiplexerHandle>;
+		using handle_type = async_handle<Object, MultiplexerHandle>;
 		using multiplexer_type = typename MultiplexerHandle::multiplexer_type;
-		using operation_type = operation_t<multiplexer_type, H, O>;
+		using operation_type = async_operation_t<multiplexer_type, Object, Operation>;
 		using io_status_type = typename multiplexer_type::io_status_type;
 		using io_handler_type = io_handler<multiplexer_type>;
 
@@ -288,7 +298,7 @@ public:
 	template<typename E>
 	friend auto tag_invoke(ex::get_completion_signatures_t, io_handle_sender const&, E&&)
 		-> ex::completion_signatures<
-			ex::set_value_t(async_handle<H, environment_multiplexer_handle_t<E>>),
+			ex::set_value_t(async_handle<Object, environment_multiplexer_handle_t<E>>),
 			ex::set_error_t(std::error_code),
 			ex::set_stopped_t()
 		>;

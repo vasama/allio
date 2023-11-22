@@ -60,10 +60,14 @@ inline constexpr size_t type_list_index = decltype(type_list_index_1<T>(List{}))
 template<typename... Lists>
 using type_list_cat = decltype((Lists{} + ...));
 
+template<typename List, typename... Elements>
+using type_list_append = decltype((List() + type_list<Elements...>()));
+
 } // namespace detail
 
 using detail::type_list_at;
 using detail::type_list_index;
 using detail::type_list_cat;
+using detail::type_list_append;
 
 } // namespace allio

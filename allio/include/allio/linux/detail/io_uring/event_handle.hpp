@@ -8,14 +8,14 @@
 namespace allio::detail {
 
 template<>
-struct operation<io_uring_multiplexer, event_t, event_t::wait_t>
+struct async_operation<io_uring_multiplexer, event_t, event_t::wait_t>
 	: io_uring_multiplexer::operation_type
 {
 	using M = io_uring_multiplexer;
 	using H = event_t;
 	using O = event_t::wait_t;
-	using C = connector_t<M, H>;
-	using S = operation_t<M, H, O>;
+	using C = async_connector_t<M, H>;
+	using S = async_operation_t<M, H, O>;
 
 	step_deadline absolute_deadline;
 

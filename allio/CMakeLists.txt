@@ -100,7 +100,6 @@ vsm_add_library(allio
 		p2300::p2300
 
 	TEST_SOURCES
-		source/allio/test/any_multiplexer.cpp
 		source/allio/test/filesystem.hpp
 		source/allio/test/io_result.cpp
 		source/allio/test/multiplexer.hpp
@@ -176,9 +175,8 @@ vsm_configure(allio
 		#source/allio/impl/win32/handles/process.cpp
 		#source/allio/impl/win32/handles/process.hpp
 
-		source/allio/impl/win32/iocp/event.cpp
 		source/allio/impl/win32/iocp/datagram_socket.cpp
-		#source/allio/impl/win32/iocp/generic_wait.cpp
+		source/allio/impl/win32/iocp/event.cpp
 		source/allio/impl/win32/iocp/listen_socket.cpp
 		source/allio/impl/win32/iocp/multiplexer.cpp
 		#source/allio/impl/win32/iocp/process.cpp

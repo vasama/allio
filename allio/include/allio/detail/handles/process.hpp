@@ -154,7 +154,7 @@ public:
 	vsm::result<process_exit_code> blocking_wait(auto&&... args) const
 	{
 		vsm::result<process_exit_code> r(vsm::result_value);
-		vsm_try_void(do_blocking_io(*this, r, io_args<wait_t>()(vsm_forward(args)...)));
+		vsm_try_void(do_blocking_io(*this, r, make_io_args<wait_t>()(vsm_forward(args)...)));
 		return r;
 	}
 
@@ -171,10 +171,10 @@ public:
 #endif
 
 
-	using operations = type_list_cat
+	using operations = type_list_append
 	<
-		base_type::operations,
-		type_list<wait_t>
+		base_type::operations
+		, wait_t
 	>;
 
 protected:
@@ -187,7 +187,7 @@ protected:
 		{
 			return handle::invoke(
 				static_cast<H const&>(*this),
-				io_args<wait_t>()(vsm_forward(args)...));
+				make_io_args<wait_t>()(vsm_forward(args)...));
 		}
 	};
 
@@ -218,7 +218,7 @@ vsm::result<basic_process_handle<void>> open_process(process_id const process_id
 	vsm_try_void(blocking_io(
 		*r,
 		no_result,
-		io_args<process_handle_t::open_t>(process_id)(vsm_forward(args)...)));
+		make_io_args<process_handle_t::open_t>(process_id)(vsm_forward(args)...)));
 	return r;
 }
 
@@ -239,7 +239,7 @@ vsm::result<basic_process_handle<void>> launch_process(path_descriptor const pat
 	vsm_try_void(blocking_io(
 		*r,
 		no_result,
-		io_args<process_handle_t::launch_t>(path)(vsm_forward(args)...)));
+		make_io_args<process_handle_t::launch_t>(path)(vsm_forward(args)...)));
 	return r;
 }
 
@@ -250,7 +250,7 @@ vsm::result<basic_process_handle<void>> launch_process(Multiplexer&& multiplexer
 	vsm_try_void(blocking_io(
 		*r,
 		no_result,
-		io_args<process_handle_t::launch_t>(path)(vsm_forward(args)...)));
+		make_io_args<process_handle_t::launch_t>(path)(vsm_forward(args)...)));
 	return r;
 }
 

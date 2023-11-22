@@ -27,11 +27,13 @@ static vsm::result<bool> check_timeout(vsm::result<void> const r)
 	return vsm::unexpected(r.error());
 }
 
-static vsm::result<bool> wait(abstract_event_handle const& event, deadline const deadline = deadline::instant())
+static vsm::result<bool> wait(
+	abstract_event_handle const& event,
+	deadline const deadline = deadline::instant())
 {
-	return check_timeout(detail::blocking_io<event_t::wait_t>(
+	return check_timeout(detail::blocking_io<event_t, event_t::wait_t>(
 		event,
-		detail::io_args<event_t::wait_t>()(deadline)));
+		detail::make_io_args<event_t, event_t::wait_t>()(deadline)));
 }
 
 static event_mode get_reset_mode(bool const manual_reset)

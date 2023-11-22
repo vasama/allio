@@ -47,13 +47,10 @@ public:
 	};
 
 
-	using async_operations = type_list_cat
+	using opeations = type_list_append
 	<
-		base_type::async_operations,
-		type_list
-		<
-			poll_t
-		>
+		base_type::operations
+		, poll_t
 	>;
 
 protected:

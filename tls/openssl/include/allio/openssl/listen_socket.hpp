@@ -6,5 +6,11 @@
 namespace allio::openssl {
 
 using listen_socket_t = detail::openssl_listen_socket_t;
+using listen_socket_security_context = detail::openssl_listen_socket_security_context;
+
+[[nodiscard]] vsm::result<listen_socket_security_context> create_listen_socket_security_context(auto&&... args)
+{
+	return listen_socket_security_context::create(make_args<detail::security_context_parameters>(vsm_forward(args)...));
+}
 
 } // namespace allio::openssl

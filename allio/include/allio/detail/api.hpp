@@ -5,7 +5,7 @@
 #if allio_config_named_module
 #	define allio_detail_export export
 #else
-#	define allio_detail_export 
+#	define allio_detail_export
 #endif
 
 #if allio_config_dynamic_library

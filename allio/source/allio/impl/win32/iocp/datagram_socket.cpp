@@ -11,19 +11,16 @@ using namespace allio::detail;
 using namespace allio::win32;
 
 using M = iocp_multiplexer;
-using H = raw_datagram_socket_t;
-using N = H::native_type;
-using C = connector_t<M, H>;
+using H = raw_datagram_socket_t::native_type;
+using C = async_connector_t<M, raw_datagram_socket_t>;
 
+using bind_t = raw_datagram_socket_t::bind_t;
+using bind_s = async_operation_t<M, raw_datagram_socket_t, bind_t>;
+using bind_a = io_parameters_t<raw_datagram_socket_t, bind_t>;
 
-using bind_t = H::bind_t;
-using bind_i = operation<M, H, bind_t>;
-using bind_s = operation_t<M, H, bind_t>;
-using bind_a = io_parameters_t<bind_t>;
-
-io_result<void> bind_i::submit(M& m, N& h, C& c, bind_s& s, bind_a const& args, io_handler<M>& handler)
+io_result<void> bind_s::submit(M& m, H& h, C& c, bind_s&, bind_a const& a, io_handler<M>&)
 {
-	vsm_try(addr, posix::socket_address::make(args.endpoint));
+	vsm_try(addr, posix::socket_address::make(a.endpoint));
 	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_DGRAM));
 
 	vsm_try_bind((socket, flags), posix::create_socket(
@@ -39,7 +36,7 @@ io_result<void> bind_i::submit(M& m, N& h, C& c, bind_s& s, bind_a const& args, 
 		posix::wrap_socket(socket.get()),
 		c));
 
-	h = N
+	h = H
 	{
 		platform_object_t::native_type
 		{
@@ -53,12 +50,12 @@ io_result<void> bind_i::submit(M& m, N& h, C& c, bind_s& s, bind_a const& args, 
 	return {};
 }
 
-io_result<void> bind_i::notify(M& m, N& h, C& c, bind_s& s, bind_a const& args, M::io_status_type const status)
+io_result<void> bind_s::notify(M&, H&, C&, bind_s&, bind_a const&, M::io_status_type)
 {
 	vsm_unreachable();
 }
 
-void bind_i::cancel(M& m, N const& h, C const& c, bind_s& s)
+void bind_s::cancel(M&, H const&, C const&, bind_s&)
 {
 }
 
@@ -74,7 +71,7 @@ static size_t get_buffers_size(basic_buffers<T> const buffers)
 	return size;
 }
 
-static size_t get_transfer_result(N const& h, M::overlapped& overlapped)
+static size_t get_transfer_result(H const& h, M::overlapped& overlapped)
 {
 	DWORD transferred;
 	DWORD flags;
@@ -91,15 +88,14 @@ static size_t get_transfer_result(N const& h, M::overlapped& overlapped)
 	return transferred;
 }
 
-using send_t = H::send_to_t;
-using send_i = operation<M, H, send_t>;
-using send_s = operation_t<M, H, send_t>;
-using send_a = io_parameters_t<send_t>;
+using send_t = raw_datagram_socket_t::send_to_t;
+using send_s = async_operation_t<M, raw_datagram_socket_t, send_t>;
+using send_a = io_parameters_t<raw_datagram_socket_t, send_t>;
 
-io_result<void> send_i::submit(M& m, N const& h, C const& c, send_s& s, send_a const& args, io_handler<M>& handler)
+io_result<void> send_s::submit(M& m, H const& h, C const&, send_s& s, send_a const& a, io_handler<M>& handler)
 {
-	vsm_try(addr, posix::socket_address::make(args.endpoint));
-	vsm_try(wsa_buffers, make_wsa_buffers(s.buffers, args.buffers.buffers()));
+	vsm_try(addr, posix::socket_address::make(a.endpoint));
+	vsm_try(wsa_buffers, make_wsa_buffers(s.buffers, a.buffers.buffers()));
 
 	DWORD transferred;
 
@@ -129,14 +125,14 @@ io_result<void> send_i::submit(M& m, N const& h, C const& c, send_s& s, send_a c
 
 	if (already_completed)
 	{
-		vsm_assert(transferred == get_buffers_size(args.buffers.buffers()));
+		vsm_assert(transferred == get_buffers_size(a.buffers.buffers()));
 		return {};
 	}
 
 	return io_pending(error::async_operation_pending);
 }
 
-io_result<void> send_i::notify(M& m, N const& h, C const& c, send_s& s, send_a const& args, M::io_status_type const status)
+io_result<void> send_s::notify(M&, H const& h, C const&, send_s& s, send_a const& a, M::io_status_type const status)
 {
 	vsm_assert(&status.slot == &s.overlapped);
 
@@ -146,25 +142,24 @@ io_result<void> send_i::notify(M& m, N const& h, C const& c, send_s& s, send_a c
 	}
 
 	size_t const transferred = get_transfer_result(h, s.overlapped);
-	vsm_assert(transferred == get_buffers_size(args.buffers.buffers()));
+	vsm_assert(transferred == get_buffers_size(a.buffers.buffers()));
 
 	return {};
 }
 
-void send_i::cancel(M& m, N const& h, C const& c, send_s& s)
+void send_s::cancel(M&, H const& h, C const&, send_s& s)
 {
 	cancel_socket_io(posix::unwrap_socket(h.platform_handle), *s.overlapped);
 }
 
 
-using recv_t = H::receive_from_t;
-using recv_i = operation<M, H, recv_t>;
-using recv_s = operation_t<M, H, recv_t>;
-using recv_a = io_parameters_t<recv_t>;
+using recv_t = raw_datagram_socket_t::receive_from_t;
+using recv_s = async_operation_t<M, raw_datagram_socket_t, recv_t>;
+using recv_a = io_parameters_t<raw_datagram_socket_t, recv_t>;
 
-io_result<receive_result> recv_i::submit(M& m, N const& h, C const& c, recv_s& s, recv_a const& args, io_handler<M>& handler)
+io_result<receive_result> recv_s::submit(M& m, H const& h, C const&, recv_s& s, recv_a const& a, io_handler<M>& handler)
 {
-	vsm_try(wsa_buffers, make_wsa_buffers(s.buffers, args.buffers.buffers()));
+	vsm_try(wsa_buffers, make_wsa_buffers(s.buffers, a.buffers.buffers()));
 
 	DWORD transferred;
 	DWORD flags = 0;
@@ -208,7 +203,7 @@ io_result<receive_result> recv_i::submit(M& m, N const& h, C const& c, recv_s& s
 	return io_pending(error::async_operation_pending);
 }
 
-io_result<receive_result> recv_i::notify(M& m, N const& h, C const& c, recv_s& s, recv_a const& args, M::io_status_type const status)
+io_result<receive_result> recv_s::notify(M&, H const& h, C const&, recv_s& s, recv_a const&, M::io_status_type const status)
 {
 	vsm_assert(&status.slot == &s.overlapped);
 
@@ -229,7 +224,7 @@ io_result<receive_result> recv_i::notify(M& m, N const& h, C const& c, recv_s& s
 	});
 }
 
-void recv_i::cancel(M& m, N const& h, C const& c, recv_s& s)
+void recv_s::cancel(M&, H const& h, C const&, recv_s& s)
 {
 	cancel_socket_io(posix::unwrap_socket(h.platform_handle), *s.overlapped);
 }

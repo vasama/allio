@@ -4,8 +4,8 @@
 
 namespace allio {
 
-//TODO: Constrain location to handle to fs_object_t
-inline path_descriptor at(auto const& location, any_path_view const path)
+template<std::derived_from<fs_object_t> FsObject>
+path_descriptor at(detail::abstract_handle<FsObject> const& location, any_path_view const path)
 {
 	return path_descriptor(location, path);
 }

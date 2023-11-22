@@ -7,68 +7,62 @@
 namespace allio::detail {
 
 template<>
-struct connector<iocp_multiplexer, raw_datagram_socket_t>
+struct async_connector<iocp_multiplexer, raw_datagram_socket_t>
 	: iocp_multiplexer::connector_type
 {
 };
 
 template<>
-struct operation<iocp_multiplexer, raw_datagram_socket_t, raw_datagram_socket_t::bind_t>
+struct async_operation<iocp_multiplexer, raw_datagram_socket_t, socket_io::bind_t>
 	: iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
-	using H = raw_datagram_socket_t;
-	using N = H::native_type;
-	using O = H::bind_t;
-	using C = connector_t<M, H>;
-	using S = operation_t<M, H, O>;
-	using A = io_parameters_t<O>;
+	using H = raw_datagram_socket_t::native_type;
+	using C = async_connector_t<M, raw_datagram_socket_t>;
+	using S = async_operation_t<M, raw_datagram_socket_t, socket_io::bind_t>;
+	using A = io_parameters_t<raw_datagram_socket_t, socket_io::bind_t>;
 
-	static io_result<void> submit(M& m, N& h, C& c, S& s, A const& args, io_handler<M>& handler);
-	static io_result<void> notify(M& m, N& h, C& c, S& s, A const& args, M::io_status_type status);
-	static void cancel(M& m, N const& h, C const& c, S& s);
+	static io_result<void> submit(M& m, H& h, C& c, S& s, A const& args, io_handler<M>& handler);
+	static io_result<void> notify(M& m, H& h, C& c, S& s, A const& args, M::io_status_type status);
+	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 
 template<>
-struct operation<iocp_multiplexer, raw_datagram_socket_t, raw_datagram_socket_t::send_to_t>
+struct async_operation<iocp_multiplexer, raw_datagram_socket_t, socket_io::receive_from_t>
 	: iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
-	using H = raw_datagram_socket_t;
-	using N = H::native_type;
-	using O = H::send_to_t;
-	using C = connector_t<M, H>;
-	using S = operation_t<M, H, O>;
-	using A = io_parameters_t<O>;
-	
-	wsa_buffers_storage<8> buffers;
-	iocp_multiplexer::overlapped overlapped;
-
-	static io_result<void> submit(M& m, N const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
-	static io_result<void> notify(M& m, N const& h, C const& c, S& s, A const& args, M::io_status_type status);
-	static void cancel(M& m, N const& h, C const& c, S& s);
-};
-
-template<>
-struct operation<iocp_multiplexer, raw_datagram_socket_t, raw_datagram_socket_t::receive_from_t>
-	: iocp_multiplexer::operation_type
-{
-	using M = iocp_multiplexer;
-	using H = raw_datagram_socket_t;
-	using N = H::native_type;
-	using O = H::receive_from_t;
-	using C = connector_t<M, H>;
-	using S = operation_t<M, H, O>;
-	using A = io_parameters_t<O>;
+	using H = raw_datagram_socket_t::native_type;
+	using C = async_connector_t<M, raw_datagram_socket_t>;
+	using S = async_operation_t<M, raw_datagram_socket_t, socket_io::receive_from_t>;
+	using A = io_parameters_t<raw_datagram_socket_t, socket_io::receive_from_t>;
 	using R = receive_result;
 
 	wsa_buffers_storage<8> buffers;
 	wsa_address_storage<116> address_storage;
 	iocp_multiplexer::overlapped overlapped;
 
-	static io_result<R> submit(M& m, N const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
-	static io_result<R> notify(M& m, N const& h, C const& c, S& s, A const& args, M::io_status_type status);
-	static void cancel(M& m, N const& h, C const& c, S& s);
+	static io_result<R> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
+	static io_result<R> notify(M& m, H const& h, C const& c, S& s, A const& args, M::io_status_type status);
+	static void cancel(M& m, H const& h, C const& c, S& s);
+};
+
+template<>
+struct async_operation<iocp_multiplexer, raw_datagram_socket_t, socket_io::send_to_t>
+	: iocp_multiplexer::operation_type
+{
+	using M = iocp_multiplexer;
+	using H = raw_datagram_socket_t::native_type;
+	using C = async_connector_t<M, raw_datagram_socket_t>;
+	using S = async_operation_t<M, raw_datagram_socket_t, socket_io::send_to_t>;
+	using A = io_parameters_t<raw_datagram_socket_t, socket_io::send_to_t>;
+
+	wsa_buffers_storage<8> buffers;
+	iocp_multiplexer::overlapped overlapped;
+
+	static io_result<void> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
+	static io_result<void> notify(M& m, H const& h, C const& c, S& s, A const& args, M::io_status_type status);
+	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 
 } // namespace allio::detail

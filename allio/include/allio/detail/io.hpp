@@ -1,16 +1,15 @@
 #pragma once
 
-#include <allio/detail/io_parameters.hpp>
 #include <allio/detail/io_result.hpp>
+#include <allio/detail/object_concepts.hpp>
+#include <allio/detail/parameters.hpp>
 #include <allio/error.hpp>
 
 #include <vsm/assert.h>
+#include <vsm/concepts.hpp>
 #include <vsm/result.hpp>
 #include <vsm/standard.hpp>
 #include <vsm/tag_invoke.hpp>
-
-#include <memory>
-#include <optional>
 
 namespace allio::detail {
 
@@ -21,23 +20,97 @@ struct modifier_t;
 struct bounded_runtime_t;
 
 
-template<typename O>
-concept mutation = requires { typename O::mutation_tag; };
+//TODO: Rename to operation
+template<typename Operation>
+concept operation_c = requires { typename Operation::operation_concept; };
 
-template<typename O>
-concept producer = mutation<O> && std::is_same_v<typename O::mutation_tag, producer_t>;
+template<typename Operation>
+concept observer =
+	operation_c<Operation> &&
+	std::is_void_v<typename Operation::operation_concept>;
 
-template<typename O>
-concept consumer = mutation<O> && std::is_same_v<typename O::mutation_tag, consumer_t>;
+template<typename Operation>
+concept mutation =
+	operation_c<Operation> &&
+	!std::is_void_v<typename Operation::operation_concept>;
 
-template<typename O>
-concept modifier = mutation<O> && std::is_same_v<typename O::mutation_tag, modifier_t>;
+template<typename Operation>
+concept producer =
+	mutation<Operation> &&
+	std::is_same_v<typename Operation::operation_concept, producer_t> &&
+	std::is_void_v<typename Operation::result_type>;
 
-template<typename O>
-concept observer = !mutation<O>;
+template<typename Operation>
+concept consumer =
+	mutation<Operation> &&
+	std::is_same_v<typename Operation::operation_concept, consumer_t>;
+
+template<typename Operation>
+concept modifier =
+	mutation<Operation> &&
+	std::is_same_v<typename Operation::operation_concept, modifier_t>;
 
 
-template<bool IsMutable>
+template<object Object, operation_c Operation>
+auto _io_optional_params()
+{
+	if constexpr (requires { typename Operation::optional_params_type; })
+	{
+		return vsm_declval(typename Operation::optional_params_type);
+	}
+	else
+	{
+		return vsm_declval(typename Operation::template optional_params_template<Object>);
+	}
+}
+
+template<object Object, operation_c Operation>
+using io_optional_params_t = decltype(_io_optional_params<Object, Operation>());
+
+template<object Object, operation_c Operation, optional_multiplexer_handle_for<Object> MultiplexerHandle>
+auto _io_result()
+{
+	if constexpr (requires { typename Operation::result_type; })
+	{
+		return vsm_declval(typename Operation::result_type);
+	}
+	else
+	{
+		return vsm_declval(typename Operation::template result_type_template<Object, MultiplexerHandle>);
+	}
+}
+
+template<object Object, typename Operation, optional_multiplexer_handle_for<Object> MultiplexerHandle = void>
+using io_result_t = decltype(_io_result<Object, Operation, MultiplexerHandle>());
+
+
+template<typename Optional, typename Required>
+struct _io_parameters : Optional, Required {};
+
+template<>
+struct _io_parameters<no_parameters_t, no_parameters_t> : no_parameters_t {};
+
+template<object Object, operation_c Operation>
+using io_parameters_t = _io_parameters<
+	typename Operation::required_params_type,
+	io_optional_params_t<Object, Operation>>;
+
+template<object Object, operation_c Operation, typename... Args>
+[[nodiscard]] auto make_io_args(Args&&... required_args)
+{
+	using parameters_type = io_parameters_t<Object, Operation>;
+	return [&required_args...](auto&&... optional_args)
+		vsm_lambda_attribute( [[nodiscard]] )
+		-> parameters_type
+	{
+		parameters_type arguments{ { { vsm_forward(required_args) }... } };
+		(set_argument(arguments, vsm_forward(optional_args)), ...);
+		return arguments;
+	};
+}
+
+
+template<bool IsMutation>
 struct _handle_const;
 
 template<>
@@ -54,24 +127,23 @@ struct _handle_const<1>
 	using type = T;
 };
 
-template<typename O, typename T>
-using handle_const_t = typename _handle_const<mutation<O>>::template type<T>;
+template<operation_c Operation, typename T>
+using handle_const_t = typename _handle_const<mutation<Operation>>::template type<T>;
 
 
-template<typename O>
+template<object Object, operation_c Operation>
 struct blocking_io_t
 {
-	template<typename H>
-	auto vsm_static_operator_invoke(H& handle, io_parameters_t<O> const& args)
-		//requires vsm::tag_invocable<blocking_io_t, H&, io_parameters_t<O> const&>
+	template<typename Handle>
+	auto vsm_static_operator_invoke(Handle&& handle, io_parameters_t<Object, Operation> const& args)
+		requires vsm::tag_invocable<blocking_io_t, Handle&&, io_parameters_t<Object, Operation> const&>
 	{
-		//return vsm::tag_invoke(blocking_io_t(), handle, args);
-		return tag_invoke(blocking_io_t(), handle, args);
+		return vsm::tag_invoke(blocking_io_t(), vsm_forward(handle), args);
 	}
 };
 
-template<typename O>
-inline constexpr blocking_io_t<O> blocking_io = {};
+template<object Object, operation_c Operation>
+inline constexpr blocking_io_t<Object, Operation> blocking_io = {};
 
 
 template<typename Handler, typename Status>
@@ -118,10 +190,10 @@ private:
 	}
 };
 
-template<typename Multiplexer>
+template<multiplexer Multiplexer>
 using io_handler = basic_io_handler<typename Multiplexer::io_status_type>;
 
-template<typename Multiplexer, typename Handler>
+template<multiplexer Multiplexer, typename Handler>
 using io_handler_base = basic_io_handler_base<typename Multiplexer::io_status_type, Handler>;
 
 
@@ -139,7 +211,7 @@ inline constexpr attach_handle_t attach_handle = {};
 struct detach_handle_t
 {
 	template<typename M, typename H, typename C>
-	void vsm_static_operator_invoke(M& m, H const& h, C& c)
+	vsm::result<void> vsm_static_operator_invoke(M& m, H const& h, C& c)
 		requires vsm::tag_invocable<detach_handle_t, M const&, H const&, C&>
 	{
 		return vsm::tag_invoke(detach_handle_t(), m, h, c);
@@ -151,16 +223,16 @@ template<typename To>
 struct rebind_handle_t
 {
 	template<vsm::any_cvref_of<To> From>
-	friend From&& tag_invoke(From&& from)
+	friend From&& tag_invoke(rebind_handle_t, From&& from, auto&&...)
 	{
 		return vsm_forward(from);
 	}
 
-	template<typename From, typename MultiplexerHandle>
-	vsm::result<To> vsm_static_operator_invoke(From&& from, MultiplexerHandle&& multiplexer)
-		requires vsm::tag_invocable<rebind_handle_t, From&&, MultiplexerHandle&&>
+	template<typename From, typename... Args>
+	vsm::result<To> vsm_static_operator_invoke(From&& from, Args&&... args)
+		requires vsm::tag_invocable<rebind_handle_t, From&&, Args&&...>
 	{
-		return vsm::tag_invoke(rebind_handle_t(), vsm_forward(from), vsm_forward(multiplexer));
+		return vsm::tag_invoke(rebind_handle_t(), vsm_forward(from), vsm_forward(args)...);
 	}
 };
 template<typename To>
@@ -222,56 +294,44 @@ struct cancel_io_t
 inline constexpr cancel_io_t cancel_io = {};
 
 
-struct poll_io_t
+struct async_connector_base
 {
-	template<typename Multiplexer, typename... Args>
-	vsm::result<bool> vsm_static_operator_invoke(Multiplexer&& m, Args&&... args)
-		requires vsm::tag_invocable<poll_io_t, Multiplexer&&, Args&&...>
-	{
-		return vsm::tag_invoke(poll_io_t(), vsm_forward(m), vsm_forward(args)...);
-	}
-};
-inline constexpr poll_io_t poll_io = {};
-
-
-struct connector_base
-{
-	template<std::derived_from<connector_base> C>
-	friend auto tag_invoke(
+	template<std::derived_from<async_connector_base> Connector>
+	friend vsm::result<void> tag_invoke(
 		attach_handle_t,
-		auto const& m,
-		auto const& h,
-		C& c)
+		auto const& multiplexer,
+		auto const& handle,
+		Connector& connector)
 	{
-		return C::attach(m, h, c);
+		return Connector::attach(multiplexer, handle, connector);
 	}
 
-	template<std::derived_from<connector_base> C>
-	friend auto tag_invoke(
+	template<std::derived_from<async_connector_base> Connector>
+	friend vsm::result<void> tag_invoke(
 		detach_handle_t,
-		auto const& m,
-		auto const& h,
-		C& c)
+		auto const& multiplexer,
+		auto const& handle,
+		Connector& connector)
 	{
-		return C::detach(m, h, c);
+		return Connector::detach(multiplexer, handle, connector);
 	}
 };
 
 template<typename M, typename H>
-struct connector;
+struct async_connector;
 
-template<typename M, typename H>
-using connector_t = connector<M, H>;
+template<multiplexer Multiplexer, object Object>
+using async_connector_t = async_connector<Multiplexer, Object>;
 
 
-struct operation_base
+struct async_operation_base
 {
-	template<std::derived_from<operation_base> S, typename IoStatus>
+	template<std::derived_from<async_operation_base> S, typename IoStatus>
 	friend auto tag_invoke(
 		submit_io_t,
 		auto& m,
 		auto& h,
-		std::derived_from<connector_base> auto& c,
+		std::derived_from<async_connector_base> auto& c,
 		S& s,
 		auto const& args,
 		basic_io_handler<IoStatus>& handler)
@@ -286,12 +346,12 @@ struct operation_base
 			handler);
 	}
 
-	template<std::derived_from<operation_base> S>
+	template<std::derived_from<async_operation_base> S>
 	friend auto tag_invoke(
 		notify_io_t,
 		auto& m,
 		auto& h,
-		std::derived_from<connector_base> auto& c,
+		std::derived_from<async_connector_base> auto& c,
 		S& s,
 		auto const& args,
 		auto&& status)
@@ -306,12 +366,12 @@ struct operation_base
 			vsm_forward(status));
 	}
 
-	template<std::derived_from<operation_base> S>
+	template<std::derived_from<async_operation_base> S>
 	friend void tag_invoke(
 		cancel_io_t,
 		auto& m,
 		auto const& h,
-		std::derived_from<connector_base> auto const& c,
+		std::derived_from<async_connector_base> auto const& c,
 		S& s)
 		//requires requires { impl_type::cancel(m, h, c, s); }
 	{
@@ -324,38 +384,38 @@ struct operation_base
 };
 
 template<typename M, typename H, typename O>
-struct operation;
+struct async_operation;
 
-template<typename M, typename H, typename O>
-using operation_t = operation<M, H, O>;
+template<multiplexer Multiplexer, object Object, operation_c Operation>
+using async_operation_t = async_operation<Multiplexer, Object, Operation>;
 
 
-template<typename M, typename H, observer O>
-	requires std::is_same_v<typename O::runtime_tag, bounded_runtime_t>
-struct operation<M, H, O>
+// A default async implementation using blocking I/O
+// is provided for observers with bounded runtime.
+template<multiplexer Multiplexer, object Object, observer Operation>
+	requires std::is_same_v<typename Operation::runtime_tag, bounded_runtime_t>
+struct async_operation<Multiplexer, Object, Operation>
 {
-	using N = typename H::native_type const;
-	using C = connector_t<M, H> const;
-	using S = operation_t<M, H, O>;
-	using R = io_result_t<O, H, M>;
+	using M = Multiplexer;
+	using H = typename Object::native_type const;
+	using C = async_connector_t<Multiplexer, Object> const;
+	using S = async_operation_t<Multiplexer, Object, Operation>;
+	using A = io_parameters_t<Object, Operation>;
+	using R = io_result_t<Object, Operation, Multiplexer>;
 
-	static io_result<R> submit(M&, N& h, C&, S& s)
+	static io_result<R> submit(M&, H& h, C&, S&, A const& a, io_handler<M>&)
 	{
-		return blocking_io<O>(h, s.args);
+		return blocking_io<Object, Operation>(h, a);
 	}
 
-	static io_result<R> notify(M&, N& h, C&, S& s, typename M::io_status_type&& status)
+	static io_result<R> notify(M&, H&, C&, S&, A const&, typename M::io_status_type&&)
 	{
 		vsm_unreachable();
 	}
 
-	static void cancel(M&, N const& h, C const&, S&)
+	static void cancel(M&, H const&, C const&, S&)
 	{
 	}
 };
-
-
-template<typename M>
-using multiplexer_t = typename std::pointer_traits<M>::element_type;
 
 } // namespace allio::detail

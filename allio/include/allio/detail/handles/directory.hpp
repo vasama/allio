@@ -179,10 +179,10 @@ struct directory_t : fs_object_t
 		using optional_params_type = directory_restart_t;
 	};
 
-	using operations = type_list_cat
+	using operations = type_list_append
 	<
-		base_type::operations,
-		type_list<read_t>
+		base_type::operations
+		, read_t
 	>;
 };
 

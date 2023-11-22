@@ -1,7 +1,6 @@
 #include <allio/impl/posix/socket.hpp>
 #include <allio/impl/win32/completion_port.hpp>
 #include <allio/impl/win32/wsa_ex.hpp>
-#include <allio/socket.hpp>
 
 #include <catch2/catch_all.hpp>
 

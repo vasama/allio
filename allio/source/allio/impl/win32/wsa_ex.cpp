@@ -8,50 +8,43 @@ using namespace allio::win32;
 
 namespace {
 
-template<typename Pointer, GUID Extension>
+template<typename Pointer, GUID Extension, INT ReturnValue>
 struct wsa_extension;
 
-template<typename... Ps, GUID Extension>
-struct wsa_extension<BOOL(*)(SOCKET, Ps...), Extension>
+template<typename... Ps, GUID Extension, INT ReturnValue>
+struct wsa_extension<INT(*)(SOCKET, Ps...), Extension, ReturnValue>
 {
-	static BOOL invoke(SOCKET const socket, Ps const... args)
+	static INT invoke(SOCKET const socket, Ps const... args)
 	{
-		typedef BOOL function_type(SOCKET, Ps...);
-
-		static function_type* const function = [&]()
+		using function_type = INT(SOCKET, Ps...);
+		static auto const function = [&]() -> function_type*
 		{
 			GUID guid = Extension;
 
-			function_type* function;
+			function_type* function_buffer;
 			DWORD bytes_returned;
 
-			if (!WSAIoctl(
+			if (WSAIoctl(
 				socket,
 				SIO_GET_EXTENSION_FUNCTION_POINTER,
 				&guid,
 				sizeof(guid),
-				&function,
-				sizeof(function),
+				&function_buffer,
+				sizeof(function_buffer),
 				&bytes_returned,
 				/* lpOverlapped: */ nullptr,
-				/* lpCompletionRoutine: */ nullptr))
+				/* lpCompletionRoutine: */ nullptr) == SOCKET_ERROR)
 			{
-				vsm_assert(bytes_returned == sizeof(function));
-			}
-			else
-			{
-				function = nullptr;
+				return [](SOCKET, Ps...) -> INT
+				{
+					WSASetLastError(WSAEOPNOTSUPP);
+					return ReturnValue;
+				};
 			}
 
-			return function;
+			vsm_assert(bytes_returned == sizeof(function_buffer));
+			return function_buffer;
 		}();
-
-		if (function == nullptr)
-		{
-			WSASetLastError(WSAEOPNOTSUPP);
-			return FALSE;
-		}
-
 		return function(socket, args...);
 	}
 };
@@ -65,7 +58,7 @@ DWORD win32::wsa_accept_ex(
 	wsa_accept_address_buffer& address,
 	OVERLAPPED& overlapped)
 {
-	using ext = wsa_extension<LPFN_ACCEPTEX, GUID WSAID_ACCEPTEX>;
+	using ext = wsa_extension<LPFN_ACCEPTEX, GUID WSAID_ACCEPTEX, FALSE>;
 
 	using address_buffer = wsa_accept_address_buffer;
 	static_assert(
@@ -95,7 +88,7 @@ DWORD win32::wsa_connect_ex(
 	socket_address const& addr,
 	OVERLAPPED& overlapped)
 {
-	using ext = wsa_extension<LPFN_CONNECTEX, GUID WSAID_CONNECTEX>;
+	using ext = wsa_extension<LPFN_CONNECTEX, GUID WSAID_CONNECTEX, FALSE>;
 
 	DWORD transferred = static_cast<DWORD>(-1);
 	if (!ext::invoke(
@@ -120,7 +113,7 @@ static DWORD wsa_send_msg(
 	LPDWORD const transferred,
 	LPOVERLAPPED const overlapped)
 {
-	using ext = wsa_extension<LPFN_WSASENDMSG, GUID WSAID_WSASENDMSG>;
+	using ext = wsa_extension<LPFN_WSASENDMSG, GUID WSAID_WSASENDMSG, SOCKET_ERROR>;
 	if (ext::invoke(
 		socket,
 		message,
@@ -140,7 +133,7 @@ static DWORD wsa_recv_msg(
 	LPDWORD const transferred,
 	LPOVERLAPPED const overlapped)
 {
-	using ext = wsa_extension<LPFN_WSARECVMSG, GUID WSAID_WSARECVMSG>;
+	using ext = wsa_extension<LPFN_WSARECVMSG, GUID WSAID_WSARECVMSG, SOCKET_ERROR>;
 	if (ext::invoke(
 		socket,
 		message,

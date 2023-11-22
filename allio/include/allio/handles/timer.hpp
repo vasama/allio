@@ -16,7 +16,7 @@ vsm::result<timer_handle> create_timer(auto&&... args)
 	vsm::result<timer_handle> r(vsm::result_value);
 	vsm_try_void(detail::blocking_io<timer_t::create_t>(
 		*r,
-		io_args<timer_t::create_t>()(vsm_forward(args)...)));
+		make_io_args<timer_t::create_t>()(vsm_forward(args)...)));
 	return r;
 }
 
@@ -30,7 +30,7 @@ using basic_timer_handle = handle<timer_t, MultiplexerHandle>;
 ex::sender auto create_timer(auto&&... args)
 {
 	return io_handle_sender<timer_t, timer_t::create_t>(
-		io_args<timer_t::create_t>()(vsm_forward(args)...));
+		make_io_args<timer_t::create_t>()(vsm_forward(args)...));
 }
 
 } // namespace async

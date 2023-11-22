@@ -8,12 +8,12 @@
 namespace allio::detail {
 
 template<>
-struct connector<iocp_multiplexer, process_handle_t>
+struct async_connector<iocp_multiplexer, process_handle_t>
 	: iocp_multiplexer::connector_type
 {
 	using M = iocp_multiplexer;
 	using H = process_handle_t;
-	using C = connector_t<M, H>;
+	using C = async_connector_t<M, H>;
 
 	static vsm::result<void> attach(M&, H const&, C&)
 	{
@@ -28,14 +28,14 @@ struct connector<iocp_multiplexer, process_handle_t>
 };
 
 template<>
-struct operation<iocp_multiplexer, process_handle_t, process_handle_t::wait_t>
+struct async_operation<iocp_multiplexer, process_handle_t, process_handle_t::wait_t>
 	: iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
 	using H = process_handle_t;
 	using O = process_handle_t::wait_t;
-	using C = connector_t<M, H>;
-	using S = operation_t<M, H, O>;
+	using C = async_connector_t<M, H>;
+	using S = async_operation_t<M, H, O>;
 	using R = io_result_ref_t<O>;
 
 	wait_operation_state wait_state;

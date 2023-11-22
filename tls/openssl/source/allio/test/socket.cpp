@@ -14,19 +14,24 @@ using namespace allio::openssl;
 
 namespace ex = stdexec;
 
-TEST_CASE("a stream socket can connect to a listening socket and exchange data", "[socket_handle][blocking]")
+TEST_CASE("a stream socket can connect to a listening socket and exchange data", "[socket][blocking]")
 {
 	using namespace blocking;
 
 	using socket_object = openssl::socket_t;
 	using listen_socket_object = openssl::listen_socket_t;
 
+	auto const listen_security_context = openssl::create_listen_socket_security_context().value();
+
 	auto const endpoint = test::generate_endpoint();
-	auto const listen_socket = listen<listen_socket_object>(endpoint).value();
+	auto const listen_socket = listen<listen_socket_object>(
+		endpoint,
+		listen_security_context).value();
 
 	auto connect_future = std::async(std::launch::async, [&]()
 	{
-		return connect<socket_object>(endpoint);
+		auto const security_context = openssl::create_socket_security_context().value();
+		return connect<socket_object>(endpoint, security_context);
 	});
 
 	auto const server_socket = listen_socket.accept().value().socket;

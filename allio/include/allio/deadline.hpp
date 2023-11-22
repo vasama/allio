@@ -5,5 +5,6 @@
 namespace allio {
 
 using detail::deadline;
+using detail::deadline_t;
 
 } // namespace allio

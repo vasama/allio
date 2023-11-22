@@ -42,7 +42,7 @@ struct section_t : platform_object_t
 
 	struct create_t
 	{
-		using mutation_tag = producer_t;
+		using operation_concept = producer_t;
 
 		struct required_params_type
 		{
@@ -53,9 +53,9 @@ struct section_t : platform_object_t
 		using optional_params_type = protection_parameter_t;
 	};
 
-	using operations = type_list_cat<
-		base_type::operations,
-		type_list<create_t>
+	using operations = type_list_append<
+		base_type::operations
+		, create_t
 	>;
 
 	template<typename H>
@@ -79,7 +79,7 @@ vsm::result<section_handle> create_section(
 	vsm::result<section_handle> r(vsm::result_value);
 	vsm_try_void(blocking_io<section_t::create_t>(
 		*r,
-		io_args<section_t::create_t>(nullptr, maximum_size)(vsm_forward(args)...)));
+		make_io_args<section_t::create_t>(nullptr, maximum_size)(vsm_forward(args)...)));
 	return r;
 }
 
@@ -91,7 +91,7 @@ vsm::result<section_handle> create_section(
 	vsm::result<section_handle> r(vsm::result_value);
 	vsm_try_void(blocking_io<section_t::create_t>(
 		*r,
-		io_args<section_t::create_t>(&backing_file, maximum_size)(vsm_forward(args)...)));
+		make_io_args<section_t::create_t>(&backing_file, maximum_size)(vsm_forward(args)...)));
 	return r;
 }
 

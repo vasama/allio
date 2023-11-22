@@ -2,17 +2,18 @@
 
 #include <cstdint>
 
-namespace allio {
-namespace detail {
+namespace allio::detail {
 
 template<typename Enum>
 concept handle_flags_enum = requires { Enum::allio_detail_handle_flags_flag_count; };
 
-} // namespace detail
-
 class handle_flags
 {
-	uint32_t m_flags;
+public:
+	using uint_type = uint32_t;
+
+private:
+	uint_type m_flags;
 
 public:
 	static handle_flags const none;
@@ -75,14 +76,14 @@ public:
 	[[nodiscard]] bool operator==(handle_flags const&) const = default;
 
 private:
-	explicit constexpr handle_flags(uint32_t const flags)
+	explicit constexpr handle_flags(uint_type const flags)
 		: m_flags(flags)
 	{
 	}
 
-	[[nodiscard]] static constexpr uint32_t convert_index(detail::handle_flags_enum auto const index)
+	[[nodiscard]] static constexpr uint_type convert_index(detail::handle_flags_enum auto const index)
 	{
-		return (static_cast<uint32_t>(1) << decltype(index)::allio_detail_handle_flags_base_count) << static_cast<uint32_t>(index);
+		return (static_cast<uint_type>(1) << decltype(index)::allio_detail_handle_flags_base_count) << static_cast<uint_type>(index);
 	}
 };
 
@@ -92,7 +93,7 @@ inline constexpr handle_flags handle_flags::none = handle_flags(0);
 #define allio_detail_handle_flags(base, ...) \
 	struct flags : base::flags \
 	{ \
-		enum : ::uint32_t \
+		enum : ::allio::detail::handle_flags::uint_type \
 		{ \
 			__VA_ARGS__ \
 			allio_detail_handle_flags_enum_count, \
@@ -108,4 +109,4 @@ inline constexpr handle_flags handle_flags::none = handle_flags(0);
 #define allio_handle_implementation_flags(...) \
 	allio_detail_handle_flags(base_type::impl_type, __VA_ARGS__)
 
-} // namespace allio
+} // namespace allio::detail

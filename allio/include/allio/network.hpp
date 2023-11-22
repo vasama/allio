@@ -1,5 +1,6 @@
 #pragma once
 
+#include <allio/detail/parameters.hpp>
 #include <allio/path_view.hpp>
 
 #include <vsm/assert.h>
@@ -317,6 +318,20 @@ public:
 		case network_address_kind::ipv6:
 			return std::invoke(vsm_forward(visitor), m_ipv6);
 		}
+	}
+};
+
+
+struct network_endpoint_t
+{
+	network_endpoint endpoint;
+
+	friend void tag_invoke(
+		detail::set_argument_t,
+		network_endpoint_t& args,
+		network_endpoint const& endpoint)
+	{
+		args.endpoint = endpoint;
 	}
 };
 

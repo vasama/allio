@@ -10,9 +10,9 @@ using accept_result_type = accept_result<blocking_handle<raw_socket_t>>;
 
 vsm::result<void> raw_listen_socket_t::listen(
 	native_type& h,
-	io_parameters_t<listen_t> const& args)
+	io_parameters_t<raw_listen_socket_t, listen_t> const& a)
 {
-	vsm_try(addr, socket_address::make(args.endpoint));
+	vsm_try(addr, socket_address::make(a.endpoint));
 	vsm_try(protocol, choose_protocol(addr.addr.sa_family, SOCK_STREAM));
 
 	vsm_try_bind((socket, flags), create_socket(
@@ -24,7 +24,7 @@ vsm::result<void> raw_listen_socket_t::listen(
 	vsm_try_void(socket_listen(
 		socket.get(),
 		addr,
-		args.backlog));
+		a.backlog));
 
 	h = native_type
 	{
@@ -42,13 +42,13 @@ vsm::result<void> raw_listen_socket_t::listen(
 
 vsm::result<accept_result_type> raw_listen_socket_t::accept(
 	native_type const& h,
-	io_parameters_t<accept_t> const& args)
+	io_parameters_t<raw_listen_socket_t, accept_t> const& a)
 {
 	socket_address addr;
 	vsm_try(socket, socket_accept(
 		unwrap_socket(h.platform_handle),
 		addr,
-		args.deadline));
+		a.deadline));
 
 	return vsm_lazy(accept_result_type
 	{
@@ -72,7 +72,7 @@ vsm::result<accept_result_type> raw_listen_socket_t::accept(
 
 vsm::result<void> raw_listen_socket_t::close(
 	native_type& h,
-	io_parameters_t<close_t> const& args)
+	io_parameters_t<raw_listen_socket_t, close_t> const&)
 {
 	if (h.platform_handle != native_platform_handle::null)
 	{

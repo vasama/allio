@@ -6,14 +6,14 @@
 namespace allio::detail {
 
 template<>
-struct operation<epoll_multiplexer, event_t, event_t::wait_t>
+struct async_operation<epoll_multiplexer, event_t, event_t::wait_t>
 	: epoll_multiplexer::operation_type
 {
 	using M = epoll_multiplexer;
 	using H = event_t;
 	using O = event_t::wait_t;
-	using C = connector_t<M, H>;
-	using S = operation_t<M, H, O>;
+	using C = async_connector_t<M, H>;
+	using S = async_operation_t<M, H, O>;
 
 	epoll_multiplexer::subscription subscription;
 

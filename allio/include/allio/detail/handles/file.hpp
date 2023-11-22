@@ -9,7 +9,8 @@ struct file_t : fs_object_t
 {
 	using base_type = fs_object_t;
 
-	using operations = type_list_cat<
+	using operations = type_list_append
+	<
 		base_type::operations
 		//TODO: file operations
 	>;

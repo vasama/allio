@@ -1,7 +1,8 @@
 #pragma once
 
-#include <allio/detail/io.hpp>
-#include <allio/multiplexer.hpp>
+#include <allio/detail/deadline.hpp>
+#include <allio/detail/multiplexer.hpp>
+#include <allio/detail/parameters.hpp>
 #include <allio/win32/handles/platform_object.hpp>
 #include <allio/win32/detail/unique_handle.hpp>
 #include <allio/win32/detail/win32_fwd.hpp>
@@ -19,42 +20,24 @@ namespace iocp {
 
 struct max_concurrent_threads_t
 {
-	struct parameter_t
-	{
-		size_t max_concurrent_threads = 1;
-	};
-
-	struct argument_t
-	{
-		size_t max_concurrent_threads;
-
-		friend void tag_invoke(set_argument_t, parameter_t& args, argument_t const& value)
-		{
-			args.max_concurrent_threads = value.max_concurrent_threads;
-		}
-	};
-
-	argument_t vsm_static_operator_invoke(size_t const max_concurrent_threads)
-	{
-		return { max_concurrent_threads };
-	}
+	size_t max_concurrent_threads = 1;
 };
-inline constexpr max_concurrent_threads_t max_concurrent_threads;
+inline constexpr explicit_parameter<max_concurrent_threads_t> max_concurrent_threads = {};
 
 } // namespace iocp
 
 class iocp_multiplexer final
 {
 public:
-	using is_multiplexer = void;
+	using multiplexer_concept = void;
 
 	struct io_status_type;
 
-	class connector_type : public connector_base
+	class connector_type : public async_connector_base
 	{
 	};
 
-	class operation_type : public operation_base
+	class operation_type : public async_operation_base
 	{
 	};
 
@@ -163,22 +146,13 @@ private:
 	vsm::linear<HANDLE> m_completion_port;
 
 
-	struct create_t
-	{
-		using required_params_type = no_parameters_t;
-		using optional_params_type = iocp::max_concurrent_threads_t::parameter_t;
-	};
-
-	struct poll_t
-	{
-		using required_params_type = no_parameters_t;
-		using optional_params_type = deadline_t;
-	};
+	using create_parameters = iocp::max_concurrent_threads_t;
+	using poll_parameters = deadline_t;
 
 public:
 	[[nodiscard]] static vsm::result<iocp_multiplexer> create(auto&&... args)
 	{
-		return _create(io_args<create_t>()(vsm_forward(args)...));
+		return _create(make_args<create_parameters>(vsm_forward(args)...));
 	}
 
 	[[nodiscard]] static vsm::result<iocp_multiplexer> create(iocp_multiplexer const& other)
@@ -190,7 +164,7 @@ public:
 	/// @return True if the multiplexer made any progress.
 	[[nodiscard]] vsm::result<bool> poll(auto&&... args)
 	{
-		return _poll(io_args<poll_t>()(vsm_forward(args)...));
+		return _poll(make_args<poll_parameters>(vsm_forward(args)...));
 	}
 
 
@@ -272,7 +246,7 @@ public:
 private:
 	explicit iocp_multiplexer(vsm::intrusive_ptr<shared_state_t> shared_state);
 
-	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(io_parameters_t<create_t> const& args);
+	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(create_parameters const& args);
 	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(iocp_multiplexer const& other);
 
 
@@ -287,12 +261,13 @@ private:
 	}
 
 
-	[[nodiscard]] vsm::result<bool> _poll(io_parameters_t<poll_t> const& args);
+	[[nodiscard]] vsm::result<bool> _poll(poll_parameters const& args);
 
 	friend vsm::result<bool> tag_invoke(poll_io_t, iocp_multiplexer& m, auto&&... args)
 	{
-		return m._poll(io_args<poll_t>()(vsm_forward(args)...));
+		return m._poll(make_args<poll_parameters>(vsm_forward(args)...));
 	}
 };
+static_assert(multiplexer<iocp_multiplexer>);
 
 } // namespace allio::detail

@@ -12,21 +12,19 @@ using namespace allio::detail;
 using namespace allio::win32;
 
 using M = iocp_multiplexer;
-using H = raw_listen_socket_t;
-using N = H::native_type;
-using C = connector_t<M, H>;
+using H = raw_listen_socket_t::native_type;
+using C = async_connector_t<M, raw_listen_socket_t>;
 
 using socket_handle_type = async_handle<raw_socket_t, basic_multiplexer_handle<M>>;
 using accept_result_type = accept_result<socket_handle_type>;
 
-using listen_t = H::listen_t;
-using listen_i = operation<M, H, listen_t>;
-using listen_s = operation_t<M, H, listen_t>;
-using listen_a = io_parameters_t<listen_t>;
+using listen_t = raw_listen_socket_t::listen_t;
+using listen_s = async_operation_t<M, raw_listen_socket_t, listen_t>;
+using listen_a = io_parameters_t<raw_listen_socket_t, listen_t>;
 
-io_result<void> listen_i::submit(M& m, N& h, C& c, listen_s& s, listen_a const& args, io_handler<M>& handler)
+io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s&, listen_a const& a, io_handler<M>&)
 {
-	vsm_try(addr, posix::socket_address::make(args.endpoint));
+	vsm_try(addr, posix::socket_address::make(a.endpoint));
 	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_STREAM));
 
 	vsm_try_bind((socket, flags), posix::create_socket(
@@ -38,18 +36,18 @@ io_result<void> listen_i::submit(M& m, N& h, C& c, listen_s& s, listen_a const& 
 	vsm_try_void(posix::socket_listen(
 		socket.get(),
 		addr,
-		args.backlog));
+		a.backlog));
 
 	vsm_try_void(m.attach_handle(
 		posix::wrap_socket(socket.get()),
 		c));
 
-	h = N
+	h = H
 	{
 		platform_object_t::native_type
 		{
 			{
-				H::flags::not_null | flags,
+				raw_listen_socket_t::flags::not_null | flags,
 			},
 			posix::wrap_socket(socket.release()),
 		}
@@ -58,19 +56,18 @@ io_result<void> listen_i::submit(M& m, N& h, C& c, listen_s& s, listen_a const& 
 	return {};
 }
 
-io_result<void> listen_i::notify(M& m, N& h, C& c, listen_s& s, listen_a const& args, M::io_status_type const status)
+io_result<void> listen_s::notify(M&, H&, C&, listen_s&, listen_a const&, M::io_status_type)
 {
 	vsm_unreachable();
 }
 
-void listen_i::cancel(M& m, N const& h, C const& c, listen_s& s)
+void listen_s::cancel(M&, H const&, C const&, listen_s&)
 {
 }
 
-using accept_t = H::accept_t;
-using accept_i = operation<M, H, accept_t>;
-using accept_s = operation_t<M, H, accept_t>;
-using accept_a = io_parameters_t<accept_t>;
+using accept_t = raw_listen_socket_t::accept_t;
+using accept_s = async_operation_t<M, raw_listen_socket_t, accept_t>;
+using accept_a = io_parameters_t<raw_listen_socket_t, accept_t>;
 
 static io_result<accept_result_type> make_accept_result(
 	M& m,
@@ -87,24 +84,24 @@ static io_result<accept_result_type> make_accept_result(
 		socket_handle_type
 		(
 			adopt_handle_t(),
+			m,
 			raw_socket_t::native_type
 			{
 				platform_object_t::native_type
 				{
 					{
-						H::flags::not_null | flags,
+						raw_listen_socket_t::flags::not_null | flags,
 					},
 					socket.release(),
 				},
 			},
-			m,
 			vsm_move(c)
 		),
 		addr.get_network_endpoint(),
 	});
 }
 
-io_result<accept_result_type> accept_i::submit(M& m, N const& h, C const& c, accept_s& s, accept_a const& args, io_handler<M>& handler)
+io_result<accept_result_type> accept_s::submit(M& m, H const& h, C const&, accept_s& s, accept_a const&, io_handler<M>& handler)
 {
 	SOCKET const listen_socket = posix::unwrap_socket(h.platform_handle);
 	//TODO: Cache the address family.
@@ -147,7 +144,7 @@ io_result<accept_result_type> accept_i::submit(M& m, N const& h, C const& c, acc
 	return io_pending(error::async_operation_pending);
 }
 
-io_result<accept_result_type> accept_i::notify(M& m, N const& h, C const& c, accept_s& s, accept_a const& args, M::io_status_type const status)
+io_result<accept_result_type> accept_s::notify(M& m, H const&, C const&, accept_s& s, accept_a const&, M::io_status_type const status)
 {
 	vsm_assert(&status.slot == &s.overlapped);
 
@@ -160,7 +157,7 @@ io_result<accept_result_type> accept_i::notify(M& m, N const& h, C const& c, acc
 	return make_accept_result(m, vsm_move(s.socket), s.socket_flags, addr_buffer.remote);
 }
 
-void accept_i::cancel(M& m, N const& h, C const& c, S& s)
+void accept_s::cancel(M&, H const& h, C const&, S& s)
 {
 	cancel_socket_io(posix::unwrap_socket(h.platform_handle), *s.overlapped);
 }

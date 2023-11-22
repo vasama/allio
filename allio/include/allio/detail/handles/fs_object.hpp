@@ -10,9 +10,6 @@
 
 namespace allio::detail {
 
-class filesystem_handle;
-
-
 enum class file_mode : uint8_t
 {
 	none                                = 1 << 0,
@@ -71,8 +68,9 @@ enum class file_flags : uint32_t
 
 #undef allio_detail_win32_flag
 };
+vsm_flag_enum(file_flags);
 
-enum class path_kind : uint32_t
+enum class path_kind : uint8_t
 {
 #if vsm_os_win32
 #	define allio_detail_win32_flag(x) 1 << x
@@ -80,9 +78,9 @@ enum class path_kind : uint32_t
 #	define allio_detail_win32_flag(x) 0
 #endif
 
-	windows_nt                      = allio_detail_win32_flag(0),
-	windows_guid                    = allio_detail_win32_flag(1),
-	windows_dos                     = allio_detail_win32_flag(2),
+	windows_nt                          = allio_detail_win32_flag(0),
+	windows_guid                        = allio_detail_win32_flag(1),
+	windows_dos                         = allio_detail_win32_flag(2),
 
 #undef allio_detail_win32_flag
 
@@ -105,9 +103,8 @@ struct path_descriptor
 	{
 	}
 
-	//TODO: Constrain base to handle to fs_object_t
-	template<std::convertible_to<any_path_view> Path>
-	path_descriptor(auto const& base, Path const& path)
+	template<std::derived_from<fs_object_t> FsObject, std::convertible_to<any_path_view> Path>
+	path_descriptor(detail::abstract_handle<FsObject> const& base, Path const& path)
 		: base(base.native().platform_object_t::native_type::platform_handle)
 		, path(path)
 	{
@@ -152,7 +149,7 @@ struct fs_object_t : platform_object_t
 
 	struct open_t
 	{
-		using mutation_tag = producer_t;
+		using operation_concept = producer_t;
 
 		struct required_params_type
 		{
@@ -181,9 +178,11 @@ struct fs_object_t : platform_object_t
 		using optional_params_type = path_kind_t;
 	};
 
-	using operations = type_list_cat<
-		base_type::operations,
-		type_list<open_t, get_current_path_t>
+	using operations = type_list_append
+	<
+		base_type::operations
+		, open_t
+		, get_current_path_t
 	>;
 
 	template<typename H>
@@ -193,7 +192,7 @@ struct fs_object_t : platform_object_t
 		{
 			return blocking_io<get_current_path_t>(
 				static_cast<H const&>(*this),
-				io_args<get_current_path_t>(buffer)(vsm_forward(args)...));
+				make_io_args<get_current_path_t>(buffer)(vsm_forward(args)...));
 		}
 
 		template<typename Path>

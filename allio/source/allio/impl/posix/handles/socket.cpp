@@ -8,9 +8,9 @@ using namespace allio::posix;
 
 vsm::result<void> raw_socket_t::connect(
 	native_type& h,
-	io_parameters_t<connect_t> const& args)
+	io_parameters_t<raw_socket_t, connect_t> const& a)
 {
-	vsm_try(addr, socket_address::make(args.endpoint));
+	vsm_try(addr, socket_address::make(a.endpoint));
 	vsm_try(protocol, choose_protocol(addr.addr.sa_family, SOCK_STREAM));
 
 	vsm_try_bind((socket, flags), create_socket(
@@ -22,7 +22,7 @@ vsm::result<void> raw_socket_t::connect(
 	vsm_try_void(socket_connect(
 		socket.get(),
 		addr,
-		args.deadline));
+		a.deadline));
 
 	h = native_type
 	{
@@ -39,37 +39,37 @@ vsm::result<void> raw_socket_t::connect(
 	return {};
 }
 
-vsm::result<size_t> raw_socket_t::read_some(
+vsm::result<size_t> raw_socket_t::read(
 	native_type const& h,
-	io_parameters_t<read_some_t> const& args)
+	io_parameters_t<raw_socket_t, read_some_t> const& a)
 {
 	socket_type const socket = unwrap_socket(h.platform_handle);
 
-	if (args.deadline != deadline::never())
+	if (a.deadline != deadline::never())
 	{
-		vsm_try_void(socket_poll_or_timeout(socket, socket_poll_r, args.deadline));
+		vsm_try_void(socket_poll_or_timeout(socket, socket_poll_r, a.deadline));
 	}
 
-	return socket_scatter_read(socket, args.buffers.buffers());
+	return socket_scatter_read(socket, a.buffers.buffers());
 }
 
-vsm::result<size_t> raw_socket_t::write_some(
+vsm::result<size_t> raw_socket_t::write(
 	native_type const& h,
-	io_parameters_t<write_some_t> const& args)
+	io_parameters_t<raw_socket_t, write_some_t> const& a)
 {
 	socket_type const socket = unwrap_socket(h.platform_handle);
 
-	if (args.deadline != deadline::never())
+	if (a.deadline != deadline::never())
 	{
-		vsm_try_void(socket_poll_or_timeout(socket, socket_poll_w, args.deadline));
+		vsm_try_void(socket_poll_or_timeout(socket, socket_poll_w, a.deadline));
 	}
 
-	return socket_gather_write(socket, args.buffers.buffers());
+	return socket_gather_write(socket, a.buffers.buffers());
 }
 
 vsm::result<void> raw_socket_t::close(
 	native_type& h,
-	io_parameters_t<close_t> const& args)
+	io_parameters_t<raw_socket_t, close_t> const&)
 {
 	if (h.platform_handle != native_platform_handle::null)
 	{

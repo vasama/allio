@@ -26,7 +26,7 @@ enum class key_context : uintptr_t
 } // namespace
 
 
-vsm::result<iocp_multiplexer> iocp_multiplexer::_create(io_parameters_t<create_t> const& args)
+vsm::result<iocp_multiplexer> iocp_multiplexer::_create(create_parameters const& args)
 {
 	if (args.max_concurrent_threads == 0)
 	{
@@ -58,7 +58,7 @@ iocp_multiplexer::iocp_multiplexer(vsm::intrusive_ptr<shared_state_t> shared_sta
 }
 
 
-vsm::result<void> iocp_multiplexer::attach_handle(native_platform_handle const handle, connector_type& c)
+vsm::result<void> iocp_multiplexer::attach_handle(native_platform_handle const handle, connector_type&)
 {
 	return set_completion_information(
 		unwrap_handle(handle),
@@ -66,7 +66,7 @@ vsm::result<void> iocp_multiplexer::attach_handle(native_platform_handle const h
 		std::bit_cast<void*>(key_context::generic));
 }
 
-vsm::result<void> iocp_multiplexer::detach_handle(native_platform_handle const handle, connector_type& c)
+vsm::result<void> iocp_multiplexer::detach_handle(native_platform_handle const handle, connector_type&)
 {
 	return set_completion_information(
 		unwrap_handle(handle),
@@ -181,7 +181,7 @@ bool iocp_multiplexer::cancel_wait(wait_packet const packet, wait_slot& slot)
 }
 
 
-vsm::result<bool> iocp_multiplexer::_poll(io_parameters_t<poll_t> const& args)
+vsm::result<bool> iocp_multiplexer::_poll(poll_parameters const& args)
 {
 	FILE_IO_COMPLETION_INFORMATION entries[32];
 
