@@ -4,10 +4,9 @@
 #include <allio/sync_wait.hpp>
 #include <allio/task.hpp>
 #include <allio/test/network.hpp>
+#include <allio/test/spawn.hpp>
 
 #include <catch2/catch_all.hpp>
-
-#include <future>
 
 using namespace allio;
 namespace ex = stdexec;
@@ -22,7 +21,7 @@ TEST_CASE("a stream socket can connect to a listening socket and exchange data",
 	auto const endpoint = test::generate_endpoint();
 	auto const listen_socket = listen<listen_socket_object>(endpoint).value();
 
-	auto connect_future = std::async(std::launch::async, [&]()
+	auto connect_future = test::spawn([&]()
 	{
 		return connect<socket_object>(endpoint);
 	});
@@ -30,21 +29,21 @@ TEST_CASE("a stream socket can connect to a listening socket and exchange data",
 	auto const server_socket = listen_socket.accept().value().socket;
 	auto const client_socket = connect_future.get().value();
 
-	SECTION("the server socket has no data to read")
+	SECTION("The server socket has no data to read")
 	{
 		signed char value = 0;
 		auto const r = server_socket.read_some(as_read_buffer(&value, 1), deadline::instant());
 		REQUIRE(r.error() == error::async_operation_timed_out);
 	}
 
-	SECTION("the client socket has no data to read")
+	SECTION("The client socket has no data to read")
 	{
 		signed char value = 0;
 		auto const r = client_socket.read_some(as_read_buffer(&value, 1), deadline::instant());
 		REQUIRE(r.error() == error::async_operation_timed_out);
 	}
 
-	SECTION("the client can send data to the server")
+	SECTION("The client can send data to the server")
 	{
 		signed char value = 42;
 		REQUIRE(client_socket.write_some(as_write_buffer(&value, 1)).value() == 1);
@@ -54,7 +53,7 @@ TEST_CASE("a stream socket can connect to a listening socket and exchange data",
 		REQUIRE(value == 42);
 	}
 
-	SECTION("the server can send data to the client")
+	SECTION("The server can send data to the client")
 	{
 		signed char value = 42;
 		REQUIRE(server_socket.write_some(as_write_buffer(&value, 1)).value() == 1);

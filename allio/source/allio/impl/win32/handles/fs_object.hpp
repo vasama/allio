@@ -6,7 +6,7 @@
 
 namespace allio::win32 {
 
-using open_args = filesystem_handle::open_t::optional_params_type;
+using open_args = detail::fs_io::open_t::optional_params_type;
 
 enum class open_kind
 {
@@ -15,11 +15,13 @@ enum class open_kind
 };
 
 
+#if 0
 vsm::result<unique_handle_with_flags> create_file(
 	HANDLE hint_handle,
 	file_id_128 const& id,
 	open_kind kind,
 	open_args const& args);
+#endif
 
 vsm::result<unique_handle_with_flags> create_file(
 	HANDLE base_handle,

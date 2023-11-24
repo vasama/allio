@@ -24,13 +24,10 @@ struct openssl_ssl_ctx_deleter
 		openssl_release_ssl_ctx(ssl_ctx);
 	}
 };
-
 using openssl_ssl_ctx_ptr = std::unique_ptr<openssl_ssl_ctx, openssl_ssl_ctx_deleter>;
 
-
-vsm::result<openssl_ssl_ctx_ptr> create_client_ssl_ctx(security_context_parameters const& args);
-vsm::result<openssl_ssl_ctx_ptr> create_server_ssl_ctx(security_context_parameters const& args);
-
+vsm::result<openssl_ssl_ctx_ptr> openssl_create_client_ssl_ctx(security_context_parameters const& args);
+vsm::result<openssl_ssl_ctx_ptr> openssl_create_server_ssl_ctx(security_context_parameters const& args);
 
 class openssl_security_context
 {
@@ -51,82 +48,118 @@ inline openssl_ssl_ctx* openssl_get_ssl_ctx(openssl_security_context const& secu
 }
 
 
-enum class openssl_request_status : unsigned char
-{
-	none,
-	pending,
-	completed,
-};
+struct openssl_ssl;
 
-enum class openssl_request_kind : bool
+void openssl_release_ssl(openssl_ssl* ssl);
+
+struct openssl_ssl_deleter
 {
-	read,
-	write,
+	void vsm_static_operator_invoke(openssl_ssl* const ssl)
+	{
+		openssl_release_ssl(ssl);
+	}
 };
+using openssl_ssl_ptr = std::unique_ptr<openssl_ssl, openssl_ssl_deleter>;
+
 
 template<typename T>
-using openssl_io_result = vsm::result<T, openssl_request_kind>;
+using openssl_result = vsm::result<T, std::monostate>;
 
-class openssl_ssl
+struct openssl_state_base
 {
-protected:
-	openssl_request_status m_request_status;
-	openssl_request_kind m_request_kind;
-	union
-	{
-		std::byte* m_request_read;
-		std::byte const* m_request_write;
-	};
-	size_t m_request_size;
+	struct bio_type;
+
+	openssl_ssl_ptr m_ssl;
+
+	std::byte* m_r_beg = nullptr;
+	std::byte* m_r_pos = nullptr;
+	std::byte* m_r_end = nullptr;
+
+	std::byte* m_w_beg = nullptr;
+	std::byte* m_w_pos = nullptr;
+	std::byte* m_w_end = nullptr;
+
+	bool m_want_read = false;
+	bool m_want_write = false;
+
+	vsm::result<openssl_ssl_ptr> create_ssl(openssl_ssl_ctx* ssl_ctx);
+
+	vsm::result<openssl_result<void>> accept();
+	vsm::result<openssl_result<void>> connect();
+	vsm::result<openssl_result<void>> disconnect();
+
+	vsm::result<openssl_result<size_t>> read(read_buffer user_buffer);
+	vsm::result<openssl_result<size_t>> write(write_buffer user_buffer);
+};
+
+#if 0
+//TODO: Move elsewhere
+template<typename Allocator, size_t BufferSize>
+class allocator_buffer_pool_handle
+{
+	static_assert(std::is_same_v<typename Allocator::value_type, std::byte>);
+	vsm_no_unique_address Allocator m_allocator;
 
 public:
-	static vsm::result<openssl_ssl*> create(openssl_ssl_ctx* ssl_ctx);
-	void delete_context();
+	using buffer_pool_handle_concept = void;
 
-	vsm::result<openssl_io_result<void>> connect();
-	vsm::result<openssl_io_result<void>> disconnect();
-	vsm::result<openssl_io_result<void>> accept();
-
-	vsm::result<openssl_io_result<size_t>> read(void* data, size_t size);
-	vsm::result<openssl_io_result<size_t>> write(void const* data, size_t size);
-
-	read_buffer get_read_buffer()
+	class buffer_handle_type
 	{
-		vsm_assert(m_request_status == openssl_request_status::pending);
-		vsm_assert(m_request_kind == openssl_request_kind::read);
-		return read_buffer(m_request_read, m_request_size);
+		std::byte* m_buffer;
+
+	public:
+		[[nodiscard]] std::byte* data() const
+		{
+			return m_buffer;
+		}
+
+		[[nodiscard]] size_t size() const
+		{
+			return BufferSize;
+		}
+
+	private:
+		explicit buffer_handle_type(std::byte* const buffer)
+			: m_buffer(buffer)
+		{
+		}
+
+		friend allocator_buffer_pool_handle;
+	};
+
+	[[nodiscard]] vsm::result<buffer_handle_type> acquire()
+	{
+		try
+		{
+			return buffer_handle_type(m_allocator.allocate(BufferSize));
+		}
+		catch (std::bad_alloc const&)
+		{
+			return vsm::unexpected(error::not_enough_memory);
+		}
 	}
 
-	void read_completed(size_t const transferred)
+	void release(buffer_handle_type const buffer)
 	{
-		vsm_assert(m_request_status == openssl_request_status::pending);
-		vsm_assert(m_request_kind == openssl_request_kind::read);
-		vsm_assert(transferred <= m_request_size);
-		m_request_size = transferred;
-		m_request_status = openssl_request_status::completed;
+		m_allocator.deallocate(m_buffer, BufferSize);
 	}
-
-	write_buffer get_write_buffer()
-	{
-		vsm_assert(m_request_status == openssl_request_status::pending);
-		vsm_assert(m_request_kind == openssl_request_kind::write);
-		return write_buffer(m_request_write, m_request_size);
-	}
-
-	void write_completed(size_t const transferred)
-	{
-		vsm_assert(m_request_status == openssl_request_status::pending);
-		vsm_assert(m_request_kind == openssl_request_kind::write);
-		vsm_assert(transferred <= m_request_size);
-		m_request_size = transferred;
-		m_request_status = openssl_request_status::completed;
-	}
-
-protected:
-	openssl_ssl() = default;
-	openssl_ssl(openssl_ssl const&) = default;
-	openssl_ssl& operator=(openssl_ssl const&) = default;
-	~openssl_ssl() = default;
 };
+
+template<typename BufferPoolHandle>
+class openssl_state : openssl_state_base
+{
+	using buffer_handle_type = typename BufferPoolHandle::buffer_handle_type;
+
+	vsm_no_unique_address BufferPoolHandle m_buffer_pool_handle;
+	buffer_handle_type m_r_buffer;
+	buffer_handle_type m_w_buffer;
+
+public:
+	
+};
+
+template<typename BufferPool>
+using openssl_state_ptr = std::unique_ptr<openssl_state<BufferPool>>;
+#endif
 
 } // namespace allio::detail

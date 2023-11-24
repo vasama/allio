@@ -1,8 +1,11 @@
 #include <allio/openssl/detail/openssl.hpp>
 #include <allio/error.hpp>
-#include "../../../../../../allio/source/allio/impl/new.hpp"
+#include <allio/file.hpp>
+#include <allio/impl/new.hpp>
+#include <allio/impl/secrets.hpp>
 
 #include <vsm/assert.h>
+#include <vsm/defer.hpp>
 #include <vsm/standard.hpp>
 
 #include <openssl/err.h>
@@ -101,54 +104,71 @@ struct openssl_deleter
 template<typename T, auto Function>
 using openssl_ptr = std::unique_ptr<T, openssl_deleter<T, Function>>;
 
+template<auto Make, typename... Args>
+using openssl_make_object_t = std::remove_pointer_t<std::invoke_result_t<decltype(Make), Args...>>;
+
 template<auto Make, auto Free, typename... Args>
-static auto openssl_make(Args const... args)
-	-> vsm::result<openssl_ptr<std::remove_pointer_t<std::invoke_result_t<decltype(Make), Args...>>, Free>>
+using openssl_make_ptr_t = openssl_ptr<openssl_make_object_t<Make, Args...>, Free>;
+
+template<auto Make, auto Free, typename... Args>
+static vsm::result<openssl_make_ptr_t<Make, Free, Args...>> openssl_make(Args const... args)
 {
 	auto* const ptr = Make(args...);
 
 	if (ptr == nullptr)
 	{
+		ERR_print_errors_fp(stderr);
 		return vsm::unexpected(get_last_openssl_error());
 	}
 
-	return openssl_ptr<std::remove_pointer_t<std::invoke_result_t<decltype(Make), Args...>>, Free>(ptr);
+	return vsm_lazy(openssl_make_ptr_t<Make, Free, Args...>(ptr));
 }
 
 
 using bio_method_ptr = openssl_ptr<BIO_METHOD, BIO_meth_free>;
-using bio_ptr = openssl_ptr<BIO, BIO_free>;
+using bio_ptr = openssl_ptr<BIO, BIO_free_all>;
+
+template<typename Signature>
+struct _bio_function
+{
+	static_assert(sizeof(Signature));
+};
+
+template<typename Data, typename R, typename... P>
+struct _bio_function<R(&)(Data&, P...)>
+{
+	template<R F(Data&, P...)>
+	static R function(BIO* const bio, P const... args)
+	{
+		return F(*static_cast<Data*>(BIO_get_data(bio)), args...);
+	}
+};
+
+template<typename Data, typename R, typename... P>
+struct _bio_function<R(&)(Data&, BIO*, P...)>
+{
+	template<R F(Data&, BIO*, P...)>
+	static R function(BIO* const bio, P const... args)
+	{
+		return F(*static_cast<Data*>(BIO_get_data(bio)), bio, args...);
+	}
+};
+
+template<auto& F>
+inline constexpr auto& bio_function = _bio_function<decltype(F)>::template function<F>;
 
 template<typename T>
-struct _bio_function;
-
-template<typename Bio, typename R, typename... P>
-struct _bio_function<R(Bio::*)(P...)>
+static int bio_method_destroy(BIO* const bio)
 {
-	template<R(Bio::* F)(P...)>
-	static R function(BIO* const bio, P const... args)
-	{
-		return (static_cast<Bio*>(BIO_get_data(bio))->*F)(args...);
-	}
-};
+	delete static_cast<typename T::data_type*>(BIO_get_data(bio));
+	return 1;
+}
 
-template<typename Bio, typename R, typename... P>
-struct _bio_function<R(Bio::*)(BIO*, P...)>
-{
-	template<R(Bio::* F)(BIO*, P...)>
-	static R function(BIO* const bio, P const... args)
-	{
-		return (static_cast<Bio*>(BIO_get_data(bio))->*F)(bio, args...);
-	}
-};
-
-template<auto F>
-inline constexpr auto bio_function = &_bio_function<decltype(F)>::template function<F>;
-
-template<typename Bio>
+template<typename T, bool Owner>
 static vsm::result<bio_method_ptr> create_bio_method()
 {
-	int const index = BIO_get_new_index();
+	static int const index = BIO_get_new_index();
+
 	if (index == -1)
 	{
 		return vsm::unexpected(get_last_openssl_error());
@@ -156,178 +176,246 @@ static vsm::result<bio_method_ptr> create_bio_method()
 
 	vsm_try(method, openssl_make<BIO_meth_new, BIO_meth_free>(
 		index | BIO_TYPE_SOURCE_SINK,
-		Bio::bio_name));
+		T::name));
 
-#if 0
-	vsm_verify(BIO_meth_set_destroy(method.get(), [](BIO* const bio) -> int
+	if constexpr (requires { T::read_ex; })
 	{
-		delete static_cast<Bio*>(BIO_get_data(bio));
-		return 0;
-	}));
-#endif
-
-	vsm_verify(BIO_meth_set_read_ex(method.get(), bio_function<&Bio::read_ex>));
-	vsm_verify(BIO_meth_set_write_ex(method.get(), bio_function<&Bio::write_ex>));
-	vsm_verify(BIO_meth_set_ctrl(method.get(), bio_function<&Bio::ctrl>));
+		vsm_verify(BIO_meth_set_read_ex(method.get(), bio_function<T::read_ex>));
+	}
+	if constexpr (requires { T::write_ex; })
+	{
+		vsm_verify(BIO_meth_set_write_ex(method.get(), bio_function<T::write_ex>));
+	}
+	if constexpr (requires { T::ctrl; })
+	{
+		vsm_verify(BIO_meth_set_ctrl(method.get(), bio_function<T::ctrl>));
+	}
+	if constexpr (requires { T::gets; })
+	{
+		vsm_verify(BIO_meth_set_gets(method.get(), bio_function<T::gets>));
+	}
+	if constexpr (Owner)
+	{
+		vsm_verify(BIO_meth_set_destroy(method.get(), bio_method_destroy<T>));
+	}
 
 	return method;
 }
 
-template<typename Bio>
-static vsm::result<bio_ptr> create_bio(Bio& bio_object, auto&&... args)
+template<typename T>
+static vsm::result<bio_ptr> create_bio(typename T::data_type& data)
 {
-	static auto const method_r = create_bio_method<Bio>();
+	static auto const method_r = create_bio_method<T, false>();
 
 	vsm_try((auto const&, method), method_r);
-	vsm_try(bio, openssl_make<BIO_new, BIO_free>(method.get()));
-	BIO_set_data(bio.get(), &bio_object);
+	vsm_try(bio, openssl_make<BIO_new, BIO_free_all>(method.get()));
+	BIO_set_data(bio.get(), &data);
+
+	return bio;
+}
+
+template<typename T>
+static vsm::result<bio_ptr> create_bio(std::unique_ptr<typename T::data_type> data)
+{
+	static auto const method_r = create_bio_method<T, true>();
+
+	vsm_try((auto const&, method), method_r);
+	vsm_try(bio, openssl_make<BIO_new, BIO_free_all>(method.get()));
+	BIO_set_data(bio.get(), data.release());
 
 	return bio;
 }
 
 
-using ssl_ctx_ptr = openssl_ptr<SSL_CTX, SSL_CTX_free>;
-using ssl_ptr = openssl_ptr<SSL, SSL_free>;
-
-static vsm::result<ssl_ctx_ptr> create_ssl_ctx(SSL_METHOD const* const ssl_method)
+static vsm::result<bio_ptr> make_memory_bio(std::span<std::byte const> const buffer)
 {
-	vsm_try(ctx, openssl_make<SSL_CTX_new, SSL_CTX_free>(ssl_method));
-
-	if (!SSL_CTX_set_min_proto_version(ctx.get(), TLS1_2_VERSION))
+	if (buffer.size() > std::numeric_limits<int>::max())
 	{
-		return vsm::unexpected(get_last_openssl_error());
+		return vsm::unexpected(error::invalid_argument);
 	}
 
-	if (!SSL_CTX_set_cipher_list(ctx.get(), OSSL_default_cipher_list()))
-	{
-		return vsm::unexpected(get_last_openssl_error());
-	}
-
-	if (!SSL_CTX_set_ciphersuites(ctx.get(), OSSL_default_ciphersuites()))
-	{
-		return vsm::unexpected(get_last_openssl_error());
-	}
-
-	return ctx;
+	return openssl_make<BIO_new_mem_buf, BIO_free_all>(
+		buffer.data(),
+		static_cast<int>(buffer.size()));
 }
 
-template<auto Function>
-static vsm::result<openssl_io_result<int>> ssl_try(SSL* const ssl, auto const... args)
+static vsm::result<bio_ptr> push_buffer_bio(bio_ptr bio)
 {
-	int const r = Function(ssl, args...);
-
-	if (r < 0)
-	{
-		switch (int const e = SSL_get_error(ssl, r))
-		{
-		case SSL_ERROR_WANT_READ:
-			return openssl_io_result<int>(vsm::unexpected(openssl_request_kind::read));
-
-		case SSL_ERROR_WANT_WRITE:
-			return openssl_io_result<int>(vsm::unexpected(openssl_request_kind::write));
-
-		default:
-			ERR_load_SSL_strings();
-			ERR_print_errors_fp(stderr);
-			return vsm::unexpected(static_cast<ssl_error>(e));
-		}
-	}
-
-	return r;
+	vsm_try(buffer_bio, openssl_make<BIO_new, BIO_free_all>(BIO_f_buffer()));
+	vsm_verify(BIO_push(buffer_bio.get(), bio.release()) == buffer_bio.get());
+	return buffer_bio;
 }
 
 
-
-struct ssl_implementation : openssl_ssl
+struct file_bio
 {
-	static constexpr char bio_name[] = "ALLIO Socket R/W BIO";
+	static constexpr char name[] = "ALLIO_FILE_BIO";
 
-	bio_ptr bio;
-	ssl_ptr ssl;
-
-	ssl_implementation()
+	struct data_type
 	{
-		m_request_status = openssl_request_status::none;
-	}
+		blocking::file_handle file;
+		fs_size file_offset;
+		std::error_code file_error;
 
-	int read_ex(BIO* const bio, char* const buffer, size_t size, size_t* const transferred)
-	{
-		switch (m_request_status)
+		explicit data_type(blocking::file_handle&& file)
+			: file(vsm_move(file))
+			, file_offset(0)
+			, file_error{}
 		{
-		case openssl_request_status::none:
-			m_request_status = openssl_request_status::pending;
-			m_request_kind = openssl_request_kind::read;
-			m_request_read = reinterpret_cast<std::byte*>(buffer);
-			m_request_size = size;
-			break;
+		}
+	};
 
-		case openssl_request_status::pending:
-			break;
+	static int read_ex(data_type& data, char* const buffer, size_t const size, size_t* const transferred)
+	{
+		auto const r = data.file.read_some(data.file_offset, as_read_buffer(buffer, size));
 
-		case openssl_request_status::completed:
-			if (m_request_kind == openssl_request_kind::read)
-			{
-				vsm_assert(m_request_read == reinterpret_cast<std::byte*>(buffer));
-				vsm_assert(m_request_size <= size);
-				m_request_status = openssl_request_status::none;
-				*transferred = m_request_size;
-				return 1;
-			}
-			break;
+		if (!r)
+		{
+			data.file_error = r.error();
+			return 0;
 		}
 
-		BIO_set_retry_read(bio);
-		return 0;
+		*transferred = *r;
+		return 1;
 	}
 
-	int write_ex(BIO* const bio, char const* const buffer, size_t size, size_t* const transferred)
+	static int write_ex(data_type& data, char const* const buffer, size_t const size, size_t* const transferred)
 	{
-		switch (m_request_status)
+		auto const r = data.file.write_some(data.file_offset, as_write_buffer(buffer, size));
+
+		if (!r)
 		{
-		case openssl_request_status::none:
-			m_request_status = openssl_request_status::pending;
-			m_request_kind = openssl_request_kind::write;
-			m_request_write = reinterpret_cast<std::byte const*>(buffer);
-			m_request_size = size;
-			break;
-
-		case openssl_request_status::pending:
-			break;
-
-		case openssl_request_status::completed:
-			if (m_request_kind == openssl_request_kind::write)
-			{
-				vsm_assert(m_request_read == reinterpret_cast<std::byte const*>(buffer));
-				vsm_assert(m_request_size <= size);
-				m_request_status = openssl_request_status::none;
-				*transferred = m_request_size;
-				return 1;
-			}
-			break;
+			data.file_error = r.error();
+			return 0;
 		}
 
-		BIO_set_retry_write(bio);
-		return 0;
+		*transferred = *r;
+		return 1;
 	}
 
-	long ctrl(BIO* const bio, int const cmd, long const larg, void* const parg)
+	static long ctrl(data_type& data, int const cmd, long const larg, void* const parg)
 	{
 		switch (cmd)
 		{
-		case BIO_CTRL_EOF:
 		case BIO_CTRL_PUSH:
 		case BIO_CTRL_POP:
 			return 0;
 
+		case BIO_CTRL_EOF:
+			return 0; //TODO
+
 		case BIO_CTRL_FLUSH:
+			return 1;
+
+		case BIO_C_FILE_TELL:
+			if (data.file_offset > std::numeric_limits<long>::max())
+			{
+				return -1;
+			}
+			return static_cast<long>(data.file_offset);
+
+		case BIO_C_FILE_SEEK:
+			if (larg < 0)
+			{
+				return -1;
+			}
+			data.file_offset = static_cast<size_t>(larg);
 			return 1;
 		}
 		return -1;
 	}
 };
 
-//static constexpr size_t context_buffer_size = 256;
-//static constexpr size_t context_buffer_offset = offsetof(ssl_implementation, buffer);
+static vsm::result<bio_ptr> make_raw_file_bio(fs_path const& path)
+{
+	vsm_try(file, blocking::open_file(path, file_mode::read));
+	vsm_try(data, make_unique<file_bio::data_type>(vsm_move(file)));
+	return create_bio<file_bio>(vsm_move(data));
+}
+
+static vsm::result<bio_ptr> make_file_bio(fs_path const& path)
+{
+	vsm_try(bio, make_raw_file_bio(path));
+	//TODO: Make sure the buffer BIO clears its buffers on free.
+	return push_buffer_bio(vsm_move(bio));
+}
+
+
+template<typename Callable>
+auto read_secret(tls_secret const& secret, Callable&& callable)
+	-> std::invoke_result_t<Callable&&, BIO*>
+{
+	switch (secret.kind())
+	{
+	case tls_secret_kind::none:
+		break;
+
+	case tls_secret_kind::data:
+		{
+			vsm_try(bio, make_memory_bio(secret.data()));
+			return vsm_forward(callable)(bio.get());
+		}
+		break;
+
+	case tls_secret_kind::path:
+		{
+			vsm_try(bio, make_file_bio(secret.path()));
+			return vsm_forward(callable)(bio.get());
+		}
+		break;
+	}
+
+	return nullptr;
+}
+
+using x509_ptr = openssl_ptr<X509, X509_free>;
+
+static vsm::result<x509_ptr> read_x509(tls_secret const& secret)
+{
+	return read_secret(secret, [&](BIO* const bio)
+	{
+		//TODO: User specified format
+		return openssl_make<PEM_read_bio_X509, X509_free>(bio, nullptr, nullptr, nullptr);
+	});
+}
+
+using pkey_ptr = openssl_ptr<EVP_PKEY, EVP_PKEY_free>;
+
+static vsm::result<pkey_ptr> read_pkey(tls_secret const& secret)
+{
+	return read_secret(secret, [&](BIO* const bio)
+	{
+		//TODO: User specified format
+		return openssl_make<PEM_read_bio_PrivateKey, EVP_PKEY_free>(bio, nullptr, nullptr, nullptr);
+	});
+}
+
+
+using ssl_ctx_ptr = openssl_ptr<SSL_CTX, SSL_CTX_free>;
+using ssl_ptr = openssl_ptr<SSL, SSL_free>;
+
+template<auto Function>
+static vsm::result<openssl_result<int>> ssl_try(SSL* const ssl, auto const... args)
+{
+	int const r = Function(ssl, args...);
+
+	if (r >= 0)
+	{
+		return r;
+	}
+
+	int const e = SSL_get_error(ssl, r);
+
+	switch (e)
+	{
+	case SSL_ERROR_WANT_READ:
+	case SSL_ERROR_WANT_WRITE:
+		return vsm::success(vsm::unexpected(std::monostate()));
+	}
+
+	ERR_print_errors_fp(stderr); //TODO
+	return vsm::unexpected(static_cast<ssl_error>(e));
+}
 
 } // namespace
 
@@ -359,27 +447,10 @@ static vsm::result<int> get_tls_version(security_context_parameters const& args)
 	return vsm::unexpected(error::invalid_argument);
 }
 
-static int get_verification(security_context_parameters const& args, bool const client)
-{
-	auto const default_value = client
-		? tls_verification::optional
-		: tls_verification::required;
-
-	int verify = SSL_VERIFY_NONE;
-	switch (args.tls_verification.value_or(default_value))
-	{
-	case tls_verification::required:
-	case tls_verification::optional:
-		verify = SSL_VERIFY_PEER;
-		break;
-	}
-	return verify;
-}
-
 static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(security_context_parameters const& args, bool const client)
 {
-	vsm_try(ssl_ctx, openssl_make<SSL_CTX_new, SSL_CTX_free>(
-		client ? TLS_client_method() : TLS_server_method()));
+	auto const ssl_method = client ? TLS_client_method() : TLS_server_method();
+	vsm_try(ssl_ctx, openssl_make<SSL_CTX_new, SSL_CTX_free>(ssl_method));
 
 	vsm_try(min_version, get_tls_version(args));
 	if (!SSL_CTX_set_min_proto_version(ssl_ctx.get(), min_version))
@@ -387,95 +458,301 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(security_context_paramete
 		return vsm::unexpected(get_last_openssl_error());
 	}
 
-	int const verification = get_verification(args, client);
-	SSL_CTX_set_verify(
-		ssl_ctx.get(),
-		get_verification(args, client),
-		nullptr); //TODO: Verify callback
-
-#if 0
-	if (!SSL_CTX_use_certificate_file(
-		ssl_ctx.get(),
-		))
+	// Configure peer verification
 	{
-		return vsm::unexpected(get_last_openssl_error());
+		int verify = SSL_VERIFY_NONE;
+
+		auto const default_verification = client
+			? tls_verification::required
+			: tls_verification::optional;
+
+		switch (args.tls_verification.value_or(default_verification))
+		{
+		case tls_verification::none:
+			break;
+
+		case tls_verification::required:
+			verify = SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
+			break;
+
+		case tls_verification::optional:
+			if (client)
+			{
+				// OpenSSL does not support optional server verification.
+				return vsm::unexpected(error::unsupported_operation);
+			}
+			verify = SSL_VERIFY_PEER;
+			break;
+		}
+
+		SSL_CTX_set_verify(
+			ssl_ctx.get(),
+			verify,
+			nullptr); //TODO: Verify callback
+
+		if (verify != SSL_VERIFY_NONE)
+		{
+			if (client)
+			{
+#if 1 //TODO: Just for testing
+				if (!SSL_CTX_load_verify_file(
+					ssl_ctx.get(),
+					"D:\\Code\\allio\\tls\\openssl\\keys\\server-certificate.pem"))
+				{
+					return vsm::unexpected(get_last_openssl_error());
+				}
+#else
+				if (!SSL_CTX_set_default_verify_paths(ssl_ctx.get()))
+				{
+					return vsm::unexpected(get_last_openssl_error());
+				}
+#endif
+			}
+		}
 	}
 
-	if (!SSL_CTX_use_PrivateKey_file(
-		ssl_ctx.get(),
-		))
+	if (args.tls_certificate)
 	{
-		return vsm::unexpected(get_last_openssl_error());
+		vsm_try(x509, read_x509(args.tls_certificate));
+		SSL_CTX_use_certificate(ssl_ctx.get(), x509.get());
+	}
+
+	if (args.tls_private_key)
+	{
+		vsm_try(pkey, read_pkey(args.tls_private_key));
+		SSL_CTX_use_PrivateKey(ssl_ctx.get(), pkey.get());
+	}
+
+#if 0
+	switch (args.tls_certificate.kind())
+	{
+	case tls_secret_kind::none:
+		break;
+
+	case tls_secret_kind::data:
+		{
+			//TODO: User specified format
+			auto const data = args.tls_certificate.data();
+			if (!SSL_CTX_use_certificate_ASN1(
+				ssl_ctx.get(),
+				//TODO: Checked saturate
+				data.size(),
+				reinterpret_cast<unsigned char const*>(data.data())))
+			{
+				return vsm::unexpected(get_last_openssl_error());
+			}
+		}
+		break;
+
+	case tls_secret_kind::path:
+		{
+			//TODO: User specified format
+			if (!SSL_CTX_use_certificate_file(
+				ssl_ctx.get(),
+				args.tls_certificate.path(),
+				SSL_FILETYPE_PEM))
+			{
+				return vsm::unexpected(get_last_openssl_error());
+			}
+		}
+		break;
+	}
+
+	switch (args.tls_private_key.kind())
+	{
+	case tls_secret_kind::none:
+		break;
+
+	case tls_secret_kind::data:
+		{
+			//TODO: User specified format
+			auto const data = args.tls_private_key.data();
+			if (!SSL_CTX_use_PrivateKey_ASN1(
+				EVP_PKEY_NONE,
+				ssl_ctx.get(),
+				reinterpret_cast<unsigned char const*>(data.data()),
+				//TODO: Checked saturate
+				data.size()))
+			{
+				return vsm::unexpected(get_last_openssl_error());
+			}
+		}
+		break;
+
+	case tls_secret_kind::path:
+		{
+			//TODO: User specified format
+			if (!SSL_CTX_use_PrivateKey_file(
+				ssl_ctx.get(),
+				args.tls_private_key.path(),
+				SSL_FILETYPE_PEM))
+			{
+				return vsm::unexpected(get_last_openssl_error());
+			}
+		}
+		break;
 	}
 #endif
 
 	return vsm_lazy(openssl_ssl_ctx_ptr(reinterpret_cast<openssl_ssl_ctx*>(ssl_ctx.release())));
 }
 
-vsm::result<openssl_ssl_ctx_ptr> detail::create_client_ssl_ctx(security_context_parameters const& args)
+vsm::result<openssl_ssl_ctx_ptr> detail::openssl_create_client_ssl_ctx(security_context_parameters const& args)
 {
 	return create_ssl_ctx(args, /* client: */ true);
 }
 
-vsm::result<openssl_ssl_ctx_ptr> detail::create_server_ssl_ctx(security_context_parameters const& args)
+vsm::result<openssl_ssl_ctx_ptr> detail::openssl_create_server_ssl_ctx(security_context_parameters const& args)
 {
 	return create_ssl_ctx(args, /* client: */ false);
 }
 
+void detail::openssl_release_ssl(openssl_ssl* const ssl)
+{
+	SSL_free(reinterpret_cast<SSL*>(ssl));
+}
 
-vsm::result<openssl_ssl*> openssl_ssl::create(openssl_ssl_ctx* const _ssl_ctx)
+
+struct openssl_state_base::bio_type
+{
+	static constexpr char name[] = "ALLIO_RW_BIO";
+
+	using data_type = openssl_state_base;
+
+	static int read_ex(
+		data_type& data,
+		BIO* const bio,
+		char* const buffer,
+		size_t const size,
+		size_t* const transferred)
+	{
+		std::byte* const r_pos = data.m_r_pos;
+		size_t const remaining = data.m_r_end - r_pos;
+
+		if (remaining == 0)
+		{
+			data.m_want_read = true;
+			BIO_set_retry_read(bio);
+			return 0;
+		}
+
+		size_t const transfer_size = std::min(size, remaining);
+
+		memcpy(buffer, r_pos, transfer_size);
+		data.m_r_pos = r_pos + transfer_size;
+		data.m_want_read = false;
+
+		*transferred = transfer_size;
+		return 1;
+	}
+
+	static int write_ex(
+		data_type& data,
+		BIO* const bio,
+		char const* const buffer,
+		size_t const size,
+		size_t* const transferred)
+	{
+		std::byte* const w_pos = data.m_w_pos;
+		size_t const remaining = data.m_w_end - w_pos;
+
+		if (remaining == 0)
+		{
+			data.m_want_write = true;
+			BIO_set_retry_write(bio);
+			return 0;
+		}
+
+		size_t const transfer_size = std::min(size, remaining);
+
+		memcpy(w_pos, buffer, transfer_size);
+		data.m_w_pos = w_pos + transfer_size;
+		data.m_want_write = true;
+
+		*transferred = transfer_size;
+		return 1;
+	}
+
+	static long ctrl(
+		data_type& data,
+		int const cmd,
+		long const larg,
+		void* const parg)
+	{
+		switch (cmd)
+		{
+		case BIO_CTRL_EOF:
+		//case BIO_CTRL_PUSH:
+		//case BIO_CTRL_POP:
+			return 0;
+
+		case BIO_CTRL_FLUSH:
+			return 1;
+		}
+		return -1;
+	}
+};
+
+vsm::result<openssl_ssl_ptr> openssl_state_base::create_ssl(openssl_ssl_ctx* const _ssl_ctx)
 {
 	auto const ssl_ctx = reinterpret_cast<SSL_CTX*>(_ssl_ctx);
 
-	//void* const storage = operator new(context_buffer_offset + context_buffer_size);
-	//if (storage == nullptr)
-	//{
-	//	return vsm::unexpected(allio::error::not_enough_memory);
-	//}
-	//
-	//auto self = std::unique_ptr<ssl_implementation>(new ssl_implementation(context_buffer_size));
-	vsm_try(self, make_unique<ssl_implementation>());
+	vsm_try(bio, create_bio<openssl_state_base::bio_type>(*this));
+	vsm_try(ssl, openssl_make<SSL_new, SSL_free>(ssl_ctx));
 
-	vsm_try_assign(self->bio, create_bio<ssl_implementation>(*self));
-	vsm_try_assign(self->ssl, openssl_make<SSL_new, SSL_free>(ssl_ctx));
-	SSL_set_bio(self->ssl.get(), self->bio.get(), self->bio.get());
+	auto const p_bio = bio.release();
+	SSL_set_bio(ssl.get(), p_bio, p_bio);
 
-	return self.release();
+	return vsm_lazy(openssl_ssl_ptr(reinterpret_cast<openssl_ssl*>(ssl.release())));
 }
 
-void openssl_ssl::delete_context()
+vsm::result<openssl_result<void>> openssl_state_base::accept()
 {
-	delete static_cast<ssl_implementation*>(this);
-}
+	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
-vsm::result<openssl_io_result<void>> openssl_ssl::connect()
-{
-	auto& self = static_cast<ssl_implementation&>(*this);
-
-	vsm_try(r, ssl_try<SSL_connect>(self.ssl.get()));
+	vsm_try(r, ssl_try<SSL_accept>(ssl));
 
 	if (!r)
 	{
-		return openssl_io_result<void>(vsm::unexpected(r.error()));
+		return vsm::success(vsm::unexpected(std::monostate()));
 	}
 
 	if (*r == 0)
 	{
-		return vsm::unexpected(get_ssl_error(self.ssl.get(), *r));
+		return vsm::unexpected(get_ssl_error(ssl, *r));
 	}
 
 	return {};
 }
 
-vsm::result<openssl_io_result<void>> openssl_ssl::disconnect()
+vsm::result<openssl_result<void>> openssl_state_base::connect()
 {
-	auto& self = static_cast<ssl_implementation&>(*this);
+	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
-	vsm_try(r, ssl_try<SSL_shutdown>(self.ssl.get()));
+	vsm_try(r, ssl_try<SSL_connect>(ssl));
 
 	if (!r)
 	{
-		return openssl_io_result<void>(vsm::unexpected(r.error()));
+		return vsm::success(vsm::unexpected(std::monostate()));
+	}
+
+	if (*r == 0)
+	{
+		return vsm::unexpected(get_ssl_error(ssl, *r));
+	}
+
+	return {};
+}
+
+vsm::result<openssl_result<void>> openssl_state_base::disconnect()
+{
+	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
+
+	vsm_try(r, ssl_try<SSL_shutdown>(ssl));
+
+	if (!r)
+	{
+		return vsm::success(vsm::unexpected(std::monostate()));
 	}
 
 	//TODO: What to do on 0 result from SSL_shutdown?
@@ -483,61 +760,14 @@ vsm::result<openssl_io_result<void>> openssl_ssl::disconnect()
 	return {};
 }
 
-vsm::result<openssl_io_result<void>> openssl_ssl::accept()
+vsm::result<openssl_result<size_t>> openssl_state_base::read(read_buffer const user_buffer)
 {
-	auto& self = static_cast<ssl_implementation&>(*this);
-
-	vsm_try(r, ssl_try<SSL_accept>(self.ssl.get()));
-
-	if (!r)
-	{
-		return openssl_io_result<void>(vsm::unexpected(r.error()));
-	}
-
-	if (*r == 0)
-	{
-		return vsm::unexpected(get_ssl_error(self.ssl.get(), *r));
-	}
-
-	return {};
+	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
+	return vsm::unexpected(error::unsupported_operation);
 }
 
-vsm::result<openssl_io_result<size_t>> openssl_ssl::read(void* const data, size_t const size)
+vsm::result<openssl_result<size_t>> openssl_state_base::write(write_buffer const user_buffer)
 {
-	auto& self = static_cast<ssl_implementation&>(*this);
-
-	size_t transferred;
-	vsm_try(r, ssl_try<SSL_read_ex>(self.ssl.get(), data, size, &transferred));
-
-	if (!r)
-	{
-		return openssl_io_result<size_t>(vsm::unexpected(r.error()));
-	}
-
-	if (*r == 0)
-	{
-		return vsm::unexpected(get_ssl_error(self.ssl.get(), *r));
-	}
-
-	return transferred;
-}
-
-vsm::result<openssl_io_result<size_t>> openssl_ssl::write(void const* const data, size_t const size)
-{
-	auto& self = static_cast<ssl_implementation&>(*this);
-
-	size_t transferred;
-	vsm_try(r, ssl_try<SSL_write_ex>(self.ssl.get(), data, size, &transferred));
-
-	if (!r)
-	{
-		return openssl_io_result<size_t>(vsm::unexpected(r.error()));
-	}
-
-	if (*r == 0)
-	{
-		return vsm::unexpected(get_ssl_error(self.ssl.get(), *r));
-	}
-
-	return transferred;
+	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
+	return vsm::unexpected(error::unsupported_operation);
 }

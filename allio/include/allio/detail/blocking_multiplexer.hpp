@@ -34,13 +34,13 @@ public:
 			return vsm::unexpected(r.error());
 		}
 
-		if constexpr (std::is_void_v<io_result_t<O, H>>)
+		if constexpr (std::is_void_v<io_result_t<Object, Operation>>)
 		{
 			return {};
 		}
 		else
 		{
-			return rebind_handle<io_result_t<O, H>>(vsm_move(*r));
+			return rebind_handle<io_result_t<Object, Operation>>(vsm_move(*r));
 		}
 	}
 
@@ -51,8 +51,8 @@ public:
 
 private:
 	static void io_callback(
-		io_handler<blocking_multiplexer>& handler,
-		blocking_multiplexer::io_status_type&& status) noexcept
+		io_handler<blocking_multiplexer>&,
+		blocking_multiplexer::io_status_type&&) noexcept
 	{
 		vsm_unreachable();
 	}

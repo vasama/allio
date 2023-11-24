@@ -1,12 +1,12 @@
-#include <allio/impl/win32/directory.hpp>
+#include <allio/handles/directory.hpp>
+#include <allio/impl/win32/handles/directory.hpp>
 
-#include <allio/impl/win32/encoding.hpp>
+#include <allio/impl/transcode.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/peb.hpp>
-#include <allio/impl/win32/sync_filesystem_handle.hpp>
 #include <allio/win32/kernel_error.hpp>
 
-#include <vsm/utility.hpp>
+#include <vsm/integer_conversion.hpp>
 
 #include <bit>
 
@@ -17,28 +17,28 @@ using namespace allio::win32;
 using directory_stream_entry = FILE_ID_FULL_DIR_INFORMATION;
 static constexpr auto directory_stream_information = FileIdFullDirectoryInformation;
 
-static file_kind get_entry_kind(directory_stream_entry const& entry)
+static fs_entry_type get_entry_type(directory_stream_entry const& entry)
 {
 	if (entry.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
 	{
 		if (entry.ReparsePointTag == IO_REPARSE_TAG_SYMLINK)
 		{
-			return file_kind::symbolic_link;
+			return fs_entry_type::symbolic_link;
 		}
 
 		if (entry.ReparsePointTag == IO_REPARSE_TAG_MOUNT_POINT)
 		{
-			return file_kind::ntfs_junction;
+			return fs_entry_type::ntfs_junction;
 		}
 	}
 
 	if (entry.FileAttributes & FILE_ATTRIBUTE_DIRECTORY)
 	{
-		return file_kind::directory;
+		return fs_entry_type::directory;
 	}
 	else
 	{
-		return file_kind::regular;
+		return fs_entry_type::regular;
 	}
 }
 
@@ -70,6 +70,11 @@ static directory_stream_entry const* next_entry(directory_stream_entry const* co
 }
 
 
+vsm::result<size_t> directory_entry::get_name(any_string_buffer const buffer) const
+{
+	return transcode_string(name.view<wchar_t>(), buffer);
+}
+
 directory_entry directory_entry_view::get_entry(directory_stream_native_handle const handle)
 {
 	vsm_assert(handle != directory_stream_native_handle::end);
@@ -77,9 +82,9 @@ directory_entry directory_entry_view::get_entry(directory_stream_native_handle c
 
 	return
 	{
-		.kind = get_entry_kind(entry),
-		.node_id = std::bit_cast<file_id_64>(entry.FileId),
-		.name = input_string_view(get_entry_name(entry)),
+		.type = get_entry_type(entry),
+		.node_id = std::bit_cast<fs_node_id>(entry.FileId),
+		.name = any_string_view(get_entry_name(entry)),
 	};
 }
 
@@ -89,7 +94,7 @@ directory_stream_native_handle directory_stream_iterator::advance(directory_stre
 }
 
 
-static bool discard_entry(directory_stream_entry const& entry)
+static bool filter_entry(directory_stream_entry const& entry)
 {
 	std::wstring_view const name = get_entry_name(entry);
 
@@ -112,34 +117,38 @@ static bool discard_entry(directory_stream_entry const& entry)
 }
 
 NTSTATUS win32::query_directory_file_start(
-	io::parameters_with_result<io::directory_read> const& args,
-	PIO_APC_ROUTINE const apc_routine, PVOID const apc_context,
+	HANDLE const handle,
+	read_buffer const buffer,
+	bool const restart,
+	PIO_APC_ROUTINE const apc_routine,
+	PVOID const apc_context,
 	IO_STATUS_BLOCK& io_status_block)
 {
 	ULONG flags = 0;
 
-	if (args.restart)
+	if (restart)
 	{
 		flags |= SL_RESTART_SCAN;
 	}
 
 	//TODO: Align args.buffer first.
 	return NtQueryDirectoryFileEx(
-		unwrap_handle(args.handle->get_platform_handle()),
-		NULL,
+		handle,
+		/* Event: */ NULL,
 		apc_routine,
 		apc_context,
 		&io_status_block,
-		args.buffer.data(),
-		args.buffer.size(),
-		FileIdExtdDirectoryInformation,
+		buffer.data(),
+		vsm::saturating(buffer.size()),
+		directory_stream_information,
 		flags,
-		nullptr);
+		/* FileName: */ nullptr);
 }
 
 NTSTATUS win32::query_directory_file_completed(
-	io::parameters_with_result<io::directory_read> const& args,
-	IO_STATUS_BLOCK const& io_status_block)
+	read_buffer const buffer,
+	IO_STATUS_BLOCK const& io_status_block,
+	directory_stream_native_handle& out_stream)
 {
 	NTSTATUS const status = io_status_block.Status;
 
@@ -147,7 +156,7 @@ NTSTATUS win32::query_directory_file_completed(
 	{
 		if (status == STATUS_NO_MORE_FILES)
 		{
-			*args.result = directory_stream_view(directory_stream_native_handle::directory_end);
+			out_stream = directory_stream_native_handle::directory_end;
 			return STATUS_SUCCESS;
 		}
 
@@ -159,97 +168,108 @@ NTSTATUS win32::query_directory_file_completed(
 		return STATUS_BUFFER_TOO_SMALL;
 	}
 
-	auto entry = reinterpret_cast<directory_stream_entry const*>(args.buffer.data());
+	auto entry = reinterpret_cast<directory_stream_entry const*>(buffer.data());
 
-	while (entry != nullptr && discard_entry(*entry))
+	while (entry != nullptr && filter_entry(*entry))
 	{
 		entry = next_entry(entry);
 	}
 
-	*args.result = directory_stream_view(wrap_stream(entry));
-	return status;
+	out_stream = wrap_stream(entry);
+	return STATUS_SUCCESS;
 }
 
-static vsm::result<void> query_directory_file(
-	io::parameters_with_result<io::directory_read> const& args)
+static vsm::result<directory_stream_native_handle> query_directory_file(
+	HANDLE const handle,
+	read_buffer const buffer,
+	bool const restart)
 {
 	IO_STATUS_BLOCK io_status_block = make_io_status_block();
 
-	NTSTATUS status = query_directory_file_start(args, nullptr, nullptr, io_status_block);
+	NTSTATUS status = query_directory_file_start(
+		handle,
+		buffer,
+		restart,
+		/* apc_routine: */ nullptr,
+		/* apc_context: */ nullptr,
+		io_status_block);
 
 	if (status == STATUS_PENDING)
 	{
-		HANDLE const handle = unwrap_handle(args.handle->get_platform_handle());
 		status = io_wait(handle, &io_status_block, deadline::never());
 	}
+	vsm_assert(io_status_block.Status == status);
 
-	status = query_directory_file_completed(args, io_status_block);
+	directory_stream_native_handle stream;
+	status = query_directory_file_completed(
+		buffer,
+		io_status_block,
+		stream);
 
 	if (!NT_SUCCESS(status))
 	{
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
-	return {};
+	return stream;
 }
 
 
-vsm::result<void> directory_handle_base::sync_impl(io::parameters_with_result<io::filesystem_open> const& args)
+vsm::result<void> directory_t::open(
+	native_type& h,
+	io_parameters_t<directory_t, open_t> const& a)
 {
-	return sync_open<directory_handle>(args, open_kind::directory);
-}
+	vsm_try_bind((directory, flags), create_file(
+		unwrap_handle(a.path.base),
+		a.path.path,
+		open_kind::directory,
+		a));
 
-vsm::result<void> directory_handle_base::sync_impl(io::parameters_with_result<io::directory_read> const& args)
-{
-	directory_handle const& h = *args.handle;
-
-	if (!h)
+	h = platform_object_t::native_type
 	{
-		return vsm::unexpected(error::handle_is_null);
-	}
-
-	IO_STATUS_BLOCK io_status_block = make_io_status_block();
-
-	NTSTATUS status = query_directory_file_start(args, nullptr, nullptr, io_status_block);
-
-	if (status == STATUS_PENDING)
-	{
-		HANDLE const handle = unwrap_handle(args.handle->get_platform_handle());
-		status = io_wait(handle, &io_status_block, deadline::never());
-	}
-
-	status = query_directory_file_completed(args, io_status_block);
-
-	if (!NT_SUCCESS(status))
-	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
-	}
+		object_t::native_type
+		{
+			flags::not_null | flags,
+		},
+		wrap_handle(directory.release()),
+	};
 
 	return {};
 }
 
-allio_handle_implementation(directory_handle);
-
-
-vsm::result<size_t> this_process::get_current_directory(output_path_ref const output)
+vsm::result<directory_stream_view> directory_t::read(
+	native_type const& h,
+	io_parameters_t<directory_t, read_t> const& a)
 {
-	unique_peb_lock peb_lock;
+	vsm_try(stream, query_directory_file(
+		unwrap_handle(h.platform_handle),
+		a.buffer,
+		a.restart));
 
-	auto const& process_parameters = *NtCurrentPeb()->ProcessParameters;
-
-	auto const wide_path = std::wstring_view(
-		process_parameters.CurrentDirectoryPath.Buffer,
-		process_parameters.CurrentDirectoryPath.Length / sizeof(wchar_t));
-
-	return copy_string(wide_path, output);
+	return directory_stream_view(stream);
 }
 
-static vsm::result<void> set_current_directory_impl(std::wstring_view const path)
+
+static constexpr size_t max_unicode_string_size = 0x7FFE;
+static vsm::result<UNICODE_STRING> make_unicode_path(platform_path_view const path)
 {
+	std::wstring_view const string = path.string();
+
+	if (string.size() > max_unicode_string_size)
+	{
+		return vsm::unexpected(error::filename_too_long);
+	}
+
 	UNICODE_STRING unicode_string;
-	unicode_string.Buffer = const_cast<wchar_t*>(path.data());
-	unicode_string.Length = path.size() * sizeof(wchar_t);
+	unicode_string.Buffer = const_cast<wchar_t*>(string.data());
+	unicode_string.Length = static_cast<USHORT>(string.size() * sizeof(wchar_t));
 	unicode_string.MaximumLength = unicode_string.Length;
+	return unicode_string;
+}
+
+static vsm::result<void> _set_current_directory(platform_path_view const path)
+{
+	vsm_try(unicode_string, make_unicode_path(path));
 
 	NTSTATUS const status = RtlSetCurrentDirectory_U(&unicode_string);
 
@@ -261,21 +281,43 @@ static vsm::result<void> set_current_directory_impl(std::wstring_view const path
 	return {};
 }
 
-#if 0
-vsm::result<void> this_process::set_current_directory(input_path_view const path)
+
+vsm::result<size_t> this_process::get_current_directory(any_path_buffer const buffer)
 {
-	if (path.is_wide())
-	{
-		return set_current_directory_impl(path.wide_view());
-	}
+	unique_peb_lock peb_lock;
+
+	auto const& process_parameters = *NtCurrentPeb()->ProcessParameters;
+
+	auto const wide_path = std::wstring_view(
+		process_parameters.CurrentDirectoryPath.Buffer,
+		process_parameters.CurrentDirectoryPath.Length / sizeof(wchar_t));
+
+	return transcode_string(wide_path, buffer);
 }
 
-vsm::result<directory_handle> this_process::open_current_directory()
+#if 0
+vsm::result<void> this_process::set_current_directory(any_path_view const path)
+{
+	//TODO: Transcode into local buffer if necessary
+	return _set_current_directory(wide_path);
+}
+#endif
+
+#if 0
+vsm::result<blocking::directory_handle> this_process::open_current_directory()
 {
 	unique_peb_lock lock;
 
 	auto const& process_parameters = *NtCurrentPeb()->ProcessParameters;
+	HANDLE const handle = process_parameters.CurrentDirectoryHandle;
 
-	//TODO: reopen process_parameters.CurrentDirectoryHandle
+	if (handle != NULL)
+	{
+		//TODO: reopen directory
+	}
+	else
+	{
+		//TODO: open directory
+	}
 }
 #endif

@@ -4,34 +4,34 @@
 #include <allio/sync_wait.hpp>
 #include <allio/task.hpp>
 #include <allio/test/network.hpp>
+#include <allio/test/spawn.hpp>
 
 #include <catch2/catch_all.hpp>
-
-#include <future>
 
 using namespace allio;
 using namespace allio::openssl;
 
 namespace ex = stdexec;
 
-TEST_CASE("a stream socket can connect to a listening socket and exchange data", "[socket][blocking]")
+TEST_CASE("a stream socket can connect to a listening socket and exchange data", "[openssl][socket][blocking]")
 {
 	using namespace blocking;
 
 	using socket_object = openssl::socket_t;
 	using listen_socket_object = openssl::listen_socket_t;
 
-	auto const listen_security_context = openssl::create_listen_socket_security_context().value();
+	using namespace path_literals;
+	auto const server_security = openssl::create_listen_socket_security_context(
+		tls_certificate("tls/openssl/keys/server-certificate.pem"_path),
+		tls_private_key("tls/openssl/keys/server-private-key.pem"_path)).value();
 
 	auto const endpoint = test::generate_endpoint();
-	auto const listen_socket = listen<listen_socket_object>(
-		endpoint,
-		listen_security_context).value();
+	auto const listen_socket = listen<listen_socket_object>(endpoint, server_security).value();
 
-	auto connect_future = std::async(std::launch::async, [&]()
+	auto connect_future = test::spawn([&]()
 	{
-		auto const security_context = openssl::create_socket_security_context().value();
-		return connect<socket_object>(endpoint, security_context);
+		auto const client_security = openssl::create_socket_security_context().value();
+		return connect<socket_object>(endpoint, client_security).value();
 	});
 
 	auto const server_socket = listen_socket.accept().value().socket;

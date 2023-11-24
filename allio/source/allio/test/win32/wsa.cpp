@@ -1,21 +1,20 @@
 #include <allio/impl/posix/socket.hpp>
 #include <allio/impl/win32/completion_port.hpp>
 #include <allio/impl/win32/wsa_ex.hpp>
+#include <allio/test/spawn.hpp>
 
 #include <catch2/catch_all.hpp>
-
-#include <future>
 
 using namespace allio;
 using namespace allio::posix;
 using namespace allio::win32;
 
-TEST_CASE("WSA supports unix stream sockets", "[windows][wsa]")
+TEST_CASE("WSA supports unix stream sockets", "[windows][wsa][socket]")
 {
 	REQUIRE(posix::create_socket(AF_UNIX, SOCK_STREAM, 0, false));
 }
 
-TEST_CASE("WSA async connect and accept", "[windows][wsa][async]")
+TEST_CASE("WSA async connect and accept", "[windows][wsa][socket][async]")
 {
 	auto const addr = socket_address::make(ipv4_endpoint(ipv4_address::localhost, 51234)).value();
 
@@ -104,13 +103,13 @@ TEST_CASE("WSA async connect and accept", "[windows][wsa][async]")
 }
 
 
-TEST_CASE("WSA does not support unix datagram sockets", "[windows][wsa]")
+TEST_CASE("WSA does not support unix datagram sockets", "[windows][datagram_socket][wsa]")
 {
 	// The purpose of this test is to quickly detect future support for this feature.
 	REQUIRE(!posix::create_socket(AF_UNIX, SOCK_DGRAM, 0, false));
 }
 
-TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][blocking]")
+TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][datagram_socket][blocking]")
 {
 	auto const create_socket = [&]()
 	{
@@ -132,7 +131,7 @@ TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][blocking]")
 	socket_address receive_addr;
 	receive_addr.size = sizeof(socket_address_union);
 
-	auto receive_future = std::async(std::launch::async, [&]()
+	auto receive_future = test::spawn([&]()
 	{
 		int const r = recvfrom(
 			receive_socket.get(),
@@ -162,7 +161,7 @@ TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][blocking]")
 	REQUIRE(receive_buffer == 42);
 }
 
-TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][async]")
+TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram_socket][async]")
 {
 	auto const addr = socket_address::make(ipv4_endpoint(ipv4_address::localhost, 51234)).value();
 

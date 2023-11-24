@@ -2,7 +2,7 @@
 
 #include <allio/detail/path.hpp>
 #include <allio/detail/platform.h>
-#include <allio/path_literal.hpp>
+#include <allio/path_literals.hpp>
 
 #include <vsm/box.hpp>
 #include <vsm/preprocessor.h>

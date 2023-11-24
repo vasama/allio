@@ -39,7 +39,7 @@ vsm::result<void> raw_socket_t::connect(
 	return {};
 }
 
-vsm::result<size_t> raw_socket_t::read(
+vsm::result<size_t> raw_socket_t::stream_read(
 	native_type const& h,
 	io_parameters_t<raw_socket_t, read_some_t> const& a)
 {
@@ -53,7 +53,7 @@ vsm::result<size_t> raw_socket_t::read(
 	return socket_scatter_read(socket, a.buffers.buffers());
 }
 
-vsm::result<size_t> raw_socket_t::write(
+vsm::result<size_t> raw_socket_t::stream_write(
 	native_type const& h,
 	io_parameters_t<raw_socket_t, write_some_t> const& a)
 {

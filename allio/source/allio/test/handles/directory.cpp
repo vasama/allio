@@ -1,3 +1,78 @@
+#include <allio/directory.hpp>
+
+#include <allio/sync_wait.hpp>
+#include <allio/task.hpp>
+#include <allio/test/filesystem.hpp>
+
+#include <catch2/catch_all.hpp>
+
+#include <filesystem>
+#include <string>
+#include <unordered_set>
+
+using namespace allio;
+namespace ex = stdexec;
+
+static std::unordered_set<std::string> fill_directory(path_view const base_path, size_t const file_count)
+{
+	static constexpr size_t name_size = 20;
+	static constexpr size_t rand_size = 10;
+
+	std::string path_string(base_path.string());
+	std::filesystem::create_directory(path_string);
+
+	if (!path_view::is_separator(path_string.back()))
+	{
+		path_string += path_view::preferred_separator;
+	}
+
+	size_t const base_size = path_string.size();
+	path_string.resize(base_size + name_size);
+
+	char* const name = path_string.data() + base_size;
+	char* const name_rand = std::fill_n(name, name_size - rand_size, '0');
+
+	std::unordered_set<std::string> file_names;
+	for (size_t i = 0; i < file_count; ++i)
+	{
+		snprintf(name_rand, rand_size + 1, "%d", static_cast<int>(i));
+		test::touch_file(path_string.c_str());
+		REQUIRE(file_names.insert(name).second);
+	}
+	return file_names;
+}
+
+
+using stream_buffer = std::array<std::byte, 4096>;
+
+TEST_CASE("Directory entries can be read", "[directory_handle][blocking]")
+{
+	using namespace blocking;
+
+	static constexpr size_t file_count = 400;
+
+	auto const path = test::get_temp_path();
+	auto file_names = fill_directory(path, file_count);
+
+	auto const directory = open_directory(path).value();
+	while (true)
+	{
+		stream_buffer buffer;
+		auto const stream = directory.read(buffer).value();
+
+		if (!stream)
+		{
+			break;
+		}
+
+		for (directory_entry const entry : stream)
+		{
+			REQUIRE(file_names.erase(entry.get_name().value()));
+		}
+	}
+	REQUIRE(file_names.empty());
+}
+
 #if 0
 
 //#include <allio/directory_handle_async.hpp>
@@ -18,36 +93,6 @@ using namespace allio;
 static path get_temp_path(std::string_view const name)
 {
 	return path((std::filesystem::temp_directory_path() / name).string());
-}
-
-static void write_directory_content(path_view const base_path, size_t const file_count)
-{
-	static constexpr size_t prefix_size = 190;
-	static constexpr size_t suffix_max_size = 10;
-	static constexpr size_t max_size = prefix_size + suffix_max_size;
-
-	std::string path_string(base_path.string());
-	std::filesystem::create_directory(path_string);
-
-	path_string += "/";
-
-	size_t const base_size = path_string.size();
-	path_string.resize(base_size + max_size);
-
-	char* path_suffix = path_string.data() + base_size;
-
-	for (size_t i = 0; i < prefix_size; ++i)
-	{
-		*path_suffix++ = 'f';
-	}
-
-	for (size_t i = 0; i < file_count; ++i)
-	{
-		snprintf(path_suffix, suffix_max_size, "%d", static_cast<int>(i));
-		FILE* const file = fopen(path_string.c_str(), "w");
-		REQUIRE(file != nullptr);
-		fclose(file);
-	}
 }
 
 TEST_CASE("directory_handle::read", "[directory_handle]")

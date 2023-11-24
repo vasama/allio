@@ -2,9 +2,8 @@
 
 #include <allio/any_path.hpp>
 #include <allio/any_path_buffer.hpp>
+#include <allio/detail/filesystem.hpp>
 #include <allio/detail/handles/platform_object.hpp>
-#include <allio/filesystem.hpp>
-#include <allio/any_path_buffer.hpp>
 #include <allio/path.hpp>
 #include <allio/path_view.hpp>
 
@@ -89,94 +88,123 @@ enum class path_kind : uint8_t
 vsm_flag_enum(path_kind);
 
 
-struct fs_object_t;
-
-struct path_descriptor
-{
-	native_platform_handle base;
-	any_path_view path;
-
-	template<std::convertible_to<any_path_view> Path>
-	path_descriptor(Path const& path)
-		: base(native_platform_handle::null)
-		, path(path)
-	{
-	}
-
-	template<std::derived_from<fs_object_t> FsObject, std::convertible_to<any_path_view> Path>
-	path_descriptor(detail::abstract_handle<FsObject> const& base, Path const& path)
-		: base(base.native().platform_object_t::native_type::platform_handle)
-		, path(path)
-	{
-	}
-};
-
-
 struct file_mode_t
 {
-	detail::file_mode mode = detail::file_mode::read_write;
+	file_mode mode = file_mode::read_write;
+
+	friend void tag_invoke(set_argument_t, file_mode_t& args, file_mode const mode)
+	{
+		args.mode = mode;
+	}
 };
 
 struct file_creation_t
 {
-	detail::file_creation creation = detail::file_creation::open_existing;
+	file_creation creation = file_creation::open_existing;
+
+	friend void tag_invoke(set_argument_t, file_creation_t& args, file_creation const creation)
+	{
+		args.creation = creation;
+	}
 };
 
 struct file_sharing_t
 {
-	detail::file_sharing sharing = detail::file_sharing::all;
+	file_sharing sharing = file_sharing::all;
+
+	friend void tag_invoke(set_argument_t, file_sharing_t& args, file_sharing const sharing)
+	{
+		args.sharing = sharing;
+	}
 };
 
 struct file_caching_t
 {
-	detail::file_caching caching = detail::file_caching::none;
+	file_caching caching = file_caching::none;
+
+	friend void tag_invoke(set_argument_t, file_caching_t& args, file_caching const caching)
+	{
+		args.caching = caching;
+	}
 };
 
 struct file_flags_t
 {
-	detail::file_flags file_flags = detail::file_flags::none;
+	file_flags flags = file_flags::none;
+
+	friend void tag_invoke(set_argument_t, file_flags_t& args, file_flags const flags)
+	{
+		args.flags = flags;
+	}
 };
 
 struct path_kind_t
 {
 	detail::path_kind path_kind = detail::path_kind::any;
+
+	friend void tag_invoke(set_argument_t, path_kind_t& args, detail::path_kind const path_kind)
+	{
+		args.path_kind = path_kind;
+	}
 };
 
+
+namespace fs_io {
+
+struct open_t
+{
+	using operation_concept = producer_t;
+	using required_params_type = fs_path_t;
+	using optional_params_type = parameters_t
+	<
+		file_mode_t,
+		file_creation_t,
+		file_sharing_t,
+		file_caching_t,
+		file_flags_t
+	>;
+	using result_type = void;
+
+	template<object Object>
+	friend vsm::result<void> tag_invoke(
+		blocking_io_t<Object, open_t>,
+		typename Object::native_type& h,
+		io_parameters_t<Object, open_t> const& a)
+		requires requires { Object::open(h, a); }
+	{
+		return Object::open(h, a);
+	}
+};
+
+struct get_current_path_t
+{
+	using operation_concept = void;
+	struct required_params_type
+	{
+		any_path_buffer buffer;
+	};
+	using optional_params_type = path_kind_t;
+	using result_type = size_t;
+
+	template<object Object>
+	friend vsm::result<size_t> tag_invoke(
+		blocking_io_t<Object, get_current_path_t>,
+		typename Object::native_type const& h,
+		io_parameters_t<Object, get_current_path_t> const& a)
+		requires requires { Object::open(h, a); }
+	{
+		return Object::get_current_path(h, a);
+	}
+};
+
+} // namespace fs_io
 
 struct fs_object_t : platform_object_t
 {
 	using base_type = platform_object_t;
 
-	struct open_t
-	{
-		using operation_concept = producer_t;
-
-		struct required_params_type
-		{
-			path_descriptor path;
-		};
-
-		using optional_params_type = parameters_t
-		<
-			file_mode_t,
-			file_creation_t,
-			file_sharing_t,
-			file_caching_t,
-			file_flags_t
-		>;
-	};
-
-	struct get_current_path_t
-	{
-		using result_type = size_t;
-		
-		struct required_params_type
-		{
-			any_path_buffer buffer;
-		};
-		
-		using optional_params_type = path_kind_t;
-	};
+	using open_t = fs_io::open_t;
+	using get_current_path_t = fs_io::get_current_path_t;
 
 	using operations = type_list_append
 	<
@@ -185,17 +213,21 @@ struct fs_object_t : platform_object_t
 		, get_current_path_t
 	>;
 
-	template<typename H>
-	struct abstract_interface : base_type::abstract_interface<H>
+	static vsm::result<size_t> get_current_path(
+		native_type const& h,
+		io_parameters_t<fs_object_t, get_current_path_t> const& a);
+
+	template<typename Handle>
+	struct abstract_interface : base_type::abstract_interface<Handle>
 	{
 		[[nodiscard]] vsm::result<size_t> get_current_path(any_path_buffer const buffer, auto&&... args)
 		{
-			return blocking_io<get_current_path_t>(
-				static_cast<H const&>(*this),
-				make_io_args<get_current_path_t>(buffer)(vsm_forward(args)...));
+			return blocking_io<typename Handle::object_type, get_current_path_t>(
+				static_cast<Handle const&>(*this),
+				make_io_args<typename Handle::object_type, get_current_path_t>(buffer)(vsm_forward(args)...));
 		}
 
-		template<typename Path>
+		template<typename Path = path>
 		[[nodiscard]] vsm::result<Path> get_current_path(auto&&... args)
 		{
 			vsm::result<Path> r(vsm::result_value);
@@ -203,11 +235,6 @@ struct fs_object_t : platform_object_t
 			return r;
 		}
 	};
-
-	static vsm::result<void> blocking_io(
-		get_current_path_t,
-		native_type const& h,
-		io_parameters_t<get_current_path_t> const& args);
 };
 
 } // namespace allio::detail

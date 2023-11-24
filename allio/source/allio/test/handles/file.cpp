@@ -1,19 +1,48 @@
-#include <allio/file_handle_async.hpp>
+#include <allio/file.hpp>
 
-#include <allio/test/filesystem.hpp>
-#include <allio/test/multiplexer.hpp>
-#include <allio/test/task.hpp>
 #include <allio/sync_wait.hpp>
+#include <allio/task.hpp>
+#include <allio/test/filesystem.hpp>
 
 #include <catch2/catch_all.hpp>
-
-#include <string>
-#include <vector>
 
 #include <cstring>
 
 using namespace allio;
+namespace ex = stdexec;
 
+TEST_CASE("Files can be read and written", "[file_handle][blocking]")
+{
+	using namespace blocking;
+
+	auto const path = test::get_temp_path();
+
+	SECTION("File content can be read")
+	{
+		test::write_file_content(path, "allio");
+		{
+			auto const file = open_file(path).value();
+
+			char data[] = "trash";
+			REQUIRE(file.read_some(0, as_read_buffer(data, 5)).value() == 5);
+			REQUIRE(memcmp(data, "allio", 5) == 0);
+		}
+	}
+
+	SECTION("File content can be written")
+	{
+		test::write_file_content(path, "trash");
+		{
+			auto const file = open_file(path).value();
+
+			char data[] = "allio";
+			REQUIRE(file.write_some(0, as_write_buffer(data, 5)).value() == 5);
+		}
+		test::check_file_content(path, "allio");
+	}
+}
+
+#if 0
 TEST_CASE("file_handle::read_at", "[file_handle]")
 {
 	path const file_path = test::get_temp_file_path("allio-test-file");
@@ -139,3 +168,4 @@ TEST_CASE("file_handle::write_at with many vectors", "[file_handle]")
 	REQUIRE(file.read_at(0, data_read_buffers).value() == buffer_count);
 	REQUIRE((data_read_buffer == data_write_buffer));
 }
+#endif

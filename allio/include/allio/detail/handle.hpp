@@ -137,8 +137,9 @@ public:
 	void close()
 	{
 		unrecoverable(blocking_io<Object, close_t>(
+		//(tag_invoke(blocking_io<Object, close_t>,
 			*this,
-			io_parameters_t<Object, close_t>{}));
+			make_io_args<Object, close_t>()()));
 	}
 
 	[[nodiscard]] native_type release()

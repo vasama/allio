@@ -8,12 +8,11 @@
 
 namespace allio::detail {
 
-using listen_backlog_uint_type = uint32_t;
 struct listen_backlog_t
 {
-	std::optional<listen_backlog_uint_type> backlog;
+	std::optional<uint32_t> backlog;
 };
-inline constexpr explicit_parameter<listen_backlog_t, listen_backlog_uint_type> listen_backlog = {};
+inline constexpr explicit_parameter<listen_backlog_t, uint32_t> listen_backlog = {};
 
 template<typename SocketHandle>
 struct accept_result
@@ -38,13 +37,10 @@ struct listen_t
 {
 	using operation_concept = producer_t;
 	using required_params_type = network_endpoint_t;
-	
-	template<object SocketObject>
-	using optional_params_template = parameters_t
-	<
-		basic_socket_security_context_t<typename SocketObject::security_context_type>,
-		listen_backlog_t
-	>;
+	using optional_params_type = listen_backlog_t;
+
+	template<object Object>
+	using extended_params_template = with_security_context_t<typename Object::security_context_type>;
 
 	using result_type = void;
 	using runtime_tag = bounded_runtime_t;
@@ -54,6 +50,7 @@ struct listen_t
 		blocking_io_t<Object, listen_t>,
 		typename Object::native_type& h,
 		io_parameters_t<Object, listen_t> const& args)
+		requires requires { Object::listen(h, args); }
 	{
 		return Object::listen(h, args);
 	}
@@ -73,6 +70,7 @@ struct accept_t
 		blocking_io_t<Object, accept_t>,
 		typename Object::native_type const& h,
 		io_parameters_t<Object, accept_t> const& args)
+		requires requires { Object::accept(h, args); }
 	{
 		return Object::accept(h, args);
 	}

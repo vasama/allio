@@ -34,14 +34,14 @@ struct async_operation<iocp_multiplexer, raw_socket_t, socket_io::connect_t>
 };
 
 template<>
-struct async_operation<iocp_multiplexer, raw_socket_t, socket_io::stream_read_t>
+struct async_operation<iocp_multiplexer, raw_socket_t, byte_io::stream_read_t>
 	: iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
 	using H = raw_socket_t::native_type;
 	using C = async_connector_t<M, raw_socket_t>;
-	using S = async_operation_t<M, raw_socket_t, socket_io::stream_read_t>;
-	using A = io_parameters_t<raw_socket_t, socket_io::stream_read_t>;
+	using S = async_operation_t<M, raw_socket_t, byte_io::stream_read_t>;
+	using A = io_parameters_t<raw_socket_t, byte_io::stream_read_t>;
 
 	wsa_buffers_storage<8> buffers;
 	iocp_multiplexer::overlapped overlapped;
@@ -52,14 +52,14 @@ struct async_operation<iocp_multiplexer, raw_socket_t, socket_io::stream_read_t>
 };
 
 template<>
-struct async_operation<iocp_multiplexer, raw_socket_t, socket_io::stream_write_t>
+struct async_operation<iocp_multiplexer, raw_socket_t, byte_io::stream_write_t>
 	: iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
 	using H = raw_socket_t::native_type;
 	using C = async_connector_t<M, raw_socket_t>;
-	using S = async_operation_t<M, raw_socket_t, socket_io::stream_write_t>;
-	using A = io_parameters_t<raw_socket_t, socket_io::stream_write_t>;
+	using S = async_operation_t<M, raw_socket_t, byte_io::stream_write_t>;
+	using A = io_parameters_t<raw_socket_t, byte_io::stream_write_t>;
 
 	wsa_buffers_storage<8> buffers;
 	iocp_multiplexer::overlapped overlapped;

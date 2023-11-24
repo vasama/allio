@@ -72,6 +72,7 @@ struct create_t
 		blocking_io_t<Object, create_t>,
 		typename Object::native_type& h,
 		io_parameters_t<Object, create_t> const& args)
+		requires requires { Object::create(h, args); }
 	{
 		return Object::create(h, args);
 	}
@@ -90,6 +91,7 @@ struct signal_t
 		blocking_io_t<Object, signal_t>,
 		typename Object::native_type const& h,
 		io_parameters_t<Object, signal_t> const& args)
+		requires requires { Object::signal(h, args); }
 	{
 		return Object::signal(h, args);
 	}
@@ -108,6 +110,7 @@ struct reset_t
 		blocking_io_t<Object, reset_t>,
 		typename Object::native_type const& h,
 		io_parameters_t<Object, reset_t> const& args)
+		requires requires { Object::reset(h, args); }
 	{
 		return Object::reset(h, args);
 	}
@@ -125,6 +128,7 @@ struct wait_t
 		blocking_io_t<Object, wait_t>,
 		typename Object::native_type const& h,
 		io_parameters_t<Object, wait_t> const& args)
+		requires requires { Object::wait(h, args); }
 	{
 		return Object::wait(h, args);
 	}

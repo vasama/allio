@@ -1,6 +1,6 @@
 #pragma once
 
-#include <system_error>
+#include <vsm/result.hpp>
 
 #include <cstdint>
 
@@ -39,6 +39,9 @@ inline std::error_category const& nt_category()
 {
 	return detail::kernel_error_category::get();
 }
+
+template<typename T>
+using kernel_result = vsm::result<T, kernel_error>;
 
 } // namespace win32
 } // namespace allio

@@ -39,6 +39,7 @@ struct close_t
 		blocking_io_t<Object, close_t>,
 		typename Object::native_type& h,
 		io_parameters_t<Object, close_t> const& a)
+		requires requires { Object::close(h, a); }
 	{
 		return Object::close(h, a);
 	}

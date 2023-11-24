@@ -33,18 +33,37 @@ concept _any_mutable_string = requires (String& string)
 struct resize_buffer_t
 {
 	template<typename Container>
-	vsm::result<size_t> tag_invoke(resize_buffer_t, Container& container, size_t const size)
-		requires requires { container.resize(size); }
+	friend vsm::result<size_t> tag_invoke(
+		resize_buffer_t,
+		Container& container,
+		size_t const min_size)
+		requires requires { container.resize(min_size); }
+	{
+		return tag_invoke(resize_buffer_t(), container, min_size, min_size);
+	}
+
+	template<typename Container>
+	friend vsm::result<size_t> tag_invoke(
+		resize_buffer_t,
+		Container& container,
+		size_t const min_size,
+		size_t const max_size)
+		requires requires { container.resize(min_size); }
 	{
 		try
 		{
-			container.resize(size);
+			container.resize(min_size);
+
+			if (min_size < max_size && container.size() < container.capacity())
+			{
+				// Resize the container further, up to min(max_size, capacity).
+				container.resize(std::min(max_size, container.capacity()));
+			}
 		}
 		catch (std::bad_alloc const&)
 		{
 			return vsm::unexpected(error::not_enough_memory);
 		}
-
 		return {};
 	}
 
@@ -52,7 +71,7 @@ struct resize_buffer_t
 	vsm::result<size_t> vsm_static_operator_invoke(Container& container, size_t const size)
 		requires vsm::tag_invocable<resize_buffer_t, Container&, size_t>
 	{
-		return vsm::tag_invoke(resize_buffer_t(), container, size);
+		return operator()(container, size, size);
 	}
 
 	template<typename Container>
@@ -115,7 +134,7 @@ struct _string_buffer
 	{
 	}
 	
-	template<_any_mutable_string Container>
+	template<resizable_buffer Container>
 	explicit _string_buffer(Container& container)
 		: m_data(&container)
 		, m_ctrl(type_mask_for<typename Container::value_type>)
@@ -143,7 +162,7 @@ struct _string_buffer
 		{
 			return vsm::unexpected(error::no_buffer_space);
 		}
-		return buffer{ self.m_data, std::max(size, max_size) };
+		return buffer{ self.m_data, std::min(size, max_size) };
 	}
 
 	template<typename Container>
@@ -151,7 +170,7 @@ struct _string_buffer
 	{
 		auto& container = *static_cast<Container*>(self.m_data);
 		vsm_try_discard(resize_buffer(container, min_size, max_size));
-		return { container.data(), container.size() };
+		return buffer{ container.data(), container.size() };
 	}
 
 };
@@ -212,7 +231,7 @@ public:
 	template<detail::_any_mutable_string String>
 		requires resizable_buffer<String>
 	any_string_buffer(String& string)
-		: _string_buffer(_string_buffer::make_container(string))
+		: _string_buffer(string)
 	{
 	}
 

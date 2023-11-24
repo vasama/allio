@@ -30,60 +30,49 @@ struct open_info
 
 static vsm::result<open_info> make_open_info(open_kind const kind, open_args const& args)
 {
+	bool const multiplexable = false; //TODO
+
 	open_info info =
 	{
 		.desired_access = SYNCHRONIZE,
 		.create_disposition = FILE_OPEN,
 	};
 
-#if 0 //TODO: Add support for synchronous files.
-	if (args.synchronous)
+	switch (kind)
 	{
-		info.create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
-		info.handle_flags |= platform_handle::impl_type::flags::synchronous;
-	}
-#endif
-
-	switch (args.mode)
-	{
-	case file_mode::none:
+	case open_kind::file:
+		info.create_options |= FILE_NON_DIRECTORY_FILE;
 		break;
 
-	case file_mode::read_attributes:
-		info.desired_access |= FILE_READ_ATTRIBUTES;
+	case open_kind::directory:
+		info.create_options |= FILE_DIRECTORY_FILE;
 		break;
-
-	case file_mode::write_attributes:
-		info.desired_access |= FILE_READ_ATTRIBUTES;
-		info.desired_access |= FILE_WRITE_ATTRIBUTES;
-		break;
-
-	case file_mode::read:
-		info.desired_access |= FILE_READ_ATTRIBUTES;
-		info.desired_access |= FILE_READ_DATA;
-		break;
-
-	case file_mode::write:
-		info.desired_access |= FILE_READ_ATTRIBUTES;
-		info.desired_access |= FILE_READ_DATA;
-		info.desired_access |= FILE_WRITE_ATTRIBUTES;
-		info.desired_access |= FILE_WRITE_DATA;
-		info.desired_access |= DELETE;
-		break;
-
-#if 0
-	case file_mode::append:
-		info.desired_access |= FILE_READ_ATTRIBUTES;
-		info.desired_access |= FILE_READ_DATA;
-		info.desired_access |= FILE_WRITE_ATTRIBUTES;
-		info.desired_access |= FILE_WRITE_DATA;
-		info.desired_access |= DELETE;
-		info.desired_access |= FILE_APPEND_DATA;
-		break;
-#endif
 
 	default:
-		return vsm::unexpected(error::invalid_argument);
+		vsm_assert(false);
+	}
+
+	if (vsm::any_flags(args.mode, file_mode::read_attributes))
+	{
+		info.desired_access |= FILE_READ_ATTRIBUTES;
+	}
+	if (vsm::any_flags(args.mode, file_mode::write_attributes))
+	{
+		info.desired_access |= FILE_READ_ATTRIBUTES;
+		info.desired_access |= FILE_WRITE_ATTRIBUTES;
+	}
+	if (vsm::any_flags(args.mode, file_mode::read))
+	{
+		info.desired_access |= FILE_READ_ATTRIBUTES;
+		info.desired_access |= FILE_READ_DATA;
+	}
+	if (vsm::any_flags(args.mode, file_mode::write))
+	{
+		info.desired_access |= FILE_READ_ATTRIBUTES;
+		info.desired_access |= FILE_READ_DATA;
+		info.desired_access |= FILE_WRITE_ATTRIBUTES;
+		info.desired_access |= FILE_WRITE_DATA;
+		info.desired_access |= DELETE;
 	}
 
 	switch (args.creation)
@@ -110,33 +99,23 @@ static vsm::result<open_info> make_open_info(open_kind const kind, open_args con
 	}
 
 	// Sharing
+	if (vsm::any_flags(args.sharing, file_sharing::unlink))
 	{
-		if (vsm::any_flags(args.sharing, file_sharing::unlink))
-		{
-			info.share_access |= FILE_SHARE_DELETE;
-		}
-		if (vsm::any_flags(args.sharing, file_sharing::read))
-		{
-			info.share_access |= FILE_SHARE_READ;
-		}
-		if (vsm::any_flags(args.sharing, file_sharing::write))
-		{
-			info.share_access |= FILE_SHARE_WRITE;
-		}
+		info.share_access |= FILE_SHARE_DELETE;
+	}
+	if (vsm::any_flags(args.sharing, file_sharing::read))
+	{
+		info.share_access |= FILE_SHARE_READ;
+	}
+	if (vsm::any_flags(args.sharing, file_sharing::write))
+	{
+		info.share_access |= FILE_SHARE_WRITE;
 	}
 
-	switch (kind)
+	if (!multiplexable)
 	{
-	case open_kind::file:
-		info.create_options |= FILE_NON_DIRECTORY_FILE;
-		break;
-
-	case open_kind::directory:
-		info.create_options |= FILE_DIRECTORY_FILE;
-		break;
-
-	default:
-		vsm_assert(false);
+		info.create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
+		info.handle_flags |= platform_object_t::impl_type::flags::synchronous;
 	}
 
 	return info;
@@ -198,6 +177,7 @@ static vsm::result<unique_handle_with_flags> create_file(
 }
 
 
+#if 0
 vsm::result<unique_handle_with_flags> win32::create_file(
 	HANDLE const hint_handle,
 	file_id_128 const& id,
@@ -215,6 +195,7 @@ vsm::result<unique_handle_with_flags> win32::create_file(
 
 	return create_file(hint_handle, unicode_string, info);
 }
+#endif
 
 vsm::result<unique_handle_with_flags> win32::create_file(
 	HANDLE const base_handle,
@@ -237,7 +218,7 @@ vsm::result<unique_handle_with_flags> win32::create_file(
 	unicode_string.Length = static_cast<USHORT>(kernel_path.path.size() * sizeof(wchar_t));
 	unicode_string.MaximumLength = unicode_string.Length;
 
-	return create_file(base_handle, unicode_string, info);
+	return create_file(kernel_path.handle, unicode_string, info);
 }
 
 vsm::result<unique_handle_with_flags> win32::reopen_file(
@@ -263,7 +244,8 @@ namespace {
 static constexpr size_t file_name_information_buffer_size = 0x7FFF;
 
 static constexpr size_t file_name_information_size =
-	sizeof(FILE_NAME_INFORMATION) + file_name_information_buffer_size;
+	sizeof(FILE_NAME_INFORMATION) +
+	file_name_information_buffer_size;
 
 struct file_name_information_deleter
 {
@@ -309,21 +291,16 @@ static vsm::result<file_name_information_ptr> query_file_name_information(HANDLE
 }
 
 
-vsm::result<void> filesystem_handle::do_blocking_io(
-	filesystem_handle const& h,
-	io_result_ref_t<get_current_path_t> const result,
-	io_parameters_t<get_current_path_t> const& args)
+vsm::result<size_t> fs_object_t::get_current_path(
+	native_type const& h,
+	io_parameters_t<fs_object_t, get_current_path_t> const& a)
 {
-	if (!h)
-	{
-		return vsm::unexpected(error::handle_is_null);
-	}
-
-	vsm_try(information, query_file_name_information(unwrap_handle(h.get_platform_handle())));
+	vsm_try(information, query_file_name_information(
+		unwrap_handle(h.platform_handle)));
 
 	std::wstring_view const wide_path = std::wstring_view(
 		information->FileName,
 		information->FileNameLength);
 
-	return result.produce(transcode_string(wide_path, args.buffer));
+	return transcode_string(wide_path, a.buffer);
 }

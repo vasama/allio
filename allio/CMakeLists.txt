@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.23)
 
-project(allio)
+project(allio-core)
 
 find_package(vsm-box REQUIRED)
 find_package(vsm-core REQUIRED)
@@ -10,6 +10,7 @@ find_package(vsm-intrusive_ptr REQUIRED)
 find_package(vsm-linear REQUIRED)
 find_package(vsm-literals REQUIRED)
 find_package(vsm-math REQUIRED)
+find_package(vsm-numeric REQUIRED)
 find_package(vsm-offset_ptr REQUIRED)
 find_package(vsm-optional REQUIRED)
 find_package(vsm-result REQUIRED)
@@ -17,7 +18,7 @@ find_package(vsm-tag_ptr REQUIRED)
 find_package(vsm-unique_resource REQUIRED)
 find_package(p2300 REQUIRED)
 
-vsm_add_library(allio
+vsm_add_library(allio::core
 	HEADERS
 		include/allio/async_result.hpp
 		include/allio/byte_io.hpp
@@ -32,7 +33,7 @@ vsm_add_library(allio
 		include/allio/map.hpp
 		include/allio/network.hpp
 		include/allio/path.hpp
-		include/allio/path_literal.hpp
+		include/allio/path_literals.hpp
 		include/allio/path_view.hpp
 		include/allio/platform_object.hpp
 		include/allio/platform.hpp
@@ -73,7 +74,6 @@ vsm_add_library(allio
 		include/allio/detail/handles/platform_object.hpp
 		include/allio/detail/handles/process.hpp
 		include/allio/detail/handles/section.hpp
-		include/allio/detail/handles/socket_handle_base.hpp
 		include/allio/detail/handles/socket.hpp
 
 	SOURCES
@@ -92,6 +92,7 @@ vsm_add_library(allio
 		vsm::linear
 		vsm::literals
 		vsm::math
+		vsm::numeric
 		vsm::offset_ptr
 		vsm::optional
 		vsm::result
@@ -110,16 +111,16 @@ vsm_add_library(allio
 		source/allio/test/task.hpp
 
 		source/allio/test/handles/datagram_socket.cpp
-		#source/allio/test/handles/directory
+		source/allio/test/handles/directory.cpp
 		source/allio/test/handles/event.cpp
-		#source/allio/test/handles/file.cpp
+		source/allio/test/handles/file.cpp
 		#source/allio/test/handles/map.cpp
 		#source/allio/test/handles/opaque_object.cpp
 		#source/allio/test/handles/process.cpp
 		source/allio/test/handles/socket.cpp
 )
 
-vsm_configure(allio
+vsm_configure(allio::core
 	PLATFORM Windows
 	
 	HEADERS
@@ -157,6 +158,7 @@ vsm_configure(allio
 		source/allio/impl/win32/platform.cpp
 		source/allio/impl/win32/posix_socket.cpp
 		source/allio/impl/win32/posix_socket.hpp
+		source/allio/impl/win32/secrets.cpp
 		source/allio/impl/win32/transcode.cpp
 		source/allio/impl/win32/unique_handle.cpp
 		source/allio/impl/win32/wait_packet.cpp
@@ -167,16 +169,20 @@ vsm_configure(allio
 		source/allio/impl/posix/handles/datagram_socket.cpp
 		source/allio/impl/posix/handles/listen_socket.cpp
 		source/allio/impl/posix/handles/socket.cpp
+		source/allio/impl/win32/handles/directory.cpp
 		source/allio/impl/win32/handles/event.cpp
-		#source/allio/impl/win32/handles/fs_object.cpp
-		#source/allio/impl/win32/handles/fs_object.hpp
+		source/allio/impl/win32/handles/file.cpp
+		source/allio/impl/win32/handles/fs_object.cpp
+		source/allio/impl/win32/handles/fs_object.hpp
 		source/allio/impl/win32/handles/platform_object.cpp
 		source/allio/impl/win32/handles/platform_object.hpp
 		#source/allio/impl/win32/handles/process.cpp
 		#source/allio/impl/win32/handles/process.hpp
 
 		source/allio/impl/win32/iocp/datagram_socket.cpp
+		source/allio/impl/win32/iocp/directory.cpp
 		source/allio/impl/win32/iocp/event.cpp
+		source/allio/impl/win32/iocp/file.cpp
 		source/allio/impl/win32/iocp/listen_socket.cpp
 		source/allio/impl/win32/iocp/multiplexer.cpp
 		#source/allio/impl/win32/iocp/process.cpp
@@ -191,7 +197,7 @@ vsm_configure(allio
 		source/allio/test/win32/wsa.cpp
 )
 
-vsm_configure(allio
+vsm_configure(allio::core
 	PLATFORM Linux
 	
 	HEADERS
@@ -240,15 +246,15 @@ vsm_configure(allio
 		source/allio/test/linux/io_uring.cpp
 )
 
-target_compile_definitions(allio_test
-	PRIVATE
-		"allio_detail_test_program=\"$<TARGET_FILE:test_program>\""
-)
-add_dependencies(allio_test test_program)
+#target_compile_definitions(allio_test
+#	PRIVATE
+#		"allio_detail_test_program=\"$<TARGET_FILE:test_program>\""
+#)
+#add_dependencies(allio_test test_program)
 
-if(MSVC)
-	target_compile_options(allio PUBLIC /Zc:preprocessor /Zc:__cplusplus)
-	target_compile_definitions(allio PUBLIC _SILENCE_ALL_CXX23_DEPRECATION_WARNINGS)
-endif()
+#if(MSVC)
+#	target_compile_options(allio PUBLIC /Zc:preprocessor /Zc:__cplusplus)
+#	target_compile_definitions(allio PUBLIC _SILENCE_ALL_CXX23_DEPRECATION_WARNINGS)
+#endif()
 
 add_subdirectory(tools)

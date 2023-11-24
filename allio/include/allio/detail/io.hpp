@@ -51,22 +51,6 @@ concept modifier =
 	std::is_same_v<typename Operation::operation_concept, modifier_t>;
 
 
-template<object Object, operation_c Operation>
-auto _io_optional_params()
-{
-	if constexpr (requires { typename Operation::optional_params_type; })
-	{
-		return vsm_declval(typename Operation::optional_params_type);
-	}
-	else
-	{
-		return vsm_declval(typename Operation::template optional_params_template<Object>);
-	}
-}
-
-template<object Object, operation_c Operation>
-using io_optional_params_t = decltype(_io_optional_params<Object, Operation>());
-
 template<object Object, operation_c Operation, optional_multiplexer_handle_for<Object> MultiplexerHandle>
 auto _io_result()
 {
@@ -84,26 +68,83 @@ template<object Object, typename Operation, optional_multiplexer_handle_for<Obje
 using io_result_t = decltype(_io_result<Object, Operation, MultiplexerHandle>());
 
 
-template<typename Optional, typename Required>
-struct _io_parameters : Optional, Required {};
+template<typename Required, typename Optional>
+struct _io_parameters : Required, Optional
+{
+	static_assert(std::is_default_constructible_v<Optional>);
+
+	template<typename... Args>
+	explicit _io_parameters(Args&&... args)
+		requires requires { Required{ vsm_forward(args)... }; }
+		: Required{ vsm_forward(args)... }
+		, Optional{}
+	{
+	}
+};
 
 template<>
-struct _io_parameters<no_parameters_t, no_parameters_t> : no_parameters_t {};
+struct _io_parameters<no_parameters_t, no_parameters_t> {};
+
+template<bool IsExtended>
+struct _extended_io_parameters;
+
+template<>
+struct _extended_io_parameters<0>
+{
+	template<typename P, object Object, operation_c Operation>
+	using type = P;
+};
+
+template<>
+struct _extended_io_parameters<1>
+{
+	template<bool IsNoParameters>
+	struct parameters;
+
+	template<>
+	struct parameters<0>
+	{
+		template<typename P, typename Extended>
+		struct type : P, Extended
+		{
+			using P::P;
+		};
+	};
+
+	template<>
+	struct parameters<1>
+	{
+		template<typename P, typename Extended>
+		using type = P;
+	};
+
+	template<typename P, typename Extended>
+	using _type = typename parameters<std::is_same_v<Extended, no_parameters_t>>::template type<P, Extended>;
+
+	template<typename P, object Object, operation_c Operation>
+	using type = _type<P, typename Operation::template extended_params_template<Object>>;
+};
+
+template<typename P, object Object, operation_c Operation>
+using extended_io_parameters_t = typename _extended_io_parameters<
+	requires { typename Operation::template extended_params_template<Object>; }
+>::template type<P, Object, Operation>;
 
 template<object Object, operation_c Operation>
-using io_parameters_t = _io_parameters<
-	typename Operation::required_params_type,
-	io_optional_params_t<Object, Operation>>;
+using io_parameters_t = extended_io_parameters_t<
+	_io_parameters<
+		typename Operation::required_params_type,
+		typename Operation::optional_params_type>,
+	Object,
+	Operation>;
 
 template<object Object, operation_c Operation, typename... Args>
 [[nodiscard]] auto make_io_args(Args&&... required_args)
 {
 	using parameters_type = io_parameters_t<Object, Operation>;
-	return [&required_args...](auto&&... optional_args)
-		vsm_lambda_attribute( [[nodiscard]] )
-		-> parameters_type
+	return [&required_args...] vsm_lambda_nodiscard (auto&&... optional_args) -> parameters_type
 	{
-		parameters_type arguments{ { { vsm_forward(required_args) }... } };
+		parameters_type arguments{ vsm_forward(required_args)... };
 		(set_argument(arguments, vsm_forward(optional_args)), ...);
 		return arguments;
 	};
@@ -135,10 +176,10 @@ template<object Object, operation_c Operation>
 struct blocking_io_t
 {
 	template<typename Handle>
-	auto vsm_static_operator_invoke(Handle&& handle, io_parameters_t<Object, Operation> const& args)
-		requires vsm::tag_invocable<blocking_io_t, Handle&&, io_parameters_t<Object, Operation> const&>
+	auto vsm_static_operator_invoke(Handle& h, io_parameters_t<Object, Operation> const& a)
+		requires vsm::tag_invocable<blocking_io_t, Handle&, io_parameters_t<Object, Operation> const&>
 	{
-		return vsm::tag_invoke(blocking_io_t(), vsm_forward(handle), args);
+		return vsm::tag_invoke(blocking_io_t(), h, a);
 	}
 };
 
@@ -241,36 +282,36 @@ inline constexpr rebind_handle_t<To> rebind_handle = {};
 
 struct submit_io_t
 {
-	template<typename H, typename S, typename Args, typename Handler>
-	auto vsm_static_operator_invoke(H& h, S& s, Args const& args, Handler& handler)
-		requires vsm::tag_invocable<submit_io_t, H&, S&, Args const&, Handler&>
+	template<typename H, typename S, typename A, typename Handler>
+	auto vsm_static_operator_invoke(H& h, S& s, A const& a, Handler& handler)
+		requires vsm::tag_invocable<submit_io_t, H&, S&, A const&, Handler&>
 	{
-		return vsm::tag_invoke(submit_io_t(), h, s, args, handler);
+		return vsm::tag_invoke(submit_io_t(), h, s, a, handler);
 	}
 
-	template<typename M, typename H, typename C, typename S, typename Args, typename Handler>
-	auto vsm_static_operator_invoke(M& m, H& h, C& c, S& s, Args const& args, Handler& handler)
-		requires vsm::tag_invocable<submit_io_t, M&, H&, C&, S&, Args const&, Handler&>
+	template<typename M, typename H, typename C, typename S, typename A, typename Handler>
+	auto vsm_static_operator_invoke(M& m, H& h, C& c, S& s, A const& a, Handler& handler)
+		requires vsm::tag_invocable<submit_io_t, M&, H&, C&, S&, A const&, Handler&>
 	{
-		return vsm::tag_invoke(submit_io_t(), m, h, c, s, args, handler);
+		return vsm::tag_invoke(submit_io_t(), m, h, c, s, a, handler);
 	}
 };
 inline constexpr submit_io_t submit_io = {};
 
 struct notify_io_t
 {
-	template<typename H, typename S, typename Args, typename Status>
-	auto vsm_static_operator_invoke(H& h, S& s, Args const& args, Status&& status)
-		requires vsm::tag_invocable<notify_io_t, H&, S&, Args const&, Status&&>
+	template<typename H, typename S, typename A, typename Status>
+	auto vsm_static_operator_invoke(H& h, S& s, A const& a, Status&& status)
+		requires vsm::tag_invocable<notify_io_t, H&, S&, A const&, Status&&>
 	{
-		return vsm::tag_invoke(notify_io_t(), h, s, args, vsm_forward(status));
+		return vsm::tag_invoke(notify_io_t(), h, s, a, vsm_forward(status));
 	}
 
-	template<typename M, typename H, typename C, typename S, typename Args, typename Status>
-	auto vsm_static_operator_invoke(M& m, H& h, C& c, S& s, Args const& args, Status&& status)
-		requires vsm::tag_invocable<notify_io_t, M&, H&, C&, S&, Args const&, Status&&>
+	template<typename M, typename H, typename C, typename S, typename A, typename Status>
+	auto vsm_static_operator_invoke(M& m, H& h, C& c, S& s, A const& a, Status&& status)
+		requires vsm::tag_invocable<notify_io_t, M&, H&, C&, S&, A const&, Status&&>
 	{
-		return vsm::tag_invoke(notify_io_t(), m, h, c, s, args, vsm_forward(status));
+		return vsm::tag_invoke(notify_io_t(), m, h, c, s, a, vsm_forward(status));
 	}
 };
 inline constexpr notify_io_t notify_io = {};
@@ -333,7 +374,7 @@ struct async_operation_base
 		auto& h,
 		std::derived_from<async_connector_base> auto& c,
 		S& s,
-		auto const& args,
+		auto const& a,
 		basic_io_handler<IoStatus>& handler)
 		//requires requires { impl_type::submit(m, h, c, s); }
 	{
@@ -342,7 +383,7 @@ struct async_operation_base
 			h,
 			c,
 			s,
-			args,
+			a,
 			handler);
 	}
 
@@ -353,7 +394,7 @@ struct async_operation_base
 		auto& h,
 		std::derived_from<async_connector_base> auto& c,
 		S& s,
-		auto const& args,
+		auto const& a,
 		auto&& status)
 		//requires requires { impl_type::notify(m, h, c, s, status); }
 	{
@@ -362,7 +403,7 @@ struct async_operation_base
 			h,
 			c,
 			s,
-			args,
+			a,
 			vsm_forward(status));
 	}
 

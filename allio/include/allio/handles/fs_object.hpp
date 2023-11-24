@@ -5,6 +5,6 @@
 namespace allio {
 
 using detail::fs_object_t;
-using detail::path_descriptor;
+using detail::fs_path;
 
 } // namespace allio

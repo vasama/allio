@@ -10,7 +10,7 @@ using socket_security_context = detail::openssl_socket_security_context;
 
 [[nodiscard]] vsm::result<socket_security_context> create_socket_security_context(auto&&... args)
 {
-	return socket_security_context::create(make_args<detail::security_context_parameters>(vsm_forward(args)...));
+	return socket_security_context::create(detail::make_args<detail::security_context_parameters>(vsm_forward(args)...));
 }
 
 } // namespace allio::openssl

@@ -11,26 +11,46 @@
 #include <vsm/platform.h>
 
 namespace allio::detail {
+
+template<bool IsVoid>
+struct _with_security_context;
+
+template<>
+struct _with_security_context<0>
+{
+	template<typename SecurityContext>
+	using type = basic_security_context_t<SecurityContext>;
+};
+
+template<>
+struct _with_security_context<1>
+{
+	template<typename SecurityContext>
+	using type = no_parameters_t;
+};
+
+template<typename SecurityContext>
+using with_security_context_t = typename _with_security_context<std::is_void_v<SecurityContext>>::template type<SecurityContext>;
+
 namespace socket_io {
 
 struct connect_t
 {
 	using operation_concept = producer_t;
 	using required_params_type = network_endpoint_t;
-	using result_type = void;
+	using optional_params_type = deadline_t;
 
-	template<typename SocketObject>
-	using optional_params_template = parameters_t
-	<
-		basic_socket_security_context_t<typename SocketObject::security_context_type>,
-		deadline_t
-	>;
+	template<object Object>
+	using extended_params_template = with_security_context_t<typename Object::security_context_type>;
+
+	using result_type = void;
 
 	template<object Object>
 	friend vsm::result<void> tag_invoke(
 		blocking_io_t<Object, connect_t>,
 		typename Object::native_type& h,
 		io_parameters_t<Object, connect_t> const& args)
+		requires requires { Object::connect(h, args); }
 	{
 		return Object::connect(h, args);
 	}
@@ -48,42 +68,9 @@ struct disconnect_t
 		blocking_io_t<Object, disconnect_t>,
 		typename Object::native_type& h,
 		io_parameters_t<Object, disconnect_t> const& args)
+		requires requires { Object::disconnect(h, args); }
 	{
 		return Object::disconnect(h, args);
-	}
-};
-
-struct stream_read_t
-{
-	using operation_concept = void;
-	using required_params_type = read_buffers_t;
-	using optional_params_type = deadline_t;
-	using result_type = size_t;
-
-	template<object Object>
-	friend vsm::result<size_t> tag_invoke(
-		blocking_io_t<Object, stream_read_t>,
-		typename Object::native_type const& h,
-		io_parameters_t<Object, stream_read_t> const& args)
-	{
-		return Object::read(h, args);
-	}
-};
-
-struct stream_write_t
-{
-	using operation_concept = void;
-	using required_params_type = write_buffers_t;
-	using optional_params_type = deadline_t;
-	using result_type = size_t;
-
-	template<object Object>
-	friend vsm::result<size_t> tag_invoke(
-		blocking_io_t<Object, stream_write_t>,
-		typename Object::native_type const& h,
-		io_parameters_t<Object, stream_write_t> const& args)
-	{
-		return Object::write(h, args);
 	}
 };
 
@@ -96,8 +83,8 @@ struct basic_socket_t : BaseObject
 
 	using connect_t = socket_io::connect_t;
 	using disconnect_t = socket_io::disconnect_t;
-	using read_some_t = socket_io::stream_read_t;
-	using write_some_t = socket_io::stream_write_t;
+	using read_some_t = byte_io::stream_read_t;
+	using write_some_t = byte_io::stream_write_t;
 
 	using operations = type_list_append
 	<
@@ -162,11 +149,15 @@ struct raw_socket_t : basic_socket_t<platform_object_t>
 		native_type& h,
 		io_parameters_t<raw_socket_t, connect_t> const& args);
 
-	static vsm::result<size_t> read(
+	static vsm::result<void> disconnect(
+		native_type& h,
+		io_parameters_t<raw_socket_t, disconnect_t> const& args);
+
+	static vsm::result<size_t> stream_read(
 		native_type const& h,
 		io_parameters_t<raw_socket_t, read_some_t> const& args);
 
-	static vsm::result<size_t> write(
+	static vsm::result<size_t> stream_write(
 		native_type const& h,
 		io_parameters_t<raw_socket_t, write_some_t> const& args);
 

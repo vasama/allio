@@ -10,7 +10,7 @@ using listen_socket_security_context = detail::openssl_listen_socket_security_co
 
 [[nodiscard]] vsm::result<listen_socket_security_context> create_listen_socket_security_context(auto&&... args)
 {
-	return listen_socket_security_context::create(make_args<detail::security_context_parameters>(vsm_forward(args)...));
+	return listen_socket_security_context::create(detail::make_args<detail::security_context_parameters>(vsm_forward(args)...));
 }
 
 } // namespace allio::openssl

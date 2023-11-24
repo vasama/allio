@@ -31,6 +31,7 @@ struct bind_t
 		blocking_io_t<Object, bind_t>,
 		typename Object::native_type& h,
 		io_parameters_t<Object, bind_t> const& a)
+		requires requires { Object::bind(h, a); }
 	{
 		return Object::bind(h, a);
 	}
@@ -48,6 +49,7 @@ struct receive_from_t
 		blocking_io_t<Object, receive_from_t>,
 		typename Object::native_type const& h,
 		io_parameters_t<Object, receive_from_t> const& a)
+		requires requires { Object::receive_from(h, a); }
 	{
 		return Object::receive_from(h, a);
 	}
@@ -65,6 +67,7 @@ struct send_to_t
 		blocking_io_t<Object, send_to_t>,
 		typename Object::native_type const& h,
 		io_parameters_t<Object, send_to_t> const& a)
+		requires requires { Object::send_to(h, a); }
 	{
 		return Object::send_to(h, a);
 	}

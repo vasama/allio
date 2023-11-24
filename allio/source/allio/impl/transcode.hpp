@@ -16,6 +16,7 @@ enum class transcode_error
 {
 	no_buffer_space = 1,
 	invalid_source_encoding,
+	unsupported_operation,
 };
 
 struct transcode_result
@@ -59,7 +60,10 @@ vsm::result<size_t> _transcode_string(
 
 	if (r1.ec == transcode_error{})
 	{
-		vsm_try_discard(encode_buffer.resize(r1.encoded));
+		if (encoded_size != out_buffer_1.size())
+		{
+			vsm_try_discard(encode_buffer.resize(r1.encoded));
+		}
 	}
 	else
 	{
@@ -79,6 +83,8 @@ vsm::result<size_t> _transcode_string(
 		}
 
 		vsm_try(out_buffer_2, encode_buffer.resize(r1.encoded + r2.encoded));
+
+		// Resizing the encode buffer again does not overwrite the content already written into it.
 		vsm_assert(memcmp(out_buffer_1.data(), out_buffer_2.data(), r1.encoded) == 0);
 
 		transcode_unchecked(
