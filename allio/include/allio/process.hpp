@@ -3,10 +3,8 @@
 #include <allio/default_multiplexer.hpp>
 #include <allio/handles/process.hpp>
 
-namespace allio {
+namespace allio::async {
 
-allio_detail_export
-template<typename Multiplexer = default_multiplexer_handle>
-using process_handle = basic_process_handle<Multiplexer>;
+using process_handle = basic_process_handle<default_multiplexer_handle>;
 
-} // namespace allio
+} // namespace allio::async

@@ -6,6 +6,7 @@
 #include <allio/network.hpp>
 
 #include <vsm/assert.h>
+#include <vsm/flags.hpp>
 #include <vsm/preprocessor.h>
 #include <vsm/result.hpp>
 #include <vsm/unique_resource.hpp>
@@ -98,11 +99,20 @@ inline vsm::result<int> choose_protocol(int const address_family, int const type
 	return vsm::unexpected(error::invalid_argument);
 }
 
+
+enum class socket_flags
+{
+	none                    = 0,
+	multiplexable           = 1 << 0,
+	registered_io           = 1 << 1,
+};
+vsm_flag_enum(socket_flags);
+
 vsm::result<unique_socket_with_flags> create_socket(
 	int address_family,
 	int type,
 	int protocol,
-	bool multiplexable);
+	socket_flags flags);
 
 inline vsm::result<void> socket_bind(
 	socket_type const socket,

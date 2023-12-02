@@ -7,29 +7,41 @@
 
 namespace allio::detail {
 
-struct protection_parameter_t
+struct protection_t
 {
 	detail::protection protection;
 
-	struct tag_t
+	friend void tag_invoke(set_argument_t, protection_t& args, detail::protection const protection)
 	{
-		struct argument_t
-		{
-			detail::protection value;
-			
-			friend void tag_invoke(set_argument_t, protection_parameter_t& args, argument_t const& value)
-			{
-				args.protection = value.value;
-			}
-		};
-
-		argument_t vsm_static_operator_invoke(detail::protection const protection)
-		{
-			return { protection };
-		}
-	};
+		args.protection = protection;
+	}
 };
-inline constexpr protection_parameter_t::tag_t section_protection;
+
+namespace section_io {
+
+struct create_t
+{
+	using operation_concept = producer_t;
+	struct required_params_type
+	{
+		platform_object_t::native_type const* backing_file;
+		fs_size max_size;
+	};
+	using optional_params_type = protection_t;
+	using result_type = void;
+
+	template<object Object>
+	friend vsm::result<void> tag_invoke(
+		blocking_io_t<Object, create_t>,
+		typename Object::native_type& h,
+		io_parameters_t<Object, create_t> const& a)
+		requires requires { Object::create(h, a); }
+	{
+		return Object::create(h, a);
+	}
+};
+
+} // namespace section_io
 
 struct section_t : platform_object_t
 {
@@ -40,58 +52,47 @@ struct section_t : platform_object_t
 		detail::protection protection;
 	};
 
-	struct create_t
-	{
-		using operation_concept = producer_t;
-
-		struct required_params_type
-		{
-			file_handle const* backing_file;
-			file_size maximum_size;
-		};
-
-		using optional_params_type = protection_parameter_t;
-	};
+	using create_t = section_io::create_t;
 
 	using operations = type_list_append<
 		base_type::operations
 		, create_t
 	>;
 
-	template<typename H>
-	struct abstract_interface : base_type::abstract_interface<H>
+	template<typename Handle>
+	struct abstract_interface : base_type::abstract_interface<Handle>
 	{
 		[[nodiscard]] detail::protection protection() const
 		{
-			return static_cast<H const&>(*this).native().native_type::protection;
+			return static_cast<Handle const&>(*this).native().native_type::protection;
 		}
 	};
 };
+using abstract_section_handle = abstract_handle<section_t>;
+
 
 namespace _section_b {
 
 using section_handle = blocking_handle<section_t>;
 
-vsm::result<section_handle> create_section(
-	file_size const maximum_size,
-	auto&&... args)
+vsm::result<section_handle> create_section(fs_size const max_size, auto&&... args)
 {
 	vsm::result<section_handle> r(vsm::result_value);
-	vsm_try_void(blocking_io<section_t::create_t>(
+	vsm_try_void(blocking_io<section_t, section_io::create_t>(
 		*r,
-		make_io_args<section_t::create_t>(nullptr, maximum_size)(vsm_forward(args)...)));
+		make_io_args<section_t, section_io::create_t>(nullptr, max_size)(vsm_forward(args)...)));
 	return r;
 }
 
 vsm::result<section_handle> create_section(
-	_file_b::file_handle const& backing_file,
-	file_size const maximum_size,
+	abstract_file_handle::file_handle const& backing_file,
+	fs_size const max_size,
 	auto&&... args)
 {
 	vsm::result<section_handle> r(vsm::result_value);
 	vsm_try_void(blocking_io<section_t::create_t>(
 		*r,
-		make_io_args<section_t::create_t>(&backing_file, maximum_size)(vsm_forward(args)...)));
+		make_io_args<section_t::create_t>(&backing_file.native(), max_size)(vsm_forward(args)...)));
 	return r;
 }
 

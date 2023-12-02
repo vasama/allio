@@ -9,7 +9,7 @@
 
 namespace allio::detail {
 
-//TODO: Create separate types for manual and auto reset events.
+//TODO: Create separate types for manual and auto reset events?
 
 enum class event_mode : uint8_t
 {
@@ -25,34 +25,19 @@ enum class event_mode : uint8_t
 inline constexpr event_mode manual_reset_event = event_mode::manual_reset;
 inline constexpr event_mode auto_reset_event = event_mode::auto_reset;
 
-struct signal_event_t
+struct initially_signaled_t
 {
-	bool signal;
+	bool initially_signaled;
 
-	struct tag_t
+	friend void tag_invoke(
+		set_argument_t,
+		initially_signaled_t& args,
+		explicit_parameter<initially_signaled_t>)
 	{
-		struct argument_t
-		{
-			bool value;
-
-			friend void tag_invoke(set_argument_t, signal_event_t& args, argument_t const& value)
-			{
-				args.signal = value.value;
-			}
-		};
-
-		argument_t vsm_static_operator_invoke(bool const signal)
-		{
-			return { signal };
-		}
-
-		friend void tag_invoke(set_argument_t, signal_event_t& args, tag_t)
-		{
-			args.signal = true;
-		}
-	};
+		args.initially_signaled = true;
+	}
 };
-inline constexpr signal_event_t::tag_t signal_event = {};
+inline constexpr explicit_parameter<initially_signaled_t> initially_signaled = {};
 
 namespace event_io {
 
@@ -63,7 +48,7 @@ struct create_t
 	{
 		event_mode mode;
 	};
-	using optional_params_type = signal_event_t;
+	using optional_params_type = initially_signaled_t;
 	using result_type = void;
 	using runtime_tag = bounded_runtime_t;
 

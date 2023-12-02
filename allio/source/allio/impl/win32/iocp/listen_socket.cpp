@@ -4,7 +4,6 @@
 #include <allio/impl/win32/iocp/socket.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/wsa.hpp>
-#include <allio/impl/win32/wsa_ex.hpp>
 #include <allio/win32/kernel_error.hpp>
 
 using namespace allio;
@@ -31,7 +30,7 @@ io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s&, listen_a const& a,
 		addr.addr.sa_family,
 		SOCK_STREAM,
 		protocol,
-		/* multiplexable: */ true));
+		posix::socket_flags::multiplexable));
 
 	vsm_try_void(posix::socket_listen(
 		socket.get(),
@@ -112,7 +111,7 @@ io_result<accept_result_type> accept_s::submit(M& m, H const& h, C const&, accep
 		addr.addr.sa_family,
 		SOCK_STREAM,
 		protocol,
-		/* multiplexable: */ true));
+		posix::socket_flags::multiplexable));
 
 	s.socket = unique_wrapped_socket(posix::wrap_socket(socket.release()));
 	s.socket_flags = flags;

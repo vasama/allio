@@ -16,11 +16,12 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 {
 	using stream = std::vector<std::byte>;
 
-	auto const handshake = [&](
+	auto const enter = [&](
 		stream& read_stream,
 		stream& write_stream,
 		openssl_state_base& state,
-		auto const p_member)
+		auto const p_member,
+		auto&&... args)
 	{
 		if (state.m_want_read)
 		{
@@ -40,7 +41,7 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 			state.m_want_read = false;
 		}
 
-		auto const r = (state.*p_member)().value();
+		auto const r = (state.*p_member)(vsm_forward(args)...).value();
 
 		if (state.m_want_write)
 		{
@@ -70,6 +71,29 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 	server_state.m_ssl = server_state.create_ssl(server_ssl_ctx.get()).value();
 	client_state.m_ssl = client_state.create_ssl(client_ssl_ctx.get()).value();
 
+	stream client_to_server;
+	stream server_to_client;
+
+	auto const enter_server = [&](auto const p_member, auto&&... args) -> bool
+	{
+		return enter(
+			client_to_server,
+			server_to_client,
+			server_state,
+			p_member,
+			vsm_forward(args)...);
+	};
+	
+	auto const enter_client = [&](auto const p_member, auto&&... args) -> bool
+	{
+		return enter(
+			server_to_client,
+			client_to_server,
+			client_state,
+			p_member,
+			vsm_forward(args)...);
+	};
+
 
 	static constexpr size_t buffer_size = 64;
 
@@ -94,9 +118,6 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 	client_state.m_w_end = client_w_buffer + buffer_size;
 
 
-	stream client_to_server;
-	stream server_to_client;
-
 	bool accept_pending = true;
 	bool connect_pending = true;
 
@@ -104,20 +125,37 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 	{
 		if (accept_pending)
 		{
-			accept_pending = handshake(
-				client_to_server,
-				server_to_client,
-				server_state,
-				&openssl_state_base::accept);
+			accept_pending = enter_server(&openssl_state_base::accept);
 		}
 
 		if (connect_pending)
 		{
-			connect_pending = handshake(
-				server_to_client,
-				client_to_server,
-				client_state,
-				&openssl_state_base::connect);
+			connect_pending = enter_client(&openssl_state_base::connect);
 		}
 	}
+
+	char write_buffer[] = "The quick brown fox jumps over the lazy dog";
+	char read_buffer[sizeof(write_buffer)] = {};
+
+	bool read_pending = true;
+	bool write_pending = true;
+
+	while (read_pending || write_pending)
+	{
+		if (read_pending)
+		{
+			read_pending = enter_server(
+				&openssl_state_base::read,
+				as_read_buffer(read_buffer, sizeof(read_buffer)));
+		}
+
+		if (write_pending)
+		{
+			write_pending = enter_client(
+				&openssl_state_base::write,
+				as_write_buffer(write_buffer, sizeof(write_buffer)));
+		}
+	}
+
+	REQUIRE(memcmp(read_buffer, write_buffer, sizeof(read_buffer)) == 0);
 }

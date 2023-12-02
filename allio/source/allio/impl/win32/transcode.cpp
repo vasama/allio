@@ -5,7 +5,7 @@
 #include <allio/impl/win32/error.hpp>
 
 #include <vsm/assert.h>
-#include <vsm/integer_conversion.hpp>
+#include <vsm/numeric.hpp>
 
 #include <win32.h>
 

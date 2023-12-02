@@ -15,72 +15,18 @@ static bool is_wide_encoding(encoding const e)
 	return e == encoding::narrow_execution_encoding || e == encoding::utf16;
 }
 
-class win32::command_line_builder
+namespace {
+
+struct builder : api_string_builder
 {
-	static constexpr size_t max_command_line_size = 0x7ffe;
-
-	// Reserve one extra character for the null terminator.
-	static constexpr size_t dynamic_buffer_size = max_command_line_size + 1;
-
-	command_line_storage& m_storage;
-
-	wchar_t* m_buffer_beg;
-	wchar_t* m_buffer_pos;
-	wchar_t* m_buffer_end;
-
-public:
-	explicit command_line_builder(command_line_storage& storage)
-		: m_storage(storage)
-	{
-	}
-
-
-	vsm::result<void> allocate_dynamic_buffer()
-	{
-		wchar_t* const new_buffer_beg = new (std::nothrow) wchar_t[dynamic_buffer_size];
-		if (new_buffer_beg == nullptr)
-		{
-			return vsm::unexpected(error::not_enough_memory);
-		}
-		m_storage.m_dynamic.reset(new_buffer_beg);
-
-		size_t const old_data_size = m_buffer_pos - m_buffer_beg;
-		memcpy(new_buffer_beg, m_buffer_beg, old_data_size * sizeof(wchar_t));
-
-		m_buffer_beg = new_buffer_beg;
-		m_buffer_pos = new_buffer_beg + old_data_size;
-		m_buffer_end = new_buffer_beg + dynamic_buffer_size;
-
-		return {};
-	}
-
-	vsm::result<std::pair<wchar_t*, wchar_t*>> reserve(size_t const size)
-	{
-		if (size > static_cast<size_t>(m_buffer_end - m_buffer_pos))
-		{
-			size_t const old_data_size = m_buffer_pos - m_buffer_beg;
-
-			if (old_data_size + size > dynamic_buffer_size)
-			{
-				return vsm::unexpected(error::command_line_too_long);
-			}
-
-			vsm_try_void(allocate_dynamic_buffer());
-		}
-
-		wchar_t* const beg = m_buffer_pos;
-		wchar_t* const end = m_buffer_pos + size;
-		m_buffer_pos = end;
-
-		return std::pair<wchar_t*, wchar_t*>{ beg, end };
-	}
+	using api_string_builder::api_string_builder;
 
 
 	struct argument_info
 	{
 		/// @brief Whether the string requires quotes around it.
 		bool requires_quotes;
-		
+
 		/// @brief Number of escape characters required.
 		size_t escape_count;
 	};
@@ -141,10 +87,10 @@ public:
 			while (beg != end)
 			{
 				wchar_t const character = *--end;
-	
+
 				vsm_assert(out_beg != out_end);
 				*--out_end = character;
-	
+
 				switch (character)
 				{
 				case L'\\':
@@ -161,19 +107,19 @@ public:
 
 
 	// The argument may be stored in the output buffer after transcoding.
-	vsm::result<void> push_argument(std::wstring_view const argument)
+	vsm::result<void> _push_argument(std::wstring_view const argument)
 	{
 		auto const info = parse_argument(argument);
 
-		vsm_try_bind((out_beg, out_end), reserve(
+		vsm_try_bind((out_beg, out_end), reserve_space(
 			info.requires_quotes +
 			argument.size() +
 			info.escape_count +
 			info.requires_quotes +
-			/* space */ 1));
+			/* space or null terminator */ 1));
 
 		wchar_t* const arg_beg = out_beg + info.requires_quotes;
-		wchar_t* const arg_end = out_end - info.requires_quotes - /* space */ 1;
+		wchar_t* const arg_end = out_end - info.requires_quotes - /* space or null terminator */ 1;
 		vsm_assert(arg_end - arg_beg == argument.size() + info.escape_count);
 
 		copy_and_escape(
@@ -198,121 +144,39 @@ public:
 		return {};
 	}
 
-	vsm::result<void> push_argument(std::string_view const argument)
+	vsm::result<void> _push_argument(std::string_view const argument)
 	{
-		auto const r1 = transcode<wchar_t>(
-			argument,
-			std::span(m_buffer_pos, m_buffer_end));
-
-		size_t encoded = r1.encoded;
-
-		if (r1.ec != transcode_error{})
-		{
-			if (r1.ec != transcode_error::no_buffer_space)
-			{
-				return vsm::unexpected(error::invalid_encoding);
-			}
-
-			if (m_storage.m_dynamic != nullptr)
-			{
-				return vsm::unexpected(error::command_line_too_long);
-			}
-
-
-			auto const r2 = transcode_size<wchar_t>(
-				argument.substr(r1.decoded),
-				max_command_line_size - r1.encoded - (m_buffer_pos - m_buffer_beg));
-
-			if (r2.ec != transcode_error{})
-			{
-				return r2.ec == transcode_error::no_buffer_space
-					? vsm::unexpected(error::command_line_too_long)
-					: vsm::unexpected(error::invalid_encoding);
-			}
-
-			encoded += r2.encoded;
-
-
-			vsm_try_void(allocate_dynamic_buffer());
-
-			transcode_unchecked<wchar_t>(
-				argument.substr(r1.decoded),
-				std::span(m_buffer_pos + r1.encoded, m_buffer_end));
-		}
-
-		return push_argument(std::wstring_view(m_buffer_pos, encoded));
-	}
-
-	vsm::result<void> push_argument(std::basic_string_view<char8_t> const argument)
-	{
-		return push_argument(std::basic_string_view<char>(
-			reinterpret_cast<char const*>(argument.data()),
-			argument.size()));
-	}
-
-	vsm::result<void> push_argument(std::basic_string_view<char16_t> const argument)
-	{
-		//TODO: This is technically UB.
-		return push_argument(std::basic_string_view<wchar_t>(
-			reinterpret_cast<wchar_t const*>(argument.data()),
-			argument.size()));
-	}
-
-	vsm::result<void> push_argument(std::basic_string_view<char32_t>)
-	{
-		return vsm::unexpected(error::unsupported_encoding);
-	}
-
-	vsm::result<void> push_argument(detail::string_length_out_of_range_t)
-	{
-		return vsm::unexpected(error::command_line_too_long);
+		vsm_try_bind((out_beg, out_end), transcode_temporary(argument));
+		return _push_argument(std::wstring_view(out_beg, out_end));
 	}
 
 	vsm::result<void> push_argument(any_string_view const argument)
 	{
-		return argument.visit(vsm_lift_borrow(push_argument));
-	}
-
-
-	vsm::result<wchar_t*> make_command_line(
-		any_string_view const program,
-		any_string_span const arguments)
-	{
-		auto const set_buffer = [&](wchar_t* const beg, size_t const size)
-		{
-			m_buffer_beg = beg;
-			m_buffer_pos = beg;
-			m_buffer_end = beg + size;
-		};
-
-		if (m_storage.m_dynamic != nullptr)
-		{
-			set_buffer(m_storage.m_dynamic.get(), dynamic_buffer_size);
-		}
-		else
-		{
-			set_buffer(m_storage.m_static, std::size(m_storage.m_static));
-		}
-
-		vsm_try_void(push_argument(program));
-		for (any_string_view const argument : arguments)
-		{
-			vsm_try_void(push_argument(argument));
-		}
-
-		// Replace the last space with the null terminator.
-		vsm_assert(m_buffer_beg != m_buffer_end);
-		vsm_assert(m_buffer_pos[-1] == L' ');
-		m_buffer_pos[-1] = L'\0';
-
-		return m_buffer_beg;
+		return visit(argument, vsm_lift_borrow(_push_argument));
 	}
 };
 
+} // namespace
+
 vsm::result<wchar_t*> win32::make_command_line(
-	command_line_storage& storage,
+	api_string_storage& storage,
 	any_string_view const program,
 	any_string_span const arguments)
 {
-	return command_line_builder(storage).make_command_line(program, arguments);
+	// The null terminator is inserted manually by replacing a space.
+	builder builder(storage, /* insert_null_terminator: */ false);
+
+	vsm_try_void(builder.push_argument(program));
+	for (any_string_view const argument : arguments)
+	{
+		vsm_try_void(builder.push_argument(argument));
+	}
+
+	auto const [beg, end] = builder.finalize();
+
+	vsm_assert(beg != end);
+	vsm_assert(end[-1] == L' ');
+	end[-1] = L'\0';
+
+	return beg;
 }

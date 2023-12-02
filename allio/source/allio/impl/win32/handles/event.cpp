@@ -18,8 +18,6 @@ vsm::result<void> event_t::create(
 	native_type& h,
 	io_parameters_t<event_t, event_io::create_t> const& a)
 {
-	vsm_try_void(kernel_init());
-
 	handle_flags flags = flags::none;
 	EVENT_TYPE event_type = NotificationEvent;
 
@@ -35,7 +33,7 @@ vsm::result<void> event_t::create(
 		EVENT_ALL_ACCESS,
 		/* ObjectAttributes: */ nullptr,
 		event_type,
-		a.signal);
+		a.initially_signaled);
 
 	if (!NT_SUCCESS(status))
 	{

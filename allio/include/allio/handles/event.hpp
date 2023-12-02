@@ -9,8 +9,8 @@ using detail::event_mode;
 using detail::manual_reset_event;
 using detail::auto_reset_event;
 
-using detail::signal_event_t;
-using detail::signal_event;
+using detail::initially_signaled_t;
+using detail::initially_signaled;
 
 using detail::event_t;
 

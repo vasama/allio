@@ -58,6 +58,7 @@ enum class error
 
 	unknown_failure,
 	invalid_argument,
+	argument_string_too_long,
 	not_enough_memory,
 	no_buffer_space,
 	filename_too_long,

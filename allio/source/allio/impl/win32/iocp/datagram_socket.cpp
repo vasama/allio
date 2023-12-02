@@ -28,7 +28,7 @@ io_result<void> bind_s::submit(M& m, H& h, C& c, bind_s&, bind_a const& a, io_ha
 		//TODO: Add raw protocol support
 		SOCK_DGRAM,
 		protocol,
-		/* multiplexable: */ true));
+		posix::socket_flags::multiplexable));
 
 	vsm_try_void(socket_bind(socket.get(), addr));
 

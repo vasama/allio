@@ -2,151 +2,211 @@
 
 #include <allio/detail/handles/section.hpp>
 
-namespace allio {
-namespace detail {
+namespace allio::detail {
 
-class _map_handle : public handle
+namespace map_io {
+
+struct map_memory_t
 {
-protected:
-	using base_type = handle;
-
-	section_handle m_section;
-	vsm::linear<void*> m_base;
-	vsm::linear<size_t> m_size;
-	vsm::linear<page_level> m_page_level;
-
-public:
-	struct native_handle_type : base_type::native_handle_type
+	using operation_concept = producer_t;
+	struct required_params_type
 	{
-		section_handle::native_handle_type section;
+		void* base;
+		size_t size;
+		detail::protection protection;
+	};
+	using optional_params_type = no_parameters_t;
+	using result_type = void;
+	using runtime_concept = bounded_runtime_t;
+
+	template<object Object>
+	friend vsm::result<void> tag_invoke(
+		blocking_io_t<Object, map_memory_t>,
+		typename Object::native_type& h,
+		io_parameters_t<Object, map_memory_t> const& a)
+		requires requires { Object::map_memory(h, a); }
+	{
+		return Object::map_memory(h, a);
+	}
+};
+
+struct commit_t
+{
+	using operation_concept = void;
+	struct required_params_type
+	{
+		void* base;
+		size_t size;
+	};
+	using optional_params_type = no_parameters_t;
+	using result_type = void;
+	using runtime_concept = bounded_runtime_t;
+
+	template<object Object>
+	friend vsm::result<void> tag_invoke(
+		blocking_io_t<Object, commit_t>,
+		typename Object::native_type const& h,
+		io_parameters_t<Object, commit_t> const& a)
+		requires requires { Object::commit(h, a); }
+	{
+		return Object::commit(h, a);
+	}
+};
+
+struct decommit_t
+{
+	using operation_concept = void;
+	struct required_params_type
+	{
+		void* base;
+		size_t size;
+	};
+	using optional_params_type = no_parameters_t;
+	using result_type = void;
+	using runtime_concept = bounded_runtime_t;
+
+	template<object Object>
+	friend vsm::result<void> tag_invoke(
+		blocking_io_t<Object, decommit_t>,
+		typename Object::native_type const& h,
+		io_parameters_t<Object, decommit_t> const& a)
+		requires requires { Object::decommit(h, a); }
+	{
+		return Object::decommit(h, a);
+	}
+};
+
+struct protect_t
+{
+	using operation_concept = void;
+	struct required_params_type
+	{
+		void* base;
+		size_t size;
+		detail::protection protection;
+	};
+	using optional_params_type = no_parameters_t;
+	using result_type = void;
+	using runtime_concept = bounded_runtime_t;
+
+	template<object Object>
+	friend vsm::result<void> tag_invoke(
+		blocking_io_t<Object, protect_t>,
+		typename Object::native_type const& h,
+		io_parameters_t<Object, protect_t> const& a)
+		requires requires { Object::protect(h, a); }
+	{
+		return Object::protect(h, a);
+	}
+};
+
+} // namespace map_io
+
+struct map_t : object_t
+{
+	using base_type = object_t;
+
+	allio_handle_flags
+	(
+		anonymous,
+	);
+
+	struct native_type : base_type::native_type
+	{
+		section_t::native_type section;
+		detail::page_level page_level;
 
 		void* base;
 		size_t size;
-
-		allio::page_level page_level;
 	};
 
-	[[nodiscard]] native_handle_type get_native_handle() const
+	using map_memory_t = map_io::map_memory_t;
+	using commit_t = map_io::commit_t;
+	using decommit_t = map_io::decommit_t;
+	using protect_t = map_io::protect_t;
+
+	using operations = type_list_append
+	<
+		base_type::operations
+		, map_memory_t
+		, commit_t
+		, decommit_t
+		, protect_t
+	>;
+
+	static vsm::result<void> map_memory(
+		native_type& h,
+		io_parameters_t<map_t, map_memory_t> const& a);
+
+	static vsm::result<void> commit(
+		native_type const& h,
+		io_parameters_t<map_t, commit_t> const& a);
+
+	static vsm::result<void> decommit(
+		native_type const& h,
+		io_parameters_t<map_t, decommit_t> const& a);
+
+	static vsm::result<void> protect(
+		native_type const& h,
+		io_parameters_t<map_t, protect_t> const& a);
+
+	static vsm::result<void> close(
+		native_type& h,
+		io_parameters_t<map_t, close_t> const& a);
+
+	template<typename Handle>
+	struct abstract_interface : base_type::abstract_interface<Handle>
 	{
-		return
+		[[nodiscard]] void* base() const
 		{
-			base_type::get_native_handle(),
-			section.get_native_handle(),
-			m_base.value,
-			m_size.value,
-			m_page_level.value,
-		};
-	}
+			return static_cast<Handle const&>(*this).native().native_type::base;
+		}
 
-
-	[[nodiscard]] section_handle const& get_section() const
-	{
-		vsm_assert(*this); //PRECONDITION
-		return m_section;
-	}
-
-	[[nodiscard]] void* base() const
-	{
-		vsm_assert(*this); //PRECONDITION
-		return m_base.value;
-	}
-
-	[[nodiscard]] size_t size() const
-	{
-		vsm_assert(*this); //PRECONDITION
-		return m_size.value;
-	}
-
-
-	[[nodiscard]] page_level get_page_level() const
-	{
-		vsm_assert(*this); //PRECONDITION
-		return m_page_level.value;
-	}
-
-	[[nodiscard]] size_t get_page_size() const
-	{
-		return allio::get_page_size(get_page_level());
-	}
-
-
-	//TODO: Use optional with sentinel for page_level.
-	#define allio_map_handle_basic_map_parameters(type, data, ...) \
-		type(allio::detail::map_handle_base, basic_map_parameters) \
-		data(::uintptr_t,                               address,            0) \
-		data(bool,                                      commit,             true) \
-		data(::allio::protection,                       protection,         ::allio::protection::read_write) \
-		data(::std::optional<::allio::page_level>,      page_level) \
-
-	allio_interface_parameters(allio_map_handle_basic_map_parameters);
-
-	#define allio_map_handle_map_parameters(type, data, ...) \
-		type(allio::detail::map_handle_base, map_parameters) \
-		data(::allio::section_handle const*,            section,            nullptr) \
-		data(::allio::file_size,                        section_offset,     0) \
-		allio_map_handle_basic_map_parameters(__VA_ARGS__, __VA_ARGS__) \
-
-	allio_interface_parameters(allio_map_handle_map_parameters);
-
-
-	#define allio_map_handle_commit_parameters(type, data, ...) \
-		type(allio::detail::map_handle_base, commit_parameters) \
-		data(::std::optional<::allio::protection>,      protection) \
-
-	allio_interface_parameters(allio_map_handle_commit_parameters);
-
-
-	using decommit_parameters = no_parameters;
-
-
-	using set_protection_parameters = no_parameters;
-
-protected:
-	allio_detail_default_lifetime(_map_handle);
-
-	explicit _map_handle(native_handle_type const& native)
-		: base_type(native)
-		, m_section(private_t(), native.section)
-		, m_base(native.base)
-		, m_size(native.size)
-		, m_page_level(native.page_level)
-	{
-	}
-
-	[[nodiscard]] static bool check_native_handle(native_handle_type const& native)
-	{
-		return base_type::check_native_handle(native)
-			&& section_handle::check_native_handle(native.section)
-			&& native.base != nullptr
-			&& native.size != 0
-		;
-	}
-
-	void set_native_handle(native_handle_type const& native)
-	{
-		base_type::set_native_handle(native);
-		m_section.set_native_handle(native);
-		m_base.value = native.base;
-		m_size.value = native.size;
-		m_page_level = native.page_level;
-	}
-
-	template<typename H>
-	struct sync_interface : base_type::sync_interface<H>
-	{
-		template<parameters<map_parameters> P = map_parameters::interface>
-		vsm::result<void> map(size_t const size, P const& args = {}) &;
-
-		template<parameters<commit_parameters> P = commit_parameters::interface>
-		vsm::result<void> commit(void* const base, size_t const size, P const& args = {}) const;
-
-		template<parameters<decommit_parameters> P = decommit_parameters::interface>
-		vsm::result<void> decommit(void* const base, size_t const size, P const& args = {}) const;
-
-		template<parameters<set_protection_parameters> P = set_protection_parameters::interface>
-		vsm::result<void> set_protection(void* const base, size_t const size, protection const protection, P const& args = {}) const;
+		[[nodiscard]] size_t size() const
+		{
+			return static_cast<Handle const&>(*this).native().native_type::size;
+		}
+	
+		[[nodiscard]] detail::page_level page_level() const
+		{
+			return static_cast<Handle const&>(*this).native().native_type::page_level;
+		}
+	
+		[[nodiscard]] size_t page_size() const
+		{
+			return allio::get_page_size(page_level());
+		}
 	};
 };
+using abstract_map_handle = abstract_handle<map_t>;
 
-} // namespace detail
-} // namespace allio
+
+namespace _map_b {
+
+using map_handle = blocking_handle<map_t>;
+
+vsm::result<map_handle> map_section(
+	vsm::any_cvref_of<section_handle> auto&& section,
+	fs_size const offset,
+	size_t const size,
+	auto&&... args)
+{
+	vsm::result<map_handle> r(vsm::result_value);
+	vsm_try_void(blocking_io<map_t, map_io::map_memory_t>(
+		*r,
+		make_io_args<map_t, map_io::map_memory_t>(section, offset, size)(vsm_forward(args)...)));
+	return r;
+}
+
+vsm::result<map_handle> map_anonymous(size_t const size, auto&&... args)
+{
+	vsm::result<map_handle> r(vsm::result_value);
+	vsm_try_void(blocking_io<map_t, map_io::map_memory_t>(
+		*r,
+		make_io_args<map_t, map_io::map_memory_t>(nullptr, 0, size)(vsm_forward(args)...)));
+	return r;
+}
+
+} // namespace _map_b
+
+} // namespace allio::detail

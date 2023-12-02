@@ -80,11 +80,23 @@ inline void check_file_content(char const* const path, std::string_view const co
 {
 	unique_file const file = open_file(path);
 
-	std::string buffer;
-	buffer.resize(content.size());
+	if (!content.empty())
+	{
+		std::string buffer;
+		buffer.resize(content.size());
+		CHECK(fread(buffer.data(), 1, content.size(), file.get()) == content.size());
+		REQUIRE(buffer == content);
+	}
 
-	REQUIRE(fread(buffer.data(), content.size(), 1, file.get()) == 1);
-	REQUIRE(buffer == content);
+	long const pos = ftell(file.get());
+	REQUIRE(pos != -1);
+
+	REQUIRE(fseek(file.get(), 0, SEEK_END) == 0);
+
+	long const end = ftell(file.get());
+	REQUIRE(end != -1);
+
+	REQUIRE(pos == end);
 }
 
 inline void check_file_content(path const& path, std::string_view const content)

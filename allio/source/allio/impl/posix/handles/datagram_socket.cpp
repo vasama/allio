@@ -17,7 +17,7 @@ vsm::result<void> raw_datagram_socket_t::bind(
 		addr.addr.sa_family,
 		SOCK_DGRAM,
 		protocol,
-		/* multiplexable: */ false));
+		socket_flags::none));
 
 	vsm_try_void(socket_bind(socket.get(), addr));
 
@@ -84,11 +84,7 @@ vsm::result<void> raw_datagram_socket_t::close(
 	native_type& h,
 	io_parameters_t<raw_datagram_socket_t, close_t> const&)
 {
-	if (h.platform_handle != native_platform_handle::null)
-	{
-		unrecoverable(posix::close_socket(unwrap_socket(h.platform_handle)));
-		h.platform_handle = native_platform_handle::null;
-	}
-
+	unrecoverable(posix::close_socket(unwrap_socket(h.platform_handle)));
+	zero_native_handle(h);
 	return {};
 }

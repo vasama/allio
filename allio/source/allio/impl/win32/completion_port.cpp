@@ -11,8 +11,6 @@ using namespace allio::win32;
 
 vsm::result<unique_handle> win32::create_completion_port(size_t const max_concurrent_threads)
 {
-	vsm_try_void(kernel_init());
-
 	HANDLE handle;
 	NTSTATUS const status = NtCreateIoCompletion(
 		&handle,

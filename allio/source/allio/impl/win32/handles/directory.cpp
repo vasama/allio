@@ -6,7 +6,7 @@
 #include <allio/impl/win32/peb.hpp>
 #include <allio/win32/kernel_error.hpp>
 
-#include <vsm/integer_conversion.hpp>
+#include <vsm/numeric.hpp>
 
 #include <bit>
 

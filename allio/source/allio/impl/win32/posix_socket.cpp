@@ -3,13 +3,10 @@
 #include <allio/detail/dynamic_buffer.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
 #include <allio/impl/win32/wsa.hpp>
-#include <allio/impl/win32/wsa_ex.hpp>
 
 #include <vsm/lazy.hpp>
 
 #include <algorithm>
-
-#pragma comment(lib, "ws2_32.lib")
 
 using namespace allio;
 using namespace allio::detail;
@@ -28,61 +25,29 @@ std::string posix::socket_error_category::message(int const code) const
 posix::socket_error_category const posix::socket_error_category::instance;
 
 
-static vsm::result<void> wsa_startup()
-{
-	struct wsa_init
-	{
-		int error;
-
-		wsa_init(int const error)
-			: error(error)
-		{
-		}
-
-		wsa_init(wsa_init const&) = delete;
-		wsa_init& operator=(wsa_init const&) = delete;
-
-		~wsa_init()
-		{
-			if (error == 0)
-			{
-				WSACleanup();
-			}
-		}
-	};
-
-	static wsa_init const init = []() -> wsa_init
-	{
-		WSADATA data;
-		return WSAStartup(MAKEWORD(2, 2), &data);
-	}();
-
-	if (init.error != 0)
-	{
-		return vsm::unexpected(static_cast<posix::socket_error>(init.error));
-	}
-
-	return {};
-}
-
 vsm::result<posix::unique_socket_with_flags> posix::create_socket(
 	int const address_family,
 	int const type,
-	int protocol,
-	bool const multiplexable)
+	int const protocol,
+	socket_flags const flags)
 {
-	vsm_try_void(wsa_startup());
+	vsm_try_void(wsa_init());
 
-	DWORD flags = WSA_FLAG_NO_HANDLE_INHERIT;
-	handle_flags handle_flags = {};
+	DWORD w_flags = WSA_FLAG_NO_HANDLE_INHERIT;
+	handle_flags h_flags = {};
 
-	if (multiplexable)
+	if (vsm::any_flags(flags, socket_flags::multiplexable))
 	{
-		flags |= WSA_FLAG_OVERLAPPED;
+		w_flags |= WSA_FLAG_OVERLAPPED;
 	}
 	else
 	{
-		handle_flags |= platform_object_t::impl_type::flags::synchronous;
+		h_flags |= platform_object_t::impl_type::flags::synchronous;
+	}
+
+	if (vsm::any_flags(flags, socket_flags::registered_io))
+	{
+		w_flags |= WSA_FLAG_REGISTERED_IO;
 	}
 
 	SOCKET const raw_socket = WSASocketW(
@@ -91,7 +56,7 @@ vsm::result<posix::unique_socket_with_flags> posix::create_socket(
 		protocol,
 		/* lpProtocolInfo: */ nullptr,
 		/* group: */ 0,
-		flags);
+		w_flags);
 
 	if (raw_socket == INVALID_SOCKET)
 	{
@@ -100,70 +65,23 @@ vsm::result<posix::unique_socket_with_flags> posix::create_socket(
 
 	unique_socket socket(raw_socket);
 
-	if (multiplexable)
+	if (vsm::any_flags(flags, socket_flags::multiplexable))
 	{
 		//TODO: Set multiplexable completion modes.
-		//handle_flags |= set_multiplexable_completion_modes(socket);
+		//h_flags |= set_multiplexable_completion_modes(socket);
 	}
 
 	return vsm_lazy(unique_socket_with_flags
 	{
 		.socket = vsm_move(socket),
-		.flags = handle_flags,
+		.flags = h_flags,
 	});
 }
 
-#if 0
-template<typename B, std::derived_from<B> D>
-static B& base_cast(D& derived)
-{
-	return derived;
-}
-
-template<typename B, std::derived_from<B> D>
-static B&& base_cast(D&& derived)
-{
-	return static_cast<D&&>(derived);
-}
-
-template<typename B, std::derived_from<B> D>
-static B const& base_cast(D const& derived)
-{
-	return derived;
-}
-
-template<typename B, std::derived_from<B> D>
-static B const&& base_cast(D const&& derived)
-{
-	return static_cast<D const&&>(derived);
-}
-
-vsm::result<unique_socket_with_flags> posix::socket_accept(socket_type const listen_socket, socket_address& addr)
-{
-	vsm_try(listen_addr, socket_address::get(listen_socket));
-	auto socket_result = create_socket(listen_addr.addr.sa_family);
-	vsm_try((auto&&, socket), socket_result);
-
-	wsa_accept_address_buffer addr_buffer;
-	DWORD const error = wsa_accept_ex(
-		listen_socket,
-		socket.socket.get(),
-		addr_buffer,
-		/* overlapped: */ nullptr);
-
-	if (error != 0)
-	{
-		return vsm::unexpected(static_cast<socket_error>(error));
-	}
-
-	base_cast<socket_address_union>(addr) = addr_buffer.remote;
-	addr.size = 0;
-
-	return socket_result;
-}
-#endif
-
-vsm::result<posix::socket_poll_mask> posix::socket_poll(socket_type const socket, socket_poll_mask const mask, deadline const deadline)
+vsm::result<posix::socket_poll_mask> posix::socket_poll(
+	socket_type const socket,
+	socket_poll_mask const mask,
+	deadline const deadline)
 {
 	WSAPOLLFD poll_fd =
 	{
@@ -191,7 +109,9 @@ vsm::result<posix::socket_poll_mask> posix::socket_poll(socket_type const socket
 	return poll_fd.revents;
 }
 
-vsm::result<void> posix::socket_set_non_blocking(socket_type const socket, bool const non_blocking)
+vsm::result<void> posix::socket_set_non_blocking(
+	socket_type const socket,
+	bool const non_blocking)
 {
 	unsigned long mode = non_blocking ? 1 : 0;
 	if (ioctlsocket(socket, FIONBIO, &mode) == socket_error_value)
@@ -201,7 +121,9 @@ vsm::result<void> posix::socket_set_non_blocking(socket_type const socket, bool 
 	return {};
 }
 
-vsm::result<size_t> posix::socket_scatter_read(socket_type const socket, read_buffers const buffers)
+vsm::result<size_t> posix::socket_scatter_read(
+	socket_type const socket,
+	read_buffers const buffers)
 {
 	wsa_buffers_storage<64> buffers_storage;
 	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
@@ -226,7 +148,9 @@ vsm::result<size_t> posix::socket_scatter_read(socket_type const socket, read_bu
 	return transferred;
 }
 
-vsm::result<size_t> posix::socket_gather_write(socket_type const socket, write_buffers const buffers)
+vsm::result<size_t> posix::socket_gather_write(
+	socket_type const socket,
+	write_buffers const buffers)
 {
 	wsa_buffers_storage<64> buffers_storage;
 	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
@@ -349,81 +273,3 @@ vsm::result<void> posix::socket_send_to(
 
 	return {};
 }
-
-#if 0
-vsm::result<void> allio::packet_scatter_read(io::parameters_with_result<io::packet_scatter_read> const& args)
-{
-	packet_socket_handle const& h = *args.handle;
-
-	if (!h)
-	{
-		return vsm::unexpected(error::handle_is_null);
-	}
-
-	SOCKET const socket = unwrap_socket(h.get_platform_handle());
-
-	read_buffers const buffers = args.buffers;
-
-	detail::dynamic_buffer<WSABUF, 64> wsa_buffers_storage;
-	vsm_try(wsa_buffers, wsa_buffers_storage.reserve(buffers.size()));
-	transform_wsa_buffers(buffers, wsa_buffers);
-
-	socket_address_union addr;
-
-	WSAMSG message =
-	{
-		.name = &addr.addr,
-		.namelen = sizeof(socket_address_union),
-		.lpBuffers = wsa_buffers,
-		.dwBufferCount = static_cast<uint32_t>(buffers.size()),
-	};
-
-	DWORD transferred;
-	if (DWORD const error = wsa_recv_msg(socket, &message, &transferred))
-	{
-		return vsm::unexpected(static_cast<socket_error>(error));
-	}
-	
-	args.result->packet_size = transferred;
-	args.result->endpoint = addr.get_network_endpoint();
-
-	return {};
-}
-
-vsm::result<void> allio::packet_gather_write(io::parameters_with_result<io::packet_gather_write> const& args)
-{
-	packet_socket_handle const& h = *args.handle;
-
-	if (!h)
-	{
-		return vsm::unexpected(error::handle_is_null);
-	}
-
-	SOCKET const socket = unwrap_socket(h.get_platform_handle());
-
-	write_buffers const buffers = args.buffers;
-	vsm_try(addr, socket_address::make(*args.endpoint));
-
-	detail::dynamic_buffer<WSABUF, 64> wsa_buffers_storage;
-	vsm_try(wsa_buffers, wsa_buffers_storage.reserve(buffers.size()));
-	transform_wsa_buffers(buffers, wsa_buffers);
-
-	WSAMSG message =
-	{
-		.name = &addr.addr,
-		.namelen = addr.size,
-		.lpBuffers = wsa_buffers,
-		.dwBufferCount = static_cast<uint32_t>(buffers.size()),
-	};
-
-	DWORD transferred;
-	if (DWORD const error = wsa_send_msg(socket, &message, &transferred))
-	{
-		return vsm::unexpected(static_cast<socket_error>(error));
-	}
-
-	*args.result = transferred;
-
-	return {};
-}
-#endif

@@ -4,8 +4,9 @@
 #include <allio/byte_io.hpp>
 #include <allio/platform_object.hpp>
 
-namespace allio {
-namespace detail {
+namespace allio::detail {
+
+
 
 class usb_stream_handle_base : public platform_handle
 {
@@ -42,12 +43,4 @@ protected:
 	using base_type::base_type;
 };
 
-} // namespace detail
-
-using usb_stream_handle = final_handle<detail::usb_stream_handle_base>;
-
-
-
-allio_USB_API extern allio_handle_implementation(usb_stream_handle);
-
-} // namespace allio
+} // namespace allio::detail

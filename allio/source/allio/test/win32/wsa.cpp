@@ -1,6 +1,6 @@
 #include <allio/impl/posix/socket.hpp>
 #include <allio/impl/win32/completion_port.hpp>
-#include <allio/impl/win32/wsa_ex.hpp>
+#include <allio/impl/win32/wsa.hpp>
 #include <allio/test/spawn.hpp>
 
 #include <catch2/catch_all.hpp>
@@ -9,9 +9,12 @@ using namespace allio;
 using namespace allio::posix;
 using namespace allio::win32;
 
+static constexpr DWORD SIO_POLL = _WSAIORW(IOC_WS2, 31);
+
+
 TEST_CASE("WSA supports unix stream sockets", "[windows][wsa][socket]")
 {
-	REQUIRE(posix::create_socket(AF_UNIX, SOCK_STREAM, 0, false));
+	REQUIRE(posix::create_socket(AF_UNIX, SOCK_STREAM, 0, socket_flags::none));
 }
 
 TEST_CASE("WSA async connect and accept", "[windows][wsa][socket][async]")
@@ -24,13 +27,13 @@ TEST_CASE("WSA async connect and accept", "[windows][wsa][socket][async]")
 			addr.addr.sa_family,
 			SOCK_STREAM,
 			IPPROTO_TCP,
-			/* multiplexable: */ true).value().socket;
+			socket_flags::multiplexable).value().socket;
 	};
 
 	auto const completion_port = create_completion_port(1).value();
 
 
-	/* accept */
+	// Accept
 
 	auto const listen_socket = create_socket();
 
@@ -48,7 +51,7 @@ TEST_CASE("WSA async connect and accept", "[windows][wsa][socket][async]")
 	REQUIRE(WSA_IO_PENDING == wsa_accept_ex(listen_socket.get(), server_socket.get(), accept_addr, accept_overlapped));
 
 
-	/* connect */
+	// Connect
 
 	auto const client_socket = create_socket();
 
@@ -70,43 +73,94 @@ TEST_CASE("WSA async connect and accept", "[windows][wsa][socket][async]")
 	REQUIRE(WSA_IO_PENDING == wsa_connect_ex(client_socket.get(), addr, connect_overlapped));
 
 
-	/* handle completions */
-
-	FILE_IO_COMPLETION_INFORMATION completions[3];
-
-	auto const get_completions = [&](size_t const index, size_t const count)
+	// Handle completions
 	{
-		return std::span(completions).subspan(index, count);
-	};
+		FILE_IO_COMPLETION_INFORMATION completions[3];
 
-	REQUIRE(remove_io_completions(completion_port.get(), get_completions(0, 1), std::chrono::milliseconds(100)).value() == 1);
-	REQUIRE(remove_io_completions(completion_port.get(), get_completions(1, 2), std::chrono::milliseconds(100)).value() == 1);
+		auto const get_completions = [&](size_t const index, size_t const count)
+		{
+			return std::span(completions).subspan(index, count);
+		};
 
-	auto const get_completion = [&](OVERLAPPED const& overlapped) -> FILE_IO_COMPLETION_INFORMATION const&
-	{
-		return completions[0].ApcContext == &overlapped ? completions[0] : completions[1];
-	};
+		REQUIRE(remove_io_completions(completion_port.get(), get_completions(0, 1), std::chrono::milliseconds(100)).value() == 1);
+		REQUIRE(remove_io_completions(completion_port.get(), get_completions(1, 2), std::chrono::milliseconds(100)).value() == 1);
 
-	// accept completion
-	{
-		auto const& completion = get_completion(accept_overlapped);
-		REQUIRE(completion.ApcContext == &accept_overlapped);
-		REQUIRE(NT_SUCCESS(completion.IoStatusBlock.Status));
+		auto const get_completion = [&](OVERLAPPED const& overlapped) -> FILE_IO_COMPLETION_INFORMATION const&
+		{
+			return completions[0].ApcContext == &overlapped ? completions[0] : completions[1];
+		};
+
+		// Accept completion
+		{
+			auto const& completion = get_completion(accept_overlapped);
+			REQUIRE(completion.ApcContext == &accept_overlapped);
+			REQUIRE(NT_SUCCESS(completion.IoStatusBlock.Status));
+		}
+
+		// Connect completion
+		{
+			auto const& completion = get_completion(connect_overlapped);
+			REQUIRE(completion.ApcContext == &connect_overlapped);
+			REQUIRE(NT_SUCCESS(completion.IoStatusBlock.Status));
+		}
 	}
 
-	// connect completion
+#if 0
+	SECTION("Asynchoronous polling")
 	{
-		auto const& completion = get_completion(connect_overlapped);
-		REQUIRE(completion.ApcContext == &connect_overlapped);
-		REQUIRE(NT_SUCCESS(completion.IoStatusBlock.Status));
+		struct AFD_HANDLE
+		{
+			SOCKET Handle;
+			ULONG Events;
+			NTSTATUS Status;
+		};
+	
+		struct AFD_POLL_INFO
+		{
+			LARGE_INTEGER Timeout;
+			ULONG HandleCount;
+			ULONG_PTR Exclusive;
+			AFD_HANDLE Handles[1];
+		};
+
+		AFD_POLL_INFO poll_info;
+		poll_info.Timeout.QuadPart = std::numeric_limits<int64_t>::max();
+		poll_info.HandleCount = 1;
+		poll_info.Exclusive = FALSE;
+		poll_info.Handles[0].Handle = server_socket.get();
+		poll_info.Handles[0].Events = 1 /*AFD_EVENT_RECEIVE*/;
+
+		HANDLE event;
+		NtCreateEvent(
+			&event,
+			EVENT_ALL_ACCESS,
+			NULL,
+			SynchronizationEvent,
+			FALSE);
+
+		IO_STATUS_BLOCK io_status_block = make_io_status_block();
+		NTSTATUS const status = win32::NtDeviceIoControlFile(
+			(HANDLE)server_socket.get(),
+			event,
+			/* ApcRoutine: */ nullptr,
+			/* ApcContext: */ nullptr,
+			&io_status_block,
+			0x12024 /*IOCTL_AFD_SELECT*/,
+			&poll_info,
+			sizeof(poll_info),
+			&poll_info,
+			sizeof(poll_info));
+
+		int x = 0;
 	}
+#endif
 }
 
 
 TEST_CASE("WSA does not support unix datagram sockets", "[windows][datagram_socket][wsa]")
 {
 	// The purpose of this test is to quickly detect future support for this feature.
-	REQUIRE(!posix::create_socket(AF_UNIX, SOCK_DGRAM, 0, false));
+	REQUIRE(!posix::create_socket(AF_UNIX, SOCK_DGRAM, 0, socket_flags::none));
 }
 
 TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][datagram_socket][blocking]")
@@ -117,7 +171,7 @@ TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][datagram_soc
 			AF_INET,
 			SOCK_DGRAM,
 			IPPROTO_UDP,
-			/* multiplexable: */ false).value().socket;
+			socket_flags::none).value().socket;
 	};
 
 	auto const receive_socket = create_socket();
@@ -171,7 +225,7 @@ TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram
 			addr.addr.sa_family,
 			SOCK_DGRAM,
 			IPPROTO_UDP,
-			/* multiplexable: */ true).value().socket;
+			socket_flags::multiplexable).value().socket;
 	};
 
 	auto const completion_port = create_completion_port(1).value();
@@ -288,3 +342,41 @@ TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram
 		REQUIRE(completion.IoStatusBlock.Information == 1);
 	}
 }
+
+
+#if 0
+TEST_CASE("WSA RIO", "[windows][wsa][rio]")
+{
+	auto const socket = posix::create_socket(
+		AF_INET,
+		SOCK_STREAM,
+		IPPROTO_TCP,
+		socket_flags::multiplexable | socket_flags::registered_io).value().socket;
+
+	auto const completion_port = create_completion_port(1).value();
+	OVERLAPPED rio_overlapped;
+
+	auto const cq = rio_create_completion_queue(
+		10,
+		completion_port.get(),
+		nullptr,
+		rio_overlapped).value();
+
+	auto const rq = rio_create_request_queue(
+		socket.get(),
+		10,
+		10,
+		10,
+		10,
+		cq.get(),
+		cq.get(),
+		nullptr);
+
+	WSA_FLAG_REGISTERED_IO;
+	auto const rio = wsa_get_rio(socket.get()).value();
+	int x = 0;
+
+	WSAIoctl;
+	SIO_ADDRESS_LIST_CHANGE
+}
+#endif

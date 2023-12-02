@@ -4,6 +4,8 @@
 #include <vsm/tag_invoke.hpp>
 #include <vsm/utility.hpp>
 
+#include <utility>
+
 namespace allio::detail {
 
 struct set_argument_t
@@ -28,45 +30,33 @@ template<typename P>
 auto&& parameter_value(P&& args)
 {
 	auto&& [value] = vsm_forward(args);
-	return vsm_forward(value);
+	return std::forward_like<P>(value);
 }
 
 template<typename P>
 using parameter_value_t = std::remove_cvref_t<decltype(parameter_value(std::declval<P>()))>;
 
 
-template<typename P>
-struct implicit_parameter : P
-{
-	using value_type = parameter_value_t<P>;
-
-	friend void tag_invoke(
-		set_argument_t,
-		P& arguments,
-		vsm::any_cvref_of<value_type> auto&& argument)
-	{
-		parameter_value(arguments) = vsm_forward(argument);
-	}
-};
-
-template<typename P, typename T = parameter_value_t<P>>
+template<typename P, typename T = void>
 class explicit_parameter
 {
-	struct argument_t
+	using value_type = vsm::select_t<std::is_void_v<T>, parameter_value_t<P>, T>;
+
+	struct argument
 	{
-		T value;
+		value_type value;
 
 		friend void tag_invoke(
 			set_argument_t,
 			P& arguments,
-			vsm::any_cvref_of<argument_t> auto&& argument)
+			vsm::any_cvref_of<argument> auto&& argument)
 		{
 			parameter_value(arguments) = vsm_forward(argument).value;
 		}
 	};
 
 public:
-	constexpr argument_t vsm_static_operator_invoke(std::convertible_to<T> auto&& value)
+	constexpr argument vsm_static_operator_invoke(std::convertible_to<value_type> auto&& value)
 	{
 		return { { vsm_forward(value) } };
 	}

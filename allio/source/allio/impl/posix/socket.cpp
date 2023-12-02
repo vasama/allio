@@ -20,10 +20,10 @@ static To ipv6_network_byte_order(From const& addr)
 	};
 	auto const data = std::bit_cast<ipv6_data>(addr);
 	return std::bit_cast<To>(ipv6_data
-		{
-			.h = network_byte_order(data.l),
-			.l = network_byte_order(data.h),
-		});
+	{
+		.h = network_byte_order(data.l),
+		.l = network_byte_order(data.h),
+	});
 }
 
 network_endpoint socket_address_union::get_network_endpoint() const
@@ -125,6 +125,7 @@ vsm::result<void> posix::socket_listen(
 		? std::min<uint32_t>(*p_backlog, std::numeric_limits<int>::max())
 		: SOMAXCONN;
 
+	//TODO: Separate bind.
 	vsm_try_void(socket_bind(socket, addr));
 
 	if (::listen(socket, backlog) == socket_error_value)

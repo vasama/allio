@@ -111,6 +111,11 @@ public:
 
 	using string_type::empty;
 
+	constexpr string_type& string()
+	{
+		return *this;
+	}
+
 	constexpr string_type const& string() const
 	{
 		return *this;

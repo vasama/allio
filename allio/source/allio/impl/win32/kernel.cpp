@@ -9,73 +9,138 @@
 using namespace allio;
 using namespace allio::win32;
 
-#define allio_nt_syscalls(X, ...) \
-	X(RtlNtStatusToDosError,                    ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(RtlSetCurrentDirectory_U,                 ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtClose,                                  ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtWaitForSingleObject,                    ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtQueryInformationFile,                   ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtSetInformationFile,                     ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtCreateFile,                             ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtReadFile,                               ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtWriteFile,                              ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtCancelIoFileEx,                         ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtCreateIoCompletion,                     ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtSetIoCompletion,                        ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtRemoveIoCompletion,                     ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtRemoveIoCompletionEx,                   ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtCreateWaitCompletionPacket,             ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtAssociateWaitCompletionPacket,          ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtCancelWaitCompletionPacket,             ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtQueryDirectoryFileEx,                   ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtQueryFullAttributesFile,                ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtAllocateVirtualMemory,                  ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtFreeVirtualMemory,                      ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtProtectVirtualMemory,                   ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtCreateSection,                          ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtMapViewOfSection,                       ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtUnmapViewOfSection,                     ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtCreateEvent,                            ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtSetEvent,                               ntdll       __VA_OPT__(, __VA_ARGS__)) \
-	X(NtResetEvent,                             ntdll       __VA_OPT__(, __VA_ARGS__)) \
+#define allio_kernel_modules(X) \
+	X(ntdll) \
 
-#define allio_x_entry(syscall, ...) \
-	decltype(win32::syscall) win32::syscall = nullptr;
+#define allio_kernel_functions(X) \
+	X(ntdll,        RtlNtStatusToDosError,                  ERROR_NOT_SUPPORTED) \
+	X(ntdll,        RtlSetCurrentDirectory_U,               STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtClose,                                STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtWaitForSingleObject,                  STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtQueryInformationFile,                 STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtSetInformationFile,                   STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtCreateFile,                           STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtReadFile,                             STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtWriteFile,                            STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtCancelIoFileEx,                       STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtCreateIoCompletion,                   STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtSetIoCompletion,                      STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtRemoveIoCompletion,                   STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtRemoveIoCompletionEx,                 STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtCreateWaitCompletionPacket,           STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtAssociateWaitCompletionPacket,        STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtCancelWaitCompletionPacket,           STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtQueryDirectoryFileEx,                 STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtQueryFullAttributesFile,              STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtAllocateVirtualMemory,                STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtFreeVirtualMemory,                    STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtProtectVirtualMemory,                 STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtCreateSection,                        STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtMapViewOfSection,                     STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtUnmapViewOfSection,                   STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtCreateEvent,                          STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtSetEvent,                             STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtResetEvent,                           STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtDeviceIoControlFile,                  STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtQueryObject,                          STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtTerminateProcess,                     STATUS_NOT_SUPPORTED) \
 
-allio_nt_syscalls(allio_x_entry)
-#undef allio_x_entry
+namespace {
 
-vsm::result<void> win32::kernel_init()
+template<typename Pointer>
+struct kernel_function;
+
+template<typename R, typename... P>
+struct kernel_function<R(NTAPI*)(P...)>
 {
-	static vsm::result<void> const r = []() -> vsm::result<void>
+	using Pointer = R(NTAPI*)(P...);
+
+	template<
+		HMODULE& Module,
+		wchar_t const* ModuleName,
+		Pointer& Function,
+		char const* FunctionName,
+		R DefaultValue>
+	static R NTAPI entry_point(P const... args)
 	{
-		HMODULE const ntdll = GetModuleHandleW(L"NTDLL.DLL");
+		auto _module = Module;
 
-		vsm_assert(ntdll != NULL);
+		if (_module == NULL)
+		{
+			_module = GetModuleHandleW(ModuleName);
 
-#define allio_x_entry(syscall, dll) \
-		if (FARPROC const proc = GetProcAddress(dll, vsm_pp_str(syscall))) \
-		{ \
-			win32::syscall = reinterpret_cast<decltype(win32::syscall)>(proc); \
-		} \
-		else \
-		{ \
-			goto return_error; \
-		} \
+			if (_module == NULL)
+			{
+				Function = return_default<DefaultValue>;
+				return DefaultValue;
+			}
 
-		allio_nt_syscalls(allio_x_entry)
+			Module = _module;
+		}
+
+		auto const function = reinterpret_cast<Pointer>(
+			GetProcAddress(_module, FunctionName));
+
+		if (function == NULL)
+		{
+			Function = return_default<DefaultValue>;
+			return DefaultValue;
+		}
+
+		Function = function;
+		return function(args...);
+	}
+
+	template<R DefaultValue>
+	static R NTAPI return_default(P...)
+	{
+		return DefaultValue;
+	}
+};
+
+namespace module_names {
+
+#define allio_x_entry(module) \
+	static constexpr wchar_t module[] = L"" vsm_pp_str(module) ".dll";
+
+allio_kernel_modules(allio_x_entry)
 #undef allio_x_entry
 
-		return {};
+} // namespace module_names
 
-	return_error:
-		return vsm::unexpected(error::unsupported_operation);
-	}();
-	return r;
-}
+namespace modules {
 
+#define allio_x_entry(module) \
+	static HMODULE module = NULL;
 
+allio_kernel_modules(allio_x_entry)
+#undef allio_x_entry
 
+} // namespace modules
+
+namespace function_names {
+
+#define allio_x_entry(module, function, ...) \
+	static constexpr char function[] = "" vsm_pp_str(function);
+
+allio_kernel_functions(allio_x_entry)
+#undef allio_x_entry
+
+} // namespace function_names
+
+} // namespace
+
+#define allio_x_entry(module, function, default_value) \
+	decltype(win32::function) win32::function = \
+		kernel_function<decltype(win32::function)>::entry_point< \
+			modules::module, \
+			module_names::module, \
+			win32::function, \
+			function_names::function, \
+			default_value>; \
+
+allio_kernel_functions(allio_x_entry)
+#undef allio_x_entry
 
 
 NTSTATUS win32::io_wait(HANDLE const handle, IO_STATUS_BLOCK* const isb, deadline const deadline)
@@ -85,7 +150,10 @@ NTSTATUS win32::io_wait(HANDLE const handle, IO_STATUS_BLOCK* const isb, deadlin
 		do
 		{
 			//TODO: deadline
-			NTSTATUS status = NtWaitForSingleObject(handle, 0, nullptr);
+			NTSTATUS status = NtWaitForSingleObject(
+				handle,
+				/* Alertable: */ FALSE,
+				/* Timeout: */ nullptr);
 
 			if (status == STATUS_TIMEOUT)
 			{

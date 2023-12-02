@@ -11,7 +11,7 @@
 using namespace allio;
 using namespace allio::win32;
 
-TEST_CASE("process command line generation", "[command_line][win32]")
+TEST_CASE("Process command line generation", "[windows][command_line]")
 {
 	std::string program;
 	std::vector<std::string> arguments;
@@ -76,7 +76,7 @@ TEST_CASE("process command line generation", "[command_line][win32]")
 
 		size_t const argument_size = 32'766 - expected_command_line.size() + 1;
 		arguments.push_back(std::string(argument_size, 'x'));
-		expected_error = error::command_line_too_long;
+		expected_error = error::argument_string_too_long;
 
 		capture_arguments = { std::format("xxx... [{}]", argument_size) };
 	}
@@ -84,7 +84,7 @@ TEST_CASE("process command line generation", "[command_line][win32]")
 	CAPTURE(program);
 	CAPTURE(capture_arguments ? *capture_arguments : arguments);
 
-	command_line_storage storage;
+	api_string_storage storage;
 	auto const r = make_command_line(
 		storage,
 		program,

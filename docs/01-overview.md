@@ -1,7 +1,5 @@
 # Library Design Overview
 
-The library is centered around two fundamental concepts: handle and multiplexer.
-
 
 ## Handle
 

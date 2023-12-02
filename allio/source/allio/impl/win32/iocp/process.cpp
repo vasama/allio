@@ -4,43 +4,31 @@
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/win32/platform.hpp>
 
-#include <vsm/defer.hpp>
-
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
 using M = iocp_multiplexer;
-using H = process_handle_t;
-using C = async_connector_t<M, H>;
+using H = process_t::native_type;
+using C = async_connector_t<M, process_t>;
 
-using wait_t = process_handle_t::wait_t;
-using wait_s = async_operation_t<M, H, wait_t>;
-using wait_r = io_result_ref_t<wait_t>;
+using wait_t = process_io::wait_t;
+using wait_s = async_operation_t<M, process_t, wait_t>;
+using wait_a = io_parameters_t<process_t, wait_t>;
 
-static io_result handle_result(H const& h, wait_r const result, io_result const wait_result)
+io_result<process_exit_code> wait_s::submit(M& m, H const& h, C const&, wait_s& s, wait_a const&, io_handler<M>& handler)
 {
-	if (!wait_result || *wait_result)
-	{
-		return wait_result;
-	}
-
-	return vsm::as_error_code(result.produce(
-		get_process_exit_code(unwrap_handle(h.get_platform_handle()))
-	));
+	vsm_try_void(s.wait_state.submit(m, h, s, handler));
+	return get_process_exit_code(unwrap_handle(h.platform_handle));
 }
 
-io_result operation<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& s, wait_r const r)
+io_result<process_exit_code> wait_s::notify(M& m, H const& h, C const&, wait_s& s, wait_a const&, M::io_status_type const status)
 {
-	return handle_result(h, r, s.wait_state.submit(m, h, s));
+	vsm_try_void(h, s.wait_state.notify(m, h, s, status));
+	return get_process_exit_code(unwrap_handle(h.platform_handle));
 }
 
-io_result operation<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& s, wait_r const r, io_status const status)
-{
-	return handle_result(h, r, s.wait_state.notify(m, h, s, status));
-}
-
-void operation<M, H, wait_t>::cancel(M& m, H const& h, C const& c, S& s)
+void wait_s::cancel(M& m, H const& h, C const&, S& s)
 {
 	s.wait_state.cancel(m, h, s);
 }

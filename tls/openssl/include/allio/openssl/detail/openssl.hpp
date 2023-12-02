@@ -82,7 +82,7 @@ struct openssl_state_base
 	bool m_want_read = false;
 	bool m_want_write = false;
 
-	vsm::result<openssl_ssl_ptr> create_ssl(openssl_ssl_ctx* ssl_ctx);
+	vsm::result<void> initialize(openssl_ssl_ctx* ssl_ctx);
 
 	vsm::result<openssl_result<void>> accept();
 	vsm::result<openssl_result<void>> connect();
@@ -90,6 +90,11 @@ struct openssl_state_base
 
 	vsm::result<openssl_result<size_t>> read(read_buffer user_buffer);
 	vsm::result<openssl_result<size_t>> write(write_buffer user_buffer);
+};
+
+struct openssl_state : openssl_state_base
+{
+
 };
 
 #if 0

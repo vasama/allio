@@ -13,10 +13,14 @@ namespace allio::win32 {
 
 inline constexpr NTSTATUS STATUS_SUCCESS                        = 0;
 inline constexpr NTSTATUS STATUS_NO_MORE_FILES                  = 0x80000006;
+inline constexpr NTSTATUS STATUS_ACCESS_DENIED                  = 0xC0000022;
 inline constexpr NTSTATUS STATUS_BUFFER_TOO_SMALL               = 0xC0000023;
 inline constexpr NTSTATUS STATUS_OBJECT_TYPE_MISMATCH           = 0xC0000024;
 inline constexpr NTSTATUS STATUS_OBJECT_NAME_INVALID            = 0xC0000033;
+inline constexpr NTSTATUS STATUS_NOT_SUPPORTED                  = 0xC00000BB;
+inline constexpr NTSTATUS STATUS_PROCESS_IS_TERMINATING         = 0xC000010A;
 inline constexpr NTSTATUS STATUS_CANCELLED                      = 0xC0000120;
+inline constexpr NTSTATUS STATUS_INVALID_ADDRESS                = 0xC0000141;
 inline constexpr NTSTATUS STATUS_NOT_FOUND                      = 0xC0000225;
 inline constexpr NTSTATUS STATUS_HANDLE_NOT_CLOSABLE            = 0xC0000325;
 
@@ -35,6 +39,25 @@ typedef void(NTAPI* PIO_APC_ROUTINE)(
 	_In_ PVOID ApcContext,
 	_In_ PIO_STATUS_BLOCK IoStatusBlock,
 	_In_ ULONG Reserved);
+
+struct _OBJECT_BASIC_INFORMATION
+{
+	ULONG Attributes;
+	ULONG GrantedAccess;
+	ULONG HandleCount;
+	ULONG PointerCount;
+	ULONG PagedPoolCharge;
+	ULONG NonPagedPoolCharge;
+	ULONG TotalNumberOfObjects;
+	ULONG Reserved[3];
+	ULONG TotalNumberOfHandles;
+	DWORD Unknown;
+	ULONG NameInfoSize;
+	ULONG TypeInfoSize;
+	ULONG SecurityDescriptorSize;
+	LARGE_INTEGER CreationTime;
+}
+typedef OBJECT_BASIC_INFORMATION, *POBJECT_BASIC_INFORMATION;
 
 enum _FILE_INFORMATION_CLASS
 {
@@ -195,6 +218,16 @@ struct _FILE_ID_EXTD_DIR_INFORMATION
 	WCHAR FileName[1];
 }
 typedef FILE_ID_EXTD_DIR_INFORMATION, *PFILE_ID_EXTD_DIR_INFORMATION;
+
+struct _FILE_FULL_EA_INFORMATION
+{
+	ULONG NextEntryOffset;
+	UCHAR Flags;
+	UCHAR EaNameLength;
+	USHORT EaValueLength;
+	CHAR EaName[1];
+}
+typedef FILE_FULL_EA_INFORMATION, *PFILE_FULL_EA_INFORMATION;
 
 struct _RTL_RELATIVE_NAME
 {
@@ -518,6 +551,45 @@ extern NTSTATUS(NTAPI* NtResetEvent)(
 	_In_ HANDLE EventHandle,
 	_Out_opt_ PLONG PreviousState);
 
+extern NTSTATUS(NTAPI* NtDeviceIoControlFile)(
+	_In_ HANDLE FileHandle,
+	_In_opt_ HANDLE Event,
+	_In_opt_ PIO_APC_ROUTINE ApcRoutine,
+	_In_opt_ PVOID ApcContext,
+	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+	_In_ ULONG IoControlCode,
+	_In_opt_ PVOID InputBuffer,
+	_In_ ULONG InputBufferLength,
+	_Out_opt_ PVOID OutputBuffer,
+	_In_ ULONG OutputBufferLength);
+
+extern NTSTATUS(NTAPI* NtTerminateProcess)(
+	_In_ HANDLE ProcessHandle,
+	_In_ NTSTATUS ExitStatus);
+
+extern NTSTATUS(NTAPI* NtQueryObject)(
+	_In_opt_ HANDLE Handle,
+	_In_ OBJECT_INFORMATION_CLASS ObjectInformationClass,
+	_Out_writes_bytes_opt_(ObjectInformationLength) PVOID ObjectInformation,
+	_In_ ULONG ObjectInformationLength,
+	_Out_opt_ PULONG ReturnLength);
+
+extern NTSTATUS(NTAPI* NtCreateNamedPipeFile)(
+	_Out_ PHANDLE FileHandle,
+	_In_ ULONG DesiredAccess,
+	_In_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+	_In_ ULONG ShareAccess,
+	_In_ ULONG CreateDisposition,
+	_In_ ULONG CreateOptions,
+	_In_ ULONG NamedPipeType,
+	_In_ ULONG ReadMode,
+	_In_ ULONG CompletionMode,
+	_In_ ULONG MaximumInstances,
+	_In_ ULONG InboundQuota,
+	_In_ ULONG OutboundQuota,
+	_In_opt_ PLARGE_INTEGER DefaultTimeout);
+
 
 inline TEB* NtCurrentTeb()
 {
@@ -537,8 +609,6 @@ inline PEB* NtCurrentPeb()
 #endif
 }
 
-
-vsm::result<void> kernel_init();
 
 inline IO_STATUS_BLOCK make_io_status_block()
 {

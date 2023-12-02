@@ -6,4 +6,4 @@ include(vsm)
 vsm_add_aggregate_test(allio_test)
 
 add_subdirectory(allio)
-add_subdirectory(tls)
+#add_subdirectory(tls)

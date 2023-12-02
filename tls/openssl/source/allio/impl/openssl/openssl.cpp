@@ -6,6 +6,7 @@
 
 #include <vsm/assert.h>
 #include <vsm/defer.hpp>
+#include <vsm/numeric.hpp>
 #include <vsm/standard.hpp>
 
 #include <openssl/err.h>
@@ -394,12 +395,12 @@ static vsm::result<pkey_ptr> read_pkey(tls_secret const& secret)
 using ssl_ctx_ptr = openssl_ptr<SSL_CTX, SSL_CTX_free>;
 using ssl_ptr = openssl_ptr<SSL, SSL_free>;
 
-template<auto Function>
+template<auto Function, int SuccessThreshold>
 static vsm::result<openssl_result<int>> ssl_try(SSL* const ssl, auto const... args)
 {
 	int const r = Function(ssl, args...);
 
-	if (r >= 0)
+	if (r >= SuccessThreshold)
 	{
 		return r;
 	}
@@ -682,8 +683,8 @@ struct openssl_state_base::bio_type
 		switch (cmd)
 		{
 		case BIO_CTRL_EOF:
-		//case BIO_CTRL_PUSH:
-		//case BIO_CTRL_POP:
+		case BIO_CTRL_PUSH:
+		case BIO_CTRL_POP:
 			return 0;
 
 		case BIO_CTRL_FLUSH:
@@ -710,7 +711,7 @@ vsm::result<openssl_result<void>> openssl_state_base::accept()
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
-	vsm_try(r, ssl_try<SSL_accept>(ssl));
+	vsm_try(r, ssl_try<SSL_accept, 0>(ssl));
 
 	if (!r)
 	{
@@ -729,7 +730,7 @@ vsm::result<openssl_result<void>> openssl_state_base::connect()
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
-	vsm_try(r, ssl_try<SSL_connect>(ssl));
+	vsm_try(r, ssl_try<SSL_connect, 0>(ssl));
 
 	if (!r)
 	{
@@ -748,7 +749,7 @@ vsm::result<openssl_result<void>> openssl_state_base::disconnect()
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
-	vsm_try(r, ssl_try<SSL_shutdown>(ssl));
+	vsm_try(r, ssl_try<SSL_shutdown, 0>(ssl));
 
 	if (!r)
 	{
@@ -760,14 +761,46 @@ vsm::result<openssl_result<void>> openssl_state_base::disconnect()
 	return {};
 }
 
-vsm::result<openssl_result<size_t>> openssl_state_base::read(read_buffer const user_buffer)
+vsm::result<openssl_result<size_t>> openssl_state_base::read(read_buffer const buffer)
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
-	return vsm::unexpected(error::unsupported_operation);
+
+	vsm_try(r, ssl_try<SSL_read, 1>(
+		ssl,
+		buffer.data(),
+		vsm::saturating(buffer.size())));
+
+	if (!r)
+	{
+		return vsm::success(vsm::unexpected(std::monostate()));
+	}
+
+	if (*r == 0)
+	{
+		return vsm::unexpected(get_ssl_error(ssl, *r));
+	}
+
+	return static_cast<size_t>(*r);
 }
 
-vsm::result<openssl_result<size_t>> openssl_state_base::write(write_buffer const user_buffer)
+vsm::result<openssl_result<size_t>> openssl_state_base::write(write_buffer const buffer)
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
-	return vsm::unexpected(error::unsupported_operation);
+
+	vsm_try(r, ssl_try<SSL_write, 1>(
+		ssl,
+		buffer.data(),
+		vsm::saturating(buffer.size())));
+
+	if (!r)
+	{
+		return vsm::success(vsm::unexpected(std::monostate()));
+	}
+
+	if (*r == 0)
+	{
+		return vsm::unexpected(get_ssl_error(ssl, *r));
+	}
+
+	return static_cast<size_t>(*r);
 }

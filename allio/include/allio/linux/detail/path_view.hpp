@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <vsm/assert.h>
 
 #include <algorithm>

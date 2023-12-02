@@ -8,71 +8,55 @@
 
 #include <vsm/out_resource.hpp>
 
-#include <win32.h>
-
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-vsm::result<void> section_handle_base::sync_impl(io::parameters_with_result<io::section_create> const& args)
+vsm::result<void> section_t::create(
+	native_type& h
+	io_parameters_t<section_t, section_io::create_t> const& a)
 {
-	section_handle& h = *args.handle;
-
-	if (h)
-	{
-		return vsm::unexpected(error::handle_is_not_null);
-	}
-
-
-	if (args.backing_file == nullptr)
+	if (a.backing_file == nullptr)
 	{
 		return vsm::unexpected(error::invalid_argument);
 	}
 
-	file_handle const& backing_file = *args.backing_file;
-
-	if (!backing_file)
+	auto const& backing_file_h = *a.backing_file;
+	if (!backing_file_h.flags[object_t::flags::not_null])
 	{
 		return vsm::unexpected(error::invalid_argument);
 	}
 
-	LARGE_INTEGER maximum_size =
-	{
-		//TODO: Maybe use a checked cast.
-		.QuadPart = static_cast<decltype(LARGE_INTEGER::QuadPart)>(args.maximum_size),
-	};
-
+	LARGE_INTEGER max_size_integer;
+	max_size_integer.QuadPart = a.max_size;
 
 	unique_handle section;
-
 	NTSTATUS const status = NtCreateSection(
 		vsm::out_resource(section),
 		SECTION_ALL_ACCESS, //TODO: Access
-		nullptr, // ObjectAttributes
-		&maximum_size,
+		/* ObjectAttributes: */ nullptr,
+		&max_size_integer,
 		0, //TODO: Page protection
 		0, //TODO: Allocation attributes
-		unwrap_handle(backing_file.get_platform_handle()));
+		unwrap_handle(backing_file_h.platform_handle));
 
 	if (!NT_SUCCESS(status))
 	{
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
-
-	return initialize_platform_handle(h, vsm_move(section),
-		[&](native_platform_handle const handle)
+	h = native_type
+	{
+		platform_object_t::native_type
 		{
-			return platform_handle::native_handle_type
+			object_t::native_type
 			{
-				handle::native_handle_type
-				{
-					handle::flags::not_null,
-				},
-				handle,
-			};
-		}
-	);
-}
+				flags::not_null,
+			},
+			wrap_handle(section.release()),
+		},
+		a.protection,
+	};
 
-allio_handle_implementation(section_handle);
+	return {};
+}

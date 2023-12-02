@@ -24,6 +24,8 @@ struct _object
 			static constexpr handle_flags::uint_type allio_detail_handle_flags_flag_limit = 32;
 		};
 	};
+
+	_object() = delete;
 };
 
 struct close_t

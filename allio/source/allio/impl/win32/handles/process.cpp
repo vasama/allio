@@ -1,32 +1,102 @@
+#include <allio/handles/process.hpp>
 #include <allio/impl/win32/handles/process.hpp>
 
 #include <allio/detail/dynamic_buffer.hpp>
+#include <allio/impl/bounded_vector.hpp>
 #include <allio/impl/transcode.hpp>
 #include <allio/impl/win32/command_line.hpp>
+#include <allio/impl/win32/environment_block.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>
-#include <allio/impl/win32/kernel_path.hpp>
+#include <allio/impl/win32/path.hpp>
 #include <allio/win32/kernel_error.hpp>
 #include <allio/win32/platform.hpp>
 
 #include <vsm/lazy.hpp>
+#include <vsm/numeric.hpp>
 #include <vsm/utility.hpp>
 
-#include <algorithm>
-#include <memory>
+#include <bit>
+#include <optional>
+
+#include <win32.h>
 
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
+namespace {
+
+struct attribute_list_deleter
+{
+	void vsm_static_operator_invoke(LPPROC_THREAD_ATTRIBUTE_LIST const list)
+	{
+		DeleteProcThreadAttributeList(list);
+	}
+};
+using unique_attribute_list = std::unique_ptr<_PROC_THREAD_ATTRIBUTE_LIST, attribute_list_deleter>;
+
+template<size_t Capacity>
+using attribute_storage = basic_dynamic_buffer<std::byte, alignof(std::max_align_t), Capacity>;
+
+} // namespace
+
+template<size_t Capacity>
+static vsm::result<unique_attribute_list> make_attribute_list(
+	attribute_storage<Capacity>& storage,
+	size_t const size)
+{
+	auto const attribute_count = vsm::saturate<DWORD>(size);
+
+	SIZE_T buffer_size = 0;
+	(void)InitializeProcThreadAttributeList(
+		/* lpAttributeList: */ nullptr,
+		attribute_count,
+		/* dwFlags: */ 0,
+		&buffer_size);
+
+	vsm_try(byte_buffer, storage.reserve(buffer_size));
+	auto const buffer = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(byte_buffer);
+
+	if (!InitializeProcThreadAttributeList(
+		buffer,
+		attribute_count,
+		/* dwFlags: */ 0,
+		&buffer_size))
+	{
+		return vsm::unexpected(get_last_error());
+	}
+
+	return vsm_lazy(unique_attribute_list(buffer));
+}
+
+static vsm::result<void> update_attribute_list(
+	unique_attribute_list const& list,
+	DWORD_PTR const attribute,
+	void const* const value,
+	size_t const value_size)
+{
+	if (!UpdateProcThreadAttribute(
+		list.get(),
+		/* dwFlags: */ 0,
+		attribute,
+		const_cast<void*>(value),
+		value_size,
+		/* lpPreviousValue: */ nullptr,
+		/* lpReturnSize: */ 0))
+	{
+		return vsm::unexpected(get_last_error());
+	}
+	return {};
+}
 
 
-vsm::result<unique_handle> win32::open_process(process_id const pid)
+vsm::result<unique_handle> win32::open_process(DWORD const id)
 {
 	HANDLE const handle = OpenProcess(
 		SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION,
 		/* bInheritHandle: */ false,
-		pid);
+		id);
 
 	if (!handle)
 	{
@@ -37,57 +107,181 @@ vsm::result<unique_handle> win32::open_process(process_id const pid)
 }
 
 vsm::result<process_info> win32::launch_process(
-	path_descriptor const path,
-	any_string_span const arguments,
-	any_string_span const environment,
-	path_descriptor const* const working_directory)
+	io_parameters_t<process_t, process_t::launch_t> const& a)
 {
-	if (path.base != nullptr)
+	if (a.path.base != native_platform_handle::null)
 	{
 		return vsm::unexpected(error::unsupported_operation);
 	}
 
-	kernel_path_storage path_storage;
-	vsm_try(kernel_path, make_kernel_path(path_storage,
+	if (a.working_directory)
 	{
-		.path = path.path,
-		.win32_api_form = true,
-	}));
+		if (a.working_directory->base != native_platform_handle::null)
+		{
+			return vsm::unexpected(error::unsupported_operation);
+		}
+	}
 
-	command_line_storage command_line_storage;
-	vsm_try(command_line, make_command_line(
-		command_line_storage,
-		path.path.string(),
-		arguments));
+	api_string_storage string_storage(4);
+	//TODO: Use a smarter path specific function over make_api_string.
+	vsm_try(path, make_api_string(string_storage, a.path.path.string()));
+	vsm_try(command_line, make_command_line(string_storage, a.path.path.string(), a.command_line));
 
-	DWORD creation_flags = 0;
+	wchar_t* environment = nullptr;
+	if (a.environment)
+	{
+		vsm_try_assign(environment, make_environment_block(string_storage, *a.environment));
+	}
 
-	STARTUPINFOW startup_info = {};
+	wchar_t const* working_directory = nullptr;
+	if (a.working_directory)
+	{
+		vsm_try_assign(working_directory, make_api_string(
+			string_storage,
+			a.working_directory->path.string()));
+	}
 
-	PROCESS_INFORMATION process_info;
+	SECURITY_ATTRIBUTES process_attributes = {};
+	process_attributes.nLength = sizeof(process_attributes);
 
+	SECURITY_ATTRIBUTES thread_attributes = {};
+	thread_attributes.nLength = sizeof(thread_attributes);
+
+	STARTUPINFOEXW startup_info = {};
+	startup_info.StartupInfo.cb = sizeof(startup_info);
+
+	bool inherit_handles = a.inherit_handles_count != 0;
+
+	size_t attribute_count = 0;
+	size_t inherit_handles_count = 0;
+
+	bounded_vector<std::pair<void const*, size_t>, 2> inherit_handles_sets;
+
+	auto const push_inherit_handles_set = [&](void const* const data, size_t const size)
+	{
+		attribute_count += inherit_handles_count == 0;
+		vsm_verify(inherit_handles_sets.try_push_back({ data, size }));
+		inherit_handles_count += size;
+	};
+
+	if (a.inherit_handles_array != nullptr)
+	{
+		push_inherit_handles_set(a.inherit_handles_array, a.inherit_handles_count);
+	}
+
+	// Standard stream handle redirection:
+	{
+		bool redirect_standard_streams = false;
+
+		if (a.std_input != native_platform_handle::null)
+		{
+			redirect_standard_streams = true;
+			startup_info.StartupInfo.hStdInput = unwrap_handle(a.std_input);
+		}
+		if (a.std_output != native_platform_handle::null)
+		{
+			redirect_standard_streams = true;
+			startup_info.StartupInfo.hStdOutput = unwrap_handle(a.std_output);
+		}
+		if (a.std_error != native_platform_handle::null)
+		{
+			redirect_standard_streams = true;
+			startup_info.StartupInfo.hStdError = unwrap_handle(a.std_error);
+		}
+
+		if (redirect_standard_streams)
+		{
+			startup_info.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
+
+			if (startup_info.StartupInfo.hStdInput == NULL)
+			{
+				startup_info.StartupInfo.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+			}
+			if (startup_info.StartupInfo.hStdOutput == NULL)
+			{
+				startup_info.StartupInfo.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+			}
+			if (startup_info.StartupInfo.hStdError == NULL)
+			{
+				startup_info.StartupInfo.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+			}
+
+			// Redirecting standard streams requires inheritance of handles.
+			inherit_handles = true;
+
+			// If the user did not request inheritance,
+			// the inheritance is restricted to just the standard stream handles.
+			push_inherit_handles_set(&startup_info.StartupInfo.hStdInput, 3);
+		}
+	}
+
+	attribute_storage<256> attribute_storage;
+	unique_attribute_list attribute_list;
+
+	if (attribute_count != 0)
+	{
+		vsm_try_assign(attribute_list, make_attribute_list(
+			attribute_storage,
+			attribute_count));
+	}
+
+	dynamic_buffer<HANDLE, 8> inherit_handles_storage;
+
+	if (inherit_handles_sets.size() != 0)
+	{
+		void const* inherit_handles_array;
+
+		if (inherit_handles_sets.size() == 1)
+		{
+			inherit_handles_array = inherit_handles_sets.front().first;
+			vsm_assert(inherit_handles_count == inherit_handles_sets.front().second);
+		}
+		else
+		{
+			vsm_try(array, inherit_handles_storage.reserve(inherit_handles_count));
+			size_t index = 0;
+
+			for (auto const& set : inherit_handles_sets)
+			{
+				vsm_assert(index <= inherit_handles_count);
+				memcpy(array + index, set.first, set.second * sizeof(HANDLE));
+				index += set.second;
+			}
+
+			vsm_assert(index == inherit_handles_count);
+			inherit_handles_array = array;
+		}
+
+		vsm_try_void(update_attribute_list(
+			attribute_list,
+			PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+			inherit_handles_array,
+			inherit_handles_count * sizeof(HANDLE)));
+	}
+
+	PROCESS_INFORMATION process_information;
 	if (!CreateProcessW(
-		kernel_path.path.data(),
+		path,
 		command_line,
-		/* lpProcessAttributes: */ nullptr,
-		/* lpThreadAttributes: */ nullptr,
-		/* bInheritHandles: */ false,
-		creation_flags,
-		/* lpEnvironment: */ nullptr, //TODO: Set environment variables
-		/* lpCurrentDirectory: */ nullptr, //TODO: Set current directory
-		&startup_info,
-		&process_info))
+		&process_attributes,
+		&thread_attributes,
+		inherit_handles,
+		CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT,
+		environment,
+		working_directory,
+		&startup_info.StartupInfo,
+		&process_information))
 	{
 		return vsm::unexpected(get_last_error());
 	}
 
-	// Automatically close the thread handle on return.
-	unique_handle const thread_handle(process_info.hThread);
+	unique_handle process(process_information.hProcess);
+	unique_handle thread(process_information.hThread);
 
-	return vsm_lazy(win32::process_info
+	return vsm_lazy(process_info
 	{
-		.handle = unique_handle(process_info.hProcess),
-		.pid = static_cast<process_id>(process_info.dwProcessId),
+		.handle = vsm_move(process),
+		.id = process_information.dwProcessId,
 	});
 }
 
@@ -98,120 +292,88 @@ vsm::result<process_exit_code> win32::get_process_exit_code(HANDLE const handle)
 	{
 		return vsm::unexpected(get_last_error());
 	}
-	return static_cast<int32_t>(exit_code);
+	return static_cast<process_exit_code>(exit_code);
 }
 
 
-//TODO: Override close to handle pseudo handles.
-
-vsm::result<process_id> process_handle_t::get_process_id() const
+vsm::result<void> process_t::open(
+	native_type& h,
+	io_parameters_t<process_t, open_t> const& a)
 {
-	DWORD const id = GetProcessId(unwrap_handle(get_platform_handle()));
-
-	if (id == 0)
-	{
-		return vsm::unexpected(get_last_error());
-	}
-
-	return static_cast<process_id>(id);
-}
-
-
-vsm::result<void> process_handle_t::do_blocking_io(
-	process_handle_t& h,
-	io_result_ref_t<open_t> const,
-	io_parameters_t<open_t> const& args)
-{
-	vsm_try_void(kernel_init());
-
-	if (h)
-	{
-		return vsm::unexpected(error::handle_is_not_null);
-	}
-
-	vsm_try(handle, win32::open_process(args.process_id));
+	vsm_try(handle, win32::open_process(std::bit_cast<DWORD>(a.id)));
 
 	handle_flags flags = flags::none;
 
-	if (static_cast<DWORD>(args.process_id) == GetCurrentProcessId())
+	h = native_type
 	{
-		flags |= flags::current;
-	}
-
-	platform_handle::native_handle_type const native =
-	{
+		platform_object_t::native_type
 		{
-			flags::not_null | flags,
+			object_t::native_type
+			{
+				flags::not_null | flags,
+			},
+			wrap_handle(handle.release()),
 		},
-		wrap_handle(handle.get()),
+		process_id{},
+		a.id,
 	};
-
-	vsm_assert(check_native_handle(native));
-	h.set_native_handle(native);
-
-	(void)handle.release();
 
 	return {};
 }
 
-vsm::result<void> process_handle_t::do_blocking_io(
-	process_handle_t& h,
-	io_result_ref_t<launch_t> const result,
-	io_parameters_t<launch_t> const& args)
+vsm::result<void> process_t::launch(
+	native_type& h,
+	io_parameters_t<process_t, launch_t> const& a)
 {
-	vsm_try_void(kernel_init());
+	vsm_try_bind((handle, id), win32::launch_process(a));
 
-	if (h)
+	h = native_type
 	{
-		return vsm::unexpected(error::handle_is_not_null);
-	}
-
-	vsm_try_bind((handle, process_id), win32::launch_process(
-		args.path,
-		args.command_line,
-		args.environment,
-		args.working_directory ? &*args.working_directory : nullptr));
-
-	platform_handle::native_handle_type const native =
-	{
+		platform_object_t::native_type
 		{
-			flags::not_null,
+			object_t::native_type
+			{
+				flags::not_null,
+			},
+			wrap_handle(handle.release()),
 		},
-		wrap_handle(handle.get()),
+		process_id{},
+		std::bit_cast<process_id>(id),
 	};
-
-	vsm_assert(check_native_handle(native));
-	h.set_native_handle(native);
-	(void)handle.release();
 
 	return {};
 }
 
-vsm::result<void> process_handle_t::do_blocking_io(
-	process_handle_t const& h,
-	io_result_ref_t<wait_t> const result,
-	io_parameters_t<wait_t> const& args)
+vsm::result<void> process_t::terminate(
+	native_type const& h,
+	io_parameters_t<process_t, terminate_t> const& a)
 {
-	if (!h)
-	{
-		return vsm::unexpected(error::handle_is_null);
-	}
+	HANDLE const handle = unwrap_handle(h.platform_handle);
 
-	if (h.is_current())
-	{
-		return vsm::unexpected(error::process_is_current_process);
-	}
-
-	HANDLE const handle = unwrap_handle(h.get_platform_handle());
-
-	NTSTATUS const status = win32::NtWaitForSingleObject(
+	NTSTATUS status = NtTerminateProcess(
 		handle,
-		/* Alertable: */ false,
-		kernel_timeout(args.deadline));
+		//TODO: Does this require some kind of transformation?
+		static_cast<NTSTATUS>(a.exit_code));
 
-	if (status == STATUS_TIMEOUT)
+	switch (status)
 	{
-		return vsm::unexpected(error::async_operation_timed_out);
+	case STATUS_ACCESS_DENIED:
+		//TODO: Check if this is really necessary.
+		//      It seems the documentation might have been incorrect.
+		if (get_handle_access(handle).value_or(0) & PROCESS_TERMINATE)
+		{
+			// Windows returns STATUS_ACCESS_DENIED when attempting to
+			// terminate an already terminated process. Check that the
+			// handle was actually granted the terminate access right.
+			status = STATUS_SUCCESS;
+		}
+		break;
+
+	case STATUS_PROCESS_IS_TERMINATING:
+		{
+			status = STATUS_SUCCESS;
+		}
+		break;
 	}
 
 	if (!NT_SUCCESS(status))
@@ -219,26 +381,88 @@ vsm::result<void> process_handle_t::do_blocking_io(
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
-	return result.produce(get_process_exit_code(handle));
+	return {};
+}
+
+vsm::result<process_exit_code> process_t::wait(
+	native_type const& h,
+	io_parameters_t<process_t, wait_t> const& a)
+{
+	if (std::bit_cast<DWORD>(h.id) == GetCurrentProcessId())
+	{
+		return vsm::unexpected(error::process_is_current_process);
+	}
+
+	HANDLE const handle = unwrap_handle(h.platform_handle);
+
+	NTSTATUS const status = win32::NtWaitForSingleObject(
+		handle,
+		/* Alertable: */ false,
+		kernel_timeout(a.deadline));
+
+	if (status == STATUS_TIMEOUT)
+	{
+		return vsm::unexpected(static_cast<kernel_error>(status));
+	}
+
+	if (!NT_SUCCESS(status))
+	{
+		return vsm::unexpected(static_cast<kernel_error>(status));
+	}
+
+	return get_process_exit_code(handle);
 }
 
 
-basic_process_handle<void> const& detail::_this_process::get_handle()
+blocking::process_handle const& this_process::get_handle()
 {
-	static basic_process_handle<void> const handle = [&]()
+	using flags = process_t::flags;
+	using i_flags = process_t::impl_type::flags;
+
+	static constexpr auto make_handle = []()
 	{
-		basic_process_handle<void> h;
-		vsm_verify(h.set_native_handle(platform_handle::native_handle_type
-		{
-			handle::native_handle_type
+		return blocking::process_handle(
+			adopt_handle,
+			process_t::native_type
 			{
-				handle_flags(process_handle_t::flags::not_null)
-					| process_handle_t::flags::current
-					| process_handle_t::impl_type::flags::pseudo_handle,
-			},
-			wrap_handle(GetCurrentProcess()),
-		}));
-		return h;
-	}();
+				platform_object_t::native_type
+				{
+					object_t::native_type
+					{
+						handle_flags(flags::not_null) | i_flags::pseudo_handle,
+					},
+					wrap_handle(GetCurrentProcess()),
+				},
+				process_id{},
+				std::bit_cast<process_id>(GetCurrentProcessId()),
+			}
+		);
+	};
+
+	static auto const handle = make_handle();
 	return handle;
+}
+
+vsm::result<blocking::process_handle> this_process::open()
+{
+	using flags = process_t::flags;
+
+	vsm_try(handle, duplicate_handle(GetCurrentProcess()));
+
+	return vsm_lazy(blocking::process_handle(
+		adopt_handle,
+		process_t::native_type
+		{
+			platform_object_t::native_type
+			{
+				object_t::native_type
+				{
+					flags::not_null,
+				},
+				wrap_handle(handle.release()),
+			},
+			process_id{},
+			std::bit_cast<process_id>(GetCurrentProcessId()),
+		}
+	));
 }

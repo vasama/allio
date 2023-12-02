@@ -26,12 +26,12 @@ TEST_CASE("wait packet can be used to wait for events", "[wait_packet][win32][ke
 {
 	auto const completion_port = create_completion_port(1).value();
 
-	bool const initially_signaled = GENERATE(false, true);
-	CAPTURE(initially_signaled);
+	bool const is_initially_signaled = GENERATE(false, true);
+	CAPTURE(is_initially_signaled);
 
 	auto const event = blocking::create_event(
 		auto_reset_event,
-		signal_event(initially_signaled)).value();
+		initially_signaled(is_initially_signaled)).value();
 
 	auto const wait_packet = create_wait_packet().value();
 
@@ -49,7 +49,7 @@ TEST_CASE("wait packet can be used to wait for events", "[wait_packet][win32][ke
 		wait_status,
 		information).value();
 
-	REQUIRE(already_signaled == initially_signaled);
+	REQUIRE(already_signaled == is_initially_signaled);
 
 	FILE_IO_COMPLETION_INFORMATION completions[2];
 	FILE_IO_COMPLETION_INFORMATION& completion = completions[0];

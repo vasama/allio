@@ -9,5 +9,5 @@ class package(ConanFile):
 
 	requires = (
 		"allio/0.1",
-		"s2n/[^1.3.55]"
+		"s2n/[^1.3.56]"
 	)

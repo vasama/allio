@@ -4,9 +4,11 @@
 #include <allio/detail/platform.h>
 #include <allio/path_literals.hpp>
 
+#include <vsm/assert.h>
 #include <vsm/box.hpp>
 #include <vsm/preprocessor.h>
 
+#include <span>
 #include <string_view>
 
 namespace allio {
@@ -318,37 +320,45 @@ private:
 template<typename Char>
 class basic_path_combine_result
 {
-	basic_path_view<Char> m_lhs;
-	basic_path_view<Char> m_rhs;
+	std::basic_string_view<Char> m_lhs;
+	std::basic_string_view<Char> m_rhs;
 	bool m_requires_separator;
 
 public:
 	explicit constexpr basic_path_combine_result(basic_path_view<Char> const path, bool const requires_separator = false)
-		: m_lhs(path), m_requires_separator(requires_separator)
+		: m_lhs(path.string())
+		, m_requires_separator(requires_separator)
 	{
 	}
 
 	explicit constexpr basic_path_combine_result(basic_path_view<Char> const lhs, basic_path_view<Char> const rhs, bool const requires_separator = false)
-		: m_lhs(lhs), m_rhs(rhs), m_requires_separator(requires_separator)
+		: m_lhs(lhs.string())
+		, m_rhs(rhs.string())
+		, m_requires_separator(requires_separator)
 	{
 	}
 
 
 	constexpr size_t size() const
 	{
-		return m_lhs.string().size() + m_rhs.string().size() + m_requires_separator;
+		return m_lhs.size() + m_rhs.size() + m_requires_separator;
 	}
 
-	constexpr basic_path_view<Char> copy(Char* const beg) const
+	constexpr basic_path_view<Char> copy(std::span<Char> const buffer) const
 	{
-		size_t size = 0;
-		size += m_lhs.string().copy(beg + size, m_lhs.string().size());
+		vsm_assert(buffer.size() >= size()); //PRECONDITION
+
+		Char* const out_beg = buffer.data();
+		Char* out_end = out_beg;
+
+		out_end = std::copy(m_lhs.data(), m_lhs.data() + m_lhs.size(), out_end);
 		if (m_requires_separator)
 		{
-			beg[size++] = basic_path_view<Char>::preferred_separator;
+			*out_end++ = basic_path_view<Char>::preferred_separator;
 		}
-		size += m_rhs.string().copy(beg + size, m_rhs.string().size());
-		return basic_path_view<Char>(std::basic_string_view<Char>(beg, size));
+		out_end = std::copy(m_rhs.data(), m_rhs.data() + m_rhs.size(), out_end);
+
+		return basic_path_view<Char>(out_beg, out_end);
 	}
 };
 

@@ -5,6 +5,17 @@
 
 namespace allio::detail {
 
+struct inheritable_t
+{
+	bool inheritable = false;
+
+	friend void tag_invoke(set_argument_t, inheritable_t& args, explicit_parameter<inheritable_t>)
+	{
+		args.inheritable = true;
+	}
+};
+inline constexpr explicit_parameter<inheritable_t> inheritable = {};
+
 struct platform_object_t : object_t
 {
 	using base_type = object_t;

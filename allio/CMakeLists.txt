@@ -116,7 +116,7 @@ vsm_add_library(allio::core
 		source/allio/test/handles/file.cpp
 		#source/allio/test/handles/map.cpp
 		#source/allio/test/handles/opaque_object.cpp
-		#source/allio/test/handles/process.cpp
+		source/allio/test/handles/process.cpp
 		source/allio/test/handles/socket.cpp
 )
 
@@ -139,10 +139,16 @@ vsm_configure(allio::core
 		source/allio/impl/posix/socket.cpp
 		source/allio/impl/posix/socket.hpp
 		source/allio/impl/posix/unique_socket.cpp
+		source/allio/impl/win32/api_string.cpp
+		source/allio/impl/win32/api_string.hpp
+		source/allio/impl/win32/byte_io.cpp
+		source/allio/impl/win32/byte_io.hpp
 		source/allio/impl/win32/completion_port.cpp
 		source/allio/impl/win32/completion_port.hpp
 		source/allio/impl/win32/command_line.cpp
 		source/allio/impl/win32/command_line.hpp
+		source/allio/impl/win32/environment_block.cpp
+		source/allio/impl/win32/environment_block.hpp
 		source/allio/impl/win32/error.cpp
 		source/allio/impl/win32/error.hpp
 		source/allio/impl/win32/kernel.cpp
@@ -151,8 +157,9 @@ vsm_configure(allio::core
 		source/allio/impl/win32/kernel_path.cpp
 		source/allio/impl/win32/kernel_path.hpp
 		source/allio/impl/win32/kernel_path_impl.hpp
-		source/allio/impl/win32/kernel_path_old.hpp
 		source/allio/impl/win32/memory.cpp
+		source/allio/impl/win32/path.cpp
+		source/allio/impl/win32/path.hpp
 		source/allio/impl/win32/peb.cpp
 		source/allio/impl/win32/peb.hpp
 		source/allio/impl/win32/platform.cpp
@@ -163,8 +170,8 @@ vsm_configure(allio::core
 		source/allio/impl/win32/unique_handle.cpp
 		source/allio/impl/win32/wait_packet.cpp
 		source/allio/impl/win32/wait_packet.hpp
-		source/allio/impl/win32/wsa_ex.cpp
-		source/allio/impl/win32/wsa_ex.hpp
+		source/allio/impl/win32/wsa.cpp
+		source/allio/impl/win32/wsa.hpp
 
 		source/allio/impl/posix/handles/datagram_socket.cpp
 		source/allio/impl/posix/handles/listen_socket.cpp
@@ -174,10 +181,11 @@ vsm_configure(allio::core
 		source/allio/impl/win32/handles/file.cpp
 		source/allio/impl/win32/handles/fs_object.cpp
 		source/allio/impl/win32/handles/fs_object.hpp
+		source/allio/impl/win32/handles/pipe.cpp
 		source/allio/impl/win32/handles/platform_object.cpp
 		source/allio/impl/win32/handles/platform_object.hpp
-		#source/allio/impl/win32/handles/process.cpp
-		#source/allio/impl/win32/handles/process.hpp
+		source/allio/impl/win32/handles/process.cpp
+		source/allio/impl/win32/handles/process.hpp
 
 		source/allio/impl/win32/iocp/datagram_socket.cpp
 		source/allio/impl/win32/iocp/directory.cpp
@@ -185,11 +193,12 @@ vsm_configure(allio::core
 		source/allio/impl/win32/iocp/file.cpp
 		source/allio/impl/win32/iocp/listen_socket.cpp
 		source/allio/impl/win32/iocp/multiplexer.cpp
-		#source/allio/impl/win32/iocp/process.cpp
+		source/allio/impl/win32/iocp/process.cpp
 		source/allio/impl/win32/iocp/socket.cpp
 		source/allio/impl/win32/iocp/wait.cpp
 
 	TEST_SOURCES
+		source/allio/test/win32/afd.cpp
 		source/allio/test/win32/command_line.cpp
 		source/allio/test/win32/kernel_path.cpp
 		#source/allio/test/win32/timer2.cpp
@@ -246,15 +255,14 @@ vsm_configure(allio::core
 		source/allio/test/linux/io_uring.cpp
 )
 
-#target_compile_definitions(allio_test
-#	PRIVATE
-#		"allio_detail_test_program=\"$<TARGET_FILE:test_program>\""
-#)
-#add_dependencies(allio_test test_program)
 
-#if(MSVC)
-#	target_compile_options(allio PUBLIC /Zc:preprocessor /Zc:__cplusplus)
-#	target_compile_definitions(allio PUBLIC _SILENCE_ALL_CXX23_DEPRECATION_WARNINGS)
-#endif()
+set(allio_test_program_output "${CMAKE_CURRENT_BINARY_DIR}/test_program_output.txt")
+
+target_compile_definitions(allio_core_test
+	PRIVATE
+		"allio_detail_test_program=\"$<TARGET_FILE:test_program>\""
+		"allio_detail_test_program_output=\"${allio_test_program_output}\""
+)
+add_dependencies(allio_core_test test_program)
 
 add_subdirectory(tools)

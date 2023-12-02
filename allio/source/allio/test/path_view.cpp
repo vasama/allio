@@ -379,7 +379,7 @@ TEST_CASE("path_view standard compliance 2", "[path_view]")
 		std::string combine_buffer;
 		combine_buffer.resize(combine_size);
 
-		path_view const a_path = combine_result.copy(combine_buffer.data());
+		path_view const a_path = combine_result.copy(combine_buffer);
 		std::filesystem::path const s_path = s_l_path / s_r_path;
 
 		CHECK(a_path.string() == s_path.string());
