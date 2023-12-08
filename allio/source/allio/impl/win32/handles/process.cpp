@@ -42,7 +42,7 @@ using attribute_storage = basic_dynamic_buffer<std::byte, alignof(std::max_align
 } // namespace
 
 template<size_t Capacity>
-static vsm::result<unique_attribute_list> make_attribute_list(
+static vsm::result<unique_attribute_list> create_attribute_list(
 	attribute_storage<Capacity>& storage,
 	size_t const size)
 {
@@ -71,13 +71,13 @@ static vsm::result<unique_attribute_list> make_attribute_list(
 }
 
 static vsm::result<void> update_attribute_list(
-	unique_attribute_list const& list,
+	PPROC_THREAD_ATTRIBUTE_LIST const list,
 	DWORD_PTR const attribute,
 	void const* const value,
 	size_t const value_size)
 {
 	if (!UpdateProcThreadAttribute(
-		list.get(),
+		list,
 		/* dwFlags: */ 0,
 		attribute,
 		const_cast<void*>(value),
@@ -220,7 +220,7 @@ vsm::result<process_info> win32::launch_process(
 
 	if (attribute_count != 0)
 	{
-		vsm_try_assign(attribute_list, make_attribute_list(
+		vsm_try_assign(attribute_list, create_attribute_list(
 			attribute_storage,
 			attribute_count));
 	}
@@ -253,7 +253,7 @@ vsm::result<process_info> win32::launch_process(
 		}
 
 		vsm_try_void(update_attribute_list(
-			attribute_list,
+			attribute_list.get(),
 			PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
 			inherit_handles_array,
 			inherit_handles_count * sizeof(HANDLE)));
