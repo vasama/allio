@@ -1,5 +1,6 @@
 #include <allio/win32/detail/iocp/datagram_socket.hpp>
 
+#include <allio/impl/byte_io.hpp>
 #include <allio/impl/posix/socket.hpp>
 #include <allio/impl/win32/iocp/socket.hpp>
 #include <allio/impl/win32/kernel.hpp>
@@ -40,6 +41,7 @@ io_result<void> bind_s::submit(M& m, H& h, C& c, bind_s&, bind_a const& a, io_ha
 	{
 		platform_object_t::native_type
 		{
+			object_t::native_type
 			{
 				object_t::flags::not_null | flags,
 			},
@@ -59,17 +61,6 @@ void bind_s::cancel(M&, H const&, C const&, bind_s&)
 {
 }
 
-
-template<vsm::any_cv_of<std::byte> T>
-static size_t get_buffers_size(basic_buffers<T> const buffers)
-{
-	size_t size = 0;
-	for (auto const& buffer : buffers)
-	{
-		size += buffer.size();
-	}
-	return size;
-}
 
 static size_t get_transfer_result(H const& h, M::overlapped& overlapped)
 {

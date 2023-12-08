@@ -12,12 +12,18 @@ namespace allio::detail {
 enum class file_mode : uint8_t
 {
 	none                                = 1 << 0,
-	read_attributes                     = 1 << 1,
-	write_attributes                    = 1 << 2,
-	read                                = 1 << 3,
-	write                               = 1 << 4,
 
-	read_write = read | write,
+	read_data                           = 1 << 1,
+	write_data                          = 1 << 2,
+
+	read_attributes                     = 1 << 3,
+	write_attributes                    = 1 << 4,
+
+	read                                = read_data | read_attributes,
+	write                               = write_data | write_attributes,
+	read_write                          = read | write,
+
+	all                                 = read_write,
 };
 vsm_flag_enum(file_mode);
 
@@ -32,6 +38,7 @@ enum class file_creation : uint8_t
 
 /// @brief Controls sharing of the file by other handles.
 /// @note File sharing restrictions may not be available on all platforms.
+///       For maximum portability, specify no file sharing restrictions (all).
 enum class file_sharing : uint8_t
 {
 	unlink                              = 1 << 0,
@@ -90,7 +97,7 @@ vsm_flag_enum(path_kind);
 
 struct file_mode_t
 {
-	file_mode mode = file_mode::read_write;
+	std::optional<file_mode> mode;
 
 	friend void tag_invoke(set_argument_t, file_mode_t& args, file_mode const mode)
 	{
@@ -157,6 +164,7 @@ struct open_t
 	using required_params_type = fs_path_t;
 	using optional_params_type = parameters_t
 	<
+		inheritable_t,
 		file_mode_t,
 		file_creation_t,
 		file_sharing_t,
@@ -202,6 +210,17 @@ struct get_current_path_t
 struct fs_object_t : platform_object_t
 {
 	using base_type = platform_object_t;
+
+	allio_handle_flags
+	(
+		readable,
+		writable,
+	);
+
+	struct native_type : base_type::native_type
+	{
+		detail::file_flags file_flags;
+	};
 
 	using open_t = fs_io::open_t;
 	using get_current_path_t = fs_io::get_current_path_t;

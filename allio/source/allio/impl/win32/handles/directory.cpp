@@ -62,11 +62,14 @@ static directory_stream_entry const* unwrap_stream(directory_stream_native_handl
 static directory_stream_entry const* next_entry(directory_stream_entry const* const entry)
 {
 	vsm_assert(entry != nullptr);
-	size_t const next_offset = entry->NextEntryOffset;
-	return next_offset != 0
-		? reinterpret_cast<directory_stream_entry const*>(
-			reinterpret_cast<std::byte const*>(entry) + next_offset)
-		: nullptr;
+
+	if (size_t const next_offset = entry->NextEntryOffset)
+	{
+		return reinterpret_cast<directory_stream_entry const*>(
+			reinterpret_cast<std::byte const*>(entry) + next_offset);
+	}
+
+	return nullptr;
 }
 
 
@@ -104,16 +107,16 @@ static bool filter_entry(directory_stream_entry const& entry)
 
 		if (size == 1)
 		{
-			return true;
+			return false;
 		}
 
 		if (size == 2 && name[1] == L'.')
 		{
-			return true;
+			return false;
 		}
 	}
 
-	return false;
+	return true;
 }
 
 NTSTATUS win32::query_directory_file_start(
@@ -170,7 +173,7 @@ NTSTATUS win32::query_directory_file_completed(
 
 	auto entry = reinterpret_cast<directory_stream_entry const*>(buffer.data());
 
-	while (entry != nullptr && filter_entry(*entry))
+	while (entry != nullptr && !filter_entry(*entry))
 	{
 		entry = next_entry(entry);
 	}

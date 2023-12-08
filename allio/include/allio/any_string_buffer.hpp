@@ -27,6 +27,11 @@ concept _any_mutable_string = requires (String& string)
 	{ string.size() } -> std::convertible_to<size_t>;
 };
 
+template<typename String, typename Char>
+concept _mutable_string_of =
+	_any_mutable_string<String> &&
+	std::is_same_v<typename String::value_type, Char>;
+
 } // namespace detail
 
 
@@ -182,21 +187,52 @@ class string_buffer : detail::_string_buffer
 {
 public:
 	explicit string_buffer(detail::_string_buffer const& buffer)
-		: detail::_string_buffer(buffer)
+		: _string_buffer(buffer)
 	{
 		vsm_assert(buffer.encoding() == detail::encoding_of<Char>); //PRECONDITION
+	}
+
+	string_buffer(Char* const data, size_t const size)
+		: _string_buffer(data, size)
+	{
+	}
+
+	template<size_t Size>
+	string_buffer(Char(&array)[Size])
+		: _string_buffer(array, Size)
+	{
+	}
+
+	template<detail::_mutable_string_of<Char> String>
+	string_buffer(String& string)
+		: _string_buffer(string.data(), string.size())
+	{
+	}
+
+	template<detail::_mutable_string_of<Char> String>
+		requires detail::_mutable_string_of<String const, Char>
+	string_buffer(String const& string)
+		: _string_buffer(string.data(), string.size())
+	{
+	}
+
+	template<detail::_mutable_string_of<Char> String>
+		requires resizable_buffer<String>
+	string_buffer(String& string)
+		: _string_buffer(string)
+	{
 	}
 
 
 	[[nodiscard]] vsm::result<std::span<Char>> resize(size_t const size) const
 	{
-		return detail::_string_buffer::_resize<Char>(size, size);
+		return _string_buffer::_resize<Char>(size, size);
 	}
 
 	[[nodiscard]] vsm::result<std::span<Char>> resize(size_t const min_size, size_t const max_size) const
 	{
 		vsm_assert(min_size <= max_size); //PRECONDITION
-		return detail::_string_buffer::_resize<Char>(min_size, max_size);
+		return _string_buffer::_resize<Char>(min_size, max_size);
 	}
 };
 
@@ -250,19 +286,19 @@ public:
 		switch (encoding())
 		{
 		case allio::encoding::narrow_execution_encoding:
-			return std::invoke(vsm_forward(visitor), string_buffer<char>(*this));
+			return vsm_forward(visitor)(string_buffer<char>(*this));
 
 		case allio::encoding::wide_execution_encoding:
-			return std::invoke(vsm_forward(visitor), string_buffer<wchar_t>(*this));
+			return vsm_forward(visitor)(string_buffer<wchar_t>(*this));
 
 		case allio::encoding::utf8:
-			return std::invoke(vsm_forward(visitor), string_buffer<char8_t>(*this));
+			return vsm_forward(visitor)(string_buffer<char8_t>(*this));
 
 		case allio::encoding::utf16:
-			return std::invoke(vsm_forward(visitor), string_buffer<char16_t>(*this));
+			return vsm_forward(visitor)(string_buffer<char16_t>(*this));
 
 		case allio::encoding::utf32:
-			return std::invoke(vsm_forward(visitor), string_buffer<char32_t>(*this));
+			return vsm_forward(visitor)(string_buffer<char32_t>(*this));
 		}
 
 		vsm_unreachable();

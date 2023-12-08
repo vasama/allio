@@ -37,7 +37,11 @@ struct listen_t
 {
 	using operation_concept = producer_t;
 	using required_params_type = network_endpoint_t;
-	using optional_params_type = listen_backlog_t;
+	using optional_params_type = parameters_t
+	<
+		inheritable_t,
+		listen_backlog_t
+	>;
 
 	template<object Object>
 	using extended_params_template = with_security_context_t<typename Object::security_context_type>;
@@ -60,7 +64,11 @@ struct accept_t
 {
 	using operation_concept = void;
 	using required_params_type = no_parameters_t;
-	using optional_params_type = deadline_t;
+	using optional_params_type = parameters_t
+	<
+		inheritable_t,
+		deadline_t
+	>;
 
 	template<object Object, optional_multiplexer_handle_for<Object> MultiplexerHandle>
 	using result_type_template = accept_result<basic_handle<typename Object::socket_object_type, MultiplexerHandle>>;

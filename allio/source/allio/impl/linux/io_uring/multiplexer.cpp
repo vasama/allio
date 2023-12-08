@@ -1,7 +1,7 @@
 #include <allio/linux/detail/io_uring/multiplexer.hpp>
 
-#include <allio/impl/linux/kernel/io_uring.hpp>
 #include <allio/impl/linux/error.hpp>
+#include <allio/impl/linux/io_uring.hpp>
 #include <allio/impl/linux/timeout.hpp>
 #include <allio/linux/io_uring_record_context.hpp>
 
@@ -73,7 +73,7 @@ static vsm::result<unique_mmap<T>> mmap(int const fd, uint64_t const offset, siz
 	return vsm_lazy(unique_mmap<T>(reinterpret_cast<T*>(addr), mmap_deleter(size)));
 }
 
-vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(io_parameters_t<create_t> const& args)
+vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(create_parameters const& args)
 {
 	static constexpr uint32_t min_queue_entries = 32;
 
@@ -241,88 +241,10 @@ vsm::result<void> io_uring_multiplexer::attach_handle(native_platform_handle con
 	return {};
 }
 
-void io_uring_multiplexer::detach_handle(native_platform_handle const handle, connector_type& c)
+vsm::result<void> io_uring_multiplexer::detach_handle(native_platform_handle const handle, connector_type& c)
 {
-}
-
-
-#if 0
-vsm::result<void> io_uring_multiplexer::record_context::push_linked_timeout(timeout::reference const timeout)
-{
-#if __cpp_lib_is_layout_compatible
-	static_assert(std::is_layout_compatible_v<timeout::timespec, __kernel_timespec>);
-#else
-	static_assert(sizeof(timeout::timespec) == sizeof(__kernel_timespec));
-	static_assert(alignof(timeout::timespec) == alignof(__kernel_timespec));
-#endif
-
-	//TODO: Make sure linked timeouts never produce a CQE.
-
-	bool const skip_success = vsm::any_flags(m_flags, flags::cqe_skip_success);
-	vsm_try(sqe, acquire_sqe(/* acquire_cqe: */ !skip_success));
-
-	sqe.opcode = IORING_OP_LINK_TIMEOUT;
-	sqe.flags = IOSQE_IO_LINK | (skip_success ? IOSQE_CQE_SKIP_SUCCESS : 0);
-	sqe.addr = reinterpret_cast<uintptr_t>(&timeout.m_timeout->m_timespec);
-	sqe.len = 1;
-	sqe.timeout_flags = timeout.m_absolute
-		? IORING_TIMEOUT_ABS
-		: 0;
-
 	return {};
 }
-
-bool io_uring_multiplexer::record_context::check_sqe_flags(io_uring_sqe const& sqe) noexcept
-{
-	return true;
-}
-
-bool io_uring_multiplexer::record_context::check_sqe_user_data(io_uring_sqe const& sqe, io_data_ref const data) noexcept
-{
-	return sqe.user_data == reinterpret_pointer_cast<uintptr_t>(data);
-}
-
-vsm::result<io_uring_sqe*> io_uring_multiplexer::record_context::acquire_sqe(io_data_ref const data)
-{
-	vsm_try(sqe, acquire_sqe(/* acquire_cqe: */ true));
-	sqe->user_data = reinterpret_pointer_cast<uintptr_t>(data);
-	return sqe;
-}
-
-vsm::result<io_uring_sqe*> io_uring_multiplexer::record_context::acquire_sqe(bool const acquire_cqe)
-{
-	if (m_sq_acquire == m_multiplexer.m_sq_consume)
-	{
-		uint32_t const k_sq_consume = m_multiplexer.m_k_sq_consume.load(std::memory_order_acquire);
-
-		if (k_sq_consume == m_multiplexer.m_sq_consume)
-		{
-			return vsm::unexpected(error::too_many_concurrent_async_operations);
-		}
-
-		m_multiplexer.m_sq_consume = k_sq_consume;
-	}
-
-	if (acquire_cqe)
-	{
-		if (m_cq_free == 0)
-		{
-			return vsm::unexpected(error::too_many_concurrent_async_operations);
-		}
-		--m_cq_free;
-	}
-
-	return &m_multiplexer.get_sqe(m_multiplexer.get_sqe_offset(m_sq_acquire++));
-}
-
-vsm::result<void> io_uring_multiplexer::record_context::commit()
-{
-	m_multiplexer.m_sq_acquire = m_sq_acquire;
-	m_multiplexer.m_cq_free = m_cq_free;
-	return m_multiplexer.commit();
-}
-#endif
-
 
 vsm::result<void> io_uring_multiplexer::commit()
 {
@@ -352,28 +274,6 @@ vsm::result<void> io_uring_multiplexer::commit()
 
 	return {};
 }
-
-
-#if 0
-void io_uring_multiplexer::wake_kernel_thread()
-{
-	vsm_assert(has_kernel_thread()); //PRECONDITION
-
-	if (kernel_thread_needs_wakeup())
-	{
-		int const r = io_uring_enter(
-			m_io_uring.get(),
-			/* to_submit: */ 0,
-			/* min_complete: */ 0,
-			IORING_ENTER_SQ_WAKEUP,
-			/* arg: */ nullptr,
-			/* argsz: */ 0);
-
-		unrecoverable(get_last_error());
-	}
-}
-#endif
-
 
 bool io_uring_multiplexer::is_kernel_thread_inactive() const
 {
@@ -456,25 +356,58 @@ void io_uring_multiplexer::reap_cqe(io_uring_cqe const& cqe)
 		.result = cqe.res,
 		.flags = cqe.flags,
 	};
-	auto operation = static_cast<operation_type*>(user_data.ptr());
+
+	io_handler_type* handler = nullptr;
 
 	if (vsm::any_flags(tag, user_data_tag::io_slot))
 	{
 		status.slot = static_cast<io_slot*>(user_data.ptr());
-		auto const op_tag = status.slot->m_operation.tag();
+		auto const h_tag = status.slot->m_handler.tag();
 
 		// Emulate IOSQE_CQE_SKIP_SUCCESS for successful operations.
-		if (status.result >= 0 && vsm::any_flags(op_tag, operation_tag::cqe_skip_success))
+		if (status.result >= 0 && vsm::any_flags(h_tag, handler_tag::cqe_skip_success))
 		{
 			return;
 		}
 
-		operation = status.slot->m_operation.ptr();
+		handler = status.slot->m_handler.ptr();
+	}
+	else
+	{
+		handler = static_cast<io_handler_type*>(user_data.ptr());
 	}
 
-	operation->notify(io_status(status));
+	handler->notify(vsm_move(status));
 }
 
+vsm::result<void> io_uring_multiplexer::async_cancel_io(io_slot& slot)
+{
+	record_context ctx(*this);
+
+	vsm_try_discard(ctx.push(
+	{
+		.opcode = IORING_OP_ASYNC_CANCEL,
+		.addr = ctx.get_user_data(slot),
+		//TODO: User data
+	}));
+
+	return ctx.commit();
+}
+
+void io_uring_multiplexer::cancel_io(io_slot& slot)
+{
+	if (is_externally_synchronized())
+	{
+		if (!async_cancel_io(slot))
+		{
+			vsm_assert(false); //TODO: Implement fallback when full
+		}
+	}
+	else
+	{
+		vsm_assert(false); //TODO: Implement thread safe cancellation
+	}
+}
 
 namespace {
 
@@ -489,7 +422,7 @@ vsm_flag_enum(enter_reason);
 
 } // namespace
 
-vsm::result<bool> io_uring_multiplexer::_poll(io_parameters_t<poll_t> const& args)
+vsm::result<bool> io_uring_multiplexer::_poll(poll_parameters const& args)
 {
 	using reason = enter_reason;
 

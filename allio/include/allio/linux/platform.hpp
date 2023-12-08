@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/detail/platform.h>
+#include <allio/platform.hpp>
 
 #include <allio/linux/detail/undef.i>
 

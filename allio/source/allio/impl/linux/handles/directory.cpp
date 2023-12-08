@@ -1,9 +1,13 @@
-#include <allio/directory.hpp>
+#include <allio/handles/directory.hpp>
 
+#include <allio/impl/transcode.hpp>
 #include <allio/impl/linux/api_string.hpp>
 #include <allio/impl/linux/error.hpp>
-#include <allio/impl/linux/fs_object.hpp>
+#include <allio/impl/linux/handles/fs_object.hpp>
+#include <allio/linux/platform.hpp>
 
+#include <vsm/lazy.hpp>
+#include <vsm/numeric.hpp>
 #include <vsm/standard.hpp>
 
 #include <bit>
@@ -11,6 +15,7 @@
 
 #include <dirent.h>
 #include <sys/syscall.h>
+#include <unistd.h>
 
 #include <allio/linux/detail/undef.i>
 
@@ -26,70 +31,64 @@ struct linux_dirent64
 	off64_t d_off;
 	unsigned short d_reclen;
 	unsigned char d_type;
-	char d_name[];
-};
 
-} // namespace
+	vsm_gnu_diagnostic(push)
+	vsm_gnu_diagnostic(ignored "-Wpedantic")
+	char d_name[];
+	vsm_gnu_diagnostic(pop)
+};
 
 static ssize_t getdents64(int const fd, linux_dirent64* const dirent, size_t count)
 {
-	// The syscall takes unsigned int for count, but later converts it to int.
-
-	if (count > static_cast<size_t>(std::numeric_limits<int>::max()))
-	{
-		count = static_cast<size_t>(std::numeric_limits<int>::max());
-	}
-
-	return syscall(__NR_getdents64, static_cast<unsigned int>(fd), dirent, static_cast<unsigned int>(count));
+	return syscall(
+		__NR_getdents64,
+		static_cast<unsigned>(fd),
+		dirent,
+		// The syscall takes unsigned int for count, but later converts it to int.
+		static_cast<unsigned>(vsm::saturate<int>(count)));
 }
+
+} // namespace
 
 
 using directory_stream_entry = linux_dirent64;
 
-static file_kind get_entry_kind(directory_stream_entry const& entry)
+static fs_entry_type get_entry_type(directory_stream_entry const& entry)
 {
 	switch (entry.d_type)
 	{
 	case DT_BLK:
-		return file_kind::block_device;
+		return fs_entry_type::block_device;
 		
 	case DT_CHR:
-		return file_kind::character_device;
+		return fs_entry_type::character_device;
 		
 	case DT_DIR:
-		return file_kind::directory;
+		return fs_entry_type::directory;
 		
 	case DT_FIFO:
-		return file_kind::pipe;
+		return fs_entry_type::pipe;
 
 	case DT_LNK:
-		return file_kind::symbolic_link;
+		return fs_entry_type::symbolic_link;
 		
 	case DT_REG:
-		return file_kind::regular;
+		return fs_entry_type::regular;
 		
 	case DT_SOCK:
-		return file_kind::socket;
+		return fs_entry_type::socket;
 	}
 
-	return file_kind::unknown;
+	return fs_entry_type::unknown;
 }
 
 static std::string_view get_entry_name(directory_stream_entry const& entry)
 {
 	static constexpr size_t name_offset = offsetof(directory_stream_entry, d_name);
-
-	size_t name_size = entry.d_reclen - name_offset;
-
-	// Scan backwards to discard any padding zeros.
-	while (name_size > 0 && entry.d_name[name_size - 1] == '\0')
-	{
-		--name_size;
-	}
-
-	vsm_assert(name_size == strlen(entry.d_name));
-
-	return std::string_view(entry.d_name, name_size);
+	size_t const max_name_size = static_cast<size_t>(entry.d_reclen) - name_offset;
+	std::string_view const name(entry.d_name, strnlen(entry.d_name, max_name_size));
+	vsm_assert(name.size() < max_name_size);
+	return name;
 }
 
 
@@ -107,13 +106,21 @@ static directory_stream_entry const* unwrap_stream(directory_stream_native_handl
 static directory_stream_entry const* next_entry(directory_stream_entry const* const entry)
 {
 	vsm_assert(entry != nullptr);
-	size_t const next_offset = entry->d_off;
-	return next_offset != 0
-		? reinterpret_cast<directory_stream_entry const*>(
-			reinterpret_cast<std::byte const*>(entry) + next_offset)
-		: nullptr;
+	
+	if (size_t const next_offset = entry->d_off)
+	{
+		return reinterpret_cast<directory_stream_entry const*>(
+			reinterpret_cast<std::byte const*>(entry) + next_offset);
+	}
+
+	return nullptr;
 }
 
+
+vsm::result<size_t> directory_entry::get_name(any_string_buffer const buffer) const
+{
+	return transcode_string(name.view<char>(), buffer);
+}
 
 directory_entry directory_entry_view::get_entry(directory_stream_native_handle const handle)
 {
@@ -122,9 +129,9 @@ directory_entry directory_entry_view::get_entry(directory_stream_native_handle c
 	
 	return
 	{
-		.kind = get_entry_kind(entry),
-		.node_id = std::bit_cast<file_id_64>(entry.d_ino),
-		.name = input_string_view(get_entry_name(entry)),
+		.type = get_entry_type(entry),
+		.node_id = std::bit_cast<fs_node_id>(entry.d_ino),
+		.name = any_string_view(get_entry_name(entry), null_terminated),
 	};
 }
 
@@ -134,26 +141,24 @@ directory_stream_native_handle directory_stream_iterator::advance(directory_stre
 }
 
 
-static bool discard_entry(directory_stream_entry const& entry)
+static bool filter_entry(directory_stream_entry const& entry)
 {
-	std::string_view const name = get_entry_name(entry);
-	
+	char const* const name = entry.d_name;
+
 	if (name[0] == '.')
 	{
-		size_t const size = name.size();
-		
-		if (size == 1)
+		if (name[1] == '\0')
 		{
-			return true;
+			return false;
 		}
-		
-		if (size == 2 && name[1] == '.')
+
+		if (name[1] == '.' && name[2] == '\0')
 		{
-			return true;
+			return false;
 		}
 	}
-	
-	return false;
+
+	return true;
 }
 
 static directory_stream_entry* create_entry_list(std::span<std::byte> const buffer, size_t const size)
@@ -177,7 +182,7 @@ static directory_stream_entry* create_entry_list(std::span<std::byte> const buff
 	{
 		directory_stream_entry& entry = *get_entry(offset);
 	
-		if (!discard_entry(entry))
+		if (filter_entry(entry))
 		{
 			// Store the relative offset between the two chosen entries in d_off of the previous entry.
 			*p_last_offset = offset - *p_last_offset;
@@ -192,6 +197,7 @@ static directory_stream_entry* create_entry_list(std::span<std::byte> const buff
 		offset += entry.d_reclen;
 	}
 
+	// It is possible that p_last_offset still points to first_offset.
 	// Get a pointer to the first entry before potentially zeroing the offset.
 	directory_stream_entry* const first_entry = get_entry(first_offset);
 
@@ -202,50 +208,50 @@ static directory_stream_entry* create_entry_list(std::span<std::byte> const buff
 }
 
 
-vsm::result<void> directory_handle_base::sync_impl(io::parameters_with_result<io::filesystem_open> const& args)
+vsm::result<void> directory_t::open(
+	native_type& h,
+	io_parameters_t<directory_t, open_t> const& a)
 {
-	directory_handle& h = static_cast<directory_handle&>(*args.handle);
+	vsm_try_bind((flags, mode), make_open_info(open_kind::directory, a));
 
-	if (h)
+	flags |= O_DIRECTORY;
+
+	api_string_storage path_storage;
+	vsm_try(path, make_api_c_string(path_storage, a.path.path.string()));
+
+	vsm_try(fd, linux::open_file(
+		unwrap_handle(a.path.base),
+		path,
+		flags,
+		mode));
+
+	h = fs_object_t::native_type
 	{
-		return vsm::unexpected(error::handle_is_not_null);
-	}
-
-	vsm_try(open_args, linux::open_parameters::make(args));
-	open_args.flags |= O_DIRECTORY;
-
-	vsm_try(h_fd, create_file(args.base, args.path, open_args));
-
-	return initialize_platform_handle(
-		h, vsm_move(h_fd),
-		[&](native_platform_handle const handle)
+		platform_object_t::native_type
 		{
-			return platform_handle::native_handle_type
+			object_t::native_type
 			{
-				handle::native_handle_type
-				{
-					handle::flags::not_null,
-				},
-				handle,
-			};
-		}
-	);
+				flags::not_null,
+			},
+			wrap_handle(fd.release()),
+		},
+		//TODO: Validate flags
+		a.flags,
+	};
+
+	return {};
 }
 
-vsm::result<void> directory_handle_base::sync_impl(io::parameters_with_result<io::directory_read> const& args)
+vsm::result<directory_stream_view> directory_t::read(
+	native_type const& h,
+	io_parameters_t<directory_t, read_t> const& a)
 {
-	directory_handle const& h = *args.handle;
-	
-	if (!h)
-	{
-		return vsm::unexpected(error::handle_is_null);
-	}
-	
-	//TODO: Align buffer first.
-	auto buffer = args.buffer;
+	//TODO: Align the buffer first.
+	auto buffer = a.buffer;
 
+	memset(a.buffer.data(), 0xCD, a.buffer.size());
 	ssize_t const count = getdents64(
-		unwrap_handle(h.get_platform_handle()),
+		unwrap_handle(h.platform_handle),
 		reinterpret_cast<directory_stream_entry*>(buffer.data()),
 		buffer.size());
 
@@ -254,24 +260,21 @@ vsm::result<void> directory_handle_base::sync_impl(io::parameters_with_result<io
 		return vsm::unexpected(get_last_error());
 	}
 
+	if (count == 0)
+	{
+		return directory_stream_view(directory_stream_native_handle::directory_end);
+	}
+
 	// Create the iterable entry list by linking the entries together
 	// with relative offsets and discarding . and .. entries.
 	directory_stream_entry const* const entry = create_entry_list(buffer, count);
 
-	*args.result = directory_stream_view(wrap_stream(entry));
-	return {};
+	return directory_stream_view(wrap_stream(entry));
 }
 
-allio_handle_implementation(directory_handle);
 
-
-vsm::result<size_t> this_process::get_current_directory(output_path_ref const output)
+vsm::result<size_t> this_process::get_current_directory(any_path_buffer const buffer)
 {
-	if (output.is_wide())
-	{
-		return vsm::unexpected(error::unsupported_encoding);
-	}
-
 	char const* const c_string = getcwd(nullptr, 0);
 
 	if (c_string == nullptr)
@@ -288,36 +291,66 @@ vsm::result<size_t> this_process::get_current_directory(output_path_ref const ou
 	};
 	std::unique_ptr<char const, cwd_deleter> const unique_c_string(c_string);
 
-	size_t const string_size = std::strlen(c_string);
-	size_t const output_size = string_size + output.is_c_string();
-
-	vsm_try(buffer, output.resize_utf8(output_size));
-	memcpy(buffer.data(), c_string, output_size);
-
-	return string_size;
+	return transcode_string(std::string_view(c_string), buffer);
 }
 
-vsm::result<void> this_process::set_current_directory(input_path_view const path)
+vsm::result<void> this_process::set_current_directory(fs_path const path)
 {
-	if (path.is_wide())
-	{
-		return vsm::unexpected(error::unsupported_encoding);
-	}
-
 	api_string_storage storage;
-	vsm_try(c_string, make_api_c_string(storage, path));
+	vsm_try(path_string, make_api_string(storage, path.path.string()));
 
-	if (chdir(c_string) == -1)
+	if (path.base == native_platform_handle::null)
 	{
-		return vsm::unexpected(get_last_error());
+		if (chdir(path_string.data()) == -1)
+		{
+			return vsm::unexpected(get_last_error());
+		}
+	}
+	else
+	{
+		int fd = unwrap_handle(path.base);
+		unique_fd new_fd;
+
+		//TODO: Use lexically_equivalent(path, ".")?
+		if (!path_string.empty())
+		{
+			vsm_try(new_fd, linux::open_file(
+				fd,
+				path_string.data(),
+				O_PATH | O_DIRECTORY | O_CLOEXEC));
+
+			fd = new_fd.get();
+		}
+
+		if (fchdir(fd) == -1)
+		{
+			return vsm::unexpected(get_last_error());
+		}
 	}
 
 	return {};
 }
 
-vsm::result<directory_handle> this_process::open_current_directory()
+vsm::result<blocking::directory_handle> this_process::open_current_directory()
 {
-	//int const fd = open(".", O_RDONLY | O_DIRECTORY, 0);
-	
-	return vsm::unexpected(error::unsupported_operation);
+	vsm_try(fd, linux::open_file(
+		/* dir_fd: */ -1,
+		"",
+		O_RDONLY | O_DIRECTORY | O_CLOEXEC));
+
+	return vsm_lazy(blocking::directory_handle(
+		adopt_handle,
+		fs_object_t::native_type
+		{
+			platform_object_t::native_type
+			{
+				object_t::native_type
+				{
+					object_t::flags::not_null,
+				},
+				wrap_handle(fd.release()),
+			},
+			file_flags::none,
+		}
+	));
 }

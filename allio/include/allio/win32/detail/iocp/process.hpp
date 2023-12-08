@@ -24,6 +24,7 @@ struct async_connector<iocp_multiplexer, process_t>
 
 	static vsm::result<void> detach(M&, H const&, C&)
 	{
+		return {};
 	}
 };
 

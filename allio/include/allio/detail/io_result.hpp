@@ -1,5 +1,132 @@
 #pragma once
 
+#include <vsm/concepts.hpp>
+#include <vsm/detail/categories.hpp>
+#include <vsm/result.hpp>
+#include <vsm/utility.hpp>
+
+namespace allio::detail {
+
+template<template<typename...> typename Template, typename... Args>
+void _any_cvref_of_template(Template<Args...> const&);
+
+template<typename T, template<typename...> typename Template>
+concept any_cvref_of_template = requires (T const& t) { _any_cvref_of_template<Template>(t); };
+
+template<template<typename> typename Template, typename T>
+T _unexpected_value(Template<T> const&);
+
+template<typename T>
+using unexpected_value_t = vsm::copy_cvref_t<T, decltype(_unexpected_value(std::declval<T const&>()))>;
+
+template<typename T, typename Tag>
+class basic_io_result_value
+{
+	T m_value;
+
+public:
+	using value_type = T;
+
+	explicit basic_io_result_value(auto&& value)
+		: m_value(vsm_forward(value))
+	{
+	}
+
+#if __cpp_explicit_this_parameter
+	auto&& value(this auto&& self)
+	{
+		return vsm_forward(self).m_value;
+	}
+#else
+#	define allio_detail_x(C) \
+	T C value() C \
+	{ \
+		return static_cast<T C>(m_value); \
+	} \
+
+	vsm_detail_reference_categories(allio_detail_x)
+#	undef allio_detail_x
+#endif
+};
+
+template<typename E>
+struct io_pending : basic_io_result_value<E, io_pending<E>>
+{
+	using basic_io_result_value<E, io_pending<E>>::basic_io_result_value;
+};
+
+template<typename E>
+io_pending(E) -> io_pending<E>;
+
+template<typename E>
+struct io_cancelled : basic_io_result_value<E, io_cancelled<E>>
+{
+	using basic_io_result_value<E, io_cancelled<E>>::basic_io_result_value;
+};
+
+template<typename E>
+io_cancelled(E) -> io_cancelled<E>;
+
+template<typename T, typename E = std::error_code>
+class io_result : vsm::result<T, E>
+{
+	using base = vsm::result<T, E>;
+
+	static constexpr unsigned char status_pending         = 1;
+	static constexpr unsigned char status_cancelled       = 2;
+
+	unsigned char m_status = 0;
+
+public:
+	using base::base;
+
+	template<vsm::any_cvref_of<base> Result>
+	io_result(Result&& result)
+		: base(vsm_forward(result))
+	{
+	}
+
+	template<any_cvref_of_template<io_pending> Pending>
+		requires std::is_constructible_v<E, unexpected_value_t<Pending>>
+	explicit(!std::is_convertible_v<unexpected_value_t<Pending>, E>)
+	io_result(Pending&& pending)
+		: base(vsm::result_error, pending.value())
+		, m_status(status_pending)
+	{
+	}
+
+	template<any_cvref_of_template<io_cancelled> Cancelled>
+		requires std::is_constructible_v<E, unexpected_value_t<Cancelled>>
+	explicit(!std::is_convertible_v<unexpected_value_t<Cancelled>, E>)
+	io_result(Cancelled&& cancelled)
+		: base(vsm::result_error, cancelled.value())
+		, m_status(status_cancelled)
+	{
+	}
+
+
+	[[nodiscard]] bool is_pending() const
+	{
+		return m_status == status_pending;
+	}
+
+	[[nodiscard]] bool is_cancelled() const
+	{
+		return m_status == status_cancelled;
+	}
+
+
+	using base::has_value;
+
+	using base::value;
+	using base::error;
+
+	using base::operator*;
+};
+
+} // namespace allio::detail
+
+#if 0
 #include <vsm/assert.h>
 #include <vsm/concepts.hpp>
 #include <vsm/result.hpp>
@@ -560,3 +687,4 @@ public:
 };
 
 } // namespace allio::detail
+#endif

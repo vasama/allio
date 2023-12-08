@@ -2,8 +2,9 @@
 
 #include <allio/byte_io_buffers.hpp>
 #include <allio/deadline.hpp>
-#include <allio/detail/platform.h>
+#include <allio/detail/handle_flags.hpp>
 #include <allio/network.hpp>
+#include <allio/platform.hpp>
 
 #include <vsm/assert.h>
 #include <vsm/flags.hpp>
@@ -52,6 +53,10 @@ struct socket_address_union
 struct socket_address : socket_address_union
 {
 	socket_address_size_type size;
+
+	[[nodiscard]] static vsm::result<socket_address_size_type> make(
+		network_endpoint const& endpoint,
+		socket_address_union& address_union);
 
 	[[nodiscard]] static vsm::result<socket_address> make(network_endpoint const& endpoint);
 
@@ -103,8 +108,9 @@ inline vsm::result<int> choose_protocol(int const address_family, int const type
 enum class socket_flags
 {
 	none                    = 0,
-	multiplexable           = 1 << 0,
-	registered_io           = 1 << 1,
+	inheritable             = 1 << 0,
+	multiplexable           = 1 << 1,
+	registered_io           = 1 << 2,
 };
 vsm_flag_enum(socket_flags);
 

@@ -48,7 +48,11 @@ struct create_t
 	{
 		event_mode mode;
 	};
-	using optional_params_type = initially_signaled_t;
+	using optional_params_type = parameters_t
+	<
+		inheritable_t,
+		initially_signaled_t
+	>;
 	using result_type = void;
 	using runtime_tag = bounded_runtime_t;
 
@@ -143,11 +147,6 @@ struct event_t : platform_object_t
 		, reset_t
 		, wait_t
 	>;
-
-
-	struct native_type : base_type::native_type
-	{
-	};
 
 
 	static vsm::result<void> create(

@@ -24,8 +24,9 @@ inline vsm::result<int> fcntl(int const fd, int const cmd, auto&&... args)
 	return r;
 }
 
-inline vsm::result<detail::unique_fd> dup(int const old_fd, int new_fd, int const flags)
+inline vsm::result<detail::unique_fd> duplicate_fd(int const old_fd, int new_fd, int const flags)
 {
+	// O_CLOEXEC is the only valid flag.
 	vsm_assert((flags & ~O_CLOEXEC) == 0);
 
 	if (new_fd == -1)
@@ -34,7 +35,7 @@ inline vsm::result<detail::unique_fd> dup(int const old_fd, int new_fd, int cons
 			? F_DUPFD_CLOEXEC
 			: F_DUPFD;
 
-		new_fd = ::fcntl(old_fd, cmd, 0);
+		new_fd = ::fcntl(old_fd, cmd, /* lowest_new_fd: */ 0);
 	}
 	else
 	{

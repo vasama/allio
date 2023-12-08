@@ -4,20 +4,21 @@
 #include <allio/detail/deadline.hpp>
 #include <allio/detail/filesystem.hpp>
 #include <allio/detail/handles/platform_object.hpp>
+#include <allio/detail/integer_id.hpp>
 #include <allio/detail/io_sender.hpp>
 
 namespace allio::detail {
 
+struct unix_process_reaper;
+
+
+struct process_t;
+
 /// Windows: Valid process IDs have a range of [1, 2^32).
 /// Linux: Valid process IDs have a range of [1, 2^22].
-class process_id
-{
-	uint32_t m_id;
-};
+using process_id = integer_id<process_t, uint32_t>;
 
 using process_exit_code = int32_t;
-
-inline constexpr process_exit_code process_exit_code_unavailable = -1;
 
 
 struct inherit_handles_t
@@ -120,6 +121,34 @@ struct std_error_t
 };
 inline constexpr stream_parameter<std_error_t> std_error = {};
 
+struct launch_detached_t
+{
+	bool launch_detached = false;
+
+	friend void tag_invoke(set_argument_t, launch_detached_t& args, explicit_parameter<launch_detached_t>)
+	{
+		args.launch_detached = true;
+	}
+};
+inline constexpr explicit_parameter<launch_detached_t> launch_detached = {};
+
+struct wait_on_close_t
+{
+	bool wait_on_close = false;
+
+	friend void tag_invoke(set_argument_t, wait_on_close_t& args, explicit_parameter<wait_on_close_t>)
+	{
+		args.wait_on_close = true;
+	}
+};
+inline constexpr explicit_parameter<wait_on_close_t> wait_on_close = {};
+
+struct exit_code_t
+{
+	std::optional<process_exit_code> exit_code;
+};
+inline constexpr explicit_parameter<exit_code_t, process_exit_code> exit_code = {};
+
 namespace process_io {
 
 struct open_t
@@ -129,7 +158,7 @@ struct open_t
 	{
 		process_id id;
 	};
-	using optional_params_type = no_parameters_t;
+	using optional_params_type = inheritable_t;
 	using result_type = void;
 	using runtime_concept = bounded_runtime_t;
 
@@ -153,6 +182,10 @@ struct launch_t
 	};
 	using optional_params_type = parameters_t
 	<
+		launch_detached_t,
+		wait_on_close_t,
+
+		inheritable_t,
 		inherit_handles_t,
 
 		command_line_t,
@@ -179,11 +212,8 @@ struct launch_t
 struct terminate_t
 {
 	using operation_concept = void;
-	struct required_params_type
-	{
-		process_exit_code exit_code;
-	};
-	using optional_params_type = no_parameters_t;
+	using required_params_type = no_parameters_t;
+	using optional_params_type = exit_code_t;
 	using result_type = void;
 	using runtime_concept = bounded_runtime_t;
 
@@ -222,10 +252,17 @@ struct process_t : platform_object_t
 {
 	using base_type = platform_object_t;
 
+	allio_handle_flags
+	(
+		wait_on_close,
+	);
+
 	struct native_type : base_type::native_type
 	{
 		process_id parent_id;
 		process_id id;
+
+		unix_process_reaper* reaper;
 	};
 
 	using open_t = process_io::open_t;
@@ -258,6 +295,10 @@ struct process_t : platform_object_t
 		native_type const& h,
 		io_parameters_t<process_t, wait_t> const& args);
 
+	static vsm::result<void> close(
+		native_type& h,
+		io_parameters_t<process_t, close_t> const& args);
+
 	template<typename Handle>
 	struct abstract_interface : base_type::abstract_interface<Handle>
 	{
@@ -266,7 +307,7 @@ struct process_t : platform_object_t
 			return static_cast<Handle const&>(*this).native().native_type::id;
 		}
 	};
-	
+
 	template<typename Handle, optional_multiplexer_handle_for<process_t> MultiplexerHandle>
 	struct concrete_interface : base_type::concrete_interface<Handle, MultiplexerHandle>
 	{
@@ -277,11 +318,11 @@ struct process_t : platform_object_t
 				make_io_args<process_t, wait_t>()(vsm_forward(args)...));
 		}
 
-		[[nodiscard]] auto terminate(process_exit_code const exit_code, auto&&... args) const
+		[[nodiscard]] auto terminate(auto&&... args) const
 		{
 			return generic_io<terminate_t>(
 				static_cast<Handle const&>(*this),
-				make_io_args<process_t, terminate_t>(exit_code)(vsm_forward(args)...));
+				make_io_args<process_t, terminate_t>()(vsm_forward(args)...));
 		}
 	};
 };

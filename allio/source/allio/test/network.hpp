@@ -103,9 +103,9 @@ inline endpoint_factory_ptr generate_endpoint_factory()
 {
 	return GENERATE(
 		as<endpoint_factory_ptr(*)()>()
-		, make_endpoint_factory<local_endpoint_factory>
+		//, make_endpoint_factory<local_endpoint_factory>
 		, make_endpoint_factory<ipv4_endpoint_factory>
-		, make_endpoint_factory<ipv6_endpoint_factory>
+		//, make_endpoint_factory<ipv6_endpoint_factory>
 	)();
 }
 

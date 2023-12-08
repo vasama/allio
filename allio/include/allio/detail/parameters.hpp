@@ -30,7 +30,11 @@ template<typename P>
 auto&& parameter_value(P&& args)
 {
 	auto&& [value] = vsm_forward(args);
+#if __cpp_lib_forward_like
 	return std::forward_like<P>(value);
+#else
+	return static_cast<vsm::copy_cvref_t<P&&, decltype(value)>>(value);
+#endif
 }
 
 template<typename P>
@@ -62,10 +66,10 @@ public:
 	}
 };
 
-template<typename P>
+template<typename P, typename T = void>
 class explicit_ref_parameter
 {
-	using pointer_type = parameter_value_t<P>;
+	using pointer_type = vsm::select_t<std::is_void_v<T>, parameter_value_t<P>, T*>;
 	static_assert(std::is_pointer_v<pointer_type>);
 	using value_type = std::remove_pointer_t<pointer_type>;
 
@@ -83,7 +87,7 @@ class explicit_ref_parameter
 	};
 
 public:
-	constexpr argument_t vsm_static_operator_invoke(vsm::any_ref_of<value_type> auto&& value)
+	constexpr argument_t vsm_static_operator_invoke(value_type& value)
 	{
 		return { { &value } };
 	}

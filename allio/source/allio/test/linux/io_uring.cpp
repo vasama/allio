@@ -1,4 +1,4 @@
-#include <allio/impl/linux/kernel/io_uring.hpp>
+#include <allio/impl/linux/io_uring.hpp>
 
 #include <allio/event.hpp>
 #include <allio/linux/detail/unique_mmap.hpp>

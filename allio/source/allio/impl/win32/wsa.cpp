@@ -161,6 +161,7 @@ static socket_error _wsa_init()
 	return socket_error::none;
 }
 
+//TODO: Automatically initialize WSA like the kernel APIs.
 vsm::result<void> win32::wsa_init()
 {
 	static wsa_owner const e = _wsa_init();

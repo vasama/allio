@@ -5,3 +5,4 @@
 	T(T&&) = default; \
 	T& operator=(T&&) & = default; \
 	~T() = default \
+

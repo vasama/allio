@@ -1,32 +1,19 @@
 #pragma once
 
 #include <allio/impl/linux/error.hpp>
+#include <allio/linux/detail/io_uring/io_uring.hpp>
 #include <allio/linux/detail/unique_fd.hpp>
 
 #include <vsm/lazy.hpp>
 #include <vsm/result.hpp>
 
-#include <linux/io_uring.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
-#ifndef IORING_SETUP_SQE128
-#	define IORING_SETUP_SQE128                  (1U << 10)
-#endif
-
-#ifndef IORING_SETUP_CQE32
-#	define IORING_SETUP_CQE32                   (1U << 11)
-#endif
-
-#ifndef IORING_FEAT_CQE_SKIP
-#	define IORING_FEAT_CQE_SKIP                 (1U << 11)
-#endif
-
-#ifndef IOSQE_CQE_SKIP_SUCCESS
-#	define IOSQE_CQE_SKIP_SUCCESS               (1U << 6)
-#endif
-
 namespace allio::linux {
+
+using namespace detail::io_uring_constants;
+
 
 inline int _io_uring_setup(unsigned const entries, io_uring_params* const args)
 {

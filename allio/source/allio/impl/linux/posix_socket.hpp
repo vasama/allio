@@ -1,4 +1,5 @@
 #pragma once
+//TODO: Move to posix/
 
 #ifndef allio_detail_socket_api
 #	error Include <allio/impl/posix/socket.hpp> instead.
@@ -9,6 +10,7 @@
 #include <allio/impl/linux/error.hpp>
 #include <allio/linux/platform.hpp>
 
+#include <poll.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -16,7 +18,7 @@
 
 #include <allio/linux/detail/undef.i>
 
-namespace allio {
+namespace allio::posix {
 
 using socket_type = int;
 using socket_address_size_type = unsigned int;
@@ -58,4 +60,4 @@ inline vsm::result<void> close_socket(socket_type const socket)
 	return {};
 }
 
-} // namespace allio
+} // namespace allio::posix

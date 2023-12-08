@@ -46,18 +46,18 @@ private:
 	{
 		if constexpr (std::invocable<Visitor&&, basic_path_view<Char>, Tag...>)
 		{
-			return std::invoke(vsm_forward(visitor), basic_path_view<Char>(string), Tag()...);
+			return vsm_forward(visitor)(basic_path_view<Char>(string), Tag()...);
 		}
 		else
 		{
-			return std::invoke(vsm_forward(visitor), basic_path_view<Char>(string));
+			return vsm_forward(visitor)(basic_path_view<Char>(string));
 		}
 	}
 
 	template<typename Visitor>
 	[[nodiscard]] decltype(auto) _visitor(Visitor&& visitor, detail::string_length_out_of_range_t)
 	{
-		return std::invoke(vsm_forward(visitor), detail::string_length_out_of_range_t());
+		return vsm_forward(visitor)(detail::string_length_out_of_range_t());
 	}
 };
 

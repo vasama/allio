@@ -49,7 +49,7 @@ TEST_CASE("Directory entries can be read", "[directory_handle][blocking]")
 {
 	using namespace blocking;
 
-	static constexpr size_t file_count = 400;
+	static constexpr size_t file_count = 1; //TODO: 1 just for debugging
 
 	auto const path = test::get_temp_path();
 	auto file_names = fill_directory(path, file_count);

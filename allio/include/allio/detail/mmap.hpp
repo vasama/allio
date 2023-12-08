@@ -19,7 +19,7 @@ struct mmap_view
 struct mmap_deleter
 {
 	template<typename T>
-	void vsm_static_operator_invoke(mmap_view const view)
+	void vsm_static_operator_invoke(mmap_view<T> const view)
 	{
 		close_mmap(view.base, view.size);
 	}

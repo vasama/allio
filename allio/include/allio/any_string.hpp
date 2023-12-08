@@ -157,7 +157,7 @@ public:
 			return _visitor<char32_t>(vsm_forward(visitor));
 		}
 
-		return std::invoke(vsm_forward(visitor), detail::string_length_out_of_range_t());
+		return vsm_forward(visitor)(detail::string_length_out_of_range_t());
 	}
 
 private:
@@ -175,10 +175,10 @@ private:
 		{
 			if (m_ctrl & cstr_flag)
 			{
-				return std::invoke(vsm_forward(visitor), view<Char>(), null_terminated);
+				return vsm_forward(visitor)(view<Char>(), null_terminated);
 			}
 		}
-		return std::invoke(vsm_forward(visitor), view<Char>());
+		return vsm_forward(visitor)(view<Char>());
 	}
 };
 

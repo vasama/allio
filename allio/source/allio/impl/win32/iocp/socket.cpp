@@ -24,6 +24,7 @@ static H make_native_handle(unique_wrapped_socket& socket, handle_flags const fl
 	{
 		platform_object_t::native_type
 		{
+			object_t::native_type
 			{
 				raw_socket_t::flags::not_null | flags,
 			},

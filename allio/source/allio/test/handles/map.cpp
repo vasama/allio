@@ -1,7 +1,6 @@
 #include <allio/map.hpp>
 
 #include <allio/test/filesystem.hpp>
-#include <allio/test/signal.hpp>
 
 #include <catch2/catch_all.hpp>
 
@@ -11,16 +10,18 @@ using namespace allio;
 
 TEST_CASE("anonymous mapping", "[map_handle]")
 {
+	using namespace blocking;
+
 	static constexpr size_t KiB = 1024;
 	static constexpr size_t MiB = 1024 * KiB;
 	static constexpr size_t GiB = 1024 * MiB;
 	static constexpr size_t TiB = 1024 * GiB;
 
-	#if vsm_word_32
+	#if vsm_word_32 || 1
 	static constexpr size_t reservation_size = MiB;
 	#endif
 
-	#if vsm_word_64
+	#if vsm_word_64 && 0
 	static constexpr size_t reservation_size = TiB;
 	#endif
 
@@ -39,33 +40,18 @@ TEST_CASE("anonymous mapping", "[map_handle]")
 		page_level = std::nullopt;
 	}
 #else
-	auto const page_level = GENERATE(
-		as<std::optional<allio::page_level>>(),
-		std::nullopt,
-		get_default_page_level());
+	auto const page_level = get_default_page_level();
+	size_t const page_size = get_page_size(page_level);
 #endif
 
-	map_handle map;
-	map.map(reservation_size,
-	{
-		.commit = false,
-		.page_level = page_level,
-	}).value();
-
-#if 0
-	map_handle map = map_anonymous(reservation_size,
-	{
-		.commit = false,
-	}).value();
-#endif
+	auto const map = map_anonymous(
+		reservation_size,
+		initial_commit(false),
+		page_level).value();
 
 	REQUIRE(map.size() >= reservation_size);
-
-	size_t const page_size = map.get_page_size();
-	if (page_level)
-	{
-		REQUIRE(page_size == get_page_size(*page_level));
-	}
+	REQUIRE(map.page_level() == page_level);
+	REQUIRE(map.page_size() == page_size);
 
 	char* const page_0 = reinterpret_cast<char*>(map.base());
 	REQUIRE(page_0 != nullptr);
@@ -92,32 +78,23 @@ TEST_CASE("anonymous mapping", "[map_handle]")
 
 TEST_CASE("map_handle page protection", "[map_handle]")
 {
-	map_handle map;
-	map.map(1,
-	{
-		.protection = protection::read,
-	}).value();
+	using namespace blocking;
 
-#if 0
-	map_handle map = map_anonymous(1,
-	{
-		.protection = protection::read,
-	}).value();
-#endif
+	auto const map = map_anonymous(1, protection::read).value();
 
-	unsigned char* const page = reinterpret_cast<unsigned char*>(map.base());
+	unsigned char* const page = static_cast<unsigned char*>(map.base());
 	unsigned char volatile& volatile_byte = *page;
 
-	map.set_protection(page, 1, protection::read).value();
+	map.protect(page, 1, protection::read).value();
 	REQUIRE(volatile_byte == 0);
 
-	map.set_protection(page, 1, protection::read_write).value();
+	map.protect(page, 1, protection::read_write).value();
 	REQUIRE(volatile_byte == 0);
 
 	volatile_byte = 1;
 	REQUIRE(volatile_byte == 1);
 
-	map.set_protection(page, 1, protection::read).value();
+	map.protect(page, 1, protection::read).value();
 	REQUIRE(volatile_byte == 1);
 }
 

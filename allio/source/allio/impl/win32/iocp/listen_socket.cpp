@@ -17,6 +17,7 @@ using C = async_connector_t<M, raw_listen_socket_t>;
 using socket_handle_type = async_handle<raw_socket_t, basic_multiplexer_handle<M>>;
 using accept_result_type = accept_result<socket_handle_type>;
 
+
 using listen_t = raw_listen_socket_t::listen_t;
 using listen_s = async_operation_t<M, raw_listen_socket_t, listen_t>;
 using listen_a = io_parameters_t<raw_listen_socket_t, listen_t>;
@@ -45,6 +46,7 @@ io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s&, listen_a const& a,
 	{
 		platform_object_t::native_type
 		{
+			object_t::native_type
 			{
 				raw_listen_socket_t::flags::not_null | flags,
 			},
@@ -64,6 +66,7 @@ void listen_s::cancel(M&, H const&, C const&, listen_s&)
 {
 }
 
+
 using accept_t = raw_listen_socket_t::accept_t;
 using accept_s = async_operation_t<M, raw_listen_socket_t, accept_t>;
 using accept_a = io_parameters_t<raw_listen_socket_t, accept_t>;
@@ -75,21 +78,20 @@ static io_result<accept_result_type> make_accept_result(
 	posix::socket_address_union const& addr)
 {
 	socket_handle_type::connector_type c;
-
 	vsm_try_void(m.attach_handle(socket.get(), c));
 
 	return vsm_lazy(accept_result_type
 	{
-		socket_handle_type
-		(
-			adopt_handle_t(),
+		socket_handle_type(
+			adopt_handle,
 			m,
 			raw_socket_t::native_type
 			{
 				platform_object_t::native_type
 				{
+					object_t::native_type
 					{
-						raw_listen_socket_t::flags::not_null | flags,
+						object_t::flags::not_null | flags,
 					},
 					socket.release(),
 				},

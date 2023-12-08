@@ -2,13 +2,21 @@
 
 #include <vsm/result.hpp>
 
+#include <cerrno>
+
 #include <allio/linux/detail/undef.i>
 
 namespace allio::linux {
 
+static_assert(EAGAIN == EWOULDBLOCK);
+
 enum class system_error : int
 {
-	none = 0
+	none = 0,
+
+	would_block = EWOULDBLOCK,
+	in_progress = EINPROGRESS,
+	not_connected = ENOTCONN,
 };
 
 inline system_error get_last_error()

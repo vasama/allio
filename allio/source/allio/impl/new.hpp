@@ -1,5 +1,6 @@
 #pragma once
 
+#include <allio/detail/new.hpp>
 #include <allio/error.hpp>
 
 #include <vsm/lazy.hpp>
@@ -8,16 +9,15 @@
 #include <vsm/utility.hpp>
 
 #include <memory>
-#include <new>
 
 namespace allio {
 namespace detail {
 
 struct operator_deleter
 {
-	void vsm_static_operator_invoke(void* const storage)
+	void vsm_static_operator_invoke(void* const memory)
 	{
-		operator delete(storage);
+		operator delete(memory);
 	}
 };
 

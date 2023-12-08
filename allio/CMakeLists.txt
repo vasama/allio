@@ -42,7 +42,7 @@ vsm_add_library(allio::core
 		include/allio/socket.hpp
 		include/allio/step_deadline.hpp
 		include/allio/sync_wait.hpp
-		
+
 		include/allio/handles/datagram_socket.hpp
 		include/allio/handles/directory.hpp
 		include/allio/handles/event.hpp
@@ -114,7 +114,7 @@ vsm_add_library(allio::core
 		source/allio/test/handles/directory.cpp
 		source/allio/test/handles/event.cpp
 		source/allio/test/handles/file.cpp
-		#source/allio/test/handles/map.cpp
+		source/allio/test/handles/map.cpp
 		#source/allio/test/handles/opaque_object.cpp
 		source/allio/test/handles/process.cpp
 		source/allio/test/handles/socket.cpp
@@ -124,16 +124,18 @@ vsm_configure(allio::core
 	PLATFORM Windows
 	
 	HEADERS
-		include/allio/win32/detail/iocp/byte_io.hpp
-		include/allio/win32/detail/iocp/event.hpp
-		include/allio/win32/detail/iocp/multiplexer.hpp
-		include/allio/win32/detail/iocp/wait.hpp
 		include/allio/win32/kernel_error.hpp
 		include/allio/win32/platform.hpp
 		include/allio/win32/detail/path.hpp
 		include/allio/win32/detail/path_view.hpp
 		include/allio/win32/detail/unique_handle.hpp
 		include/allio/win32/detail/win32_fwd.hpp
+
+		# iocp
+		include/allio/win32/detail/iocp/byte_io.hpp
+		include/allio/win32/detail/iocp/event.hpp
+		include/allio/win32/detail/iocp/multiplexer.hpp
+		include/allio/win32/detail/iocp/wait.hpp
 
 	SOURCES
 		source/allio/impl/posix/socket.cpp
@@ -173,6 +175,7 @@ vsm_configure(allio::core
 		source/allio/impl/win32/wsa.cpp
 		source/allio/impl/win32/wsa.hpp
 
+		# handles
 		source/allio/impl/posix/handles/datagram_socket.cpp
 		source/allio/impl/posix/handles/listen_socket.cpp
 		source/allio/impl/posix/handles/socket.cpp
@@ -187,6 +190,7 @@ vsm_configure(allio::core
 		source/allio/impl/win32/handles/process.cpp
 		source/allio/impl/win32/handles/process.hpp
 
+		# iocp
 		source/allio/impl/win32/iocp/datagram_socket.cpp
 		source/allio/impl/win32/iocp/directory.cpp
 		source/allio/impl/win32/iocp/event.cpp
@@ -210,46 +214,72 @@ vsm_configure(allio::core
 	PLATFORM Linux
 	
 	HEADERS
-		include/allio/linux/detail/io_uring/event.hpp
-		include/allio/linux/detail/io_uring/multiplexer.hpp
-		include/allio/linux/platform.hpp
-		include/allio/linux/timespec.hpp
 		include/allio/linux/detail/path.hpp
 		include/allio/linux/detail/path_view.hpp
 		include/allio/linux/detail/undef.i
 		include/allio/linux/detail/unique_fd.hpp
+		include/allio/linux/platform.hpp
+		include/allio/linux/timespec.hpp
+
+		# io_uring
+		include/allio/linux/detail/io_uring/event.hpp
+		include/allio/linux/detail/io_uring/listen_socket.hpp
+		include/allio/linux/detail/io_uring/multiplexer.hpp
+		include/allio/linux/detail/io_uring/socket.hpp
 	
 	SOURCES
-		source/allio/impl/linux/kernel/fcntl.hpp
-		source/allio/impl/linux/kernel/proc.hpp
-		source/allio/impl/linux/kernel/stat.hpp
 		source/allio/impl/linux/api_string.hpp
-		source/allio/impl/linux/default_multiplexer.cpp
-		#source/allio/impl/linux/directory
+		source/allio/impl/linux/byte_io.cpp
+		source/allio/impl/linux/byte_io.hpp
 		source/allio/impl/linux/error.cpp
 		source/allio/impl/linux/error.hpp
-		source/allio/impl/linux/event.cpp
-		#source/allio/impl/linux/fs_object.cpp
-		#source/allio/impl/linux/fs_object.hpp
-		#source/allio/impl/linux/file.cpp
-		#source/allio/impl/linux/map.cpp
+		source/allio/impl/linux/fcntl.hpp
+		source/allio/impl/linux/fork_exec.cpp
+		source/allio/impl/linux/fork_exec.hpp
+		source/allio/impl/linux/io_uring.hpp
 		source/allio/impl/linux/memory.cpp
-		#source/allio/impl/linux/platform_object.cpp
-		#source/allio/impl/linux/platform_object.hpp
+		source/allio/impl/linux/mman.hpp
+		source/allio/impl/linux/mmap.cpp
 		source/allio/impl/linux/platform.cpp
-		#source/allio/impl/linux/posix_socket.cpp
-		#source/allio/impl/linux/posix_socket.hpp
-		#source/allio/impl/linux/process.cpp
-		#source/allio/impl/linux/process.hpp
-		#source/allio/impl/linux/section.cpp
-		#source/allio/impl/linux/sync_byte_io.cpp
+		source/allio/impl/linux/posix_socket.hpp
+		source/allio/impl/linux/posix_socket.cpp
+		source/allio/impl/linux/proc.hpp
+		source/allio/impl/linux/process_reaper.hpp
+		source/allio/impl/linux/process_reaper.cpp
+		source/allio/impl/linux/stat.hpp
+		source/allio/impl/linux/timeout.hpp
+		source/allio/impl/linux/transcode.cpp
 		source/allio/impl/linux/unique_fd.cpp
 		source/allio/impl/linux/unique_mmap.cpp
 		source/allio/impl/linux/version.cpp
 		source/allio/impl/linux/version.hpp
+		source/allio/impl/posix/socket.cpp
+		source/allio/impl/posix/socket.hpp
+		source/allio/impl/posix/unique_socket.cpp
 
+		# handles
+		source/allio/impl/linux/handles/directory.cpp
+		source/allio/impl/linux/handles/event.cpp
+		source/allio/impl/linux/handles/event.hpp
+		source/allio/impl/linux/handles/file.cpp
+		source/allio/impl/linux/handles/fs_object.cpp
+		source/allio/impl/linux/handles/fs_object.hpp
+		source/allio/impl/linux/handles/map.cpp
+		source/allio/impl/linux/handles/pipe.cpp
+		source/allio/impl/linux/handles/platform_object.cpp
+		source/allio/impl/linux/handles/process.cpp
+		source/allio/impl/linux/handles/section.cpp
+		source/allio/impl/posix/handles/datagram_socket.cpp
+		source/allio/impl/posix/handles/listen_socket.cpp
+		source/allio/impl/posix/handles/socket.cpp
+
+		# io_uring
+		source/allio/impl/linux/io_uring/datagram_socket.cpp
 		source/allio/impl/linux/io_uring/event.cpp
+		source/allio/impl/linux/io_uring/listen_socket.cpp
 		source/allio/impl/linux/io_uring/multiplexer.cpp
+		source/allio/impl/linux/io_uring/socket.cpp
+		#source/allio/impl/linux/io_uring/process.cpp
 
 	TEST_SOURCES
 		source/allio/test/linux/io_uring.cpp

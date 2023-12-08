@@ -1,6 +1,7 @@
 #include <allio/impl/posix/socket.hpp>
 
 #include <allio/detail/dynamic_buffer.hpp>
+#include <allio/impl/byte_io.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
 #include <allio/impl/win32/wsa.hpp>
 
@@ -33,8 +34,13 @@ vsm::result<posix::unique_socket_with_flags> posix::create_socket(
 {
 	vsm_try_void(wsa_init());
 
-	DWORD w_flags = WSA_FLAG_NO_HANDLE_INHERIT;
+	DWORD w_flags = 0;
 	handle_flags h_flags = {};
+
+	if (!vsm::any_flags(flags, socket_flags::inheritable))
+	{
+		w_flags |= WSA_FLAG_NO_HANDLE_INHERIT;
+	}
 
 	if (vsm::any_flags(flags, socket_flags::multiplexable))
 	{
@@ -181,28 +187,6 @@ vsm::result<size_t> posix::socket_receive_from(
 	wsa_buffers_storage<64> buffers_storage;
 	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
 
-#if 0
-	if (buffers.size() > std::numeric_limits<ULONG>::max())
-	{
-		//TODO: Use a better error code?
-		return vsm::unexpected(error::invalid_argument);
-	}
-
-	WSAMSG message =
-	{
-		.name = &addr.addr,
-		.namelen = sizeof(socket_address_union),
-		.lpBuffers = wsa_buffers.data(),
-		.dwBufferCount = static_cast<ULONG>(wsa_buffers.size()),
-	};
-
-	DWORD transferred;
-	if (DWORD const error = wsa_recv_msg(socket, &message, &transferred))
-	{
-		return vsm::unexpected(static_cast<socket_error>(error));
-	}
-#endif
-
 	DWORD transferred;
 	DWORD flags = 0;
 
@@ -221,6 +205,7 @@ vsm::result<size_t> posix::socket_receive_from(
 	{
 		return vsm::unexpected(get_last_socket_error());
 	}
+	vsm_assert(transferred == get_buffers_size(buffers));
 
 	return transferred;
 }
@@ -232,29 +217,6 @@ vsm::result<void> posix::socket_send_to(
 {
 	wsa_buffers_storage<64> buffers_storage;
 	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
-
-#if 0
-	if (buffers.size() > std::numeric_limits<ULONG>::max())
-	{
-		//TODO: Use a better error code?
-		return vsm::unexpected(error::invalid_argument);
-	}
-
-	WSAMSG message =
-	{
-		.name = &const_cast<sockaddr&>(addr.addr),
-		.namelen = addr.size,
-		.lpBuffers = wsa_buffers.data(),
-		.dwBufferCount = static_cast<ULONG>(wsa_buffers.size()),
-	};
-
-	DWORD transferred;
-	if (DWORD const error = wsa_send_msg(socket, &message, &transferred))
-	{
-		return vsm::unexpected(static_cast<socket_error>(error));
-	}
-	//TODO: Assert transferred against total buffers size.
-#endif
 
 	DWORD transferred;
 	if (WSASendTo(
@@ -270,6 +232,7 @@ vsm::result<void> posix::socket_send_to(
 	{
 		return vsm::unexpected(get_last_socket_error());
 	}
+	vsm_assert(transferred == get_buffers_size(buffers));
 
 	return {};
 }

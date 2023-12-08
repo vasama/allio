@@ -1,12 +1,10 @@
-#include <allio/impl/linux/event.hpp>
+#include <allio/impl/linux/handles/event.hpp>
 
 #include <allio/impl/linux/error.hpp>
-#include <allio/impl/linux/timeout.hpp>
+#include <allio/impl/linux/eventfd.hpp>
+#include <allio/impl/linux/poll.hpp>
 #include <allio/linux/platform.hpp>
 #include <allio/step_deadline.hpp>
-
-#include <poll.h>
-#include <sys/eventfd.h>
 
 #include <allio/linux/detail/undef.i>
 
@@ -14,40 +12,16 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::linux;
 
-vsm::result<void> linux::poll_event(int const fd, deadline const deadline)
+static vsm::result<void> poll_event(int const fd, deadline const deadline)
 {
-	pollfd poll_fd =
-	{
-		.fd = fd,
-		.events = POLLIN,
-	};
-
-	int const result = ppoll(
-		&poll_fd,
-		1,
-		kernel_timeout<timespec>(deadline),
-		nullptr);
-
-	if (result == -1)
-	{
-		return vsm::unexpected(get_last_error());
-	}
-
-	if (result == 0)
-	{
-		return vsm::unexpected(error::async_operation_timed_out);
-	}
-
-	vsm_assert(poll_fd.revents == POLLIN);
-
-	return {};
+	return linux::poll(fd, POLLIN, deadline);
 }
 
 vsm::result<bool> linux::reset_event(int const fd)
 {
 	eventfd_t value;
 
-	int const r = eventfd_read(
+	int const r = ::eventfd_read(
 		fd,
 		&value);
 
@@ -89,15 +63,44 @@ vsm::result<void> linux::test_event(int const fd, bool const auto_reset)
 }
 
 
-vsm::result<void> _event_handle::signal() const
+vsm::result<void> event_t::create(
+	native_type& h,
+	io_parameters_t<event_t, create_t> const& a)
 {
-	if (!*this)
+	handle_flags flags = flags::none;
+	if (a.mode == event_mode::auto_reset)
 	{
-		return vsm::unexpected(error::handle_is_null);
+		flags |= flags::auto_reset;
 	}
 
-	int const r = eventfd_write(
-		unwrap_handle(get_platform_handle()),
+	int eventfd_flags = EFD_NONBLOCK;
+	if (!a.inheritable)
+	{
+		eventfd_flags |= EFD_CLOEXEC;
+	}
+
+	vsm_try(fd, linux::eventfd(
+		eventfd_flags,
+		a.initially_signaled ? 1 : 0));
+
+	h = platform_object_t::native_type
+	{
+		object_t::native_type
+		{
+			flags::not_null | flags,
+		},
+		wrap_handle(fd.release()),
+	};
+
+	return {};
+}
+
+vsm::result<void> event_t::signal(
+	native_type const& h,
+	io_parameters_t<event_t, signal_t> const& a)
+{
+	int const r = ::eventfd_write(
+		unwrap_handle(h.platform_handle),
 		/* value: */ 1);
 
 	if (r == -1)
@@ -114,75 +117,31 @@ vsm::result<void> _event_handle::signal() const
 	return {};
 }
 
-vsm::result<void> _event_handle::reset() const
+vsm::result<void> event_t::reset(
+	native_type const& h,
+	io_parameters_t<event_t, reset_t> const& a)
 {
-	if (!*this)
-	{
-		return vsm::unexpected(error::handle_is_null);
-	}
-
 	// It doesn't matter whether the counter was already zero,
 	// as long as it is now zero. Thus the value can be discarded.
 	return vsm::discard_value(
-		reset_event(unwrap_handle(get_platform_handle()))
+		reset_event(unwrap_handle(h.platform_handle))
 	);
 }
 
-
-vsm::result<void> _event_handle::do_blocking_io(_event_handle& h, io_parameters_t<create_t> const& args)
+vsm::result<void> event_t::wait(
+	native_type const& h,
+	io_parameters_t<event_t, wait_t> const& a)
 {
-	if (h)
-	{
-		return vsm::unexpected(error::handle_is_not_null);
-	}
-
-	handle_flags flags = flags::none;
-
-	if (args.reset_mode == reset_mode::auto_reset)
-	{
-		flags |= flags::auto_reset;
-	}
-
-	int const event = eventfd(
-		args.signal ? 1 : 0,
-		EFD_CLOEXEC | EFD_NONBLOCK);
-
-	if (event == -1)
-	{
-		return vsm::unexpected(get_last_error());
-	}
-
-	platform_handle::native_handle_type const native =
-	{
-		{
-			flags::not_null | flags,
-		},
-		wrap_handle(event),
-	};
-
-	vsm_assert(check_native_handle(native));
-	h.set_native_handle(native);
-
-	return {};
-}
-
-vsm::result<void> _event_handle::do_blocking_io(_event_handle const& h, io_parameters_t<wait_t> const& args)
-{
-	if (!h)
-	{
-		return vsm::unexpected(error::handle_is_not_null);
-	}
-
-	int const event = unwrap_handle(h.get_platform_handle());
+	int const fd = unwrap_handle(h.platform_handle);
 	bool const auto_reset = is_auto_reset(h);
 
-	if (args.deadline == deadline::instant())
+	if (a.deadline == deadline::instant())
 	{
-		return test_event(event, auto_reset);
+		return test_event(fd, auto_reset);
 	}
 
 	// The deadline must be made absolute and stepped in each iteration.
-	step_deadline absolute_deadline(args.deadline);
+	step_deadline absolute_deadline(a.deadline);
 
 	while (true)
 	{
@@ -199,11 +158,11 @@ vsm::result<void> _event_handle::do_blocking_io(_event_handle const& h, io_param
 		//   using write even in the unlikely case of a maxed out counter value.
 		//   There is also no way to open the event in both blocking and non-blocking
 		//   modes at the same time.
-		vsm_try_void(poll_event(event, relative_deadline));
+		vsm_try_void(poll_event(fd, relative_deadline));
 
 		if (auto_reset)
 		{
-			vsm_try(was_non_zero, reset_event(event));
+			vsm_try(was_non_zero, reset_event(fd));
 
 			// It is possible that another thread (possibly in another process)
 			// reset the event object between polling and reading. The auto reset mode

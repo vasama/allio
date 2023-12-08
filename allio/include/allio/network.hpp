@@ -307,16 +307,16 @@ public:
 		switch (m_kind)
 		{
 		case network_address_kind::null:
-			return std::invoke(vsm_forward(visitor), null_endpoint_t());
+			return vsm_forward(visitor)(null_endpoint_t());
 
 		case network_address_kind::local:
-			return std::invoke(vsm_forward(visitor), m_local);
+			return vsm_forward(visitor)(m_local);
 
 		case network_address_kind::ipv4:
-			return std::invoke(vsm_forward(visitor), m_ipv4);
+			return vsm_forward(visitor)(m_ipv4);
 
 		case network_address_kind::ipv6:
-			return std::invoke(vsm_forward(visitor), m_ipv6);
+			return vsm_forward(visitor)(m_ipv6);
 		}
 	}
 };

@@ -300,7 +300,7 @@ vsm::result<void> process_t::open(
 	native_type& h,
 	io_parameters_t<process_t, open_t> const& a)
 {
-	vsm_try(handle, win32::open_process(std::bit_cast<DWORD>(a.id)));
+	vsm_try(handle, win32::open_process(a.id.integer()));
 
 	handle_flags flags = flags::none;
 
@@ -338,7 +338,7 @@ vsm::result<void> process_t::launch(
 			wrap_handle(handle.release()),
 		},
 		process_id{},
-		std::bit_cast<process_id>(id),
+		process_id(id),
 	};
 
 	return {};
@@ -353,7 +353,7 @@ vsm::result<void> process_t::terminate(
 	NTSTATUS status = NtTerminateProcess(
 		handle,
 		//TODO: Does this require some kind of transformation?
-		static_cast<NTSTATUS>(a.exit_code));
+		static_cast<NTSTATUS>(a.exit_code.value_or(EXIT_FAILURE)));
 
 	switch (status)
 	{
@@ -388,7 +388,7 @@ vsm::result<process_exit_code> process_t::wait(
 	native_type const& h,
 	io_parameters_t<process_t, wait_t> const& a)
 {
-	if (std::bit_cast<DWORD>(h.id) == GetCurrentProcessId())
+	if (h.id.integer() == GetCurrentProcessId())
 	{
 		return vsm::unexpected(error::process_is_current_process);
 	}
@@ -416,9 +416,6 @@ vsm::result<process_exit_code> process_t::wait(
 
 blocking::process_handle const& this_process::get_handle()
 {
-	using flags = process_t::flags;
-	using i_flags = process_t::impl_type::flags;
-
 	static constexpr auto make_handle = []()
 	{
 		return blocking::process_handle(
@@ -429,12 +426,13 @@ blocking::process_handle const& this_process::get_handle()
 				{
 					object_t::native_type
 					{
-						handle_flags(flags::not_null) | i_flags::pseudo_handle,
+						handle_flags(object_t::flags::not_null)
+							| process_t::impl_type::flags::pseudo_handle,
 					},
 					wrap_handle(GetCurrentProcess()),
 				},
 				process_id{},
-				std::bit_cast<process_id>(GetCurrentProcessId()),
+				process_id(GetCurrentProcessId()),
 			}
 		);
 	};
@@ -445,8 +443,6 @@ blocking::process_handle const& this_process::get_handle()
 
 vsm::result<blocking::process_handle> this_process::open()
 {
-	using flags = process_t::flags;
-
 	vsm_try(handle, duplicate_handle(GetCurrentProcess()));
 
 	return vsm_lazy(blocking::process_handle(
@@ -457,12 +453,12 @@ vsm::result<blocking::process_handle> this_process::open()
 			{
 				object_t::native_type
 				{
-					flags::not_null,
+					object_t::flags::not_null,
 				},
 				wrap_handle(handle.release()),
 			},
 			process_id{},
-			std::bit_cast<process_id>(GetCurrentProcessId()),
+			process_id(GetCurrentProcessId()),
 		}
 	));
 }

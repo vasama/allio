@@ -10,6 +10,8 @@
 #include <span>
 #include <string_view>
 
+#include <cstring>
+
 namespace allio {
 
 enum class transcode_error
@@ -47,10 +49,8 @@ transcode_result transcode_unchecked(
 }
 
 
-namespace detail {
-
 template<detail::character TargetChar, detail::character SourceChar>
-vsm::result<size_t> _transcode_string(
+vsm::result<size_t> transcode_string(
 	std::basic_string_view<SourceChar> const decode_buffer,
 	string_buffer<TargetChar> const encode_buffer)
 {
@@ -97,14 +97,15 @@ vsm::result<size_t> _transcode_string(
 	return {};
 }
 
-} // namespace detail
-
 template<detail::character SourceChar>
 vsm::result<size_t> transcode_string(
 	std::basic_string_view<SourceChar> const decode_buffer,
 	any_string_buffer const encode_buffer)
 {
-	return encode_buffer.visit(vsm_bind_borrow(detail::_transcode_string, decode_buffer));
+	return encode_buffer.visit([&](auto const encode_buffer)
+	{
+		return transcode_string(decode_buffer, encode_buffer);
+	});
 }
 
 } // namespace allio

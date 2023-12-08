@@ -170,13 +170,13 @@ TEST_CASE("Child process can be terminated", "[process_handle]")
 
 	std::this_thread::sleep_for(std::chrono::seconds(1));
 
-	process.terminate(EXIT_SUCCESS).value();
+	process.terminate().value();
 
-	// Requesting termination again succeeds and does not affect the exit code.
-	process.terminate(EXIT_FAILURE).value();
+	// Requesting termination again is fine.
+	process.terminate().value();
 
-	REQUIRE(process.wait() == EXIT_SUCCESS);
+	REQUIRE(process.wait() != EXIT_SUCCESS);
 
-	// Requesting termination after the program has already terminated succeeds.
-	process.terminate(EXIT_FAILURE).value();
+	// Requesting termination after the program has already terminated is fine.
+	process.terminate().value();
 }

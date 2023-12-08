@@ -52,11 +52,13 @@ network_endpoint socket_address_union::get_network_endpoint() const
 	return {};
 }
 
-vsm::result<socket_address> socket_address::make(network_endpoint const& endpoint)
+vsm::result<socket_address_size_type> socket_address::make(
+	network_endpoint const& endpoint,
+	socket_address_union& addr)
 {
-	vsm::result<socket_address> r(vsm::result_value);
+	socket_address_size_type addr_size = 0;
 
-	switch (auto& addr = *r; endpoint.kind())
+	switch (endpoint.kind())
 	{
 	case network_address_kind::local:
 		{
@@ -71,7 +73,7 @@ vsm::result<socket_address> socket_address::make(network_endpoint const& endpoin
 			{
 				addr.unix.sun_path[path.size()] = '\0';
 			}
-			addr.size = sizeof(addr.unix);
+			addr_size = sizeof(addr.unix);
 		}
 		break;
 
@@ -82,7 +84,7 @@ vsm::result<socket_address> socket_address::make(network_endpoint const& endpoin
 			addr.ipv4.sin_port = network_byte_order(ip.port);
 			addr.ipv4.sin_addr.s_addr = network_byte_order(ip.address.integer());
 			memset(addr.ipv4.sin_zero, 0, sizeof(ipv4.sin_zero));
-			addr.size = sizeof(addr.ipv4);
+			addr_size = sizeof(addr.ipv4);
 		}
 		break;
 
@@ -94,11 +96,21 @@ vsm::result<socket_address> socket_address::make(network_endpoint const& endpoin
 			addr.ipv6.sin6_flowinfo = 0;
 			addr.ipv6.sin6_addr = ipv6_network_byte_order<in6_addr>(ip.address);
 			addr.ipv6.sin6_scope_id = network_byte_order(ip.zone);
-			addr.size = sizeof(addr.ipv6);
+			addr_size = sizeof(addr.ipv6);
 		}
 		break;
+
+	default:
+		return vsm::unexpected(error::unsupported_operation);
 	}
 
+	return addr_size;
+}
+
+vsm::result<socket_address> socket_address::make(network_endpoint const& endpoint)
+{
+	vsm::result<socket_address> r(vsm::result_value);
+	vsm_try_assign(r->size, make(endpoint, *r));
 	return r;
 }
 
@@ -146,6 +158,7 @@ vsm::result<unique_socket_with_flags> posix::socket_accept(
 		vsm_try_void(socket_poll_or_timeout(listen_socket, socket_poll_r, deadline));
 	}
 
+	//TODO: CLOEXEC
 	addr.size = sizeof(socket_address_union);
 	socket_type const socket = accept(
 		listen_socket,

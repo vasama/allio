@@ -80,6 +80,7 @@ enum class error
 	multiplexer_is_null,
 	process_arguments_too_long,
 	process_is_current_process,
+	process_exit_code_not_available,
 	invalid_path,
 	invalid_current_directory,
 	directory_stream_at_end,

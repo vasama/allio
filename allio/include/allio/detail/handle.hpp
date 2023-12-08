@@ -137,7 +137,6 @@ public:
 	void close()
 	{
 		unrecoverable(blocking_io<Object, close_t>(
-		//(tag_invoke(blocking_io<Object, close_t>,
 			*this,
 			make_io_args<Object, close_t>()()));
 	}
@@ -156,7 +155,7 @@ public:
 	template<multiplexer_for<Object> Multiplexer>
 	[[nodiscard]] auto via(Multiplexer& multiplexer) &&
 	{
-		return vsm_move(*this).via<multiplexer_handle_t<Multiplexer>>(multiplexer);
+		return vsm_move(*this).template via<multiplexer_handle_t<Multiplexer>>(multiplexer);
 	}
 
 	#if 0
@@ -164,7 +163,7 @@ public:
 	[[nodiscard]] auto via(MultiplexerHandle&& multiplexer_handle) &&
 		requires multiplexer_handle_for<std::remove_cvref_t<MultiplexerHandle>, Object>
 	{
-		return vsm_move(*this).via<std::remove_cvref_t<MultiplexerHandle>>(vsm_forward(multiplexer));
+		return vsm_move(*this).template via<std::remove_cvref_t<MultiplexerHandle>>(vsm_forward(multiplexer));
 	}
 	#endif
 
@@ -191,7 +190,7 @@ private:
 		blocking_handle&& h,
 		std::convertible_to<OtherMultiplexerHandle> auto&& multiplexer)
 	{
-		return vsm_move(h).via<OtherMultiplexerHandle>(vsm_forward(multiplexer));
+		return vsm_move(h).template via<OtherMultiplexerHandle>(vsm_forward(multiplexer));
 	}
 
 	template<mutation Operation>
@@ -433,7 +432,7 @@ private:
 	}
 
 
-	template<object Object>
+	template<object OtherObject>
 	friend class blocking_handle;
 };
 

@@ -1,7 +1,7 @@
 #pragma once
 
+#include <allio/any_string.hpp>
 #include <allio/error.hpp>
-#include <allio/input_string_view.hpp>
 
 #include <vsm/result.hpp>
 #include <vsm/utility.hpp>
@@ -70,31 +70,23 @@ private:
 		{
 		}
 
-		std::string_view operator()(input_string_view const string)
+		std::string_view string(any_string_view const string)
 		{
-			return string.is_c_string()
-				? string.utf8_view()
-				: push_string(string.utf8_view());
+			return string.is_null_terminated()
+				? string.view<char>()
+				: push_string(string.view<char>());
 		}
 
-		char const* const* operator()(std::span<input_string_view const> const strings)
+		char const* const* strings(auto const... strings)
 		{
-			if (strings.empty())
+			char const* const* const ptrs = m_self.m_out_ptrs;
+
+			if ((0 + ... + push_strings(strings)) == 0)
 			{
 				return &null_string_ptr;
 			}
 
-			char const* const* const ptrs = m_self.m_out_ptrs;
-			for (input_string_view const string : strings)
-			{
-				Traits::push_string_ptr(
-					m_self,
-					string.is_c_string()
-						? string.utf8_c_string()
-						: push_string(string.utf8_view()).data());
-			}
 			Traits::push_string_ptr(m_self, nullptr);
-
 			return ptrs;
 		}
 
@@ -108,7 +100,26 @@ private:
 
 			char const* const ptr = m_self.m_out_data;
 			Traits::push_string(m_self, string);
-			return ptr;
+			return std::string_view(ptr, string.size());
+		}
+
+		size_t push_strings(any_string_view const string)
+		{
+			Traits::push_string_ptr(
+				m_self,
+				string.is_null_terminated()
+					? string.data<char>()
+					: push_string(string.view<char>()).data());
+			return 1;
+		}
+
+		size_t push_strings(any_string_span const strings)
+		{
+			for (any_string_view const string : strings)
+			{
+				push_strings(string);
+			}
+			return strings.size();
 		}
 	};
 
@@ -175,20 +186,19 @@ private:
 	}
 };
 
-inline vsm::result<std::string_view> make_api_string(api_string_storage& storage, input_string_view const string)
+inline vsm::result<std::string_view> make_api_string(api_string_storage& storage, any_string_view const string)
 {
 	std::string_view result;
 	vsm_try_void(api_string_builder::make(storage, [&](auto&& context)
 	{
-		result = vsm_forward(context)(string);
+		result = context.string(string);
 	}));
 	return result;
 }
 
-inline vsm::result<char const*> make_api_c_string(api_string_storage& storage, input_string_view const string)
+inline vsm::result<char const*> make_api_c_string(api_string_storage& storage, any_string_view const string)
 {
-	vsm_try(r, make_api_string(storage, string));
-	return r.data();
+	return make_api_string(storage, string).transform([](auto const& s) { return s.data(); });
 }
 
 } // namespace allio::linux

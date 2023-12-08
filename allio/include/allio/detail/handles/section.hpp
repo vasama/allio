@@ -9,12 +9,17 @@ namespace allio::detail {
 
 struct protection_t
 {
-	detail::protection protection;
+	std::optional<allio::protection> protection;
 
-	friend void tag_invoke(set_argument_t, protection_t& args, detail::protection const protection)
+	friend void tag_invoke(set_argument_t, protection_t& args, allio::protection const protection)
 	{
 		args.protection = protection;
 	}
+};
+
+struct backing_directory_t
+{
+	fs_object_t::native_type const* backing_directory;
 };
 
 namespace section_io {
@@ -24,10 +29,15 @@ struct create_t
 	using operation_concept = producer_t;
 	struct required_params_type
 	{
-		platform_object_t::native_type const* backing_file;
+		fs_object_t::native_type const* backing_file;
 		fs_size max_size;
 	};
-	using optional_params_type = protection_t;
+	using optional_params_type = parameters_t
+	<
+		backing_directory_t,
+		inheritable_t,
+		protection_t
+	>;
 	using result_type = void;
 
 	template<object Object>
@@ -49,20 +59,25 @@ struct section_t : platform_object_t
 
 	struct native_type : base_type::native_type
 	{
-		detail::protection protection;
+		allio::protection protection;
 	};
 
 	using create_t = section_io::create_t;
 
-	using operations = type_list_append<
+	using operations = type_list_append
+	<
 		base_type::operations
 		, create_t
 	>;
 
+	static vsm::result<void> create(
+		native_type& h,
+		io_parameters_t<section_t, create_t> const& a);
+
 	template<typename Handle>
 	struct abstract_interface : base_type::abstract_interface<Handle>
 	{
-		[[nodiscard]] detail::protection protection() const
+		[[nodiscard]] allio::protection protection() const
 		{
 			return static_cast<Handle const&>(*this).native().native_type::protection;
 		}
@@ -85,14 +100,14 @@ vsm::result<section_handle> create_section(fs_size const max_size, auto&&... arg
 }
 
 vsm::result<section_handle> create_section(
-	abstract_file_handle::file_handle const& backing_file,
+	abstract_file_handle const& backing_file,
 	fs_size const max_size,
 	auto&&... args)
 {
 	vsm::result<section_handle> r(vsm::result_value);
-	vsm_try_void(blocking_io<section_t::create_t>(
+	vsm_try_void(blocking_io<section_t, section_io::create_t>(
 		*r,
-		make_io_args<section_t::create_t>(&backing_file.native(), max_size)(vsm_forward(args)...)));
+		make_io_args<section_t, section_io::create_t>(&backing_file.native(), max_size)(vsm_forward(args)...)));
 	return r;
 }
 

@@ -101,23 +101,6 @@ struct _extended_io_parameters<1>
 	template<bool IsNoParameters>
 	struct parameters;
 
-	template<>
-	struct parameters<0>
-	{
-		template<typename P, typename Extended>
-		struct type : P, Extended
-		{
-			using P::P;
-		};
-	};
-
-	template<>
-	struct parameters<1>
-	{
-		template<typename P, typename Extended>
-		using type = P;
-	};
-
 	template<typename P, typename Extended>
 	using _type = typename parameters<std::is_same_v<Extended, no_parameters_t>>::template type<P, Extended>;
 
@@ -125,9 +108,32 @@ struct _extended_io_parameters<1>
 	using type = _type<P, typename Operation::template extended_params_template<Object>>;
 };
 
+template<>
+struct _extended_io_parameters<1>::parameters<0>
+{
+	template<typename P, typename Extended>
+	struct type : P, Extended
+	{
+		using P::P;
+	};
+};
+
+template<>
+struct _extended_io_parameters<1>::parameters<1>
+{
+	template<typename P, typename Extended>
+	using type = P;
+};
+
+template<typename Object, typename Operation>
+concept has_extended_parameters = requires
+{
+	typename Operation::template extended_params_template<Object>;
+};
+
 template<typename P, object Object, operation_c Operation>
 using extended_io_parameters_t = typename _extended_io_parameters<
-	requires { typename Operation::template extended_params_template<Object>; }
+	has_extended_parameters<Object, Operation>
 >::template type<P, Object, Operation>;
 
 template<object Object, operation_c Operation>
@@ -343,6 +349,7 @@ struct async_connector_base
 		auto const& multiplexer,
 		auto const& handle,
 		Connector& connector)
+		requires requires { Connector::attach(multiplexer, handle, connector); }
 	{
 		return Connector::attach(multiplexer, handle, connector);
 	}
@@ -353,6 +360,7 @@ struct async_connector_base
 		auto const& multiplexer,
 		auto const& handle,
 		Connector& connector)
+		requires requires { Connector::detach(multiplexer, handle, connector); }
 	{
 		return Connector::detach(multiplexer, handle, connector);
 	}

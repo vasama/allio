@@ -1,12 +1,11 @@
 #pragma once
 
+#include <allio/linux/detail/io_uring/io_uring.hpp>
 #include <allio/linux/detail/io_uring/multiplexer.hpp>
 
 #include <allio/linux/platform.hpp>
 
 #include <vsm/lazy.hpp>
-
-#include <linux/io_uring.h>
 
 #include <allio/linux/detail/undef.i>
 
@@ -50,7 +49,7 @@ public:
 		uint8_t fd_flags;
 	};
 
-	fd_pair get_fd(connector_type const& c, native_platform_handle const handle) const
+	[[nodiscard]] fd_pair get_fd(connector_type const& c, native_platform_handle const handle) const
 	{
 		return c.file_index != -1
 			? fd_pair{ c.file_index, IOSQE_FIXED_FILE }
@@ -58,20 +57,20 @@ public:
 	}
 
 
-	uintptr_t get_user_data(operation_type& operation) const
+	[[nodiscard]] uintptr_t get_user_data(io_handler_type& handler) const
 	{
-		return reinterpret_cast<uintptr_t>(&operation);
+		return vsm::reinterpret_pointer_cast<uintptr_t>(
+			basic_user_data_ptr<io_handler_type>(&handler));
 	}
 
-	uintptr_t get_user_data(io_slot& io_slot) const
+	[[nodiscard]] uintptr_t get_user_data(io_slot& slot) const
 	{
-		return vsm::reinterpret_pointer_cast<uintptr_t>(user_data_ptr(
-			&io_slot,
-			user_data_tag::io_slot));
+		return vsm::reinterpret_pointer_cast<uintptr_t>(
+			basic_user_data_ptr<io_slot>(&slot, user_data_tag::io_slot));
 	}
 
 
-	vsm::result<io_uring_sqe*> push()
+	[[nodiscard]] vsm::result<io_uring_sqe*> push()
 	{
 		vsm_try(p_sqe, acquire_sqe(/* acquire_cqe: */ true));
 		m_last_sqe = p_sqe;
@@ -79,7 +78,7 @@ public:
 	}
 
 	template<std::convertible_to<io_uring_sqe> SQE = io_uring_sqe>
-	vsm::result<io_uring_sqe*> push(SQE&& sqe)
+	[[nodiscard]] vsm::result<io_uring_sqe*> push(SQE&& sqe)
 	{
 		vsm_try(p_sqe, push());
 		*p_sqe = vsm_forward(sqe);
@@ -97,7 +96,7 @@ public:
 	}
 
 
-	vsm::result<io_uring_sqe*> push_timeout(timeout::reference const timeout)
+	[[nodiscard]] vsm::result<io_uring_sqe*> push_timeout(timeout::reference const timeout)
 	{
 		vsm_try(p_sqe, push());
 		*p_sqe = io_uring_sqe
@@ -110,7 +109,7 @@ public:
 		return p_sqe;
 	}
 
-	vsm::result<void> link_timeout(timeout::reference const timeout)
+	[[nodiscard]] vsm::result<void> link_timeout(timeout::reference const timeout)
 	{
 		vsm_assert(m_last_sqe != nullptr); //PRECONDITION
 		vsm_assert(m_last_sqe->opcode != IORING_OP_LINK_TIMEOUT); //PRECONDITION
@@ -144,7 +143,7 @@ public:
 	///        Any CQEs associated with this slot are skipped if successful.
 	void set_cqe_skip_success_emulation(io_slot& slot)
 	{
-		slot.m_operation.set_tag(slot.m_operation.tag() | operation_tag::cqe_skip_success);
+		slot.m_handler.set_tag(slot.m_handler.tag() | handler_tag::cqe_skip_success);
 	}
 
 	/// @brief Emulate skipping of CQEs of linked operations on failure.
@@ -160,7 +159,7 @@ public:
 	}
 
 
-	vsm::result<void> commit()
+	[[nodiscard]] vsm::result<void> commit()
 	{
 		vsm_assert(m_last_sqe != nullptr); //PRECONDITION
 
@@ -178,7 +177,7 @@ public:
 	}
 
 private:
-	vsm::result<io_uring_sqe*> acquire_sqe(bool const acquire_cqe)
+	[[nodiscard]] vsm::result<io_uring_sqe*> acquire_sqe(bool const acquire_cqe)
 	{
 		if (m_sq_acquire - m_multiplexer.m_sq_consume == m_multiplexer.m_sq_size)
 		{

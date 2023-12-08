@@ -43,10 +43,12 @@ public:
 
 	class io_slot
 	{
-		io_handler<iocp_multiplexer>* m_handler = nullptr;
+		using io_handler_type = basic_io_handler<io_status_type>;
+
+		io_handler_type* m_handler = nullptr;
 
 	public:
-		void bind(io_handler<iocp_multiplexer>& handler) &
+		void bind(io_handler_type& handler) &
 		{
 			m_handler = &handler;
 		}
