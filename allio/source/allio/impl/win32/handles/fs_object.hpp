@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/handles/fs_object.hpp>
+#include <allio/impl/handles/fs_object.hpp>
 
 #include <allio/impl/win32/handles/platform_object.hpp>
 

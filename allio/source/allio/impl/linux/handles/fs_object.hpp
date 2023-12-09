@@ -1,6 +1,7 @@
 #pragma once
 
-#include <allio/detail/handles/fs_object.hpp>
+#include <allio/impl/handles/fs_object.hpp>
+
 #include <allio/linux/detail/unique_fd.hpp>
 
 #include <fcntl.h>
@@ -9,21 +10,13 @@
 
 namespace allio::linux {
 
-using open_parameters = detail::fs_io::open_t::optional_params_type;
-
-enum class open_kind
-{
-	file,
-	directory,
-};
-
 struct open_info
 {
 	int flags;
 	mode_t mode;
-};
 
-vsm::result<open_info> make_open_info(open_kind kind, open_parameters const& args);
+	static vsm::result<open_info> make(open_parameters const& args);
+};
 
 vsm::result<detail::unique_fd> open_file(
 	int dir_fd,

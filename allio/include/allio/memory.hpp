@@ -19,7 +19,8 @@ enum class protection : uint8_t
 	write                               = 1 << 1,
 	execute                             = 1 << 2,
 
-	read_write = read | write,
+	read_write                          = read | write,
+	all                                 = read | write | execute,
 };
 vsm_flag_enum(protection);
 

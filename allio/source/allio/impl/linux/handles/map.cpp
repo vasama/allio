@@ -78,7 +78,7 @@ vsm::result<void> map_t::map_memory(
 
 	if (a.section != nullptr)
 	{
-		if (!a.section->flags[section_t::flags::not_null])
+		if (!a.section->flags[object_t::flags::not_null])
 		{
 			return vsm::unexpected(error::invalid_argument);
 		}
@@ -124,10 +124,14 @@ vsm::result<void> map_t::map_memory(
 	auto const page_level = a.page_level.value_or(vsm_lazy(get_default_page_level()));
 	mmap_flags |= get_page_level_flags(page_level);
 
-	int mmap_protection = 0;
+	int mmap_protection = PROT_NONE;
 	if (a.initial_commit)
 	{
 		mmap_protection = get_page_protection(protection);
+	}
+	else
+	{
+		mmap_flags |= MAP_NORESERVE;
 	}
 
 	vsm_try(map, linux::mmap(
@@ -169,6 +173,37 @@ vsm::result<void> map_t::map_memory(
 	return {};
 }
 
+static vsm::result<protection> get_protection(
+	std::optional<protection> const section_protection,
+	std::optional<protection> const desired_protection)
+{
+	if (!desired_protection)
+	{
+		return section_protection.value_or(protection::read_write);
+	}
+
+	if (section_protection)
+	{
+		if (!vsm::all_flags(*section_protection, *desired_protection))
+		{
+			return vsm::unexpected(error::invalid_argument);
+		}
+	}
+
+	return *desired_protection;
+}
+
+static vsm::result<protection> get_protection(
+	map_t::native_type const& h,
+	std::optional<protection> const desired_protection)
+{
+	return get_protection(
+		h.flags[map_t::flags::anonymous]
+			? std::optional<protection>(h.section.protection)
+			: std::optional<protection>(),
+		desired_protection);
+}
+
 vsm::result<void> map_t::commit(
 	native_type const& h,
 	io_parameters_t<map_t, commit_t> const& a)
@@ -178,8 +213,12 @@ vsm::result<void> map_t::commit(
 		return vsm::unexpected(error::invalid_address);
 	}
 
-	//TODO: Implement map_t::commit on Linux.
-	return vsm::unexpected(error::unsupported_operation);
+	vsm_try(protection, get_protection(h, a.protection));
+
+	return linux::mprotect(
+		a.base,
+		a.size,
+		get_page_protection(protection));
 }
 
 vsm::result<void> map_t::decommit(

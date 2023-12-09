@@ -83,6 +83,9 @@ vsm_add_library(allio::core
 		source/allio/impl/unique_name.cpp
 		source/allio/impl/unique_name.hpp
 
+		source/allio/impl/handles/fs_object.cpp
+		source/allio/impl/handles/fs_object.hpp
+
 	HEADER_DEPENDENCIES
 		vsm::box
 		vsm::core
@@ -287,6 +290,7 @@ vsm_configure(allio::core
 
 	TEST_SOURCES
 		source/allio/test/linux/io_uring.cpp
+		source/allio/test/linux/memory.cpp
 )
 
 

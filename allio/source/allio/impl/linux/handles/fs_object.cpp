@@ -15,44 +15,35 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::linux;
 
-vsm::result<open_info> linux::make_open_info(
-	open_kind const kind,
-	open_parameters const& args)
+vsm::result<open_info> open_info::make(open_parameters const& args)
 {
+	open_info info = {};
+
 	// Linux does not provide file sharing restrictions.
 	if (!vsm::all_flags(args.sharing, file_sharing::all))
 	{
 		return vsm::unexpected(error::unsupported_operation);
 	}
 
-	//TODO: Select default based on creation?
-	auto default_mode = file_mode::read_write;
 	auto maximum_mode = file_mode::read_write;
-
-	if (kind == open_kind::directory)
+	switch (args.kind)
 	{
-		default_mode = file_mode::read;
+	case open_kind::directory:
+		info.flags |= O_DIRECTORY;
 		maximum_mode = file_mode::read;
+		break;
 	}
-
-	open_info info =
+	if (!vsm::all_flags(maximum_mode, args.mode))
 	{
-		.flags = O_CLOEXEC,
-	};
+		return vsm::unexpected(error::invalid_argument);
+	}
 
 	if (!args.inheritable)
 	{
 		info.flags |= O_CLOEXEC;
 	}
 
-	auto const mode = args.mode.value_or(default_mode);
-
-	if (!vsm::all_flags(maximum_mode, mode))
-	{
-		return vsm::unexpected(error::invalid_argument);
-	}
-
-	switch (mode)
+	switch (args.mode)
 	{
 	case file_mode::none:
 		break;
