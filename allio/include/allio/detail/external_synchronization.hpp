@@ -41,12 +41,13 @@ public:
 	}
 };
 
+template<typename ExternallySynchronized>
 class scoped_synchronization
 {
-	externally_synchronized& m_object;
+	ExternallySynchronized& m_object;
 
 public:
-	scoped_synchronization(externally_synchronized& object)
+	scoped_synchronization(ExternallySynchronized& object)
 		: m_object(object)
 	{
 		m_object.external_synchronization_acquired();

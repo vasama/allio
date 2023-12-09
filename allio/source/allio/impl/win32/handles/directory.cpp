@@ -225,16 +225,20 @@ vsm::result<void> directory_t::open(
 	vsm_try_bind((directory, flags), create_file(
 		unwrap_handle(a.path.base),
 		a.path.path,
-		open_kind::directory,
-		a));
+		open_parameters::make(open_kind::directory, a)));
 
-	h = platform_object_t::native_type
+	h = fs_object_t::native_type
 	{
-		object_t::native_type
+		platform_object_t::native_type
 		{
-			flags::not_null | flags,
+			object_t::native_type
+			{
+				flags::not_null | flags,
+			},
+			wrap_handle(directory.release()),
 		},
-		wrap_handle(directory.release()),
+		//TODO: Validate flags
+		a.flags,
 	};
 
 	return {};

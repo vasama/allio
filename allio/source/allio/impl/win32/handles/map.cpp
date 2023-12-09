@@ -2,15 +2,45 @@
 
 #include <allio/win32/kernel_error.hpp>
 #include <allio/win32/platform.hpp>
+#include <allio/impl/win32/handles/platform_object.hpp>
 #include <allio/impl/win32/kernel.hpp>
 
-#include <vsm/defer.hpp>
+#include <vsm/lazy.hpp>
 
 #include <win32.h>
 
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
+
+namespace {
+
+enum class mmap_type
+{
+	section,
+	anonymous,
+};
+
+struct mmap_view
+{
+	void* base;
+	size_t size;
+};
+
+template<mmap_type Type>
+struct mmap_deleter
+{
+	void vsm_static_operator_invoke(mmap_view const view);
+};
+
+template<mmap_type Type>
+using unique_mmap = vsm::unique_resource<mmap_view, mmap_deleter<Type>>;
+
+using unique_section_mmap = unique_mmap<mmap_type::section>;
+using unique_anonymous_mmap = unique_mmap<mmap_type::anonymous>;
+
+} // namespace
+
 
 static vsm::result<ULONG> get_page_protection(protection const protection)
 {
@@ -34,7 +64,7 @@ static vsm::result<ULONG> get_page_protection(protection const protection)
 	case protection::execute | protection::read | protection::write:
 		return PAGE_EXECUTE_READWRITE;
 	}
-	
+
 	return vsm::unexpected(error::unsupported_operation);
 }
 
@@ -62,7 +92,7 @@ static vsm::result<ULONG> get_page_level_allocation_type(page_level const level)
 }
 
 
-static vsm::result<unique_mmap<void>> allocate_virtual_memory(
+static vsm::result<unique_anonymous_mmap> allocate_virtual_memory(
 	HANDLE const process,
 	void* base,
 	size_t size,
@@ -82,7 +112,12 @@ static vsm::result<unique_mmap<void>> allocate_virtual_memory(
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
-	return unique_mmap<void>{ base, size };
+	if (allocation_type & MEM_RESERVE)
+	{
+		return vsm_lazy(unique_anonymous_mmap(mmap_view(base, size)));
+	}
+
+	return {};
 }
 
 static vsm::result<ULONG> protect_virtual_memory(
@@ -97,7 +132,7 @@ static vsm::result<ULONG> protect_virtual_memory(
 		&base,
 		&size,
 		new_page_protection,
-		old_page_protection);
+		&old_page_protection);
 
 	if (!NT_SUCCESS(status))
 	{
@@ -110,13 +145,14 @@ static vsm::result<ULONG> protect_virtual_memory(
 static vsm::result<void> free_virtual_memory(
 	HANDLE const process,
 	void* base,
-	size_t size)
+	size_t size,
+	ULONG const free_type)
 {
 	NTSTATUS const status = NtFreeVirtualMemory(
 		process,
 		&base,
 		&size,
-		MEM_RELEASE);
+		free_type);
 
 	if (!NT_SUCCESS(status))
 	{
@@ -126,7 +162,7 @@ static vsm::result<void> free_virtual_memory(
 	return {};
 }
 
-static vsm::result<unique_mmap<void>> map_view_of_section(
+static vsm::result<unique_section_mmap> map_view_of_section(
 	HANDLE const process,
 	HANDLE const section,
 	fs_size const offset,
@@ -155,7 +191,7 @@ static vsm::result<unique_mmap<void>> map_view_of_section(
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
-	return unique_mmap<void>{ base, size };
+	return vsm_lazy(unique_section_mmap(mmap_view(base, size)));
 }
 
 static vsm::result<void> unmap_view_of_section(
@@ -175,6 +211,23 @@ static vsm::result<void> unmap_view_of_section(
 }
 
 
+void mmap_deleter<mmap_type::section>::operator()(mmap_view const view) vsm_static_operator_const
+{
+	unrecoverable(free_virtual_memory(
+		GetCurrentProcess(),
+		view.base,
+		/* size: */ 0,
+		MEM_RELEASE));
+}
+
+void mmap_deleter<mmap_type::anonymous>::operator()(mmap_view const view) vsm_static_operator_const
+{
+	unrecoverable(unmap_view_of_section(
+		GetCurrentProcess(),
+		view.base));
+}
+
+
 static bool check_address_range(map_t::native_type const& h, auto const& a)
 {
 	uintptr_t const h_beg = reinterpret_cast<uintptr_t>(h.base);
@@ -190,12 +243,12 @@ static protection get_max_protection(map_t::native_type const& h)
 {
 	if (h.flags[map_t::flags::anonymous])
 	{
-		return h.section.protection;
+		// Page file backed memory can use any protection.
+		return protection::read_write | protection::execute;
 	}
 	else
 	{
-		// Page file backed memory can use any protection.
-		return protection::read_write | protection::execute;
+		return h.section.protection;
 	}
 }
 
@@ -204,31 +257,38 @@ static vsm::result<void> _map_section(
 	map_t::native_type& h,
 	io_parameters_t<map_t, map_io::map_memory_t> const& a)
 {
-	auto const& section_h = *h.section;
-
-	if (!section_h.flags[section_t::flags::not_null])
-	{
-		return vsm::unexpected(error::invalid_argument);
-	}
-
-	if (!a.commit)
+	if (!a.initial_commit)
 	{
 		return vsm::unexpected(error::unsupported_operation);
 	}
 
+	if (!a.section->flags[object_t::flags::not_null])
+	{
+		return vsm::unexpected(error::invalid_argument);
+	}
+
+	auto const& section_h = *a.section;
+
 	auto const page_level = a.page_level.value_or(vsm_lazy(get_default_page_level()));
-	vsm_try(page_protection, get_page_protection(a.protection));
+	auto const protection = a.protection.value_or(section_h.protection);
+
+	if (!vsm::all_flags(section_h.protection, protection))
+	{
+		return vsm::unexpected(error::invalid_argument);
+	}
+
+	vsm_try(page_protection, get_page_protection(protection));
 	vsm_try(allocation_type, get_page_level_allocation_type(page_level));
 
-	vsm_try(section, duplicate_handle(unwrap_handle(section.h_platform_handle)));
+	vsm_try(section, win32::duplicate_handle(unwrap_handle(section_h.platform_handle)));
 
 	vsm_try(map, map_view_of_section(
 		GetCurrentProcess(),
 		section.get(),
-		a.offset,
+		a.section_offset,
 		reinterpret_cast<void*>(a.address),
 		a.size,
-		allocation_type | MEM_RESERVE,
+		allocation_type,
 		page_protection));
 
 	h = map_t::native_type
@@ -262,16 +322,18 @@ static vsm::result<void> _map_anonymous(
 	map_t::native_type& h,
 	io_parameters_t<map_t, map_io::map_memory_t> const& a)
 {
-	if (a.offset != 0)
+	if (a.section_offset != 0)
 	{
 		return vsm::unexpected(error::invalid_argument);
 	}
 
 	auto const page_level = a.page_level.value_or(vsm_lazy(get_default_page_level()));
-	vsm_try(page_protection, get_page_protection(a.protection));
+	auto const protection = a.protection.value_or(protection::read_write);
+
+	vsm_try(page_protection, get_page_protection(protection));
 	vsm_try(allocation_type, get_page_level_allocation_type(page_level));
 
-	if (a.commit)
+	if (a.initial_commit)
 	{
 		allocation_type |= MEM_COMMIT;
 	}
@@ -313,7 +375,7 @@ vsm::result<void> map_t::map_memory(
 
 vsm::result<void> map_t::commit(
 	native_type const& h,
-	io_parameters_t<map_t, commit_t> const& a) const
+	io_parameters_t<map_t, commit_t> const& a)
 {
 	if (!h.flags[flags::anonymous])
 	{
@@ -325,14 +387,13 @@ vsm::result<void> map_t::commit(
 		return vsm::unexpected(error::invalid_address);
 	}
 
+	auto const protection = a.protection.value_or(protection::read_write);
 	vsm_try(page_protection, get_page_protection(protection));
 
-	//TODO: non-owning unique_mmap
-	vsm_try(map, allocate_virtual_memory(
+	vsm_try_discard(allocate_virtual_memory(
 		GetCurrentProcess(),
-		,
-		/* ZeroBits: */ 0,
-		,
+		a.base,
+		a.size,
 		MEM_COMMIT,
 		page_protection));
 
@@ -341,26 +402,35 @@ vsm::result<void> map_t::commit(
 
 vsm::result<void> map_t::decommit(
 	native_type const& h,
-	io_parameters_t<map_t, decommit_t> const& a) const
+	io_parameters_t<map_t, decommit_t> const& a)
 {
-	return vsm::unexpected(error::unsupported_operation);
+	if (!h.flags[flags::anonymous])
+	{
+		return vsm::unexpected(error::unsupported_operation);
+	}
+
+	return free_virtual_memory(
+		GetCurrentProcess(),
+		a.base,
+		a.size,
+		MEM_DECOMMIT);
 }
 
 vsm::result<void> map_t::protect(
 	native_type const& h,
-	io_parameters_t<map_t, protect_t> const& a) const
+	io_parameters_t<map_t, protect_t> const& a)
 {
 	if (!check_address_range(h, a))
 	{
 		return vsm::unexpected(error::invalid_address);
 	}
 
-	if (!vsm::all_flags(get_max_protection(h), protection))
+	if (!vsm::all_flags(get_max_protection(h), a.protection))
 	{
 		return vsm::unexpected(error::invalid_argument);
 	}
 
-	vsm_try(new_page_protection, get_page_protection(protection));
+	vsm_try(new_page_protection, get_page_protection(a.protection));
 
 	vsm_try_discard(protect_virtual_memory(
 		GetCurrentProcess(),
@@ -380,7 +450,8 @@ vsm::result<void> map_t::close(
 		unrecoverable(free_virtual_memory(
 			GetCurrentProcess(),
 			h.base,
-			h.size));
+			h.size,
+			MEM_RELEASE));
 	}
 	else
 	{
@@ -388,7 +459,10 @@ vsm::result<void> map_t::close(
 			GetCurrentProcess(),
 			h.base));
 
-		(void)close(h.section, a);
+		//TODO: Change close to return void?
+		//      It's pretty pointless to return a result if it's always void and never fails.
+
+		(void)section_t::close(h.section, a);
 	}
 	zero_native_handle(h);
 	return {};

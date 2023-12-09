@@ -311,7 +311,7 @@ vsm::result<unique_rio_cq> win32::rio_create_completion_queue(
 	size_t const queue_size,
 	HANDLE const completion_port,
 	void* const completion_key,
-	OVERLAPPED& const overlapped)
+	OVERLAPPED& overlapped)
 {
 	RIO_NOTIFICATION_COMPLETION completion;
 	RIO_NOTIFICATION_COMPLETION* p_completion = nullptr;

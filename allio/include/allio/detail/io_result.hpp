@@ -67,6 +67,24 @@ struct io_cancelled : basic_io_result_value<E, io_cancelled<E>>
 template<typename E>
 io_cancelled(E) -> io_cancelled<E>;
 
+template<typename E>
+class io_unexpected : public basic_io_result_value<E, void>
+{
+	unsigned char m_status;
+
+public:
+	io_unexpected(std::convertible_to<E> auto&& error, unsigned char const status)
+		: basic_io_result_value<E, void>(vsm_forward(error))
+		, m_status(status)
+	{
+	}
+
+	unsigned char status() const
+	{
+		return m_status;
+	}
+};
+
 template<typename T, typename E = std::error_code>
 class io_result : vsm::result<T, E>
 {
@@ -78,6 +96,8 @@ class io_result : vsm::result<T, E>
 	unsigned char m_status = 0;
 
 public:
+	using base::value_type;
+
 	using base::base;
 
 	template<vsm::any_cvref_of<base> Result>
@@ -104,6 +124,15 @@ public:
 	{
 	}
 
+	template<any_cvref_of_template<io_unexpected> Unexpected>
+		requires std::is_constructible_v<E, unexpected_value_t<Unexpected>>
+	explicit(!std::is_convertible_v<unexpected_value_t<Unexpected>, E>)
+		io_result(Unexpected&& unexpected)
+		: base(vsm::result_error, unexpected.value())
+		, m_status(unexpected.status())
+	{
+	}
+
 
 	[[nodiscard]] bool is_pending() const
 	{
@@ -122,6 +151,18 @@ public:
 	using base::error;
 
 	using base::operator*;
+
+private:
+	friend bool tag_invoke(vsm::has_error_t, io_result const& r)
+	{
+		return !r.has_value();
+	}
+
+	template<vsm::any_cvref_of<io_result> R>
+	friend io_unexpected<vsm::copy_cvref_t<R&&, E>> tag_invoke(vsm::propagate_error_t, R&& r)
+	{
+		return io_unexpected<vsm::copy_cvref_t<R&&, E>>(vsm_forward(r).error(), r.m_status);
+	}
 };
 
 } // namespace allio::detail

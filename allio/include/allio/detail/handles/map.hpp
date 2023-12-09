@@ -27,6 +27,7 @@ struct page_level_t
 	}
 };
 
+//TODO: Rename to fixed_address?
 struct map_address_t
 {
 	uintptr_t address = 0;
@@ -73,7 +74,7 @@ struct commit_t
 		void* base;
 		size_t size;
 	};
-	using optional_params_type = no_parameters_t;
+	using optional_params_type = protection_t;
 	using result_type = void;
 	using runtime_concept = bounded_runtime_t;
 
@@ -254,7 +255,7 @@ vsm::result<map_handle> map_section(
 	vsm::result<map_handle> r(vsm::result_value);
 	vsm_try_void(blocking_io<map_t, map_io::map_memory_t>(
 		*r,
-		make_io_args<map_t, map_io::map_memory_t>(section, offset, size)(vsm_forward(args)...)));
+		make_io_args<map_t, map_io::map_memory_t>(&section.native(), offset, size)(vsm_forward(args)...)));
 	return r;
 }
 

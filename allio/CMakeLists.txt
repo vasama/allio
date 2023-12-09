@@ -104,6 +104,7 @@ vsm_add_library(allio::core
 		source/allio/test/filesystem.hpp
 		source/allio/test/io_result.cpp
 		source/allio/test/multiplexer.hpp
+		source/allio/test/memory.cpp
 		source/allio/test/network.cpp
 		source/allio/test/path_view.cpp
 		source/allio/test/reverse_iterator.hpp
@@ -184,11 +185,13 @@ vsm_configure(allio::core
 		source/allio/impl/win32/handles/file.cpp
 		source/allio/impl/win32/handles/fs_object.cpp
 		source/allio/impl/win32/handles/fs_object.hpp
+		source/allio/impl/win32/handles/map.cpp
 		source/allio/impl/win32/handles/pipe.cpp
 		source/allio/impl/win32/handles/platform_object.cpp
 		source/allio/impl/win32/handles/platform_object.hpp
 		source/allio/impl/win32/handles/process.cpp
 		source/allio/impl/win32/handles/process.hpp
+		source/allio/impl/win32/handles/section.cpp
 
 		# iocp
 		source/allio/impl/win32/iocp/datagram_socket.cpp
@@ -205,6 +208,7 @@ vsm_configure(allio::core
 		source/allio/test/win32/afd.cpp
 		source/allio/test/win32/command_line.cpp
 		source/allio/test/win32/kernel_path.cpp
+		source/allio/test/win32/memory.cpp
 		#source/allio/test/win32/timer2.cpp
 		source/allio/test/win32/wait_packet.cpp
 		source/allio/test/win32/wsa.cpp

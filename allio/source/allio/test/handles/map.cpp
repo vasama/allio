@@ -1,6 +1,9 @@
 #include <allio/map.hpp>
 
+#include <allio/file.hpp>
+#include <allio/section.hpp>
 #include <allio/test/filesystem.hpp>
+#include <allio/test/memory.hpp>
 
 #include <catch2/catch_all.hpp>
 
@@ -17,11 +20,11 @@ TEST_CASE("anonymous mapping", "[map_handle]")
 	static constexpr size_t GiB = 1024 * MiB;
 	static constexpr size_t TiB = 1024 * GiB;
 
-	#if vsm_word_32 || 1
+	#if vsm_word_32
 	static constexpr size_t reservation_size = MiB;
 	#endif
 
-	#if vsm_word_64 && 0
+	#if vsm_word_64
 	static constexpr size_t reservation_size = TiB;
 	#endif
 
@@ -32,7 +35,7 @@ TEST_CASE("anonymous mapping", "[map_handle]")
 
 	char const fill_char_0 = 'A' + (+fill_char_offset % fill_char_range);
 	char const fill_char_1 = 'A' + (~fill_char_offset % fill_char_range);
-	
+
 #if 0 //TODO: Query for large page privileges and test if available.
 	std::optional<page_level> page_level = GENERATE(from_range(get_supported_page_levels()));
 	if (*page_level == get_default_page_level() && GENERATE(1, 0))
@@ -50,6 +53,7 @@ TEST_CASE("anonymous mapping", "[map_handle]")
 		page_level).value();
 
 	REQUIRE(map.size() >= reservation_size);
+	REQUIRE(map.size() % page_size == 0);
 	REQUIRE(map.page_level() == page_level);
 	REQUIRE(map.page_size() == page_size);
 
@@ -76,49 +80,53 @@ TEST_CASE("anonymous mapping", "[map_handle]")
 		[=](char const x) { return x == fill_char_1; }));
 }
 
-TEST_CASE("map_handle page protection", "[map_handle]")
+TEST_CASE("map_handle page protection", "[map_handle][causes_faults]")
 {
 	using namespace blocking;
 
-	auto const map = map_anonymous(1, protection::read).value();
+	auto const map = map_anonymous(1, protection::none).value();
 
-	unsigned char* const page = static_cast<unsigned char*>(map.base());
-	unsigned char volatile& volatile_byte = *page;
+	void* const base = map.base();
+	size_t const size = map.size();
 
-	map.protect(page, 1, protection::read).value();
-	REQUIRE(volatile_byte == 0);
+	REQUIRE(test::test_memory_protection(base, size) == protection::none);
 
-	map.protect(page, 1, protection::read_write).value();
-	REQUIRE(volatile_byte == 0);
+	map.commit(base, size, protection::read).value();
+	REQUIRE(test::test_memory_protection(base, size) == protection::read);
 
-	volatile_byte = 1;
-	REQUIRE(volatile_byte == 1);
+	// Write-only mappings are probably most likely not supported,
+	// but if it happens that they are, test that they work correctly.
+	if (map.commit(base, size, protection::write))
+	{
+		REQUIRE(test::test_memory_protection(base, size) == protection::write);
+	}
 
-	map.protect(page, 1, protection::read).value();
-	REQUIRE(volatile_byte == 1);
+	map.commit(base, size, protection::read_write).value();
+	REQUIRE(test::test_memory_protection(base, size) == protection::read_write);
 }
 
-#if 0
 TEST_CASE("file section and mapping", "[section_handle][map_handle]")
 {
-	path const file_path = test::get_temp_file_path("allio-test-file");
+	using namespace blocking;
 
-	bool const writable = GENERATE(0, 1);
+	path const file_path = test::get_temp_path();
+	//TODO: Make sure file_mode is found in namespace allio.
+	auto const mode = GENERATE(file_mode::read, file_mode::read_write);
 
 	test::write_file_content(file_path, "check");
+	std::string expected_content = "check";
 	{
-		file_handle const file = open_file(file_path).value();
-		section_handle const section = section_create(file, 5).value();
-		map_handle const map = map_section(section, 0, 5).value();
+		auto const file = open_file(file_path, mode).value();
+		auto const section = create_section(file, 5).value();
+		auto const map = map_section(section, 0, 5).value();
 
-		REQUIRE(map.size() >= 5);
 		REQUIRE(memcmp(map.base(), "check", 5) == 0);
 
-		if (writable)
+		if (vsm::any_flags(mode, file_mode::write_data))
 		{
 			memcpy(map.base(), "write", 5);
+			expected_content = "write";
 		}
 	}
-	test::check_file_content(file_path, writable ? "write" : "check");
+	test::check_file_content(file_path, expected_content);
 }
-#endif

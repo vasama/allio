@@ -26,19 +26,14 @@ struct open_info
 	DWORD create_options;
 };
 
-} // namespace
-
-static vsm::result<open_info> make_open_info(open_kind const kind, open_args const& args)
+static vsm::result<open_info> make_open_info(open_parameters const& args)
 {
-	bool const multiplexable = false; //TODO
-
 	open_info info =
 	{
 		.desired_access = SYNCHRONIZE,
-		.create_disposition = FILE_OPEN,
 	};
 
-	switch (kind)
+	switch (args.kind)
 	{
 	case open_kind::file:
 		info.create_options |= FILE_NON_DIRECTORY_FILE;
@@ -51,28 +46,28 @@ static vsm::result<open_info> make_open_info(open_kind const kind, open_args con
 	default:
 		vsm_assert(false);
 	}
-
+	
+	if (args.mode != file_mode::none)
+	{
+		info.desired_access |= READ_CONTROL;
+	}
+	if (vsm::any_flags(args.mode, file_mode::read_data))
+	{
+		info.desired_access |= FILE_GENERIC_READ;
+		info.handle_flags |= fs_object_t::flags::readable;
+	}
+	if (vsm::any_flags(args.mode, file_mode::write_data))
+	{
+		info.desired_access |= FILE_GENERIC_WRITE | DELETE;
+		info.handle_flags |= fs_object_t::flags::writable;
+	}
 	if (vsm::any_flags(args.mode, file_mode::read_attributes))
 	{
-		info.desired_access |= FILE_READ_ATTRIBUTES;
+		info.desired_access |= FILE_READ_ATTRIBUTES | FILE_READ_EA;
 	}
 	if (vsm::any_flags(args.mode, file_mode::write_attributes))
 	{
-		info.desired_access |= FILE_READ_ATTRIBUTES;
-		info.desired_access |= FILE_WRITE_ATTRIBUTES;
-	}
-	if (vsm::any_flags(args.mode, file_mode::read))
-	{
-		info.desired_access |= FILE_READ_ATTRIBUTES;
-		info.desired_access |= FILE_READ_DATA;
-	}
-	if (vsm::any_flags(args.mode, file_mode::write))
-	{
-		info.desired_access |= FILE_READ_ATTRIBUTES;
-		info.desired_access |= FILE_READ_DATA;
-		info.desired_access |= FILE_WRITE_ATTRIBUTES;
-		info.desired_access |= FILE_WRITE_DATA;
-		info.desired_access |= DELETE;
+		info.desired_access |= FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA;
 	}
 
 	switch (args.creation)
@@ -112,7 +107,7 @@ static vsm::result<open_info> make_open_info(open_kind const kind, open_args con
 		info.share_access |= FILE_SHARE_WRITE;
 	}
 
-	if (!multiplexable)
+	if (!args.multiplexable)
 	{
 		info.create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
 		info.handle_flags |= platform_object_t::impl_type::flags::synchronous;
@@ -120,6 +115,8 @@ static vsm::result<open_info> make_open_info(open_kind const kind, open_args con
 
 	return info;
 }
+
+} // namespace
 
 static vsm::result<unique_handle_with_flags> create_file(
 	HANDLE const root_handle,
@@ -195,13 +192,46 @@ vsm::result<unique_handle_with_flags> win32::create_file(
 }
 #endif
 
+open_parameters open_parameters::make(
+	open_kind const kind,
+	fs_io::open_t::optional_params_type const& args)
+{
+	file_mode default_mode = file_mode::none;
+	switch (kind)
+	{
+	case open_kind::file:
+		default_mode = file_mode::read_write;
+		break;
+
+	case open_kind::directory:
+		default_mode = file_mode::read;
+		break;
+	}
+
+	file_creation default_creation = file_creation::open_existing;
+	if (vsm::any_flags(default_mode, file_mode::write_data))
+	{
+		default_creation = file_creation::open_or_create;
+	}
+
+	return open_parameters
+	{
+		.kind = kind,
+		.inheritable = args.inheritable,
+		.mode = args.mode.value_or(default_mode),
+		.creation = args.creation.value_or(default_creation),
+		.sharing = args.sharing,
+		.caching = args.caching,
+		.flags = args.flags,
+	};
+}
+
 vsm::result<unique_handle_with_flags> win32::create_file(
 	HANDLE const base_handle,
 	any_path_view const path,
-	open_kind const kind,
-	open_args const& args)
+	open_parameters const& args)
 {
-	vsm_try(info, make_open_info(kind, args));
+	vsm_try(info, make_open_info(args));
 
 	kernel_path_storage path_storage;
 	vsm_try(kernel_path, make_kernel_path(path_storage,
@@ -221,12 +251,11 @@ vsm::result<unique_handle_with_flags> win32::create_file(
 
 vsm::result<unique_handle_with_flags> win32::reopen_file(
 	HANDLE const handle,
-	open_kind const kind,
-	open_args const& args)
+	open_parameters const& args)
 {
 	vsm_assert(handle != NULL); //PRECONDITION
 
-	vsm_try(info, make_open_info(kind, args));
+	vsm_try(info, make_open_info(args));
 
 	UNICODE_STRING unicode_string;
 	unicode_string.Buffer = nullptr;

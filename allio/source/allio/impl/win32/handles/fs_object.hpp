@@ -6,32 +6,42 @@
 
 namespace allio::win32 {
 
-using open_args = detail::fs_io::open_t::optional_params_type;
-
-enum class open_kind
+enum class open_kind : uint8_t
 {
 	file,
 	directory,
 };
 
+struct open_parameters
+{
+	open_kind kind;
+	bool inheritable;
+	bool multiplexable;
+	file_mode mode;
+	file_creation creation;
+	file_sharing sharing;
+	file_caching caching;
+	file_flags flags;
+
+	static open_parameters make(
+		open_kind const kind,
+		detail::fs_io::open_t::optional_params_type const& args);
+};
 
 #if 0
 vsm::result<unique_handle_with_flags> create_file(
 	HANDLE hint_handle,
 	file_id_128 const& id,
-	open_kind kind,
-	open_args const& args);
+	open_parameters const& args);
 #endif
 
 vsm::result<unique_handle_with_flags> create_file(
 	HANDLE base_handle,
 	any_path_view path,
-	open_kind kind,
-	open_args const& args);
+	open_parameters const& args);
 
 vsm::result<unique_handle_with_flags> reopen_file(
 	HANDLE handle,
-	open_kind kind,
-	open_args const& args);
+	open_parameters const& args);
 
 } // namespace allio::win32

@@ -16,7 +16,7 @@ using namespace allio::win32;
 
 vsm::result<void> event_t::create(
 	native_type& h,
-	io_parameters_t<event_t, event_io::create_t> const& a)
+	io_parameters_t<event_t, create_t> const& a)
 {
 	handle_flags flags = flags::none;
 	EVENT_TYPE event_type = NotificationEvent;
@@ -56,7 +56,7 @@ vsm::result<void> event_t::create(
 
 vsm::result<void> event_t::signal(
 	native_type const& h,
-	io_parameters_t<event_t, event_io::signal_t> const&)
+	io_parameters_t<event_t, signal_t> const&)
 {
 	NTSTATUS const status = NtSetEvent(
 		unwrap_handle(h.platform_handle),
@@ -72,7 +72,7 @@ vsm::result<void> event_t::signal(
 
 vsm::result<void> event_t::reset(
 	native_type const& h,
-	io_parameters_t<event_t, event_io::reset_t> const&)
+	io_parameters_t<event_t, reset_t> const&)
 {
 	NTSTATUS const status = NtResetEvent(
 		unwrap_handle(h.platform_handle),
@@ -88,7 +88,7 @@ vsm::result<void> event_t::reset(
 
 vsm::result<void> event_t::wait(
 	native_type const& h,
-	io_parameters_t<event_t, event_io::wait_t> const& a)
+	io_parameters_t<event_t, wait_t> const& a)
 {
 	NTSTATUS const status = win32::NtWaitForSingleObject(
 		unwrap_handle(h.platform_handle),

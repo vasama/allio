@@ -4,9 +4,6 @@
 
 namespace allio {
 
-using detail::section_protection_t;
-using detail::section_protection;
-
 using detail::section_t;
 using detail::abstract_section_handle;
 

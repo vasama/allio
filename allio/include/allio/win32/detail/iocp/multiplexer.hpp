@@ -245,6 +245,14 @@ public:
 	}
 
 
+	void external_synchronization_acquired()
+	{
+	}
+
+	void external_synchronization_released()
+	{
+	}
+
 private:
 	explicit iocp_multiplexer(vsm::intrusive_ptr<shared_state_t> shared_state);
 

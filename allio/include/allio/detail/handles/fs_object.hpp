@@ -11,13 +11,13 @@ namespace allio::detail {
 
 enum class file_mode : uint8_t
 {
-	none                                = 1 << 0,
+	none                                = 0,
 
-	read_data                           = 1 << 1,
-	write_data                          = 1 << 2,
+	read_data                           = 1 << 0,
+	write_data                          = 1 << 1,
 
-	read_attributes                     = 1 << 3,
-	write_attributes                    = 1 << 4,
+	read_attributes                     = 1 << 2,
+	write_attributes                    = 1 << 3,
 
 	read                                = read_data | read_attributes,
 	write                               = write_data | write_attributes,
@@ -107,7 +107,7 @@ struct file_mode_t
 
 struct file_creation_t
 {
-	file_creation creation = file_creation::open_existing;
+	std::optional<file_creation> creation;
 
 	friend void tag_invoke(set_argument_t, file_creation_t& args, file_creation const creation)
 	{

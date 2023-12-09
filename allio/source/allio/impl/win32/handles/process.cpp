@@ -413,6 +413,13 @@ vsm::result<process_exit_code> process_t::wait(
 	return get_process_exit_code(handle);
 }
 
+vsm::result<void> process_t::close(
+	native_type& h,
+	io_parameters_t<process_t, close_t> const& a)
+{
+	return base_type::close(h, a);
+}
+
 
 blocking::process_handle const& this_process::get_handle()
 {
