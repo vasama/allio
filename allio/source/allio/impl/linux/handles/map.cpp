@@ -70,115 +70,27 @@ static bool check_address_range(map_t::native_type const& h, auto const& a)
 }
 
 
-vsm::result<void> map_t::map_memory(
-	native_type& h,
-	io_parameters_t<map_t, map_memory_t> const& a)
+template<std::unsigned_integral Offset>
+static bool is_page_aligned(Offset const offset, page_level const page_level)
 {
-	section_t::native_type section_h;
-	handle_flags h_flags = {};
-
-	protection default_protection;
-	protection maximum_protection;
-
-	int fd = -1;
-	int mmap_flags = 0;
-
-	if (a.section != nullptr)
-	{
-		if (!a.section->flags[object_t::flags::not_null])
-		{
-			return vsm::unexpected(error::invalid_argument);
-		}
-
-		section_h = *a.section;
-
-		default_protection = section_h.protection;
-		maximum_protection = section_h.protection;
-
-		fd = unwrap_handle(section_h.platform_handle);
-
-		mmap_flags |= MAP_SHARED_VALIDATE;
-	}
-	else
-	{
-		if (a.section_offset != 0)
-		{
-			return vsm::unexpected(error::invalid_argument);
-		}
-
-		section_h = {};
-		h_flags |= flags::anonymous;
-
-		default_protection = protection::read_write;
-		maximum_protection = protection::read_write | protection::execute;
-
-		mmap_flags |= MAP_PRIVATE | MAP_ANONYMOUS;
-	}
-
-	void* address = nullptr;
-	if (a.address != 0)
-	{
-		mmap_flags |= MAP_FIXED_NOREPLACE;
-		address = reinterpret_cast<void*>(a.address);
-	}
-
-	auto const protection = a.protection.value_or(default_protection);
-	if (!vsm::all_flags(maximum_protection, protection))
-	{
-		vsm::unexpected(error::invalid_argument);
-	}
-
-	auto const page_level = a.page_level.value_or(vsm_lazy(get_default_page_level()));
-	mmap_flags |= get_page_level_flags(page_level);
-
-	int mmap_protection = PROT_NONE;
-	if (a.initial_commit)
-	{
-		vsm_try_assign(mmap_protection, get_page_protection(protection));
-	}
-	else
-	{
-		mmap_flags |= MAP_NORESERVE;
-	}
-
-	vsm_try(map, linux::mmap(
-		address,
-		a.size,
-		mmap_protection,
-		mmap_flags,
-		fd,
-		a.section_offset));
-
-	if (address != nullptr && map.get().base != address)
-	{
-		return vsm::unexpected(error::virtual_address_not_available);
-	}
-
-	if (fd != -1)
-	{
-		vsm_try(new_fd, linux::duplicate_fd(
-			fd,
-			/* new_fd: */ -1,
-			O_CLOEXEC));
-
-		section_h.platform_handle = wrap_handle(new_fd.release());
-	}
-
-	h = native_type
-	{
-		object_t::native_type
-		{
-			flags::not_null,
-		},
-		section_h,
-		page_level,
-		map.get().base,
-		vsm::round_up_to_power_of_two(map.get().size, get_page_size(page_level)),
-	};
-	(void)map.release();
-
-	return {};
+	static_assert(std::numeric_limits<Offset>::max() >= std::numeric_limits<size_t>());
+	return offset & (static_cast<Offset>(get_page_size(page_level)) - 1);
 }
+
+template<std::unsigned_integral Offset>
+static Offset align_to_page(Offset const offset, page_level const page_level)
+{
+	static_assert(std::numeric_limits<Offset>::max() >= std::numeric_limits<size_t>());
+	return offset & ~(static_cast<Offset>(get_page_size(page_level)) - 1);
+}
+
+template<std::unsigned_integral Offset>
+static Offset round_to_page(Offset const offset, page_level const page_level)
+{
+	static_assert(std::numeric_limits<Offset>::max() >= std::numeric_limits<size_t>());
+	return vsm::round_up_to_power_of_two(offset, static_cast<Offset>(get_page_size(page_level)));
+}
+
 
 static vsm::result<protection> get_protection(
 	std::optional<protection> const section_protection,
@@ -209,6 +121,164 @@ static vsm::result<protection> get_protection(
 			? std::optional<protection>(h.section.protection)
 			: std::optional<protection>(),
 		desired_protection);
+}
+
+
+static vsm::result<unique_mmap<void>> _map_common(
+	io_parameters_t<map_t, map_io::map_memory_t> const& a,
+	page_level const page_level,
+	protection const protection,
+	int mmap_flags,
+	int const fd,
+	off_t const offset)
+{
+	void* mmap_address = nullptr;
+	int mmap_prot = PROT_NONE;
+
+	if (a.address != 0)
+	{
+		mmap_flags |= MAP_FIXED_NOREPLACE;
+		mmap_address = reinterpret_cast<void*>(align_to_page(a.address, page_level));
+	}
+
+	if (a.initial_commit)
+	{
+		vsm_try_assign(mmap_prot, get_page_protection(protection));
+	}
+	else
+	{
+		mmap_flags |= MAP_NORESERVE;
+	}
+
+	vsm_try(map, linux::mmap(
+		mmap_address,
+		a.size,
+		mmap_prot,
+		mmap_flags,
+		fd,
+		offset));
+
+	if (mmap_address != nullptr && map.get().base != mmap_address)
+	{
+		return vsm::unexpected(error::virtual_address_not_available);
+	}
+
+	return map;
+}
+
+static vsm::result<void> _map_section(
+	map_t::native_type& h,
+	io_parameters_t<map_t, map_io::map_memory_t> const& a)
+{
+	vsm_assert(a.section != nullptr);
+
+	if (!a.section->flags[object_t::flags::not_null])
+	{
+		return vsm::unexpected(error::invalid_argument);
+	}
+
+	auto const page_level = a.page_level.value_or(vsm_lazy(get_default_page_level()));
+
+	if (!is_page_aligned(a.section_offset, page_level))
+	{
+		return vsm::unexpected(error::invalid_argument);
+	}
+
+	auto const& section_h = *a.section;
+	auto protection = section_h.protection;
+
+	if (a.protection)
+	{
+		protection = a.protection;
+		if (!vsm::all_flags(section_h.protection, protection))
+		{
+			return vsm::unexpected(error::invalid_argument);
+		}
+	}
+
+	vsm_try(map, _map_common(
+		a,
+		page_level,
+		protection,
+		MAP_SHARED_VALIDATE,
+		unwrap_handle(section_h.platform_handle),
+		a.offset));
+
+	vsm_try(new_fd, linux::duplicate_fd(
+		fd,
+		/* new_fd: */ -1,
+		O_CLOEXEC));
+
+	// Linux maps the entire page but does not persist
+	// the bytes mapped past the end of the file.
+	size_t const map_size = map.get().size;
+
+	h = native_type
+	{
+		object_t::native_type
+		{
+			flags::not_null,
+		},
+		section_h,
+		page_level,
+		map.release().base,
+		map_size,
+	};
+	h.section.platform_handle = wrap_handle(new_fd.release());
+
+	return {};
+}
+
+static vsm::result<void> _map_anonymous(
+	map_t::native_type& h,
+	io_parameters_t<map_t, map_io::map_memory_t> const& a)
+{
+	if (a.section_offset != 0)
+	{
+		return vsm::unexpected(error::invalid_argument);
+	}
+
+	auto const page_level = a.page_level.value_or(vsm_lazy(get_default_page_level()));
+	auto const protection = a.protection.value_or(protection::read_write);
+
+	vsm_try(map, _map_common(
+		a,
+		page_level,
+		protection,
+		MAP_PRIVATE | MAP_ANONYMOUS,
+		/* fd: */ -1,
+		/* offset: */ 0));
+
+	// Anonymous mappings are always a multiple of the page size.
+	size_t const map_size = round_to_page(map.get().size, page_level);
+
+	h = native_type
+	{
+		object_t::native_type
+		{
+			handle_flags(flags::not_null) | map_t::flags::anonymous,
+		},
+		section_t::native_type{},
+		page_level,
+		map.release().base,
+		map_size,
+	};
+
+	return {};
+}
+
+vsm::result<void> map_t::map_memory(
+	native_type& h,
+	io_parameters_t<map_t, map_memory_t> const& a)
+{
+	if (a.section != nullptr)
+	{
+		return _map_section(h, a);
+	}
+	else
+	{
+		return _map_anonymous(h, a);
+	}
 }
 
 vsm::result<void> map_t::commit(

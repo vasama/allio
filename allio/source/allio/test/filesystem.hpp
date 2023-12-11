@@ -29,7 +29,7 @@ inline path get_temp_path()
 	for (char& x : std::span(buffer).subspan(name_prefix.size()))
 	{
 		int const y = distribution(rng);
-		x = y < 10 ? '0' + y : 'a' + (y - 10);
+		x = static_cast<char>(y < 10 ? '0' + y : 'a' + (y - 10));
 	}
 
 	auto path =

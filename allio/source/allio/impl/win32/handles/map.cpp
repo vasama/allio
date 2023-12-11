@@ -257,6 +257,8 @@ static vsm::result<void> _map_section(
 	map_t::native_type& h,
 	io_parameters_t<map_t, map_io::map_memory_t> const& a)
 {
+	vsm_assert(a.section != nullptr);
+
 	if (!a.initial_commit)
 	{
 		return vsm::unexpected(error::unsupported_operation);

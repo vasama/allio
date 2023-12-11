@@ -18,12 +18,12 @@ namespace {
 
 struct open_info
 {
-	handle_flags handle_flags;
 	ACCESS_MASK desired_access;
-	DWORD attributes;
-	DWORD share_access;
-	DWORD create_disposition;
-	DWORD create_options;
+	ULONG attributes;
+	ULONG share_access;
+	ULONG create_disposition;
+	ULONG create_options;
+	handle_flags handle_flags;
 };
 
 static vsm::result<open_info> make_open_info(open_parameters const& args)

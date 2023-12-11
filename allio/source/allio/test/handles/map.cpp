@@ -65,10 +65,10 @@ TEST_CASE("The protection of anonymous mappings can be changed", "[map_handle][c
 	map.commit(base, size, protection::read).value();
 	REQUIRE(test::test_memory_protection(base, size) == protection::read);
 
-	// Write-only mappings are probably most likely not supported,
-	// but if it happens that they are, test that they work correctly.
 	if (map.commit(base, size, protection::write))
 	{
+		// Write-only mappings are most likely not supported,
+		// but if it happens that they are, test that they work correctly.
 		REQUIRE(test::test_memory_protection(base, size) == protection::write);
 	}
 
@@ -81,7 +81,6 @@ TEST_CASE("Sections using backing files can be created and mapped", "[section_ha
 	using namespace blocking;
 
 	path const file_path = test::get_temp_path();
-	//TODO: Make sure file_mode is found in namespace allio.
 	auto const mode = GENERATE(file_mode::read, file_mode::read_write);
 
 	test::write_file_content(file_path, "check");
