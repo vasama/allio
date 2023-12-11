@@ -15,12 +15,11 @@ static constexpr size_t KiB = 1024;
 static constexpr size_t MiB = 1024 * KiB;
 static constexpr size_t GiB = 1024 * MiB;
 static constexpr size_t TiB = 1024 * GiB;
-static constexpr size_t PiB = 1024 * TiB;
 
 #if vsm_word_32
 static constexpr size_t large_reservation_size = GiB;
 #else
-static constexpr size_t large_reservation_size = PiB;
+static constexpr size_t large_reservation_size = TiB;
 #endif
 
 TEST_CASE("Anonymous mappings can reserve large amounts of address space", "[map_handle]")

@@ -330,12 +330,13 @@ static vsm::result<void> _map_anonymous(
 	auto const page_level = a.page_level.value_or(vsm_lazy(get_default_page_level()));
 	auto const protection = a.protection.value_or(protection::read_write);
 
-	vsm_try(page_protection, get_page_protection(protection));
 	vsm_try(allocation_type, get_page_level_allocation_type(page_level));
+	ULONG page_protection = PAGE_NOACCESS;
 
 	if (a.initial_commit)
 	{
 		allocation_type |= MEM_COMMIT;
+		vsm_try_assign(page_protection, get_page_protection(protection));
 	}
 
 	vsm_try(map, allocate_virtual_memory(
