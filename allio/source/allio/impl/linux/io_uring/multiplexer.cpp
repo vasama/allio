@@ -432,7 +432,7 @@ vsm::result<bool> io_uring_multiplexer::_poll(poll_parameters const& args)
 	unsigned int enter_flags = 0;
 
 	// If the auto submit mode is not enabled, submit all pending SQEs now.
-	if (!vsm::any_flags(m_flags, flags::auto_submit) && has_pending_sqes())
+	if (vsm::no_flags(m_flags, flags::auto_submit) && has_pending_sqes())
 	{
 		// Release ready SQEs to the kernel.
 		release_sqes();

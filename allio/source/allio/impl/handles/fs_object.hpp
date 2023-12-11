@@ -20,6 +20,7 @@ struct open_parameters
 	file_sharing sharing;
 	file_caching caching;
 	file_flags flags;
+	detail::handle_flags handle_flags;
 
 	static open_parameters make(
 		open_kind const kind,

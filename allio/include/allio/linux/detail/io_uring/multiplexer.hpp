@@ -359,7 +359,7 @@ private:
 
 	[[nodiscard]] bool acquire_record_lock()
 	{
-		return !vsm::any_flags(
+		return vsm::no_flags(
 			std::exchange(m_flags, m_flags | flags::record_lock),
 			flags::record_lock);
 	}

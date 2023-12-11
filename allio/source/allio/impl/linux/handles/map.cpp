@@ -15,22 +15,29 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::linux;
 
-static int get_page_protection(protection const protection)
+static vsm::result<int> get_page_protection(protection const protection)
 {
-	int p = 0;
+	// Linux does not support write only or execute only page protection.
+	if (protection != protection::none &&
+		vsm::no_flags(protection, protection::read))
+	{
+		return vsm::unexpected(error::unsupported_operation);
+	}
+
+	int page_protection = 0;
 	if (vsm::any_flags(protection, protection::read))
 	{
-		p |= PROT_READ;
+		page_protection |= PROT_READ;
 	}
 	if (vsm::any_flags(protection, protection::write))
 	{
-		p |= PROT_WRITE;
+		page_protection |= PROT_WRITE;
 	}
 	if (vsm::any_flags(protection, protection::execute))
 	{
-		p |= PROT_EXEC;
+		page_protection |= PROT_EXEC;
 	}
-	return p;
+	return page_protection;
 }
 
 static int get_page_level_flags(std::optional<page_level> const level)
@@ -105,7 +112,7 @@ vsm::result<void> map_t::map_memory(
 		default_protection = protection::read_write;
 		maximum_protection = protection::read_write | protection::execute;
 
-		mmap_flags |= MAP_ANONYMOUS | MAP_PRIVATE;
+		mmap_flags |= MAP_PRIVATE | MAP_ANONYMOUS;
 	}
 
 	void* address = nullptr;
@@ -127,7 +134,7 @@ vsm::result<void> map_t::map_memory(
 	int mmap_protection = PROT_NONE;
 	if (a.initial_commit)
 	{
-		mmap_protection = get_page_protection(protection);
+		vsm_try_assign(mmap_protection, get_page_protection(protection));
 	}
 	else
 	{
@@ -214,11 +221,12 @@ vsm::result<void> map_t::commit(
 	}
 
 	vsm_try(protection, get_protection(h, a.protection));
+	vsm_try(page_protection, get_page_protection(protection));
 
 	return linux::mprotect(
 		a.base,
 		a.size,
-		get_page_protection(protection));
+		page_protection);
 }
 
 vsm::result<void> map_t::decommit(
@@ -252,10 +260,12 @@ vsm::result<void> map_t::protect(
 		return vsm::unexpected(error::invalid_address);
 	}
 
+	vsm_try(page_protection, get_page_protection(a.protection));
+
 	vsm_try_void(linux::mprotect(
 		a.base,
 		a.size,
-		get_page_protection(a.protection)));
+		page_protection));
 
 	return {};
 }

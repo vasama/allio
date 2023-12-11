@@ -18,7 +18,7 @@ vsm::result<unique_socket_with_flags> posix::create_socket(
 	int const protocol,
 	socket_flags const flags)
 {
-	if (!vsm::any_flags(flags, socket_flags::inheritable))
+	if (vsm::no_flags(flags, socket_flags::inheritable))
 	{
 		type |= SOCK_CLOEXEC;
 	}

@@ -5,22 +5,17 @@
 
 #include <signal.h>
 
-static thread_local jmp_buf* tls_jmp_buf;
-static void handler(int const signum, siginfo_t*, void*)
+static thread_local sigjmp_buf* tls_jmp_buf;
+
+static void handler(int, siginfo_t*, void*)
 {
-	if (signum == SIGSEGV)
-	{
-		std::atomic_signal_fence(std::memory_order_acquire);
-		jmp_buf* const buf = tls_jmp_buf;
+	std::atomic_signal_fence(std::memory_order_acquire);
+	sigjmp_buf* const buf = tls_jmp_buf;
 
-		if (buf != nullptr)
-		{
-			tls_jmp_buf = nullptr;
-			std::atomic_signal_fence(std::memory_order_release);
+	tls_jmp_buf = nullptr;
+	std::atomic_signal_fence(std::memory_order_release);
 
-			longjmp(*buf, 1);
-		}
-	}
+	siglongjmp(*buf, /* status: */ 1);
 }
 
 namespace allio::test {
@@ -38,7 +33,7 @@ bool catch_access_violation(void(* const function)(void*), void* const context)
 	struct sigaction old_action;
 	vsm_assert(sigaction(SIGSEGV, &new_action, &old_action) != -1);
 
-	if (jmp_buf buf; setjmp(buf) == 0)
+	if (sigjmp_buf buf; sigsetjmp(buf, /* savesigs: */ 1) == 0)
 	{
 		tls_jmp_buf = &buf;
 		std::atomic_signal_fence(std::memory_order_release);

@@ -37,7 +37,7 @@ vsm::result<posix::unique_socket_with_flags> posix::create_socket(
 	DWORD w_flags = 0;
 	handle_flags h_flags = {};
 
-	if (!vsm::any_flags(flags, socket_flags::inheritable))
+	if (vsm::no_flags(flags, socket_flags::inheritable))
 	{
 		w_flags |= WSA_FLAG_NO_HANDLE_INHERIT;
 	}

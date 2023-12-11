@@ -31,6 +31,7 @@ static vsm::result<open_info> make_open_info(open_parameters const& args)
 	open_info info =
 	{
 		.desired_access = SYNCHRONIZE,
+		.handle_flags = args.handle_flags,
 	};
 
 	switch (args.kind)
@@ -54,12 +55,10 @@ static vsm::result<open_info> make_open_info(open_parameters const& args)
 	if (vsm::any_flags(args.mode, file_mode::read_data))
 	{
 		info.desired_access |= FILE_GENERIC_READ;
-		info.handle_flags |= fs_object_t::flags::readable;
 	}
 	if (vsm::any_flags(args.mode, file_mode::write_data))
 	{
 		info.desired_access |= FILE_GENERIC_WRITE | DELETE;
-		info.handle_flags |= fs_object_t::flags::writable;
 	}
 	if (vsm::any_flags(args.mode, file_mode::read_attributes))
 	{

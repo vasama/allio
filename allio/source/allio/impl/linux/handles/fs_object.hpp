@@ -24,6 +24,11 @@ vsm::result<detail::unique_fd> open_file(
 	int flags,
 	mode_t mode = 0);
 
+vsm::result<detail::unique_fd> reopen_file(
+	int fd,
+	int flags,
+	mode_t mode = 0);
+
 } // namespace allio::linux
 
 #include <allio/linux/detail/undef.i>

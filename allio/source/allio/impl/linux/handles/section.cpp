@@ -39,7 +39,13 @@ static vsm::result<void> _create_backed(
 	}
 
 	auto const default_protection = get_file_protection(backing_file_h.flags);
-	auto const maximum_protection = default_protection | protection::execute;
+
+	auto maximum_protection = default_protection;
+	if (vsm::any_flags(default_protection, protection::read))
+	{
+		maximum_protection |= protection::execute;
+	}
+
 	auto const protection = a.protection.value_or(default_protection);
 
 	if (!vsm::all_flags(maximum_protection, protection))
@@ -47,7 +53,7 @@ static vsm::result<void> _create_backed(
 		return vsm::unexpected(error::invalid_argument);
 	}
 
-	int open_flags = O_NOFOLLOW;
+	int open_flags = 0;
 
 	switch (protection & allio::protection::read_write)
 	{
@@ -69,9 +75,8 @@ static vsm::result<void> _create_backed(
 		open_flags |= O_CLOEXEC;
 	}
 
-	vsm_try(fd, linux::open_file(
+	vsm_try(fd, linux::reopen_file(
 		unwrap_handle(backing_file_h.platform_handle),
-		"",
 		open_flags));
 
 	h = section_t::native_type
@@ -107,7 +112,7 @@ static vsm::result<void> _create_anonymous(
 
 	auto const protection = a.protection.value_or(protection::read_write);
 
-	if (!vsm::any_flags(protection, protection::write))
+	if (vsm::no_flags(protection, protection::write))
 	{
 		//TODO: Is there any point in creating a read only anonymous section?
 		return vsm::unexpected(error::invalid_argument);

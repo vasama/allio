@@ -113,6 +113,40 @@ vsm::result<unique_fd> linux::open_file(
 	return vsm_lazy(unique_fd(fd));
 }
 
+vsm::result<unique_fd> linux::reopen_file(
+	int const fd,
+	int const flags,
+	mode_t const mode)
+{
+	if (flags & O_DIRECTORY)
+	{
+		return open_file(
+			fd,
+			".",
+			flags,
+			mode);
+	}
+
+	char link_path[32];
+	vsm_verify(snprintf(
+		link_path,
+		sizeof(link_path),
+		"/proc/self/fd/%d",
+		fd) > 0);
+
+	int const new_fd = open(
+		link_path,
+		flags,
+		mode);
+
+	if (new_fd == -1)
+	{
+		return vsm::unexpected(get_last_error());
+	}
+
+	return vsm_lazy(unique_fd(new_fd));
+}
+
 
 static vsm::result<size_t> _readlink(char const* const path, std::span<char> const buffer)
 {

@@ -15,7 +15,8 @@ vsm::result<void> file_t::open(
 	native_type& h,
 	io_parameters_t<file_t, open_t> const& a)
 {
-	vsm_try_bind((flags, mode), open_info::make(open_parameters::make(open_kind::file, a)));
+	auto const open_args = open_parameters::make(open_kind::file, a);
+	vsm_try_bind((flags, mode), open_info::make(open_args));
 
 	api_string_storage path_storage;
 	vsm_try(path, make_api_c_string(path_storage, a.path.path.string()));
@@ -32,7 +33,7 @@ vsm::result<void> file_t::open(
 		{
 			object_t::native_type
 			{
-				flags::not_null,
+				flags::not_null | open_args.handle_flags,
 			},
 			wrap_handle(fd.release()),
 		},
