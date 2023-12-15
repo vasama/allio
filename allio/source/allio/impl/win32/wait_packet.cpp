@@ -2,16 +2,19 @@
 
 #include <allio/win32/kernel_error.hpp>
 
+#include <vsm/out_resource.hpp>
+
 using namespace allio;
+using namespace allio::detail;
 using namespace allio::win32;
 
 static constexpr ACCESS_MASK wait_packet_all_access = 1;
 
-vsm::result<unique_wait_packet> win32::create_wait_packet()
+vsm::result<unique_handle> win32::create_wait_packet()
 {
-	HANDLE packet;
+	unique_handle handle;
 	NTSTATUS const status = NtCreateWaitCompletionPacket(
-		&packet,
+		vsm::out_resource(handle),
 		wait_packet_all_access,
 		/* ObjectAttributes: */ nullptr);
 
@@ -20,7 +23,7 @@ vsm::result<unique_wait_packet> win32::create_wait_packet()
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
-	return vsm::result<unique_wait_packet>(vsm::result_value, wrap_wait_packet(packet));
+	return handle;
 }
 
 vsm::result<bool> win32::associate_wait_packet(

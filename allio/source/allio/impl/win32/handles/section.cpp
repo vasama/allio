@@ -1,10 +1,9 @@
 #include <allio/detail/handles/section.hpp>
 
+#include <allio/detail/unique_handle.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
 #include <allio/impl/win32/kernel.hpp>
-#include <allio/win32/detail/unique_handle.hpp>
 #include <allio/win32/kernel_error.hpp>
-#include <allio/win32/platform.hpp>
 
 #include <vsm/out_resource.hpp>
 
@@ -75,43 +74,86 @@ vsm::result<void> section_t::create(
 	native_type& h,
 	io_parameters_t<section_t, create_t> const& a)
 {
-	if (a.backing_file == nullptr)
+	static constexpr auto storage_options =
+		section_options::backing_file |
+		section_options::backing_directory;
+
+	unique_handle unique_backing_file;
+	HANDLE backing_file_handle = NULL;
+
+	protection maximum_protection = protection::read_write | protection::execute;
+	protection default_protection = protection::read_write;
+
+	if (vsm::any_flags(a.options, storage_options))
 	{
-		return vsm::unexpected(error::invalid_argument);
+		if (vsm::all_flags(a.options, storage_options))
+		{
+			return vsm::unexpected(error::invalid_argument);
+		}
+
+		if (a.backing_storage == nullptr)
+		{
+			return vsm::unexpected(error::invalid_argument);
+		}
+
+		if (vsm::any_flags(a.options, section_options::backing_file))
+		{
+			if (!a.backing_storage->flags[object_t::flags::not_null])
+			{
+				return vsm::unexpected(error::invalid_argument);
+			}
+
+			backing_file_handle = unwrap_handle(a.backing_storage->platform_handle);
+
+			maximum_protection = get_file_protection(*a.backing_storage);
+			default_protection = maximum_protection;
+		}
+		else
+		{
+			//TODO: Open new backing file
+			return vsm::unexpected(error::unsupported_operation);
+		}
 	}
 
-	auto const& backing_file_h = *a.backing_file;
-	if (!backing_file_h.flags[object_t::flags::not_null])
+	protection protection = default_protection;
+
+	if (a.protection != detail::protection(0))
 	{
-		return vsm::unexpected(error::invalid_argument);
+		if (!vsm::all_flags(maximum_protection, a.protection))
+		{
+			return vsm::unexpected(error::invalid_argument);
+		}
+
+		protection = a.protection;
 	}
 
-	auto const maximum_protection = get_file_protection(backing_file_h);
-	auto const default_protection = maximum_protection & protection::read_write;
-	auto const protection = a.protection.value_or(default_protection);
+	ULONG const section_access = get_section_access(protection);
+	vsm_try(page_protection, get_page_protection(protection));
 
-	if (!vsm::all_flags(maximum_protection, protection))
+	OBJECT_ATTRIBUTES object_attributes = {};
+	object_attributes.Length = sizeof(object_attributes);
+	OBJECT_ATTRIBUTES* p_object_attributes = nullptr;
+
+	if (vsm::any_flags(a.flags, io_flags::create_inheritable))
 	{
-		return vsm::unexpected(error::invalid_argument);
+		object_attributes.Attributes |= OBJ_INHERIT;
+		p_object_attributes = &object_attributes;
 	}
 
 	LARGE_INTEGER max_size_integer;
 	max_size_integer.QuadPart = a.max_size;
 
-	auto const section_access = get_section_access(protection);
-	vsm_try(page_protection, get_page_protection(protection));
-
-	unique_handle section;
+	unique_handle handle;
 	NTSTATUS const status = NtCreateSection(
-		vsm::out_resource(section),
+		vsm::out_resource(handle),
 		//TODO: Set section access flags
 		section_access,
-		/* ObjectAttributes: */ nullptr,
+		p_object_attributes,
 		&max_size_integer,
 		page_protection,
 		//TODO: Set section allocation attributes
 		SEC_COMMIT,
-		unwrap_handle(backing_file_h.platform_handle));
+		backing_file_handle);
 
 	if (!NT_SUCCESS(status))
 	{
@@ -126,7 +168,7 @@ vsm::result<void> section_t::create(
 			{
 				flags::not_null,
 			},
-			wrap_handle(section.release()),
+			wrap_handle(handle.release()),
 		},
 		protection,
 	};

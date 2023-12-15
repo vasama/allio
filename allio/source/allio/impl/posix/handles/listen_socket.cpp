@@ -75,6 +75,6 @@ vsm::result<void> raw_listen_socket_t::close(
 	io_parameters_t<raw_listen_socket_t, close_t> const&)
 {
 	unrecoverable(posix::close_socket(unwrap_socket(h.platform_handle)));
-	zero_native_handle(h);
+	h = {};
 	return {};
 }

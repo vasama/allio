@@ -1,3 +1,9 @@
 #pragma once
 
-#include <allio/handles/section.hpp>
+#include <allio/blocking/section.hpp>
+
+namespace allio {
+
+using namespace blocking::section;
+
+} // namespace allio

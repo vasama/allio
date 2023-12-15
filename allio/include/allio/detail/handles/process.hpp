@@ -21,144 +21,171 @@ using process_id = integer_id<process_t, uint32_t>;
 using process_exit_code = int32_t;
 
 
+enum class process_options : uint8_t
+{
+	launch_detached                     = 1 << 0,
+	inherit_handles                     = 1 << 1,
+	set_environment                     = 1 << 2,
+	wait_on_close                       = 1 << 3,
+};
+
+struct inherit_handles_implicit_t
+{
+	bool inherit_handles;
+};
+
+struct inherit_handles_explicit_t
+{
+	//TODO: Use a type-erased view like any_string_span over stream handles
+};
+
 struct inherit_handles_t
 {
-	native_platform_handle const* inherit_handles_array = nullptr;
-	size_t inherit_handles_count = 0;
-};
-class explicit_inherit_handles
-{
-	struct argument
+	inherit_handles_implicit_t vsm_static_operator_invoke(bool const inherit_handles)
 	{
-		native_platform_handle const* array;
-		size_t count;
-	};
-
-	friend void tag_invoke(set_argument_t, inherit_handles_t& args, explicit_inherit_handles)
-	{
-		args.inherit_handles_array = nullptr;
-		args.inherit_handles_count = static_cast<size_t>(-1);
+		return { inherit_handles };
 	}
 
-	friend void tag_invoke(set_argument_t, inherit_handles_t& args, argument const& value)
+	inherit_handles_explicit_t vsm_static_operator_invoke()
 	{
-		args.inherit_handles_array = value.array;
-		args.inherit_handles_count = value.count;
-	}
-
-public:
-	argument vsm_static_operator_invoke(bool const inherit_handles)
-	{
-		return { nullptr, inherit_handles ? static_cast<size_t>(-1) : 0 };
-	}
-
-	argument vsm_static_operator_invoke(std::span<native_platform_handle const> const inherit_handles)
-	{
-		return { inherit_handles.data(), inherit_handles.size() };
+		//TODO
 	}
 };
-inline constexpr explicit_inherit_handles inherit_handles = {};
-
-struct command_line_t
-{
-	any_string_span command_line;
-};
-inline constexpr explicit_parameter<command_line_t> command_line = {};
-
-struct environment_t
-{
-	std::optional<any_string_span> environment;
-};
-inline constexpr explicit_parameter<environment_t> environment = {};
-
-struct working_directory_t
-{
-	std::optional<fs_path> working_directory;
-};
-inline constexpr explicit_parameter<working_directory_t> working_directory = {};
-
-template<typename T>
-concept byte_stream_handle = true;
-
-template<typename P>
-class stream_parameter
-{
-	struct argument
-	{
-		native_platform_handle value;
-
-		friend void tag_invoke(
-			set_argument_t,
-			P& arguments,
-			argument const& argument)
-		{
-			parameter_value(arguments) = argument.value;
-		}
-	};
-
-public:
-	constexpr argument vsm_static_operator_invoke(byte_stream_handle auto const& value)
-	{
-		return { value.native().platform_handle };
-	}
-};
-
-struct std_input_t
-{
-	native_platform_handle std_input = native_platform_handle::null;
-};
-inline constexpr stream_parameter<std_input_t> std_input = {};
-
-struct std_output_t
-{
-	native_platform_handle std_output = native_platform_handle::null;
-};
-inline constexpr stream_parameter<std_output_t> std_output = {};
-
-struct std_error_t
-{
-	native_platform_handle std_error = native_platform_handle::null;
-};
-inline constexpr stream_parameter<std_error_t> std_error = {};
-
-struct launch_detached_t
-{
-	bool launch_detached = false;
-
-	friend void tag_invoke(set_argument_t, launch_detached_t& args, explicit_parameter<launch_detached_t>)
-	{
-		args.launch_detached = true;
-	}
-};
-inline constexpr explicit_parameter<launch_detached_t> launch_detached = {};
+inline constexpr inherit_handles_t inherit_handles = {};
 
 struct wait_on_close_t
 {
-	bool wait_on_close = false;
-
-	friend void tag_invoke(set_argument_t, wait_on_close_t& args, explicit_parameter<wait_on_close_t>)
-	{
-		args.wait_on_close = true;
-	}
+	bool wait_on_close;
 };
 inline constexpr explicit_parameter<wait_on_close_t> wait_on_close = {};
 
-struct exit_code_t
+struct process_arguments_t
 {
-	std::optional<process_exit_code> exit_code;
+	any_string_span arguments;
 };
-inline constexpr explicit_parameter<exit_code_t, process_exit_code> exit_code = {};
+inline constexpr explicit_parameter<process_arguments_t> process_arguments = {};
+
+struct working_directory_t
+{
+	fs_path path;
+};
+inline constexpr explicit_parameter<working_directory_t> working_directory = {};
+
+struct process_environment_t
+{
+	any_string_span arguments;
+};
+inline constexpr explicit_parameter<process_environment_t> process_environment = {};
+
+template<int Stream>
+struct redirect_stream_t
+{
+	native_platform_handle stream;
+};
+
+inline constexpr explicit_parameter<redirect_stream_t<0>> redirect_stdin = {};
+inline constexpr explicit_parameter<redirect_stream_t<1>> redirect_stdout = {};
+inline constexpr explicit_parameter<redirect_stream_t<2>> redirect_stderr = {};
+
+struct with_exit_code_t
+{
+	process_exit_code exit_code;
+};
+inline constexpr explicit_parameter<with_exit_code_t> with_exit_code = {};
 
 namespace process_io {
+
+struct open_parameters : io_flags_t
+{
+	process_id id = {};
+
+	friend void tag_invoke(set_argument_t, launch_parameters& args, process_id const value)
+	{
+		args.id = value;
+	}
+};
+
+struct launch_parameters : io_flags_t
+{
+	process_options options = {};
+	any_string_span arguments = {};
+	any_string_span environment = {};
+	fs_path working_directory = {};
+	native_platform_handle redirect_stdin = {};
+	native_platform_handle redirect_stdout = {};
+	native_platform_handle redirect_stderr = {};
+	//TODO: Explicit handle inheritance
+
+	friend void tag_invoke(set_argument_t, launch_parameters& args, inherit_handles_t)
+	{
+		args.options |= process_options::inherit_handles;
+	}
+
+	friend void tag_invoke(set_argument_t, launch_parameters& args, inherit_handles_implicit_t const value)
+	{
+		if (value.inherit_handles)
+		{
+			args.options |= process_options::inherit_handles;
+		}
+	}
+
+	friend void tag_invoke(set_argument_t, launch_parameters& args, wait_on_close_t const value)
+	{
+		if (value.wait_on_close)
+		{
+			args.options |= process_options::wait_on_close;
+		}
+	}
+
+	friend void tag_invoke(set_argument_t, launch_parameters& args, process_arguments_t const value)
+	{
+		args.arguments = value.arguments;
+	}
+
+	friend void tag_invoke(set_argument_t, launch_parameters& args, process_environment_t const value)
+	{
+		args.environment = value.environment;
+		args.options |= process_options::set_environment;
+	}
+
+	friend void tag_invoke(set_argument_t, launch_parameters& args, working_directory_t const value)
+	{
+		args.working_directory = value.path;
+	}
+
+	friend void tag_invoke(set_argument_t, launch_parameters& args, redirect_stream_t<0> const value)
+	{
+		args.redirect_stdin = value.stream;
+	}
+
+	friend void tag_invoke(set_argument_t, launch_parameters& args, redirect_stream_t<1> const value)
+	{
+		args.redirect_stdout = value.stream;
+	}
+
+	friend void tag_invoke(set_argument_t, launch_parameters& args, redirect_stream_t<2> const value)
+	{
+		args.redirect_stderr = value.stream;
+	}
+};
+
+struct teminate_parameters
+{
+	bool user_exit_code = false;
+	process_exit_code exit_code;
+
+	friend void tag_invoke(set_argument_t, launch_parameters& args, with_exit_code const value)
+	{
+		args.user_exit_code = true;
+		args.exit_coee = value.exit_code;
+	}
+};
+
 
 struct open_t
 {
 	using operation_concept = producer_t;
-	struct required_params_type
-	{
-		process_id id;
-	};
-	using optional_params_type = inheritable_t;
+	using params_type = open_parameters;
 	using result_type = void;
 	using runtime_concept = bounded_runtime_t;
 
@@ -176,26 +203,7 @@ struct open_t
 struct launch_t
 {
 	using operation_concept = producer_t;
-	struct required_params_type
-	{
-		fs_path path;
-	};
-	using optional_params_type = parameters_t
-	<
-		launch_detached_t,
-		wait_on_close_t,
-
-		inheritable_t,
-		inherit_handles_t,
-
-		command_line_t,
-		environment_t,
-		working_directory_t,
-
-		std_input_t,
-		std_output_t,
-		std_error_t
-	>;
+	using params_type = launch_parameters;
 	using result_type = void;
 
 	template<object Object>
@@ -212,8 +220,7 @@ struct launch_t
 struct terminate_t
 {
 	using operation_concept = void;
-	using required_params_type = no_parameters_t;
-	using optional_params_type = exit_code_t;
+	using params_type = teminate_parameters;
 	using result_type = void;
 	using runtime_concept = bounded_runtime_t;
 
@@ -231,8 +238,7 @@ struct terminate_t
 struct wait_t
 {
 	using operation_concept = void;
-	using required_params_type = no_parameters_t;
-	using optional_params_type = deadline_t;
+	using params_type = deadline_t;
 	using result_type = process_exit_code;
 
 	template<object Object>
@@ -308,8 +314,8 @@ struct process_t : platform_object_t
 		}
 	};
 
-	template<typename Handle, optional_multiplexer_handle_for<process_t> MultiplexerHandle>
-	struct concrete_interface : base_type::concrete_interface<Handle, MultiplexerHandle>
+	template<typename Handle>
+	struct concrete_interface : base_type::concrete_interface<Handle>
 	{
 		[[nodiscard]] auto wait(auto&&... args) const
 		{
@@ -326,53 +332,6 @@ struct process_t : platform_object_t
 		}
 	};
 };
-using abstract_process_handle = abstract_handle<process_t>;
-
-
-namespace _process_b {
-
-using process_handle = blocking_handle<process_t>;
-
-
-vsm::result<process_handle> open_process(process_id const id, auto&&... args)
-{
-	vsm::result<process_handle> r(vsm::result_value);
-	vsm_try_void(blocking_io<process_t, process_io::open_t>(
-		*r,
-		make_io_args<process_t, process_io::open_t>(id)(vsm_forward(args)...)));
-	return r;
-}
-
-vsm::result<process_handle> launch_process(fs_path const& executable, auto&&... args)
-{
-	vsm::result<process_handle> r(vsm::result_value);
-	vsm_try_void(blocking_io<process_t, process_io::launch_t>(
-		*r,
-		make_io_args<process_t, process_io::launch_t>(executable)(vsm_forward(args)...)));
-	return r;
-}
-
-} // namespace _process_b
-
-namespace _process_a {
-
-template<multiplexer_handle_for<process_t> MultiplexerHandle>
-using basic_process_handle = async_handle<process_t, MultiplexerHandle>;
-
-
-ex::sender auto open_process(process_id const id, auto&&... args)
-{
-	return io_handle_sender<process_t, process_io::open_t>(
-		make_io_args<process_t, process_io::open_t>(id)(vsm_forward(args)...));
-}
-
-ex::sender auto launch_process(fs_path const& path, auto&&... args)
-{
-	return io_handle_sender<process_t, process_io::launch_t>(
-		make_io_args<process_t, process_io::launch_t>(path)(vsm_forward(args)...));
-}
-
-} // namespace _process_a
 
 } // namespace allio::detail
 

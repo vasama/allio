@@ -1,7 +1,6 @@
 #include <allio/detail/handles/section.hpp>
 
 #include <allio/impl/linux/handles/fs_object.hpp>
-#include <allio/linux/platform.hpp>
 
 #include <allio/linux/detail/undef.i>
 

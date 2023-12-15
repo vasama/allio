@@ -10,7 +10,6 @@
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/path.hpp>
 #include <allio/win32/kernel_error.hpp>
-#include <allio/win32/platform.hpp>
 
 #include <vsm/lazy.hpp>
 #include <vsm/numeric.hpp>

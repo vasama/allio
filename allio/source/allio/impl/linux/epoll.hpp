@@ -1,7 +1,7 @@
 #pragma once
 
+#include <allio/detail/unique_handle.hpp>
 #include <allio/impl/linux/error.hpp>
-#include <allio/linux/detail/unique_fd.hpp>
 
 #include <vsm/lazy.hpp>
 
@@ -11,14 +11,14 @@
 
 namespace allio::linux {
 
-inline vsm::result<detail::unique_fd> epoll_create()
+inline vsm::result<detail::unique_handle> epoll_create()
 {
 	int const fd = epoll_create1(EPOLL_CLOEXEC);
 	if (fd == -1)
 	{
 		return vsm::unexpected(get_last_error());
 	}
-	return vsm_lazy(detail::unique_fd(fd));
+	return vsm_lazy(detail::unique_handle(fd));
 }
 
 inline vsm::result<void> epoll_ctl(

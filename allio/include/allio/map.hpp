@@ -1,3 +1,9 @@
 #pragma once
 
-#include <allio/handles/map.hpp>
+#include <allio/blocking/map.hpp>
+
+namespace allio {
+
+using namespace blocking::map;
+
+} // namespace allio

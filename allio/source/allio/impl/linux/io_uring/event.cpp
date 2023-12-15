@@ -4,7 +4,6 @@
 #include <allio/impl/linux/handles/event.hpp>
 #include <allio/impl/linux/io_uring.hpp>
 #include <allio/linux/io_uring_record_context.hpp>
-#include <allio/linux/platform.hpp>
 
 #include <poll.h>
 #include <sys/eventfd.h>

@@ -21,10 +21,10 @@ TEST_CASE("Files can be read and written", "[file_handle][blocking]")
 	{
 		test::write_file_content(path, "allio");
 		{
-			auto const file = open_file(path).value();
+			auto const file = open_file(path);
 
 			char data[] = "trash";
-			REQUIRE(file.read_some(0, as_read_buffer(data, 5)).value() == 5);
+			REQUIRE(file.read_some(0, as_read_buffer(data, 5)) == 5);
 			REQUIRE(memcmp(data, "allio", 5) == 0);
 		}
 	}
@@ -33,10 +33,10 @@ TEST_CASE("Files can be read and written", "[file_handle][blocking]")
 	{
 		test::write_file_content(path, "trash");
 		{
-			auto const file = open_file(path).value();
+			auto const file = open_file(path);
 
 			char data[] = "allio";
-			REQUIRE(file.write_some(0, as_write_buffer(data, 5)).value() == 5);
+			REQUIRE(file.write_some(0, as_write_buffer(data, 5)) == 5);
 		}
 		test::check_file_content(path, "allio");
 	}
@@ -48,17 +48,17 @@ TEST_CASE("file_handle::read_at", "[file_handle]")
 	path const file_path = test::get_temp_file_path("allio-test-file");
 
 	//unique_multiplexer_ptr const multiplexer = test::generate_multiplexer();
-	unique_multiplexer_ptr const multiplexer = create_default_multiplexer().value();
+	unique_multiplexer_ptr const multiplexer = create_default_multiplexer();
 	bool const multiplexable = multiplexer != nullptr;
 
 	test::write_file_content(file_path, "allio");
 	{
 		file_handle file;
-		file.set_multiplexer(multiplexer.get()).value();
-		file.open(file_path, { .multiplexable = multiplexable }).value();
+		file.set_multiplexer(multiplexer.get());
+		file.open(file_path, { .multiplexable = multiplexable });
 
 		char buffer[] = "trash";
-		REQUIRE(file.read_at(0, as_read_buffer(buffer, 5)).value() == 5);
+		REQUIRE(file.read_at(0, as_read_buffer(buffer, 5)) == 5);
 		REQUIRE(memcmp(buffer, "allio", 5) == 0);
 	}
 }
@@ -73,10 +73,10 @@ TEST_CASE("file_handle::write_at", "[file_handle]")
 	test::write_file_content(file_path, "trash");
 	{
 		file_handle file;
-		file.set_multiplexer(multiplexer.get()).value();
-		file.open(file_path, { .multiplexable = multiplexable, .mode = file_mode::write }).value();
+		file.set_multiplexer(multiplexer.get());
+		file.open(file_path, { .multiplexable = multiplexable, .mode = file_mode::write });
 
-		REQUIRE(file.write_at(0, as_write_buffer("allio", 5)).value() == 5);
+		REQUIRE(file.write_at(0, as_write_buffer("allio", 5)) == 5);
 	}
 	test::check_file_content(file_path, "allio");
 }
@@ -156,16 +156,16 @@ TEST_CASE("file_handle::write_at with many vectors", "[file_handle]")
 	unique_multiplexer_ptr const multiplexer = test::generate_multiplexer(true);
 
 	file_handle file;
-	file.set_multiplexer(multiplexer.get()).value();
+	file.set_multiplexer(multiplexer.get());
 	file.open(file_path,
 	{
 		.multiplexable = multiplexer != nullptr,
 		.mode = file_mode::write,
 		.creation = file_creation::replace_existing,
-	}).value();
+	});
 
-	REQUIRE(file.write_at(0, data_write_buffers).value() == buffer_count);
-	REQUIRE(file.read_at(0, data_read_buffers).value() == buffer_count);
+	REQUIRE(file.write_at(0, data_write_buffers) == buffer_count);
+	REQUIRE(file.read_at(0, data_read_buffers) == buffer_count);
 	REQUIRE((data_read_buffer == data_write_buffer));
 }
 #endif

@@ -47,18 +47,16 @@ using stream_buffer = std::array<std::byte, 4096>;
 
 TEST_CASE("Directory entries can be read", "[directory_handle][blocking]")
 {
-	using namespace blocking;
-
-	static constexpr size_t file_count = 1; //TODO: 1 just for debugging
+	static constexpr size_t file_count = 400;
 
 	auto const path = test::get_temp_path();
 	auto file_names = fill_directory(path, file_count);
 
-	auto const directory = open_directory(path).value();
+	auto const directory = open_directory(path);
 	while (true)
 	{
 		stream_buffer buffer;
-		auto const stream = directory.read(buffer).value();
+		auto const stream = directory.read(buffer);
 
 		if (!stream)
 		{
@@ -109,16 +107,16 @@ TEST_CASE("directory_handle::read", "[directory_handle]")
 	}
 	REQUIRE(files.size() == file_count);
 
-	directory_handle directory = open_directory(directory_path).value();
+	directory_handle directory = open_directory(directory_path);
 
 	std::byte stream_buffer[4096];
 	directory_stream stream(stream_buffer);
 
-	while (stream.read(directory).value())
+	while (stream.read(directory))
 	{
 		for (directory_entry const& entry : stream)
 		{
-			CHECK(files.erase(entry.get_name().value()));
+			CHECK(files.erase(entry.get_name()));
 		}
 	}
 
@@ -133,7 +131,7 @@ TEST_CASE("directory_stream_handle async", "[directory_stream_handle]")
 	path const directory_path = get_temp_path("allio-test-directory");
 	write_directory_content(directory_path, file_count);
 
-	unique_multiplexer_ptr const multiplexer = create_default_multiplexer().value();
+	unique_multiplexer_ptr const multiplexer = create_default_multiplexer();
 
 	std::unordered_set<std::string> files;
 	for (auto const& entry : std::filesystem::directory_iterator(directory_path.string()))
@@ -150,7 +148,7 @@ TEST_CASE("directory_stream_handle async", "[directory_stream_handle]")
 		{
 			for (auto const& entry : stream.entries())
 			{
-				REQUIRE(files.erase(stream.get_name(entry).value()));
+				REQUIRE(files.erase(stream.get_name(entry)));
 			}
 		}
 	}());

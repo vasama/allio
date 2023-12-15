@@ -2,7 +2,6 @@
 #include <allio/win32/detail/iocp/process.hpp>
 
 #include <allio/impl/win32/kernel.hpp>
-#include <allio/win32/platform.hpp>
 
 using namespace allio;
 using namespace allio::detail;

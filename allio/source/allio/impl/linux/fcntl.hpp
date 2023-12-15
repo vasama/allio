@@ -1,7 +1,7 @@
 #pragma once
 
+#include <allio/detail/unique_handle.hpp>
 #include <allio/impl/linux/error.hpp>
-#include <allio/linux/detail/unique_fd.hpp>
 
 #include <vsm/lazy.hpp>
 
@@ -24,7 +24,7 @@ inline vsm::result<int> fcntl(int const fd, int const cmd, auto&&... args)
 	return r;
 }
 
-inline vsm::result<detail::unique_fd> duplicate_fd(int const old_fd, int new_fd, int const flags)
+inline vsm::result<detail::unique_handle> duplicate_fd(int const old_fd, int new_fd, int const flags)
 {
 	// O_CLOEXEC is the only valid flag.
 	vsm_assert((flags & ~O_CLOEXEC) == 0);
@@ -47,7 +47,7 @@ inline vsm::result<detail::unique_fd> duplicate_fd(int const old_fd, int new_fd,
 		return vsm::unexpected(get_last_error());
 	}
 
-	return vsm_lazy(detail::unique_fd(new_fd));
+	return vsm_lazy(detail::unique_handle(new_fd));
 }
 
 } // namespace allio::linux

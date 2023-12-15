@@ -148,7 +148,7 @@ vsm::result<void> posix::socket_listen(
 	return {};
 }
 
-vsm::result<unique_socket_with_flags> posix::socket_accept(
+vsm::result<socket_with_flags> posix::socket_accept(
 	socket_type const listen_socket,
 	socket_address& addr,
 	deadline const deadline)
@@ -170,7 +170,7 @@ vsm::result<unique_socket_with_flags> posix::socket_accept(
 		return vsm::unexpected(get_last_socket_error());
 	}
 
-	return vsm_lazy(unique_socket_with_flags
+	return vsm_lazy(socket_with_flags
 	{
 		.socket = unique_socket(socket),
 	});
@@ -239,7 +239,7 @@ static vsm::result<void> socket_connect_with_timeout(
 
 	if (!r)
 	{
-		unrecoverable(close_socket(socket));
+		close_socket(socket);
 	}
 
 	return r;

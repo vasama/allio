@@ -176,7 +176,7 @@ static uint32_t* get_shared_uint32(unique_byte_mmap const& mmap, size_t const of
 }
 
 io_uring_multiplexer::io_uring_multiplexer(
-	unique_fd&& io_uring,
+	unique_handle&& io_uring,
 	unique_byte_mmap&& sq_ring,
 	unique_byte_mmap&& cq_ring,
 	unique_void_mmap&& sq_data,

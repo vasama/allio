@@ -1,7 +1,7 @@
 #pragma once
 
+#include <allio/detail/unique_handle.hpp>
 #include <allio/impl/linux/error.hpp>
-#include <allio/linux/detail/unique_fd.hpp>
 
 #include <vsm/assert.h>
 #include <vsm/lazy.hpp>
@@ -34,7 +34,7 @@ inline vsm::result<void> eventfd_write(int const fd, eventfd_t const value)
 	return {};
 }
 
-inline vsm::result<detail::unique_fd> eventfd(
+inline vsm::result<detail::unique_handle> eventfd(
 	int const flags,
 	int const initial_value)
 {
@@ -47,10 +47,10 @@ inline vsm::result<detail::unique_fd> eventfd(
 		return vsm::unexpected(get_last_error());
 	}
 
-	return vsm_lazy(detail::unique_fd(fd));
+	return vsm_lazy(detail::unique_handle(fd));
 }
 
-inline vsm::result<detail::unique_fd> eventfd(
+inline vsm::result<detail::unique_handle> eventfd(
 	int const flags,
 	eventfd_t const initial_value = 0)
 {

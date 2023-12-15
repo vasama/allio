@@ -11,6 +11,44 @@
 #include <memory>
 
 namespace allio {
+
+struct unique_ptr_deleter
+{
+	template<typename T>
+	void vsm_static_operator_invoke(T* const object)
+	{
+		object->~T();
+
+		detail::memory_release(
+			object,
+			sizeof(T),
+			alignof(T),
+			/* automatic: */ false);
+	}
+};
+
+template<typename T>
+using unique_ptr = std::unique_ptr<T, unique_ptr_deleter>;
+
+template<typename T>
+vsm::result<unique_ptr<T>> make_unique2(auto&&... args)
+{
+	auto const allocation = detail::memory_acquire(
+		/* min_size: */ sizeof(T),
+		/* max_size: */ sizeof(T),
+		alignof(T),
+		/* automatic: */ false);
+
+	if (allocation.memory == nullptr)
+	{
+		return vsm::unexpected(error::not_enough_memory);
+	}
+
+	T* const object = new (allocation.memory) T(vsm_forward(args)...);
+	return vsm::result<unique_ptr<T>>(vsm::result_value, object);
+}
+
+
 namespace detail {
 
 struct operator_deleter

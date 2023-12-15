@@ -11,13 +11,13 @@ namespace allio::detail {
 
 enum class file_mode : uint8_t
 {
-	none                                = 0,
+	none                                = 1,
 
-	read_data                           = 1 << 0,
-	write_data                          = 1 << 1,
+	read_data                           = 1 | 1 << 1,
+	write_data                          = 1 | 1 << 2,
 
-	read_attributes                     = 1 << 2,
-	write_attributes                    = 1 << 3,
+	read_attributes                     = 1 | 1 << 3,
+	write_attributes                    = 1 | 1 << 4,
 
 	read                                = read_data | read_attributes,
 	write                               = write_data | write_attributes,
@@ -27,9 +27,9 @@ enum class file_mode : uint8_t
 };
 vsm_flag_enum(file_mode);
 
-enum class file_creation : uint8_t
+enum class file_opening : uint8_t
 {
-	open_existing,
+	open_existing = 1,
 	create_only,
 	open_or_create,
 	truncate_existing,
@@ -38,12 +38,12 @@ enum class file_creation : uint8_t
 
 /// @brief Controls sharing of the file by other handles.
 /// @note File sharing restrictions may not be available on all platforms.
-///       For maximum portability, specify no file sharing restrictions (all).
+///       For maximum portability, do not specify file sharing restrictions.
 enum class file_sharing : uint8_t
 {
-	unlink                              = 1 << 0,
-	read                                = 1 << 1,
-	write                               = 1 << 2,
+	unlink                              = 1 | 1 << 1,
+	read                                = 1 | 1 << 2,
+	write                               = 1 | 1 << 3,
 
 	all = unlink | read | write,
 };
@@ -51,126 +51,126 @@ vsm_flag_enum(file_sharing);
 
 enum class file_caching : uint8_t
 {
-	none                                = 0,
+	none = 1,
+	only_metadata,
+	reads,
+	reads_and_metadata,
+	all,
+	safety_barriers,
+	temporary,
 };
 
-enum class file_flags : uint32_t
+enum class file_options : uint16_t
 {
-	none                                = 0,
-	unlink_on_first_close               = 1 << 0,
-	disable_safety_barriers             = 1 << 1,
-	disable_safety_unlinks              = 1 << 2,
-	disable_prefetching                 = 1 << 3,
-	maximum_prefetching                 = 1 << 4,
+	none                                        = 1,
+	unlink_on_first_close                       = 1 | 1 << 1,
+	disable_safety_barriers                     = 1 | 1 << 2,
+	disable_safety_unlinks                      = 1 | 1 << 3,
+	disable_prefetching                         = 1 | 1 << 4,
+	maximum_prefetching                         = 1 | 1 << 5,
 
 #if vsm_os_win32
-#	define allio_detail_win32_flag(x) 1 << x
+#	define allio_detail_windows_flag(x) 1 | 1 << x
 #else
-#	define allio_detail_win32_flag(x) 0
+#	define allio_detail_windows_flag(x) 0
 #endif
 
-	win_disable_unlink_emulation        = allio_detail_win32_flag(24),
-	win_disable_sparse_file_creation    = allio_detail_win32_flag(25),
+	windows_disable_unlink_emulation            = allio_detail_windows_flag(6),
+	windows_disable_sparse_file_creation        = allio_detail_windows_flag(7),
 
-#undef allio_detail_win32_flag
+#undef allio_detail_windows_flag
 };
-vsm_flag_enum(file_flags);
+vsm_flag_enum(file_options);
 
 enum class path_kind : uint8_t
 {
 #if vsm_os_win32
-#	define allio_detail_win32_flag(x) 1 << x
+#	define allio_detail_windows_flag(x) 1 << x
 #else
-#	define allio_detail_win32_flag(x) 0
+#	define allio_detail_windows_flag(x) 0
 #endif
 
-	windows_nt                          = allio_detail_win32_flag(0),
-	windows_guid                        = allio_detail_win32_flag(1),
-	windows_dos                         = allio_detail_win32_flag(2),
+	windows_nt                          = allio_detail_windows_flag(0),
+	windows_guid                        = allio_detail_windows_flag(1),
+	windows_dos                         = allio_detail_windows_flag(2),
 
-#undef allio_detail_win32_flag
+#undef allio_detail_windows_flag
 
 	any = windows_nt | windows_guid | windows_dos,
 };
 vsm_flag_enum(path_kind);
 
-
-struct file_mode_t
+enum class open_options : uint8_t
 {
-	std::optional<file_mode> mode;
-
-	friend void tag_invoke(set_argument_t, file_mode_t& args, file_mode const mode)
-	{
-		args.mode = mode;
-	}
+	temporary                           = 1 << 0,
+	unique_name                         = 1 << 1,
+	anonymous                           = 1 << 2,
 };
+vsm_flag_enum(open_options);
 
-struct file_creation_t
-{
-	std::optional<file_creation> creation;
-
-	friend void tag_invoke(set_argument_t, file_creation_t& args, file_creation const creation)
-	{
-		args.creation = creation;
-	}
-};
-
-struct file_sharing_t
-{
-	file_sharing sharing = file_sharing::all;
-
-	friend void tag_invoke(set_argument_t, file_sharing_t& args, file_sharing const sharing)
-	{
-		args.sharing = sharing;
-	}
-};
-
-struct file_caching_t
-{
-	file_caching caching = file_caching::none;
-
-	friend void tag_invoke(set_argument_t, file_caching_t& args, file_caching const caching)
-	{
-		args.caching = caching;
-	}
-};
-
-struct file_flags_t
-{
-	file_flags flags = file_flags::none;
-
-	friend void tag_invoke(set_argument_t, file_flags_t& args, file_flags const flags)
-	{
-		args.flags = flags;
-	}
-};
 
 struct path_kind_t
 {
-	detail::path_kind path_kind = detail::path_kind::any;
+	path_kind kind = path_kind::any;
 
-	friend void tag_invoke(set_argument_t, path_kind_t& args, detail::path_kind const path_kind)
+	friend void tag_invoke(set_argument_t, path_kind_t& args, path_kind const kind)
 	{
-		args.path_kind = path_kind;
+		args.kind = kind;
 	}
 };
-
 
 namespace fs_io {
 
 struct open_t
 {
 	using operation_concept = producer_t;
-	using required_params_type = fs_path_t;
-	using optional_params_type = parameters_t
-	<
-		inheritable_t,
-		file_mode_t,
-		file_creation_t,
-		file_sharing_t,
-		file_caching_t,
-		file_flags_t
-	>;
+
+	struct params_type : io_flags_t
+	{
+		file_mode mode = {};
+		file_options options = {};
+		file_opening opening = {};
+		file_sharing sharing = {};
+		file_caching caching = {};
+		open_options special = {};
+		fs_path path = {};
+
+		friend void tag_invoke(set_argument_t, params_type& args, file_mode const value)
+		{
+			args.mode = value;
+		}
+	
+		friend void tag_invoke(set_argument_t, params_type& args, file_opening const value)
+		{
+			args.opening = value;
+		}
+	
+		friend void tag_invoke(set_argument_t, params_type& args, file_sharing const value)
+		{
+			args.sharing = value;
+		}
+	
+		friend void tag_invoke(set_argument_t, params_type& args, file_caching const value)
+		{
+			args.caching = value;
+		}
+	
+		friend void tag_invoke(set_argument_t, params_type& args, file_options const value)
+		{
+			args.options = value;
+		}
+	
+		friend void tag_invoke(set_argument_t, params_type& args, open_options const value)
+		{
+			args.special = value;
+		}
+	
+		friend void tag_invoke(set_argument_t, params_type& args, fs_path const& value)
+		{
+			args.path = value;
+		}
+	};
+
 	using result_type = void;
 
 	template<object Object>
@@ -187,11 +187,18 @@ struct open_t
 struct get_current_path_t
 {
 	using operation_concept = void;
-	struct required_params_type
+
+	struct params_type
 	{
 		any_path_buffer buffer;
+		path_kind kind = path_kind::any;
+
+		friend void tag_invoke(set_argument_t, params_type& args, path_kind const value)
+		{
+			args.kind = value;
+		}
 	};
-	using optional_params_type = path_kind_t;
+
 	using result_type = size_t;
 
 	template<object Object>
@@ -217,11 +224,6 @@ struct fs_object_t : platform_object_t
 		writable,
 	);
 
-	struct native_type : base_type::native_type
-	{
-		detail::file_flags file_flags;
-	};
-
 	using open_t = fs_io::open_t;
 	using get_current_path_t = fs_io::get_current_path_t;
 
@@ -239,18 +241,36 @@ struct fs_object_t : platform_object_t
 	template<typename Handle>
 	struct abstract_interface : base_type::abstract_interface<Handle>
 	{
-		[[nodiscard]] vsm::result<size_t> get_current_path(any_path_buffer const buffer, auto&&... args)
+		[[nodiscard]] auto read_current_path(any_path_buffer const buffer, auto&&... args) const
 		{
-			return blocking_io<typename Handle::object_type, get_current_path_t>(
-				static_cast<Handle const&>(*this),
-				make_io_args<typename Handle::object_type, get_current_path_t>(buffer)(vsm_forward(args)...));
+			return Handle::io_traits_type::unwrap_result(
+				_read_current_path(buffer, vsm_forward(args)...));
 		}
 
 		template<typename Path = path>
-		[[nodiscard]] vsm::result<Path> get_current_path(auto&&... args)
+		[[nodiscard]] auto get_current_path(auto&&... args) const
+		{
+			return Handle::io_traits_type::unwrap_result(
+				_get_current_path<Path>(vsm_forward(args)...));
+		}
+
+	private:
+		vsm::result<size_t> _read_current_path(any_path_buffer const buffer, auto&&... args) const
+		{
+			io_parameters_t<typename Handle::object_type, get_current_path_t> a = {};
+			a.buffer = buffer;
+			(set_argument(a, vsm_forward(args)), ...);
+
+			return blocking_io<typename Handle::object_type, get_current_path_t>(
+					static_cast<Handle const&>(*this),
+					a);
+		}
+
+		template<typename Path>
+		vsm::result<Path> _get_current_path(auto&&... args) const
 		{
 			vsm::result<Path> r(vsm::result_value);
-			vsm_try_discard(get_current_path(any_path_buffer(*r), vsm_forward(args)...));
+			vsm_try_void(_read_current_path(any_path_buffer(*r), vsm_forward(args)...));
 			return r;
 		}
 	};

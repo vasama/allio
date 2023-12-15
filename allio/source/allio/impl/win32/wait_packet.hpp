@@ -1,14 +1,14 @@
 #pragma once
 
 #include <allio/impl/win32/kernel.hpp>
-#include <allio/win32/wait_packet.hpp>
+#include <allio/win32/detail/wait_packet.hpp>
 
 #include <vsm/result.hpp>
 
 namespace allio::win32 {
 
 /// @brief Create a wait packet object.
-vsm::result<unique_wait_packet> create_wait_packet();
+vsm::result<detail::unique_handle> create_wait_packet();
 
 /// @brief Submit a wait for a handle using a wait packet.
 ///        The waiting happens as if by WaitForSingleObject, but when completed,

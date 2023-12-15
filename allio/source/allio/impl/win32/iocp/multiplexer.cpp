@@ -5,7 +5,6 @@
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/wait_packet.hpp>
 #include <allio/win32/kernel_error.hpp>
-#include <allio/win32/platform.hpp>
 
 #include <vsm/lazy.hpp>
 
@@ -116,7 +115,10 @@ bool iocp_multiplexer::cancel_io(io_slot& slot, native_platform_handle const han
 
 vsm::result<unique_wait_packet> iocp_multiplexer::acquire_wait_packet()
 {
-	return create_wait_packet();
+	return create_wait_packet().transform([](unique_handle&& h)
+	{
+		return unique_wait_packet(wrap_wait_packet(h.release()));
+	});
 }
 
 void iocp_multiplexer::release_wait_packet(unique_wait_packet&& packet)

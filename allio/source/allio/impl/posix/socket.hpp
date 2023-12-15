@@ -1,10 +1,11 @@
 #pragma once
 
 #include <allio/byte_io_buffers.hpp>
+#include <allio/error.hpp>
 #include <allio/deadline.hpp>
 #include <allio/detail/handle_flags.hpp>
+#include <allio/detail/platform.hpp>
 #include <allio/network.hpp>
-#include <allio/platform.hpp>
 
 #include <vsm/assert.h>
 #include <vsm/flags.hpp>
@@ -66,15 +67,15 @@ struct socket_address : socket_address_union
 
 struct socket_deleter
 {
-	void operator()(socket_type const socket) const
+	void vsm_static_operator_invoke(socket_type const socket)
 	{
-		vsm_verify(close_socket(socket));
+		close_socket(socket);
 	}
 };
 using unique_socket = vsm::unique_resource<socket_type, socket_deleter, invalid_socket>;
 
 
-struct unique_socket_with_flags
+struct socket_with_flags
 {
 	unique_socket socket;
 	detail::handle_flags flags;
@@ -114,7 +115,7 @@ enum class socket_flags
 };
 vsm_flag_enum(socket_flags);
 
-vsm::result<unique_socket_with_flags> create_socket(
+vsm::result<socket_with_flags> create_socket(
 	int address_family,
 	int type,
 	int protocol,
@@ -152,7 +153,7 @@ vsm::result<void> socket_listen(
 	return socket_listen(socket, addr, backlog ? &*backlog : nullptr);
 }
 
-vsm::result<unique_socket_with_flags> socket_accept(
+vsm::result<socket_with_flags> socket_accept(
 	socket_type listen_socket,
 	socket_address& addr,
 	deadline deadline);

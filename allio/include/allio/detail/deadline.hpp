@@ -115,12 +115,12 @@ public:
 	}
 
 
-	static constexpr deadline instant()
+	static consteval deadline instant()
 	{
 		return deadline(0);
 	}
 
-	static constexpr deadline never()
+	static consteval deadline never()
 	{
 		return deadline(never_bits);
 	}
@@ -148,7 +148,7 @@ private:
 
 struct deadline_t
 {
-	detail::deadline deadline;
+	detail::deadline deadline = detail::deadline::never();
 
 	friend void tag_invoke(
 		set_argument_t,

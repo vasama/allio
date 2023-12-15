@@ -1,8 +1,8 @@
 #pragma once
 
+#include <allio/detail/unique_handle.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/linux/detail/io_uring/io_uring.hpp>
-#include <allio/linux/detail/unique_fd.hpp>
 
 #include <vsm/lazy.hpp>
 #include <vsm/result.hpp>
@@ -31,7 +31,7 @@ inline int _io_uring_register(int const fd, unsigned const opcode, void* const a
 }
 
 
-inline vsm::result<detail::unique_fd> io_uring_setup(
+inline vsm::result<detail::unique_handle> io_uring_setup(
 	unsigned const entries,
 	io_uring_params& setup)
 {
@@ -42,7 +42,7 @@ inline vsm::result<detail::unique_fd> io_uring_setup(
 		return vsm::unexpected(get_last_error());
 	}
 
-	return vsm_lazy(detail::unique_fd(fd));
+	return vsm_lazy(detail::unique_handle(fd));
 }
 
 template<typename Argument = io_uring_getevents_arg>

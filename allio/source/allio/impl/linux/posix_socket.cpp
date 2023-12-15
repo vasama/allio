@@ -12,7 +12,7 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::posix;
 
-vsm::result<unique_socket_with_flags> posix::create_socket(
+vsm::result<socket_with_flags> posix::create_socket(
 	int const address_family,
 	int type,
 	int const protocol,
@@ -33,7 +33,7 @@ vsm::result<unique_socket_with_flags> posix::create_socket(
 		return vsm::unexpected(get_last_socket_error());
 	}
 
-	return vsm_lazy(unique_socket_with_flags
+	return vsm_lazy(socket_with_flags
 	{
 		.socket = unique_socket(socket),
 	});

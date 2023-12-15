@@ -1,7 +1,7 @@
 #pragma once
 
 #include <allio/any_path.hpp>
-#include <allio/platform.hpp>
+#include <allio/detail/platform.hpp>
 
 #include <vsm/flags.hpp>
 #include <vsm/result.hpp>
@@ -15,7 +15,7 @@
 
 namespace allio::detail {
 
-using fs_size = uint64_t;
+using fs_size = int64_t;
 
 using fs_clock = std::chrono::file_clock;
 using fs_time_point = fs_clock::time_point;
@@ -77,8 +77,10 @@ struct fs_entry_info
 
 struct fs_path
 {
-	native_platform_handle base;
+	native_platform_handle base = {};
 	any_path_view path;
+
+	fs_path() = default;
 
 	template<std::convertible_to<any_path_view> Path>
 	fs_path(Path const& path)

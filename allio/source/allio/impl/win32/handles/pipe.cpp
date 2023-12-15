@@ -1,10 +1,13 @@
 #include <allio/detail/handles/pipe.hpp>
 
+#include <allio/detail/unique_handle.hpp>
 #include <allio/impl/win32/byte_io.hpp>
 #include <allio/impl/win32/error.hpp>
+#include <allio/impl/win32/handles/platform_object.hpp>
 #include <allio/impl/win32/kernel.hpp>
-#include <allio/win32/detail/unique_handle.hpp>
-#include <allio/win32/platform.hpp>
+
+#include <vsm/lazy.hpp>
+#include <vsm/out_resource.hpp>
 
 #include <win32.h>
 
@@ -36,9 +39,9 @@ static vsm::result<HANDLE> get_named_pipe_directory()
 
 		IO_STATUS_BLOCK io_status_block;
 
-		HANDLE handle;
+		unique_handle handle;
 		NTSTATUS const status = win32::NtCreateFile(
-			&handle,
+			vsm::out_resource(handle),
 			GENERIC_READ | SYNCHRONIZE,
 			&object_attributes,
 			&io_status_block,
@@ -56,7 +59,7 @@ static vsm::result<HANDLE> get_named_pipe_directory()
 			return vsm::unexpected(static_cast<kernel_error>(status));
 		}
 
-		return vsm_lazy(unique_handle(handle));
+		return handle;
 	};
 
 	static auto const handle = open();
@@ -64,8 +67,7 @@ static vsm::result<HANDLE> get_named_pipe_directory()
 	return h.get();
 }
 
-static vsm::result<unique_handle> create_named_pipe_file(
-	bool const inheritable)
+static vsm::result<handle_with_flags> create_named_pipe_file(io_flags const flags)
 {
 	vsm_try(directory, get_named_pipe_directory());
 
@@ -77,22 +79,31 @@ static vsm::result<unique_handle> create_named_pipe_file(
 	object_attributes.ObjectName = &name;
 	object_attributes.Attributes = OBJ_CASE_INSENSITIVE;
 
-	if (inheritable)
+	if (vsm::any_flags(flags, io_flags::create_inheritable))
 	{
 		object_attributes.Attributes |= OBJ_INHERIT;
 	}
 
+	ULONG create_options = 0;
+	handle_flags h_flags = handle_flags::none;
+
+	if (vsm::no_flags(flags, io_flags::create_multiplexable))
+	{
+		create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
+		h_flags |= platform_object_t::impl_type::flags::synchronous;
+	}
+
 	IO_STATUS_BLOCK io_status_block;
 
-	HANDLE handle;
+	unique_handle handle;
 	NTSTATUS const status = NtCreateNamedPipeFile(
-		&handle,
+		vsm::out_resource(handle),
 		GENERIC_READ | SYNCHRONIZE | FILE_WRITE_ATTRIBUTES,
 		&object_attributes,
 		&io_status_block,
 		FILE_SHARE_READ | FILE_SHARE_WRITE,
 		FILE_CREATE,
-		FILE_SYNCHRONOUS_IO_NONALERT,
+		create_options,
 		/* NamedPipeType: */ 0,
 		/* ReadMode: */ 0,
 		/* CompletionMode: */ 0,
@@ -100,18 +111,24 @@ static vsm::result<unique_handle> create_named_pipe_file(
 		/* InboundQuota: */ 4096,
 		/* OutboundQuota: */ 4096,
 		/* DefaultTimeout: */ nullptr);
+	vsm_assert(status != STATUS_PENDING);
 
 	if (!NT_SUCCESS(status))
 	{
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
-	return vsm_lazy(unique_handle(handle));
+	if ((create_options & FILE_SYNCHRONOUS_IO_NONALERT) == 0)
+	{
+		h_flags |= set_file_completion_notification_modes(handle.get());
+	}
+
+	return vsm_lazy(handle_with_flags{ vsm_move(handle), h_flags });
 }
 
-static vsm::result<unique_handle> create_pipe(
+static vsm::result<handle_with_flags> create_pipe(
 	HANDLE const server_handle,
-	bool const inheritable)
+	io_flags const flags)
 {
 	UNICODE_STRING name = {};
 
@@ -121,16 +138,25 @@ static vsm::result<unique_handle> create_pipe(
 	object_attributes.ObjectName = &name;
 	object_attributes.Attributes = OBJ_CASE_INSENSITIVE;
 
-	if (inheritable)
+	if (vsm::any_flags(flags, io_flags::create_inheritable))
 	{
 		object_attributes.Attributes |= OBJ_INHERIT;
 	}
 
+	ULONG create_options = FILE_NON_DIRECTORY_FILE;
+	handle_flags h_flags = handle_flags::none;
+
+	if (vsm::no_flags(flags, io_flags::create_multiplexable))
+	{
+		create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
+		h_flags |= platform_object_t::impl_type::flags::synchronous;
+	}
+
 	IO_STATUS_BLOCK io_status_block;
 
-	HANDLE handle;
+	unique_handle handle;
 	NTSTATUS const status = win32::NtCreateFile(
-		&handle,
+		vsm::out_resource(handle),
 		GENERIC_WRITE | SYNCHRONIZE | FILE_READ_ATTRIBUTES,
 		&object_attributes,
 		&io_status_block,
@@ -138,7 +164,7 @@ static vsm::result<unique_handle> create_pipe(
 		/* FileAttributes: */ 0,
 		FILE_SHARE_READ | FILE_SHARE_WRITE,
 		FILE_OPEN,
-		FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+		create_options,
 		/* EaBuffer: */ nullptr,
 		/* EaLength: */ 0);
 	vsm_assert(status != STATUS_PENDING);
@@ -148,58 +174,79 @@ static vsm::result<unique_handle> create_pipe(
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
-	return vsm_lazy(unique_handle(handle));
+	if ((create_options & FILE_SYNCHRONOUS_IO_NONALERT) == 0)
+	{
+		h_flags |= set_file_completion_notification_modes(handle.get());
+	}
+
+	return vsm_lazy(handle_with_flags{ vsm_move(handle), h_flags });
 }
 
-vsm::result<void> pipe_t::create(native_type& r_h, native_type& w_h)
+vsm::result<void> pipe_pair_t::create_pair(
+	native_type& h,
+	io_parameters_t<pipe_pair_t, create_pair_t> const& a)
 {
-	HANDLE read_handle;
-	HANDLE write_handle;
-
+#if 0
 	SECURITY_ATTRIBUTES security_attributes = {};
 	security_attributes.nLength = sizeof(security_attributes);
-	security_attributes.bInheritHandle = true;
 
+	if (vsm::any_flags(a.flags, io_flags::create_inheritable))
+	{
+		security_attributes.bInheritHandle = true;
+	}
+
+	unique_handle read_handle;
+	unique_handle write_handle;
 	if (!CreatePipe(
-		&read_handle,
-		&write_handle,
+		vsm::out_resource(read_handle),
+		vsm::out_resource(write_handle),
 		&security_attributes,
 		/* nSize (buffer size): */ 0))
 	{
 		return vsm::unexpected(get_last_error());
 	}
+#endif
 
-	r_h = platform_object_t::native_type
+	vsm_try_bind((server_handle, server_flags), create_named_pipe_file(a.flags));
+	vsm_try_bind((client_handle, client_flags), create_pipe(server_handle.get(), a.flags));
+
+	h = native_type
 	{
 		object_t::native_type
 		{
 			flags::not_null,
 		},
-		wrap_handle(read_handle),
+		platform_object_t::native_type
+		{
+			object_t::native_type
+			{
+				flags::not_null | server_flags,
+			},
+			wrap_handle(server_handle.release()),
+		},
+		platform_object_t::native_type
+		{
+			object_t::native_type
+			{
+				flags::not_null | client_flags,
+			},
+			wrap_handle(client_handle.release()),
+		},
 	};
 
-	w_h = platform_object_t::native_type
-	{
-		object_t::native_type
-		{
-			flags::not_null,
-		},
-		wrap_handle(write_handle),
-	};
-	
 	return {};
 }
 
 vsm::result<size_t> pipe_t::stream_read(
 	native_type const& h,
-	io_parameters_t<pipe_t, read_some_t> const& a)
+	io_parameters_t<pipe_t, stream_read_t> const& a)
 {
 	return win32::stream_read(h, a);
 }
 
 vsm::result<size_t> pipe_t::stream_write(
 	native_type const& h,
-	io_parameters_t<pipe_t, write_some_t> const& a)
+	io_parameters_t<pipe_t, stream_write_t> const& a)
 {
 	return win32::stream_write(h, a);
 }

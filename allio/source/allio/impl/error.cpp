@@ -13,7 +13,7 @@ void detail::unrecoverable_error_default(std::error_code const error)
 
 char const* detail::error_category::name() const noexcept
 {
-	return "allio";
+	return error_category_name;
 }
 
 std::string detail::error_category::message(int const code) const

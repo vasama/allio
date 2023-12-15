@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/linux/detail/unique_fd.hpp>
+#include <allio/detail/unique_handle.hpp>
 
 #include <vsm/intrusive/list.hpp>
 #include <vsm/offset_ptr.hpp>
@@ -63,7 +63,7 @@ private:
 		uint32_t write_count;
 	};
 
-	unique_fd m_epoll;
+	unique_handle m_epoll;
 
 	std::deque<file_descriptor> m_file_descriptors;
 

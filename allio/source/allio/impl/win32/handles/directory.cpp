@@ -227,18 +227,13 @@ vsm::result<void> directory_t::open(
 		a.path.path,
 		open_parameters::make(open_kind::directory, a)));
 
-	h = fs_object_t::native_type
+	h = platform_object_t::native_type
 	{
-		platform_object_t::native_type
+		object_t::native_type
 		{
-			object_t::native_type
-			{
-				flags::not_null | flags,
-			},
-			wrap_handle(directory.release()),
+			flags::not_null | flags,
 		},
-		//TODO: Validate flags
-		a.flags,
+		wrap_handle(directory.release()),
 	};
 
 	return {};
@@ -251,7 +246,7 @@ vsm::result<directory_stream_view> directory_t::read(
 	vsm_try(stream, query_directory_file(
 		unwrap_handle(h.platform_handle),
 		a.buffer,
-		a.restart));
+		/* restart: */ false));
 
 	return directory_stream_view(stream);
 }
@@ -289,6 +284,7 @@ static vsm::result<void> _set_current_directory(platform_path_view const path)
 }
 
 
+#if 0
 vsm::result<size_t> this_process::get_current_directory(any_path_buffer const buffer)
 {
 	unique_peb_lock peb_lock;
@@ -301,6 +297,7 @@ vsm::result<size_t> this_process::get_current_directory(any_path_buffer const bu
 
 	return transcode_string(wide_path, buffer);
 }
+#endif
 
 #if 0
 vsm::result<void> this_process::set_current_directory(any_path_view const path)

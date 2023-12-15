@@ -1,7 +1,6 @@
 #include <allio/impl/win32/byte_io.hpp>
 
 #include <allio/impl/win32/kernel.hpp>
-#include <allio/win32/platform.hpp>
 
 using namespace allio;
 using namespace allio::detail;

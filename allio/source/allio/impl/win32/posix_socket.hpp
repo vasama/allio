@@ -4,8 +4,6 @@
 #	error Include <allio/impl/posix/socket.hpp> instead.
 #endif
 
-#include <allio/win32/platform.hpp>
-
 #include <system_error>
 
 #ifndef _WINSOCKAPI_
@@ -75,23 +73,22 @@ struct std::is_error_code_enum<allio::posix::socket_error>
 
 namespace allio::posix {
 
-inline native_platform_handle wrap_socket(SOCKET const socket)
+inline detail::native_platform_handle wrap_socket(SOCKET const socket)
 {
-	return win32::wrap_handle<SOCKET>(socket);
+	return (detail::native_platform_handle)(detail::platform_handle_uint_type)socket;
 }
 
-inline SOCKET unwrap_socket(native_platform_handle const socket)
+inline SOCKET unwrap_socket(detail::native_platform_handle const socket)
 {
-	return win32::unwrap_handle<SOCKET>(socket);
+	return (SOCKET)(detail::platform_handle_uint_type)socket;
 }
 
-inline vsm::result<void> close_socket(socket_type const socket)
+inline void close_socket(socket_type const socket)
 {
 	if (closesocket(socket) == socket_error_value)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		detail::unrecoverable_error(get_last_socket_error());
 	}
-	return {};
 }
 
 } // namespace allio::posix

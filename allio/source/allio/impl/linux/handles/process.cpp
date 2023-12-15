@@ -9,7 +9,6 @@
 #include <allio/impl/linux/poll.hpp>
 #include <allio/impl/linux/proc.hpp>
 #include <allio/impl/linux/process_reaper.hpp>
-#include <allio/linux/platform.hpp>
 
 #include <vsm/numeric.hpp>
 #include <vsm/utility.hpp>
@@ -103,7 +102,7 @@ vsm::result<void> process_t::launch(
 	process_reaper_ptr reaper;
 	handle_flags h_flags = {};
 
-	unique_fd pid_fd;
+	unique_handle pid_fd;
 	pid_t pid = 0;
 
 	// Launch the process using the internal fork_exec interface.
@@ -120,7 +119,7 @@ vsm::result<void> process_t::launch(
 		api_string_storage string_storage;
 		std::string_view exec_path;
 		std::string_view wdir_path;
-		unique_fd exec_fd;
+		unique_handle exec_fd;
 
 		vsm_try_void(api_string_builder::make(string_storage, [&](auto&& ctx)
 		{

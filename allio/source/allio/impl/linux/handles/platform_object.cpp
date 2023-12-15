@@ -1,7 +1,7 @@
 #include <allio/detail/handles/platform_object.hpp>
 
+#include <allio/detail/unique_handle.hpp>
 #include <allio/impl/linux/error.hpp>
-#include <allio/linux/detail/unique_fd.hpp>
 
 #include <unistd.h>
 
@@ -19,6 +19,6 @@ vsm::result<void> platform_object_t::close(
 	{
 		unrecoverable(close_handle(h.platform_handle));
 	}
-	zero_native_handle(h);
+	h = {};
 	return {};
 }

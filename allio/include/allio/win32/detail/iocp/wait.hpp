@@ -12,7 +12,7 @@ struct iocp_wait_state
 	using N = H::native_type;
 	using S = M::operation_type;
 
-	win32::unique_wait_packet wait_packet;
+	unique_wait_packet wait_packet;
 	iocp_multiplexer::wait_slot wait_slot;
 
 	io_result<void> submit(M& m, N const& h, S& s, io_handler<M>& handler);

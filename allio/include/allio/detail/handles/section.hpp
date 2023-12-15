@@ -1,21 +1,18 @@
 #pragma once
 
 #include <allio/detail/handles/file.hpp>
-#include <allio/memory.hpp>
+#include <allio/detail/memory.hpp>
 
 #include <vsm/standard.hpp>
 
 namespace allio::detail {
 
-struct protection_t
+enum class section_options : uint8_t
 {
-	std::optional<allio::protection> protection;
-
-	friend void tag_invoke(set_argument_t, protection_t& args, allio::protection const protection)
-	{
-		args.protection = protection;
-	}
+	backing_file                        = 1 << 0,
+	backing_directory                   = 1 << 1,
 };
+vsm_flag_enum(section_options);
 
 struct backing_directory_t
 {
@@ -27,17 +24,31 @@ namespace section_io {
 struct create_t
 {
 	using operation_concept = producer_t;
-	struct required_params_type
+
+	struct params_type : io_flags_t
 	{
-		fs_object_t::native_type const* backing_file;
-		fs_size max_size;
+		section_options options = {};
+		detail::protection protection = {};
+		fs_object_t::native_type const* backing_storage = nullptr;
+		fs_size max_size = 0;
+
+		friend void tag_invoke(set_argument_t, params_type& args, section_options const value)
+		{
+			args.options = value;
+		}
+
+		friend void tag_invoke(set_argument_t, params_type& args, detail::protection const value)
+		{
+			args.protection = value;
+		}
+
+		friend void tag_invoke(set_argument_t, params_type& args, backing_directory_t const value)
+		{
+			args.options |= section_options::backing_directory;
+			args.backing_storage = value.backing_directory;
+		}
 	};
-	using optional_params_type = parameters_t
-	<
-		backing_directory_t,
-		inheritable_t,
-		protection_t
-	>;
+
 	using result_type = void;
 
 	template<object Object>
@@ -59,7 +70,7 @@ struct section_t : platform_object_t
 
 	struct native_type : base_type::native_type
 	{
-		allio::protection protection;
+		detail::protection protection;
 	};
 
 	using create_t = section_io::create_t;
@@ -77,40 +88,11 @@ struct section_t : platform_object_t
 	template<typename Handle>
 	struct abstract_interface : base_type::abstract_interface<Handle>
 	{
-		[[nodiscard]] allio::protection protection() const
+		[[nodiscard]] detail::protection protection() const
 		{
 			return static_cast<Handle const&>(*this).native().native_type::protection;
 		}
 	};
 };
-using abstract_section_handle = abstract_handle<section_t>;
-
-
-namespace _section_b {
-
-using section_handle = blocking_handle<section_t>;
-
-vsm::result<section_handle> create_section(fs_size const max_size, auto&&... args)
-{
-	vsm::result<section_handle> r(vsm::result_value);
-	vsm_try_void(blocking_io<section_t, section_io::create_t>(
-		*r,
-		make_io_args<section_t, section_io::create_t>(nullptr, max_size)(vsm_forward(args)...)));
-	return r;
-}
-
-vsm::result<section_handle> create_section(
-	abstract_file_handle const& backing_file,
-	fs_size const max_size,
-	auto&&... args)
-{
-	vsm::result<section_handle> r(vsm::result_value);
-	vsm_try_void(blocking_io<section_t, section_io::create_t>(
-		*r,
-		make_io_args<section_t, section_io::create_t>(&backing_file.native(), max_size)(vsm_forward(args)...)));
-	return r;
-}
-
-} // namespace _section_b
 
 } // namespace allio::detail

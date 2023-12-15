@@ -1,10 +1,9 @@
 #pragma once
 
-#include <allio/default_multiplexer.hpp>
-#include <allio/handles/directory.hpp>
+#include <allio/blocking/directory.hpp>
 
-namespace allio::async {
+namespace allio {
 
-using directory_handle = basic_directory_handle<default_multiplexer_handle>;
+using namespace blocking::directory;
 
-} // namespace allio::async
+} // namespace allio

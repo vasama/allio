@@ -4,7 +4,50 @@
 #include <allio/detail/io.hpp>
 #include <allio/detail/type_list.hpp>
 
+#include <vsm/flags.hpp>
+
 namespace allio::detail {
+
+enum class io_flags : uint8_t
+{
+	create_inheritable                  = 1 << 0,
+	create_multiplexable                = 1 << 1,
+	async_result_stream                 = 1 << 2,
+};
+vsm_flag_enum(io_flags);
+
+
+struct inheritable_t
+{
+	bool inheritable;
+};
+
+struct multiplexable_t
+{
+	bool multiplexable;
+};
+
+struct io_flags_t
+{
+	io_flags flags = {};
+
+	friend void tag_invoke(set_argument_t, io_flags_t& args, inheritable_t const value)
+	{
+		if (value.inheritable)
+		{
+			args.flags |= io_flags::create_inheritable;
+		}
+	}
+
+	friend void tag_invoke(set_argument_t, io_flags_t& args, multiplexable_t const value)
+	{
+		if (value.multiplexable)
+		{
+			args.flags |= io_flags::create_multiplexable;
+		}
+	}
+};
+
 
 struct _object
 {
@@ -32,8 +75,7 @@ struct close_t
 {
 	using operation_concept = consumer_t;
 
-	using required_params_type = no_parameters_t;
-	using optional_params_type = no_parameters_t;
+	using params_type = no_parameters_t;
 	using result_type = void;
 
 	template<object Object>
@@ -67,11 +109,6 @@ struct object_t : _object
 		return h.flags[flags::not_null];
 	}
 
-	static void zero_native_handle(native_type& h)
-	{
-		h.flags = {};
-	}
-
 
 	using operations = type_list<close_t>;
 
@@ -79,7 +116,7 @@ struct object_t : _object
 	template<typename Handle>
 	struct abstract_interface {};
 
-	template<typename Handle, optional_multiplexer_handle_for<object_t> MultiplexerHandle>
+	template<typename Handle>
 	struct concrete_interface {};
 };
 

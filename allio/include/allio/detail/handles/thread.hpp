@@ -118,8 +118,8 @@ struct thread_t : platform_object_t
 		[[nodiscard]] thread_id get_id() const;
 	};
 	
-	template<typename Handle, optional_multiplexer_handle_for<thread_t> MultiplexerHandle>
-	struct concrete_interface : base_type::concrete_interface<Handle, MultiplexerHandle>
+	template<typename Handle>
+	struct concrete_interface : base_type::concrete_interface<Handle>
 	{
 		[[nodiscard]] auto wait(auto&&... args) const
 		{

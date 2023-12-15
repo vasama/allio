@@ -36,10 +36,13 @@ template<typename R>
 using set_value_signature = typename _set_value_signature<std::is_void_v<R>>::template type<R>;
 
 
-template<object Object, multiplexer_handle MultiplexerHandle, operation_c Operation>
+template<object Object, typename IoTraits, multiplexer_handle MultiplexerHandle, operation_c Operation>
 class io_sender
 {
-	using handle_type = handle_const_t<Operation, async_handle<Object, MultiplexerHandle>>;
+	using handle_type = handle_const_t<
+		Operation,
+		basic_attached_handle<Object, IoTraits, MultiplexerHandle>>;
+
 	using multiplexer_type = typename MultiplexerHandle::multiplexer_type;
 
 	using operation_type = async_operation_t<multiplexer_type, Object, Operation>;
@@ -170,32 +173,13 @@ public:
 	}
 };
 
-template<
-	operation_c Operation,
-	object Object,
-	multiplexer_handle_for<Object> MultiplexerHandle>
-io_sender<Object, MultiplexerHandle, Operation> generic_io(
-	async_handle<Object, MultiplexerHandle>& h,
-	io_parameters_t<Object, Operation> const& a)
-{
-	return io_sender<Object, MultiplexerHandle, Operation>(h, a);
-}
 
-template<
-	operation_c Operation,
-	object Object,
-	multiplexer_handle_for<Object> MultiplexerHandle>
-io_sender<Object, MultiplexerHandle, Operation> generic_io(
-	async_handle<Object, MultiplexerHandle> const& h,
-	io_parameters_t<Object, Operation> const& a)
-{
-	return io_sender<Object, MultiplexerHandle, Operation>(h, a);
-}
-
-
-template<object Object, producer Operation>
+template<object Object, typename IoTraits, producer Operation>
 class io_handle_sender
 {
+	template<typename MultiplexerHandle>
+	using handle_t = basic_attached_handle<Object, IoTraits, MultiplexerHandle>;
+
 	using params_type = io_parameters_t<Object, Operation>;
 
 	template<multiplexer_handle_for<Object> MultiplexerHandle, ex::receiver Receiver>
@@ -207,7 +191,7 @@ class io_handle_sender
 	{
 		using stoppable_base = ex::__in_place_stoppable_base<operation<MultiplexerHandle, Receiver>>;
 
-		using handle_type = async_handle<Object, MultiplexerHandle>;
+		using handle_type = handle_t<MultiplexerHandle>;
 		using multiplexer_type = typename MultiplexerHandle::multiplexer_type;
 		using operation_type = async_operation_t<multiplexer_type, Object, Operation>;
 		using io_status_type = typename multiplexer_type::io_status_type;
@@ -298,7 +282,7 @@ public:
 	template<typename E>
 	friend auto tag_invoke(ex::get_completion_signatures_t, io_handle_sender const&, E&&)
 		-> ex::completion_signatures<
-			ex::set_value_t(async_handle<Object, environment_multiplexer_handle_t<E>>),
+			ex::set_value_t(handle_t<environment_multiplexer_handle_t<E>>),
 			ex::set_error_t(std::error_code),
 			ex::set_stopped_t()
 		>;

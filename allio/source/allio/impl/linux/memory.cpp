@@ -1,4 +1,4 @@
-#include <allio/memory.hpp>
+#include <allio/detail/memory.hpp>
 
 //#include <allio/directory.hpp>
 #include <allio/impl/bounded_vector.hpp>

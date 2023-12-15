@@ -5,7 +5,6 @@
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/stat.hpp>
 #include <allio/impl/transcode.hpp>
-#include <allio/linux/platform.hpp>
 
 #include <vsm/lazy.hpp>
 
@@ -88,7 +87,7 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 	return info;
 }
 
-vsm::result<unique_fd> linux::open_file(
+vsm::result<unique_handle> linux::open_file(
 	int dir_fd,
 	char const* const path,
 	int const flags,
@@ -110,10 +109,10 @@ vsm::result<unique_fd> linux::open_file(
 		return vsm::unexpected(get_last_error());
 	}
 
-	return vsm_lazy(unique_fd(fd));
+	return vsm_lazy(unique_handle(fd));
 }
 
-vsm::result<unique_fd> linux::reopen_file(
+vsm::result<unique_handle> linux::reopen_file(
 	int const fd,
 	int const flags,
 	mode_t const mode)
@@ -144,7 +143,7 @@ vsm::result<unique_fd> linux::reopen_file(
 		return vsm::unexpected(get_last_error());
 	}
 
-	return vsm_lazy(unique_fd(new_fd));
+	return vsm_lazy(unique_handle(new_fd));
 }
 
 

@@ -26,7 +26,7 @@ std::string posix::socket_error_category::message(int const code) const
 posix::socket_error_category const posix::socket_error_category::instance;
 
 
-vsm::result<posix::unique_socket_with_flags> posix::create_socket(
+vsm::result<posix::socket_with_flags> posix::create_socket(
 	int const address_family,
 	int const type,
 	int const protocol,
@@ -77,7 +77,7 @@ vsm::result<posix::unique_socket_with_flags> posix::create_socket(
 		//h_flags |= set_multiplexable_completion_modes(socket);
 	}
 
-	return vsm_lazy(unique_socket_with_flags
+	return vsm_lazy(socket_with_flags
 	{
 		.socket = vsm_move(socket),
 		.flags = h_flags,

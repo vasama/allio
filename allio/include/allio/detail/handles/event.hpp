@@ -25,34 +25,56 @@ enum class event_mode : uint8_t
 inline constexpr event_mode manual_reset_event = event_mode::manual_reset;
 inline constexpr event_mode auto_reset_event = event_mode::auto_reset;
 
+enum class event_options : uint8_t
+{
+	auto_reset                          = 1 << 0,
+	initially_signaled                  = 1 << 1,
+};
+vsm_flag_enum(event_options);
+
 struct initially_signaled_t
 {
 	bool initially_signaled;
-
-	friend void tag_invoke(
-		set_argument_t,
-		initially_signaled_t& args,
-		explicit_parameter<initially_signaled_t>)
-	{
-		args.initially_signaled = true;
-	}
 };
 inline constexpr explicit_parameter<initially_signaled_t> initially_signaled = {};
+
+struct event_mode_t
+{
+	event_mode mode;
+};
 
 namespace event_io {
 
 struct create_t
 {
 	using operation_concept = producer_t;
-	struct required_params_type
+
+	struct params_type : io_flags_t
 	{
-		event_mode mode;
+		event_options options = {};
+
+		friend void tag_invoke(set_argument_t, params_type& args, event_mode_t const value)
+		{
+			if (value.mode == auto_reset_event)
+			{
+				args.options |= event_options::auto_reset;
+			}
+		}
+
+		friend void tag_invoke(set_argument_t, params_type& args, initially_signaled_t const value)
+		{
+			if (value.initially_signaled)
+			{
+				args.options |= event_options::initially_signaled;
+			}
+		}
+
+		friend void tag_invoke(set_argument_t, params_type& args, explicit_parameter<initially_signaled_t>)
+		{
+			args.options |= event_options::initially_signaled;
+		}
 	};
-	using optional_params_type = parameters_t
-	<
-		inheritable_t,
-		initially_signaled_t
-	>;
+
 	using result_type = void;
 	using runtime_tag = bounded_runtime_t;
 
@@ -70,8 +92,7 @@ struct create_t
 struct signal_t
 {
 	using operation_concept = void;
-	using required_params_type = no_parameters_t;
-	using optional_params_type = no_parameters_t;
+	using params_type = no_parameters_t;
 	using result_type = void;
 	using runtime_tag = bounded_runtime_t;
 
@@ -89,8 +110,7 @@ struct signal_t
 struct reset_t
 {
 	using operation_concept = void;
-	using required_params_type = no_parameters_t;
-	using optional_params_type = no_parameters_t;
+	using params_type = no_parameters_t;
 	using result_type = void;
 	using runtime_tag = bounded_runtime_t;
 
@@ -108,8 +128,7 @@ struct reset_t
 struct wait_t
 {
 	using operation_concept = void;
-	using required_params_type = no_parameters_t;
-	using optional_params_type = deadline_t;
+	using params_type = deadline_t;
 	using result_type = void;
 
 	template<object Object>
@@ -167,63 +186,32 @@ struct event_t : platform_object_t
 
 
 	template<typename Handle>
-	struct abstract_interface : base_type::abstract_interface<Handle>
+	struct concrete_interface : base_type::concrete_interface<Handle>
 	{
-		[[nodiscard]] vsm::result<void> signal() const
+		[[nodiscard]] auto signal() const
 		{
-			return event_t::signal(
-				static_cast<Handle const&>(*this).native(),
-				io_parameters_t<event_t, signal_t>());
+			return Handle::io_traits_type::unwrap_result(
+				blocking_io<typename Handle::object_type, signal_t>(
+					static_cast<Handle const&>(*this),
+					io_parameters_t<typename Handle::object_type, signal_t>()));
 		}
 
-		[[nodiscard]] vsm::result<void> reset() const
+		[[nodiscard]] auto reset() const
 		{
-			return event_t::reset(
-				static_cast<Handle const&>(*this).native(),
-				io_parameters_t<event_t, reset_t>());
+			return Handle::io_traits_type::unwrap_result(
+				blocking_io<typename Handle::object_type, reset_t>(
+					static_cast<Handle const&>(*this),
+					io_parameters_t<typename Handle::object_type, reset_t>()));
 		}
-	};
 
-	template<typename Handle, optional_multiplexer_handle_for<event_t> MultiplexerHandle>
-	struct concrete_interface : base_type::concrete_interface<Handle, MultiplexerHandle>
-	{
 		[[nodiscard]] auto wait(auto&&... args) const
 		{
-			return generic_io<wait_t>(
+			return Handle::io_traits_type::template observe<wait_t>(
 				static_cast<Handle const&>(*this),
-				make_io_args<typename Handle::object_type, wait_t>()(vsm_forward(args)...));
+				io_parameters_t<typename Handle::object_type, wait_t>(vsm_forward(args)...));
 		}
 	};
 };
-using abstract_event_handle = abstract_handle<event_t>;
-
-namespace _event_b {
-
-using event_handle = blocking_handle<event_t>;
-
-vsm::result<event_handle> create_event(event_mode const mode, auto&&... args)
-{
-	vsm::result<event_handle> r(vsm::result_value);
-	vsm_try_void(blocking_io<event_t, event_io::create_t>(
-		*r,
-		make_io_args<event_t, event_io::create_t>(mode)(vsm_forward(args)...)));
-	return r;
-}
-
-} // namespace _event_b
-
-namespace _event_a {
-
-template<multiplexer_handle_for<event_t> MultiplexerHandle>
-using basic_event_handle = async_handle<event_t, MultiplexerHandle>;
-
-ex::sender auto create_event(event_mode const mode, auto&&... args)
-{
-	return io_handle_sender<event_t, event_io::create_t>(
-		make_io_args<event_t, event_io::create_t>(mode)(vsm_forward(args)...));
-}
-
-} // namespace _event_a
 
 } // namespace allio::detail
 

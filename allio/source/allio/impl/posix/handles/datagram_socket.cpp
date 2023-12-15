@@ -69,10 +69,11 @@ vsm::result<void> raw_datagram_socket_t::send_to(
 
 	vsm_try(addr, socket_address::make(a.endpoint));
 
-	if (a.deadline != deadline::never())
-	{
-		vsm_try_void(socket_poll_or_timeout(socket, socket_poll_w, a.deadline));
-	}
+	//TODO: Do timeouts on datagram send make any sense? Probably not...
+//	if (a.deadline != deadline::never())
+//	{
+//		vsm_try_void(socket_poll_or_timeout(socket, socket_poll_w, a.deadline));
+//	}
 
 	return socket_send_to(
 		socket,
@@ -84,7 +85,7 @@ vsm::result<void> raw_datagram_socket_t::close(
 	native_type& h,
 	io_parameters_t<raw_datagram_socket_t, close_t> const&)
 {
-	unrecoverable(posix::close_socket(unwrap_socket(h.platform_handle)));
-	zero_native_handle(h);
+	posix::close_socket(unwrap_socket(h.platform_handle));
+	h = {};
 	return {};
 }

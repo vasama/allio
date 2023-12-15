@@ -1,7 +1,6 @@
 #pragma once
 
 #include <allio/usb/usb_cdc_handle.hpp>
-#include <allio/win32/platform.hpp>
 
 #include <winusb.h>
 

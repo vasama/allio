@@ -2,9 +2,9 @@
 
 #include <allio/handles/process.hpp>
 
+#include <allio/detail/unique_handle.hpp>
 #include <allio/handles/fs_object.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
-#include <allio/win32/detail/unique_handle.hpp>
 
 namespace allio::win32 {
 

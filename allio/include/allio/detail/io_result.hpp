@@ -1,17 +1,12 @@
 #pragma once
 
-#include <vsm/concepts.hpp>
+#include <allio/detail/concepts.hpp>
+
 #include <vsm/detail/categories.hpp>
 #include <vsm/result.hpp>
 #include <vsm/utility.hpp>
 
 namespace allio::detail {
-
-template<template<typename...> typename Template, typename... Args>
-void _any_cvref_of_template(Template<Args...> const&);
-
-template<typename T, template<typename...> typename Template>
-concept any_cvref_of_template = requires (T const& t) { _any_cvref_of_template<Template>(t); };
 
 template<template<typename> typename Template, typename T>
 T _unexpected_value(Template<T> const&);

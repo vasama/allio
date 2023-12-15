@@ -21,17 +21,17 @@ using allio::linux::fork_exec_data;
 
 namespace {
 
-class _unique_fd
+class unique_fd
 {
 	int m_fd = -1;
 
 public:
-	_unique_fd() = default;
+	unique_fd() = default;
 
-	_unique_fd(_unique_fd const&) = delete;
-	_unique_fd& operator=(_unique_fd const&) = delete;
+	unique_fd(unique_fd const&) = delete;
+	unique_fd& operator=(unique_fd const&) = delete;
 
-	~_unique_fd()
+	~unique_fd()
 	{
 		if (m_fd != -1)
 		{
@@ -63,7 +63,7 @@ public:
 		return fd;
 	}
 
-	void swap(_unique_fd& other) &
+	void swap(unique_fd& other) &
 	{
 		int const t = m_fd;
 		m_fd = other.m_fd;
@@ -73,14 +73,14 @@ public:
 
 struct stream_pair
 {
-	_unique_fd r;
-	_unique_fd w;
+	unique_fd r;
+	unique_fd w;
 };
 
 struct result_storage
 {
-	_unique_fd pid_fd;
-	_unique_fd dup_fd;
+	unique_fd pid_fd;
+	unique_fd dup_fd;
 	pid_t pid = 0;
 };
 
@@ -140,8 +140,53 @@ static int create_socket_pair(stream_pair& sockets)
 
 /* In the target process */
 
+// Closes all open file descriptors not found in the ordered array.
+static int close_other(int const* const array, size_t const count)
+{
+	int lower_bound = -1;
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		int const upper_bound = array[i];
+
+		if (lower_bound + 1 <= upper_bound - 1)
+		{
+			if (close_range(
+				lower_bound + 1,
+				upper_bound - 1,
+				CLOSE_RANGE_CLOEXEC) == -1)
+			{
+				return errno;
+			}
+		}
+
+		lower_bound = upper_bound;
+	}
+
+	if (lower_bound != INT_MAX)
+	{
+		if (close_range(
+			lower_bound + 1,
+			INT_MAX,
+			CLOSE_RANGE_CLOEXEC) == -1)
+		{
+			return errno;
+		}
+	}
+
+	return 0;
+}
+
 static int exec_target(fork_exec_data& data)
 {
+	if (data.inherit_fd_count != 0)
+	{
+		if (int const e = close_other(data.inherit_fd_array, data.inherit_fd_count))
+		{
+			return e;
+		}
+	}
+
 	if (data.wdir_base != -1 && fchdir(data.wdir_base) == -1)
 	{
 		return errno;
@@ -159,6 +204,7 @@ static int exec_target(fork_exec_data& data)
 			return errno;
 		}
 	}
+
 	if (data.exec_stdout != -1)
 	{
 		if (dup2(data.exec_stdout, STDOUT_FILENO) == -1)
@@ -166,6 +212,7 @@ static int exec_target(fork_exec_data& data)
 			return errno;
 		}
 	}
+
 	if (data.exec_stderr != -1)
 	{
 		if (dup2(data.exec_stderr, STDERR_FILENO) == -1)

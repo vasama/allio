@@ -68,6 +68,11 @@ class any_string_view
 	uint32_t m_ctrl;
 
 public:
+	any_string_view()
+		: any_string_view("", 0, cstr_flag)
+	{
+	}
+
 	template<detail::_any_string String>
 	any_string_view(String const& string)
 		: any_string_view(string.data(), string.size(), cstr_flag_for<String>)

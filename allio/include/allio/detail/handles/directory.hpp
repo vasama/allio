@@ -14,6 +14,7 @@ enum class directory_stream_native_handle : uintptr_t
 	directory_end                       = static_cast<uintptr_t>(-1),
 };
 
+//TODO: Template on error traits
 struct directory_entry
 {
 	fs_entry_type type;
@@ -135,21 +136,17 @@ public:
 };
 
 
-struct directory_restart_t
-{
-	bool restart;
-};
-
 namespace directory_io {
 
 struct read_t
 {
 	using operation_concept = void;
-	struct required_params_type
+
+	struct params_type
 	{
 		read_buffer buffer;
 	};
-	using optional_params_type = directory_restart_t;
+
 	using result_type = directory_stream_view;
 
 	template<object Object>
@@ -163,6 +160,23 @@ struct read_t
 	}
 };
 
+struct restart_t
+{
+	using operation_concept = void;
+	using params_type = no_parameters_t;
+	using result_type = void;
+
+	template<object Object>
+	friend vsm::result<directory_stream_view> tag_invoke(
+		blocking_io_t<Object, restart_t>,
+		typename Object::native_type const& h,
+		io_parameters_t<Object, restart_t> const& a)
+		requires requires { Object::restart(h, a); }
+	{
+		return Object::restart(h, a);
+	}
+};
+
 } // namespace directory_io
 
 struct directory_t : fs_object_t
@@ -170,63 +184,47 @@ struct directory_t : fs_object_t
 	using base_type = fs_object_t;
 
 	using read_t = directory_io::read_t;
+	using restart_t = directory_io::restart_t;
 
 	using operations = type_list_append
 	<
 		base_type::operations
 		, read_t
+		, restart_t
 	>;
 
 	static vsm::result<void> open(
 		native_type& h,
-		io_parameters_t<directory_t, open_t> const& args);
+		io_parameters_t<directory_t, open_t> const& a);
 
 	static vsm::result<directory_stream_view> read(
 		native_type const& h,
-		io_parameters_t<directory_t, read_t> const& args);
+		io_parameters_t<directory_t, read_t> const& a);
+
+	static vsm::result<void> restart(
+		native_type& h,
+		io_parameters_t<directory_t, restart_t> const& a);
 
 
-	template<typename Handle, optional_multiplexer_handle_for<directory_t> MultiplexerHandle>
-	struct concrete_interface : base_type::concrete_interface<Handle, MultiplexerHandle>
+	template<typename Handle>
+	struct concrete_interface : base_type::concrete_interface<Handle>
 	{
-		[[nodiscard]] auto read(read_buffer const buffer, auto&&... args) const
+		[[nodiscard]] auto read(read_buffer const buffer) const
 		{
-			return generic_io<read_t>(
+			return Handle::io_traits_type::template observe<read_t>(
 				static_cast<Handle const&>(*this),
-				make_io_args<typename Handle::object_type, read_t>(buffer)(vsm_forward(args)...));
+				io_parameters_t<typename Handle::object_type, read_t>{ buffer });
+		}
+
+		[[nodiscard]] auto restart() const
+		{
+			return Handle::io_traits_type::unwrap_result(
+				blocking_io<typename Handle::object_type, restart_t>(
+					static_cast<Handle const&>(*this),
+					no_parameters_t()));
 		}
 	};
 };
-using abstract_directory_handle = abstract_handle<directory_t>;
-
-
-namespace _directory_b {
-
-using directory_handle = blocking_handle<directory_t>;
-
-inline vsm::result<directory_handle> open_directory(fs_path const& path, auto&&... args)
-{
-	vsm::result<directory_handle> r(vsm::result_value);
-	vsm_try_void(blocking_io<directory_t, fs_io::open_t>(
-		*r,
-		make_io_args<directory_t, fs_io::open_t>(path)(vsm_forward(args)...)));
-	return r;
-}
-
-} // namespace _directory_b
-
-namespace _directory_a {
-
-template<multiplexer_handle_for<directory_t> MultiplexerHandle>
-using basic_directory_handle = async_handle<directory_t, MultiplexerHandle>;
-
-ex::sender auto open_directory(fs_path const& path, auto&&... args)
-{
-	return io_handle_sender<directory_t, fs_io::open_t>(
-		vsm_lazy(make_io_args<directory_t, fs_io::open_t>(path)(vsm_forward(args)...)));
-}
-
-} // namespace _directory_a
 
 } // namespace allio::detail
 

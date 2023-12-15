@@ -20,4 +20,3 @@ allio::detail::allocation allio_memory_acquire(size_t min_size, size_t max_size,
 
 extern "C"
 void allio_memory_release(void* memory, size_t size_hint, size_t alignment, bool automatic);
-

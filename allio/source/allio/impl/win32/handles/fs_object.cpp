@@ -14,40 +14,40 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-namespace {
-
-struct open_info
-{
-	ACCESS_MASK desired_access;
-	ULONG attributes;
-	ULONG share_access;
-	ULONG create_disposition;
-	ULONG create_options;
-	handle_flags handle_flags;
-};
-
-static vsm::result<open_info> make_open_info(open_parameters const& args)
+vsm::result<open_info> open_info::make(open_parameters const& args)
 {
 	open_info info =
 	{
+		//TODO: Is synchronize needed for path_handle?
 		.desired_access = SYNCHRONIZE,
-		.handle_flags = args.handle_flags,
 	};
 
-	switch (args.kind)
+	if (vsm::no_flags(args.flags, io_flags::create_multiplexable))
 	{
-	case open_kind::file:
+		info.create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
+	}
+
+	switch (args.special & open_options::kind_mask)
+	{
+	case open_options::path:
+		if (args.mode != file_mode::none)
+		{
+			return vsm::unexpected(error::invalid_argument);
+		}
+		break;
+
+	case open_options::file:
 		info.create_options |= FILE_NON_DIRECTORY_FILE;
 		break;
 
-	case open_kind::directory:
+	case open_options::directory:
 		info.create_options |= FILE_DIRECTORY_FILE;
 		break;
 
 	default:
-		vsm_assert(false);
+		return vsm::unexpected(error::invalid_argument);
 	}
-	
+
 	if (args.mode != file_mode::none)
 	{
 		info.desired_access |= READ_CONTROL;
@@ -69,27 +69,30 @@ static vsm::result<open_info> make_open_info(open_parameters const& args)
 		info.desired_access |= FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA;
 	}
 
-	switch (args.creation)
+	switch (args.opening)
 	{
-	case file_creation::open_existing:
+	case file_opening::open_existing:
 		info.create_disposition = FILE_OPEN;
 		break;
 
-	case file_creation::create_only:
+	case file_opening::create_only:
 		info.create_disposition = FILE_CREATE;
 		break;
 
-	case file_creation::open_or_create:
+	case file_opening::open_or_create:
 		info.create_disposition = FILE_OPEN_IF;
 		break;
 
-	case file_creation::truncate_existing:
+	case file_opening::truncate_existing:
 		info.create_disposition = FILE_OVERWRITE;
 		break;
 
-	case file_creation::replace_existing:
+	case file_opening::replace_existing:
 		info.create_disposition = FILE_SUPERSEDE;
 		break;
+
+	default:
+		return vsm::unexpected(error::invalid_argument);
 	}
 
 	// Sharing
@@ -106,18 +109,10 @@ static vsm::result<open_info> make_open_info(open_parameters const& args)
 		info.share_access |= FILE_SHARE_WRITE;
 	}
 
-	if (!args.multiplexable)
-	{
-		info.create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
-		info.handle_flags |= platform_object_t::impl_type::flags::synchronous;
-	}
-
 	return info;
 }
 
-} // namespace
-
-static vsm::result<unique_handle_with_flags> create_file(
+static vsm::result<handle_with_flags> _create_file(
 	HANDLE const root_handle,
 	UNICODE_STRING path,
 	open_info const& info)
@@ -156,23 +151,23 @@ static vsm::result<unique_handle_with_flags> create_file(
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
-	handle_flags flags = info.handle_flags;
-
+	//TODO: Make sure the synchronous flag is set.
+	auto h_flags = handle_flags::none;
 	if ((info.create_options & FILE_SYNCHRONOUS_IO_NONALERT) == 0)
 	{
-		flags |= set_file_completion_notification_modes(handle.get());
+		h_flags |= set_file_completion_notification_modes(handle.get());
 	}
 
-	return vsm_lazy(unique_handle_with_flags
+	return vsm_lazy(handle_with_flags
 	{
 		.handle = vsm_move(handle),
-		.flags = flags,
+		.flags = h_flags,
 	});
 }
 
 
 #if 0
-vsm::result<unique_handle_with_flags> win32::create_file(
+vsm::result<handle_with_flags> win32::create_file(
 	HANDLE const hint_handle,
 	file_id_128 const& id,
 	open_kind const kind,
@@ -191,13 +186,11 @@ vsm::result<unique_handle_with_flags> win32::create_file(
 }
 #endif
 
-vsm::result<unique_handle_with_flags> win32::create_file(
+vsm::result<handle_with_flags> win32::create_file(
 	HANDLE const base_handle,
 	any_path_view const path,
-	open_parameters const& args)
+	open_info const& info)
 {
-	vsm_try(info, make_open_info(args));
-
 	kernel_path_storage path_storage;
 	vsm_try(kernel_path, make_kernel_path(path_storage,
 	{
@@ -211,23 +204,21 @@ vsm::result<unique_handle_with_flags> win32::create_file(
 	unicode_string.Length = static_cast<USHORT>(kernel_path.path.size() * sizeof(wchar_t));
 	unicode_string.MaximumLength = unicode_string.Length;
 
-	return create_file(kernel_path.handle, unicode_string, info);
+	return _create_file(kernel_path.handle, unicode_string, info);
 }
 
-vsm::result<unique_handle_with_flags> win32::reopen_file(
+vsm::result<handle_with_flags> win32::reopen_file(
 	HANDLE const handle,
-	open_parameters const& args)
+	open_info const& info)
 {
 	vsm_assert(handle != NULL); //PRECONDITION
-
-	vsm_try(info, make_open_info(args));
 
 	UNICODE_STRING unicode_string;
 	unicode_string.Buffer = nullptr;
 	unicode_string.Length = 0;
 	unicode_string.MaximumLength = unicode_string.Length;
 
-	return create_file(handle, unicode_string, info);
+	return _create_file(handle, unicode_string, info);
 }
 
 
@@ -282,6 +273,73 @@ static vsm::result<file_name_information_ptr> query_file_name_information(HANDLE
 	return r;
 }
 
+
+static vsm::result<handle_with_flags> open_named_file(open_parameters const& a)
+{
+	vsm_try(info, open_info::make(a));
+
+	auto const base = a.path.base == native_platform_handle::null
+		? NULL
+		: unwrap_handle(a.path.base);
+
+	return win32::create_file(base, a.path.path, info);
+}
+
+static vsm::result<handle_with_flags> open_anonymous_file(open_parameters const& a)
+{
+	vsm_try(file, open_unique_file(a));
+
+	// Delete the file by reopening it and
+	// setting delete-on-close on the new handle.
+	{
+		open_info const info =
+		{
+			.desired_access = SYNCHRONIZE | DELETE,
+			.share_access = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+			.create_options = FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+		};
+
+		vsm_try(duplicate, win32::reopen_file(file.handle.get(), info));
+
+		FILE_DISPOSITION_INFORMATION_EX information =
+		{
+			.Flags = FILE_DISPOSITION_DELETE | FILE_DISPOSITION_POSIX_SEMANTICS,
+		};
+
+		IO_STATUS_BLOCK io_status_block;
+		NTSTATUS const status = NtSetInformationFile(
+			duplicate.handle.get(),
+			&io_status_block,
+			&information,
+			sizeof(information),
+			FileDispositionInformationEx);
+
+		if (!NT_SUCCESS(status))
+		{
+			//TODO: Fall back to non-posix semantics or at least
+			//      attempt to delete the unique file now.
+
+			return vsm::unexpected(static_cast<kernel_error>(status));
+		}
+	}
+
+	return file;
+}
+
+vsm::result<handle_with_flags> detail::open_file(open_parameters const& a)
+{
+	switch (a.special & open_options::mode_mask)
+	{
+	case open_options(0):
+		return open_named_file(a);
+
+	case open_options::anonymous:
+		return open_anonymous_file(a);
+
+	default:
+		return vsm::unexpected(error::invalid_argument);
+	}
+}
 
 vsm::result<size_t> fs_object_t::get_current_path(
 	native_type const& h,

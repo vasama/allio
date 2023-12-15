@@ -1,7 +1,6 @@
-#include <allio/platform.hpp>
+#include <allio/detail/platform.hpp>
 
 #include <allio/impl/linux/error.hpp>
-#include <allio/linux/platform.hpp>
 
 #include <unistd.h>
 
@@ -11,21 +10,12 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::linux;
 
-vsm::result<void> detail::close_handle(native_platform_handle const handle) noexcept
+void detail::close_platform_handle(int const fd) noexcept
 {
 	static_assert(vsm_os_linux, "Check close behaviour on EINTR");
 
-	if (::close(unwrap_handle(handle)) == -1)
+	if (::close(fd) == -1)
 	{
-		int const e = errno;
-
-		if (e == EBADF)
-		{
-			return vsm::unexpected(static_cast<system_error>(e));
-		}
-
-		unrecoverable_error(static_cast<system_error>(e));
+		unrecoverable_error(get_last_error());
 	}
-
-	return {};
 }

@@ -43,6 +43,8 @@ public:
 	}
 
 
+	using value_type = Char;
+
 	class iterator
 	{
 		static constexpr bool Reverse = false;

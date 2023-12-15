@@ -2,7 +2,6 @@
 
 #include <allio/event.hpp>
 #include <allio/linux/detail/unique_mmap.hpp>
-#include <allio/linux/platform.hpp>
 
 #include <vsm/atomic.hpp>
 
@@ -36,14 +35,14 @@ static vsm::result<unique_mmap<T>> mmap(int const fd, uint64_t const offset, siz
 	return vsm_lazy(unique_mmap<T>(reinterpret_cast<T*>(addr), mmap_deleter(size)));
 }
 
-static vsm::result<std::pair<unique_fd, unique_fd>> create_pipe_pair()
+static vsm::result<std::pair<unique_handle, unique_handle>> create_pipe_pair()
 {
 	int fds[2];
 	if (pipe(fds) == -1)
 	{
 		return vsm::unexpected(get_last_error());
 	}
-	return vsm_lazy(std::pair<unique_fd, unique_fd>(fds[0], fds[1]));
+	return vsm_lazy(std::pair<unique_handle, unique_handle>(fds[0], fds[1]));
 }
 
 

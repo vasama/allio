@@ -19,10 +19,10 @@ concept multiplexer_for =
 	multiplexer<Multiplexer> &&
 	_multiplexer_for<Multiplexer, Object>;
 
-//template<typename Multiplexer, typename Object>
-//concept optional_multiplexer_for =
-//	std::is_void_v<Multiplexer> ||
-//	multiplexer_for<Multiplexer, Object>;
+template<typename Multiplexer, typename Object>
+concept optional_multiplexer_for =
+	std::is_void_v<Multiplexer> ||
+	multiplexer_for<Multiplexer, Object>;
 
 template<typename MultiplexerHandle, typename Object>
 concept multiplexer_handle_for =

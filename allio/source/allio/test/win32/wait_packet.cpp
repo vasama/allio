@@ -1,7 +1,6 @@
 #include <allio/event.hpp>
 #include <allio/impl/win32/completion_port.hpp>
 #include <allio/impl/win32/wait_packet.hpp>
-#include <allio/win32/platform.hpp>
 
 #include <catch2/catch_all.hpp>
 
@@ -43,7 +42,7 @@ TEST_CASE("wait packet can be used to wait for events", "[wait_packet][win32][ke
 	bool const already_signaled = associate_wait_packet(
 		unwrap_wait_packet(wait_packet.get()),
 		completion_port.get(),
-		unwrap_handle(event.platform_handle()),
+		unwrap_handle(event.native().platform_handle),
 		key_context,
 		apc_context,
 		wait_status,

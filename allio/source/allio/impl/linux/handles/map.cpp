@@ -1,10 +1,9 @@
 #include <allio/detail/handles/map.hpp>
 
+#include <allio/detail/unique_handle.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/fcntl.hpp>
 #include <allio/impl/linux/mman.hpp>
-#include <allio/linux/detail/unique_fd.hpp>
-#include <allio/linux/platform.hpp>
 
 #include <vsm/lazy.hpp>
 #include <vsm/math.hpp>
@@ -348,6 +347,6 @@ vsm::result<void> map_t::close(
 	{
 		unrecoverable_error(get_last_error());
 	}
-	zero_native_handle(h);
+	h = {};
 	return {};
 }

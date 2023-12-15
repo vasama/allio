@@ -7,23 +7,19 @@ namespace allio {
 using detail::process_id;
 using detail::process_exit_code;
 
-using detail::inherit_handles_t;
+using detail::launch_detached;
 using detail::inherit_handles;
-
-using detail::command_line_t;
 using detail::command_line;
-
-using detail::environment_t;
 using detail::environment;
-
-using detail::working_directory_t;
 using detail::working_directory;
+using detail::std_input;
+using detail::std_output;
+using detail::std_error;
+using detail::wait_on_close;
+using detail::with_exit_code;
 
 using detail::process_t;
 using detail::abstract_process_handle;
-
-namespace blocking { using namespace detail::_process_b; }
-namespace async { using namespace detail::_process_a; }
 
 namespace this_process {
 

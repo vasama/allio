@@ -8,7 +8,6 @@
 #include <allio/linux/detail/undef.i>
 
 #include <allio/impl/linux/error.hpp>
-#include <allio/linux/platform.hpp>
 
 #include <poll.h>
 #include <unistd.h>

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 #include <unistd.h>
 
 #include <allio/linux/detail/undef.i>
@@ -17,14 +19,17 @@ struct fork_exec_data
 	int exec_stderr = -1;
 
 	bool fork_detached = false;
-	bool duplicate_fd = false;
 	bool inheritable_fd = false;
+	bool duplicate_fd = false;
 
 	char const* exec_path = nullptr;
 	char const* wdir_path = nullptr;
 
 	char* const* exec_argv = nullptr;
 	char* const* exec_envp = nullptr;
+
+	int const* inherit_fd_array;
+	size_t inherit_fd_count;
 
 	int pid_fd = -1;
 	int dup_fd = -1;

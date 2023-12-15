@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/platform.hpp>
+#include <allio/detail/platform.hpp>
 
 #include <vsm/standard.hpp>
 #include <vsm/unique_resource.hpp>

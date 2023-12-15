@@ -4,7 +4,6 @@
 #include <allio/impl/linux/api_string.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/handles/fs_object.hpp>
-#include <allio/linux/platform.hpp>
 
 #include <vsm/lazy.hpp>
 #include <vsm/numeric.hpp>
@@ -308,7 +307,7 @@ vsm::result<void> this_process::set_current_directory(fs_path const path)
 	else
 	{
 		int fd = unwrap_handle(path.base);
-		unique_fd new_fd;
+		unique_handle new_fd;
 
 		//TODO: Use lexically_equivalent(path, ".")?
 		if (!path_string.empty())

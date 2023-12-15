@@ -3,7 +3,6 @@
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/eventfd.hpp>
 #include <allio/impl/linux/poll.hpp>
-#include <allio/linux/platform.hpp>
 #include <allio/step_deadline.hpp>
 
 #include <allio/linux/detail/undef.i>

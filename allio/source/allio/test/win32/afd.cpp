@@ -2,9 +2,9 @@
 #include <allio/impl/win32/kernel.hpp>
 
 #include <allio/detail/dynamic_buffer.hpp>
+#include <allio/detail/unique_handle.hpp>
 #include <allio/impl/posix/socket.hpp>
 #include <allio/impl/win32/wsa.hpp>
-#include <allio/win32/detail/unique_handle.hpp>
 
 #include <allio/test/spawn.hpp>
 

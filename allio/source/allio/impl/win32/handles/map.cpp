@@ -1,9 +1,9 @@
 #include <allio/detail/handles/map.hpp>
 
-#include <allio/win32/kernel_error.hpp>
-#include <allio/win32/platform.hpp>
+#include <allio/impl/new.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
 #include <allio/impl/win32/kernel.hpp>
+#include <allio/win32/kernel_error.hpp>
 
 #include <vsm/lazy.hpp>
 
@@ -239,17 +239,16 @@ static bool check_address_range(map_t::native_type const& h, auto const& a)
 	return h_beg <= a_beg && a_end <= h_end;
 }
 
-static protection get_max_protection(map_t::native_type const& h)
+
+template<object Object, std::convertible_to<typename Object::native_type> H>
+static vsm::result<unique_ptr<shared_native_handle<Object>>> make_shared_handle(H&& h)
 {
-	if (h.flags[map_t::flags::anonymous])
+	using shared_type = shared_native_handle<Object>;
+	return make_unique2<shared_type>(vsm_lazy(shared_type
 	{
-		// Page file backed memory can use any protection.
-		return protection::read_write | protection::execute;
-	}
-	else
-	{
-		return h.section.protection;
-	}
+		.ref_count = 1,
+		.h = vsm_forward(h),
+	}));
 }
 
 
@@ -257,32 +256,57 @@ static vsm::result<void> _map_section(
 	map_t::native_type& h,
 	io_parameters_t<map_t, map_io::map_memory_t> const& a)
 {
-	vsm_assert(a.section != nullptr);
-
-	if (!a.initial_commit)
+	if (a.section == nullptr)
 	{
+		return vsm::unexpected(error::invalid_argument);
+	}
+
+	section_t::native_type const& section_h = *a.section;
+
+	if (!section_h.flags[object_t::flags::not_null])
+	{
+		return vsm::unexpected(error::invalid_argument);
+	}
+
+	if (vsm::no_flags(a.options, map_options::initial_commit))
+	{
+		//TODO: Add a test for NtMapViewOfSection with backing file and MEM_RESERVE.
+		//      If the combination is supported, add support for uncommitted maps here.
 		return vsm::unexpected(error::unsupported_operation);
 	}
 
-	if (!a.section->flags[object_t::flags::not_null])
+	auto const page_level = a.page_level != detail::page_level(0)
+		? a.page_level
+		: get_default_page_level();
+
+	protection protection = section_h.protection & protection::read_write;
+
+	if (a.protection != detail::protection(0))
 	{
-		return vsm::unexpected(error::invalid_argument);
-	}
+		if (!vsm::all_flags(section_h.protection, a.protection))
+		{
+			return vsm::unexpected(error::invalid_argument);
+		}
 
-	auto const& section_h = *a.section;
-
-	auto const page_level = a.page_level.value_or(vsm_lazy(get_default_page_level()));
-	auto const protection = a.protection.value_or(section_h.protection);
-
-	if (!vsm::all_flags(section_h.protection, protection))
-	{
-		return vsm::unexpected(error::invalid_argument);
+		protection = a.protection;
 	}
 
 	vsm_try(page_protection, get_page_protection(protection));
 	vsm_try(allocation_type, get_page_level_allocation_type(page_level));
 
+	//TODO: Use a type erased section handle parameter and share already shared handles.
 	vsm_try(section, win32::duplicate_handle(unwrap_handle(section_h.platform_handle)));
+	vsm_try(shared_section, make_shared_handle<section_t>(section_t::native_type
+	{
+		platform_object_t::native_type
+		{
+			object_t::native_type
+			{
+				section_t::flags::not_null,
+			},
+			wrap_handle(section.get()),
+		},
+	}));
 
 	vsm_try(map, map_view_of_section(
 		GetCurrentProcess(),
@@ -299,22 +323,12 @@ static vsm::result<void> _map_section(
 		{
 			map_t::flags::not_null,
 		},
-		section_t::native_type
-		{
-			platform_object_t::native_type
-			{
-				object_t::native_type
-				{
-					section_t::flags::not_null,
-				},
-				wrap_handle(section.release()),
-			},
-			section_h.protection,
-		},
-		page_level,
+		shared_section.release(),
 		map.get().base,
 		map.get().size,
 	};
+
+	(void)section.release();
 	(void)map.release();
 
 	return {};
@@ -324,20 +338,31 @@ static vsm::result<void> _map_anonymous(
 	map_t::native_type& h,
 	io_parameters_t<map_t, map_io::map_memory_t> const& a)
 {
+	if (a.section != nullptr)
+	{
+		return vsm::unexpected(error::invalid_argument);
+	}
+
 	if (a.section_offset != 0)
 	{
 		return vsm::unexpected(error::invalid_argument);
 	}
 
-	auto const page_level = a.page_level.value_or(vsm_lazy(get_default_page_level()));
-	auto const protection = a.protection.value_or(protection::read_write);
+	auto const page_level = a.page_level != detail::page_level(0)
+		? a.page_level
+		: get_default_page_level();
 
 	vsm_try(allocation_type, get_page_level_allocation_type(page_level));
 	ULONG page_protection = PAGE_NOACCESS;
 
-	if (a.initial_commit)
+	if (vsm::any_flags(a.options, map_options::initial_commit))
 	{
 		allocation_type |= MEM_COMMIT;
+
+		auto const protection = a.protection != detail::protection(0)
+			? a.protection
+			: detail::protection::read_write;
+
 		vsm_try_assign(page_protection, get_page_protection(protection));
 	}
 
@@ -348,17 +373,20 @@ static vsm::result<void> _map_anonymous(
 		allocation_type | MEM_RESERVE,
 		page_protection));
 
+	handle_flags h_flags = handle_flags::none;
+
+	if (allocation_type & MEM_LARGE_PAGES)
+	{
+		h_flags |= map_t::flags::page_level_1;
+	}
+
 	h = map_t::native_type
 	{
 		object_t::native_type
 		{
-			handle_flags(map_t::flags::not_null)
-				| map_t::flags::anonymous,
+			map_t::flags::not_null | h_flags,
 		},
-		section_t::native_type
-		{
-		},
-		page_level,
+		/* section: */ nullptr,
 		map.get().base,
 		map.get().size,
 	};
@@ -371,16 +399,21 @@ vsm::result<void> map_t::map_memory(
 	native_type& h,
 	io_parameters_t<map_t, map_memory_t> const& a)
 {
-	return a.section != nullptr
-		? _map_section(h, a)
-		: _map_anonymous(h, a);
+	if (vsm::any_flags(a.options, map_options::backing_section))
+	{
+		return _map_section(h, a);
+	}
+	else
+	{
+		return _map_anonymous(h, a);
+	}
 }
 
 vsm::result<void> map_t::commit(
 	native_type const& h,
 	io_parameters_t<map_t, commit_t> const& a)
 {
-	if (!h.flags[flags::anonymous])
+	if (h.section != nullptr)
 	{
 		return vsm::unexpected(error::unsupported_operation);
 	}
@@ -390,7 +423,10 @@ vsm::result<void> map_t::commit(
 		return vsm::unexpected(error::invalid_address);
 	}
 
-	auto const protection = a.protection.value_or(protection::read_write);
+	auto const protection = a.protection != detail::protection(0)
+		? a.protection
+		: detail::protection::read_write;
+
 	vsm_try(page_protection, get_page_protection(protection));
 
 	vsm_try_discard(allocate_virtual_memory(
@@ -407,7 +443,7 @@ vsm::result<void> map_t::decommit(
 	native_type const& h,
 	io_parameters_t<map_t, decommit_t> const& a)
 {
-	if (!h.flags[flags::anonymous])
+	if (h.section != nullptr)
 	{
 		return vsm::unexpected(error::unsupported_operation);
 	}
@@ -419,6 +455,7 @@ vsm::result<void> map_t::decommit(
 		MEM_DECOMMIT);
 }
 
+#if 0
 vsm::result<void> map_t::protect(
 	native_type const& h,
 	io_parameters_t<map_t, protect_t> const& a)
@@ -443,12 +480,24 @@ vsm::result<void> map_t::protect(
 
 	return {};
 }
+#endif
 
 vsm::result<void> map_t::close(
 	native_type& h,
-	io_parameters_t<map_t, close_t> const& a)
+	io_parameters_t<map_t, close_t> const&)
 {
-	if (h.flags[flags::anonymous])
+	//TODO: Change close to return void?
+	//      It's pretty pointless to return a result if it's always void and never fails.
+
+	if (h.section != nullptr)
+	{
+		unrecoverable(unmap_view_of_section(
+			GetCurrentProcess(),
+			h.base));
+
+		h.section->release();
+	}
+	else
 	{
 		unrecoverable(free_virtual_memory(
 			GetCurrentProcess(),
@@ -456,17 +505,6 @@ vsm::result<void> map_t::close(
 			h.size,
 			MEM_RELEASE));
 	}
-	else
-	{
-		unrecoverable(unmap_view_of_section(
-			GetCurrentProcess(),
-			h.base));
-
-		//TODO: Change close to return void?
-		//      It's pretty pointless to return a result if it's always void and never fails.
-
-		(void)section_t::close(h.section, a);
-	}
-	zero_native_handle(h);
+	h = {};
 	return {};
 }

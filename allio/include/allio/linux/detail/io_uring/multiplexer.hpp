@@ -4,7 +4,7 @@
 #include <allio/detail/handles/platform_object.hpp>
 #include <allio/detail/io.hpp>
 #include <allio/detail/multiplexer.hpp>
-#include <allio/linux/detail/unique_fd.hpp>
+#include <allio/detail/unique_handle.hpp>
 #include <allio/linux/detail/unique_mmap.hpp>
 #include <allio/linux/timespec.hpp>
 
@@ -167,7 +167,7 @@ public:
 
 private:
 	/// @brief Unique owner of the io uring kernel object.
-	unique_fd m_io_uring;
+	unique_handle m_io_uring;
 
 	/// @brief Unique owner of the mmapped region containing the submission queue indices.
 	unique_byte_mmap m_sq_mmap;
@@ -328,7 +328,7 @@ public:
 
 private:
 	explicit io_uring_multiplexer(
-		unique_fd&& io_uring,
+		unique_handle&& io_uring,
 		unique_byte_mmap&& sq_ring,
 		unique_byte_mmap&& cq_ring,
 		unique_void_mmap&& sq_data,

@@ -2,8 +2,6 @@
 
 #include <allio/detail/handles/thread.hpp>
 
-#include <allio/win32/detail/unique_handle.hpp>
-
 #include <win32.h>
 
 namespace allio::win32 {

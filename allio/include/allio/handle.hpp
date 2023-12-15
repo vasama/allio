@@ -5,9 +5,7 @@
 namespace allio {
 
 using detail::object_t;
-using detail::abstract_handle;
-using detail::blocking_handle;
-using detail::async_handle;
-using detail::basic_handle;
+using detail::basic_detached_handle;
+using detail::basic_attached_handle;
 
 } // namespace allio

@@ -3,10 +3,10 @@
 #include <allio/detail/deadline.hpp>
 #include <allio/detail/multiplexer.hpp>
 #include <allio/detail/parameters.hpp>
+#include <allio/detail/unique_handle.hpp>
 #include <allio/win32/handles/platform_object.hpp>
-#include <allio/win32/detail/unique_handle.hpp>
+#include <allio/win32/detail/wait_packet.hpp>
 #include <allio/win32/detail/win32_fwd.hpp>
-#include <allio/win32/wait_packet.hpp>
 
 #include <vsm/intrusive_ptr.hpp>
 #include <vsm/linear.hpp>
@@ -184,10 +184,10 @@ public:
 
 	/// @brief Acquire a wait packet from the multiplexer's pool.
 	/// @return Returns a unique wait packet handle.
-	[[nodiscard]] vsm::result<win32::unique_wait_packet> acquire_wait_packet();
+	[[nodiscard]] vsm::result<unique_wait_packet> acquire_wait_packet();
 
 	/// @brief Release a wait packet into the multiplexer's pool.
-	void release_wait_packet(win32::unique_wait_packet&& packet);
+	void release_wait_packet(unique_wait_packet&& packet);
 
 	/// @brief Represents a lease of a wait packet from a multiplexer.
 	///        On destruction, if the lease is still active, the wait packet is returned to the multiplexer.
@@ -197,15 +197,15 @@ public:
 		{
 			iocp_multiplexer* m_multiplexer;
 
-			void vsm_static_operator_invoke(win32::unique_wait_packet* const wait_packet)
+			void vsm_static_operator_invoke(unique_wait_packet* const wait_packet)
 			{
 				m_multiplexer->release_wait_packet(vsm_move(*wait_packet));
 			}
 		};
-		std::unique_ptr<win32::unique_wait_packet, deleter> m_wait_packet;
+		std::unique_ptr<unique_wait_packet, deleter> m_wait_packet;
 
 	public:
-		explicit wait_packet_lease(iocp_multiplexer& multiplexer, win32::unique_wait_packet& wait_packet)
+		explicit wait_packet_lease(iocp_multiplexer& multiplexer, unique_wait_packet& wait_packet)
 			: m_wait_packet(&wait_packet, deleter{ &multiplexer })
 		{
 		}
@@ -221,7 +221,7 @@ public:
 	/// @brief Acquire a wait packet from the multiplexer's pool as a lease.
 	/// @param wait_packet Reference to a unique wait packet handle to be assigned.
 	/// @return Returns a leased wait packet. See @ref wait_packet_lease.
-	[[nodiscard]] vsm::result<wait_packet_lease> lease_wait_packet(win32::unique_wait_packet& wait_packet)
+	[[nodiscard]] vsm::result<wait_packet_lease> lease_wait_packet(unique_wait_packet& wait_packet)
 	{
 		vsm_try_assign(wait_packet, acquire_wait_packet());
 		return wait_packet_lease(*this, wait_packet);
@@ -231,12 +231,12 @@ public:
 	/// @pre The wait_slot shall be associated with an operation state.
 	/// @return True if the object was already signaled.
 	/// @note A completion event is not queued if the object was already signaled.
-	[[nodiscard]] vsm::result<bool> submit_wait(win32::wait_packet packet, wait_slot& slot, native_platform_handle handle);
+	[[nodiscard]] vsm::result<bool> submit_wait(wait_packet packet, wait_slot& slot, native_platform_handle handle);
 
 	/// @brief Attempt to cancel a wait operation started on the specified slot.
 	/// @return True if the operation was cancelled before its completion.
 	/// @note A completion event is queued regardless of whether the operation was cancelled.
-	bool cancel_wait(win32::wait_packet packet, wait_slot& slot);
+	bool cancel_wait(wait_packet packet, wait_slot& slot);
 
 
 	[[nodiscard]] static bool supports_synchronous_completion(platform_object_t::native_type const& h)

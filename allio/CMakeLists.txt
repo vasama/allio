@@ -36,7 +36,6 @@ vsm_add_library(allio::core
 		include/allio/path_literals.hpp
 		include/allio/path_view.hpp
 		include/allio/platform_object.hpp
-		include/allio/platform.hpp
 		include/allio/process.hpp
 		include/allio/section.hpp
 		include/allio/socket.hpp
@@ -62,6 +61,7 @@ vsm_add_library(allio::core
 		include/allio/detail/platform.h
 		include/allio/detail/string_ref.hpp
 		include/allio/detail/type_list.hpp
+		include/allio/detail/unique_handle.hpp
 
 		include/allio/detail/handles/datagram_socket.hpp
 		include/allio/detail/handles/directory.hpp
@@ -79,6 +79,7 @@ vsm_add_library(allio::core
 	SOURCES
 		source/allio/impl/error.cpp
 		source/allio/impl/network.cpp
+		source/allio/impl/random.hpp
 		source/allio/impl/transcode.hpp
 		source/allio/impl/unique_name.cpp
 		source/allio/impl/unique_name.hpp
@@ -129,10 +130,8 @@ vsm_configure(allio::core
 	
 	HEADERS
 		include/allio/win32/kernel_error.hpp
-		include/allio/win32/platform.hpp
 		include/allio/win32/detail/path.hpp
 		include/allio/win32/detail/path_view.hpp
-		include/allio/win32/detail/unique_handle.hpp
 		include/allio/win32/detail/win32_fwd.hpp
 
 		# iocp
@@ -171,9 +170,9 @@ vsm_configure(allio::core
 		source/allio/impl/win32/platform.cpp
 		source/allio/impl/win32/posix_socket.cpp
 		source/allio/impl/win32/posix_socket.hpp
+		source/allio/impl/win32/random.cpp
 		source/allio/impl/win32/secrets.cpp
 		source/allio/impl/win32/transcode.cpp
-		source/allio/impl/win32/unique_handle.cpp
 		source/allio/impl/win32/wait_packet.cpp
 		source/allio/impl/win32/wait_packet.hpp
 		source/allio/impl/win32/wsa.cpp
@@ -224,7 +223,6 @@ vsm_configure(allio::core
 		include/allio/linux/detail/path.hpp
 		include/allio/linux/detail/path_view.hpp
 		include/allio/linux/detail/undef.i
-		include/allio/linux/detail/unique_fd.hpp
 		include/allio/linux/platform.hpp
 		include/allio/linux/timespec.hpp
 
@@ -253,10 +251,10 @@ vsm_configure(allio::core
 		source/allio/impl/linux/proc.hpp
 		source/allio/impl/linux/process_reaper.hpp
 		source/allio/impl/linux/process_reaper.cpp
+		source/allio/impl/linux/random.cpp
 		source/allio/impl/linux/stat.hpp
 		source/allio/impl/linux/timeout.hpp
 		source/allio/impl/linux/transcode.cpp
-		source/allio/impl/linux/unique_fd.cpp
 		source/allio/impl/linux/unique_mmap.cpp
 		source/allio/impl/linux/version.cpp
 		source/allio/impl/linux/version.hpp

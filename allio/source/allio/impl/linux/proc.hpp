@@ -1,7 +1,7 @@
 #pragma once
 
+#include <allio/detail/unique_handle.hpp>
 #include <allio/impl/linux/error.hpp>
-#include <allio/linux/detail/unique_fd.hpp>
 
 #include <vsm/lazy.hpp>
 #include <vsm/result.hpp>

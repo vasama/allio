@@ -1,9 +1,9 @@
 #include <allio/impl/linux/process_reaper.hpp>
 
+#include <allio/detail/unique_handle.hpp>
 #include <allio/impl/linux/epoll.hpp>
 #include <allio/impl/linux/eventfd.hpp>
 #include <allio/impl/new.hpp>
-#include <allio/linux/detail/unique_fd.hpp>
 
 #include <vsm/atomic.hpp>
 #include <vsm/intrusive/mpsc_queue.hpp>
@@ -71,8 +71,8 @@ struct reaper_thread
 	vsm::intrusive::mpsc_queue<process_reaper> m_shared_queue;
 	vsm::intrusive::forward_list<process_reaper> m_local_queue;
 
-	unique_fd m_event;
-	unique_fd m_epoll;
+	unique_handle m_event;
+	unique_handle m_epoll;
 
 	vsm::atomic<bool> m_exit_requested = false;
 	std::thread m_thread;

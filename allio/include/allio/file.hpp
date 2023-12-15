@@ -1,10 +1,9 @@
 #pragma once
 
-#include <allio/default_multiplexer.hpp>
-#include <allio/handles/file.hpp>
+#include <allio/blocking/file.hpp>
 
-namespace allio::async {
+namespace allio {
 
-using file_handle = basic_file_handle<default_multiplexer_handle>;
+using namespace blocking::file;
 
-} // namespace allio::async
+} // namespace allio

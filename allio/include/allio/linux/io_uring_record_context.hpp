@@ -3,8 +3,6 @@
 #include <allio/linux/detail/io_uring/io_uring.hpp>
 #include <allio/linux/detail/io_uring/multiplexer.hpp>
 
-#include <allio/linux/platform.hpp>
-
 #include <vsm/lazy.hpp>
 
 #include <allio/linux/detail/undef.i>

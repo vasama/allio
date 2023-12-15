@@ -1,30 +1,27 @@
 #pragma once
 
-#include <allio/handles/fs_object.hpp>
+#include <allio/detail/handles/fs_object.hpp>
 
-namespace allio {
+#include <allio/impl/handles/platform_object.hpp>
 
-enum class open_kind : uint8_t
-{
-	file,
-	directory,
-};
+namespace allio::detail {
+namespace open_kind {
 
-struct open_parameters
-{
-	open_kind kind;
-	bool inheritable;
-	bool multiplexable;
-	file_mode mode;
-	file_creation creation;
-	file_sharing sharing;
-	file_caching caching;
-	file_flags flags;
-	detail::handle_flags handle_flags;
+inline constexpr open_options mask                  = open_options(3 << 6);
+inline constexpr open_options path                  = open_options(1 << 6);
+inline constexpr open_options file                  = open_options(2 << 6);
+inline constexpr open_options directory             = open_options(3 << 6);
 
-	static open_parameters make(
-		open_kind const kind,
-		detail::fs_io::open_t::optional_params_type const& args);
-};
+} // namespace open_kind
 
-} // namespace allio
+using open_parameters = fs_io::open_t::params_type;
+
+vsm::result<handle_with_flags> open_file(open_parameters const& a);
+vsm::result<handle_with_flags> open_unique_file(open_parameters const& a);
+
+vsm::result<void> open_fs_object(
+	fs_object_t::native_type& h,
+	io_parameters_t<fs_object_t, fs_io::open_t> const& a,
+	open_options kind);
+
+} // namespace allio::detail

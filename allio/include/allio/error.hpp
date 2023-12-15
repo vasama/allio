@@ -34,6 +34,8 @@ decltype(auto) unrecoverable(auto&& r, auto&& default_value)
 }
 
 
+inline constexpr char error_category_name[] = "allio";
+
 struct error_category final : std::error_category
 {
 	char const* name() const noexcept override;

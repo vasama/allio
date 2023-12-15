@@ -1,7 +1,6 @@
 #include <allio/impl/linux/byte_io.hpp>
 
 #include <allio/impl/linux/error.hpp>
-#include <allio/linux/platform.hpp>
 
 #include <vsm/numeric.hpp>
 

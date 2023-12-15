@@ -2,7 +2,6 @@
 
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/win32/kernel_error.hpp>
-#include <allio/win32/platform.hpp>
 
 using namespace allio;
 using namespace allio::win32;

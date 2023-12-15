@@ -16,6 +16,8 @@ concept _any_path = _any_string<decltype(get_path_string(std::declval<Path const
 class any_path_view : any_string_view
 {
 public:
+	any_path_view() = default;
+
 	template<detail::_any_path Path>
 	any_path_view(Path const& path)
 		: any_string_view(get_path_string(path))

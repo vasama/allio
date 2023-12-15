@@ -80,8 +80,8 @@ vsm::result<void> platform_object_t::close(
 {
 	if (!h.flags[impl_type::flags::pseudo_handle])
 	{
-		unrecoverable(close_handle(h.platform_handle));
+		close_platform_handle(unwrap_handle(h.platform_handle));
 	}
-	zero_native_handle(h);
+	h = {};
 	return {};
 }

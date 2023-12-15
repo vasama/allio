@@ -1,4 +1,5 @@
-#include <allio/datagram_socket.hpp>
+#include <allio/blocking/datagram_socket.hpp>
+#include <allio/senders/datagram_socket.hpp>
 
 #include <allio/sync_wait.hpp>
 #include <allio/task.hpp>
@@ -22,7 +23,7 @@ static bool is_supported_address_kind(network_address_kind const kind)
 	return true;
 }
 
-TEST_CASE("a datagram socket can send and receive data", "[datagram_socket][blocking]")
+TEST_CASE("Datagram socket can send and receive data", "[datagram_socket][blocking]")
 {
 	using namespace blocking;
 
@@ -35,33 +36,41 @@ TEST_CASE("a datagram socket can send and receive data", "[datagram_socket][bloc
 	}
 
 	auto const server_endpoint = endpoint_factory->create_endpoint();
-	auto const server_socket = bind<datagram_socket_object>(server_endpoint).value();
+	auto const server_socket = bind<datagram_socket_object>(server_endpoint);
 
-	SECTION("the server socket has no data available to read")
+	SECTION("The server socket has no data available to read")
 	{
 		signed char value = 0;
-		auto const r = server_socket.receive_from(as_read_buffer(&value, 1), deadline::instant());
-		REQUIRE(r.error() == error::async_operation_timed_out);
+		try
+		{
+			(void)server_socket.receive_from(
+				as_read_buffer(&value, 1),
+				deadline::instant());
+		}
+		catch (std::system_error const& e)
+		{
+			REQUIRE(e.code().default_error_condition() == std::errc::timed_out);
+		}
 	}
 
-	SECTION("the client can send data to the server")
+	SECTION("The client can send data to the server")
 	{
 		auto const client_endpoint = endpoint_factory->create_endpoint();
-		auto const client_socket = bind<datagram_socket_object>(client_endpoint).value();
+		auto const client_socket = bind<datagram_socket_object>(client_endpoint);
 
 		signed char value = 42;
-		client_socket.send_to(server_endpoint, as_write_buffer(&value, 1)).value();
+		client_socket.send_to(server_endpoint, as_write_buffer(&value, 1));
 
 		static_cast<volatile signed char&>(value) = 0;
-		auto const r = server_socket.receive_from(as_read_buffer(&value, 1)).value();
+		auto const r = server_socket.receive_from(as_read_buffer(&value, 1));
 		REQUIRE(r.size == 1);
 		REQUIRE(value == 42);
 	}
 }
 
-TEST_CASE("a datagram socket can asynchronously send and receive data", "[datagram_socket][async]")
+TEST_CASE("Datagram socket can asynchronously send and receive data", "[datagram_socket][async]")
 {
-	using namespace async;
+	using namespace senders;
 
 	using datagram_socket_object = raw_datagram_socket_t;
 

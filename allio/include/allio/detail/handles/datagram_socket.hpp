@@ -22,8 +22,12 @@ namespace socket_io {
 struct bind_t
 {
 	using operation_concept = producer_t;
-	using required_params_type = network_endpoint_t;
-	using optional_params_type = no_parameters_t;
+
+	struct params_type : io_flags_t
+	{
+		network_endpoint endpoint;
+	};
+
 	using result_type = void;
 
 	template<object Object>
@@ -40,8 +44,12 @@ struct bind_t
 struct receive_from_t
 {
 	using operation_concept = void;
-	using required_params_type = read_buffers_t;
-	using optional_params_type = deadline_t;
+
+	struct params_type : deadline_t
+	{
+		read_buffers_storage buffers;
+	};
+
 	using result_type = receive_result;
 
 	template<object Object>
@@ -58,8 +66,13 @@ struct receive_from_t
 struct send_to_t
 {
 	using operation_concept = void;
-	using required_params_type = parameters_t<network_endpoint_t, write_buffers_t>;
-	using optional_params_type = deadline_t;
+	
+	struct params_type
+	{
+		network_endpoint endpoint;
+		write_buffers_storage buffers;
+	};
+
 	using result_type = void;
 
 	template<object Object>
@@ -92,49 +105,69 @@ struct basic_datagram_socket_t : BaseObject
 		, receive_from_t
 	>;
 
-	template<typename Handle, optional_multiplexer_handle_for<basic_datagram_socket_t> MultiplexerHandle>
-	struct concrete_interface : base_type::template concrete_interface<Handle, MultiplexerHandle>
+	template<typename Handle>
+	struct concrete_interface : base_type::template concrete_interface<Handle>
 	{
 		[[nodiscard]] auto receive_from(read_buffer const buffer, auto&&... args) const
 		{
-			return generic_io<receive_from_t>(
+			io_parameters_t<typename Handle::object_type, receive_from_t> a = {};
+			a.buffers = buffer;
+			(set_argument(a, vsm_forward(args)), ...);
+			return Handle::io_traits_type::template observe<receive_from_t>(
 				static_cast<Handle const&>(*this),
-				make_io_args<typename Handle::object_type, receive_from_t>(buffer)(vsm_forward(args)...));
+				a);
 		}
 
 		[[nodiscard]] auto receive_from(read_buffers const buffers, auto&&... args) const
 		{
-			return generic_io<receive_from_t>(
+			io_parameters_t<typename Handle::object_type, receive_from_t> a = {};
+			a.buffers = buffers;
+			(set_argument(a, vsm_forward(args)), ...);
+			return Handle::io_traits_type::template observe<receive_from_t>(
 				static_cast<Handle const&>(*this),
-				make_io_args<typename Handle::object_type, receive_from_t>(buffers)(vsm_forward(args)...));
+				a);
 		}
 
 		[[nodiscard]] auto send(write_buffer const buffer, auto&&... args) const
 		{
-			return generic_io<send_to_t>(
+			io_parameters_t<typename Handle::object_type, send_to_t> a = {};
+			a.buffers = buffer;
+			(set_argument(a, vsm_forward(args)), ...);
+			return Handle::io_traits_type::template observe<send_to_t>(
 				static_cast<Handle const&>(*this),
-				make_io_args<typename Handle::object_type, send_to_t>(null_endpoint, buffer)(vsm_forward(args)...));
+				a);
 		}
 
 		[[nodiscard]] auto send(write_buffers const buffers, auto&&... args) const
 		{
-			return generic_io<send_to_t>(
+			io_parameters_t<typename Handle::object_type, send_to_t> a = {};
+			a.buffers = buffers;
+			(set_argument(a, vsm_forward(args)), ...);
+			return Handle::io_traits_type::template observe<send_to_t>(
 				static_cast<Handle const&>(*this),
-				make_io_args<typename Handle::object_type, send_to_t>(null_endpoint, buffers)(vsm_forward(args)...));
+				a);
 		}
 
 		[[nodiscard]] auto send_to(network_endpoint const& endpoint, write_buffer const buffer, auto&&... args) const
 		{
-			return generic_io<send_to_t>(
+			io_parameters_t<typename Handle::object_type, send_to_t> a = {};
+			a.endpoint = endpoint;
+			a.buffers = buffer;
+			(set_argument(a, vsm_forward(args)), ...);
+			return Handle::io_traits_type::template observe<send_to_t>(
 				static_cast<Handle const&>(*this),
-				make_io_args<typename Handle::object_type, send_to_t>(endpoint, buffer)(vsm_forward(args)...));
+				a);
 		}
 
 		[[nodiscard]] auto send_to(network_endpoint const& endpoint, write_buffers const buffers, auto&&... args) const
 		{
-			return generic_io<send_to_t>(
+			io_parameters_t<typename Handle::object_type, send_to_t> a = {};
+			a.endpoint = endpoint;
+			a.buffers = buffers;
+			(set_argument(a, vsm_forward(args)), ...);
+			return Handle::io_traits_type::template observe<send_to_t>(
 				static_cast<Handle const&>(*this),
-				make_io_args<typename Handle::object_type, send_to_t>(endpoint, buffers)(vsm_forward(args)...));
+				a);
 		}
 	};
 };
@@ -173,7 +206,6 @@ struct raw_datagram_socket_t : basic_datagram_socket_t<platform_object_t>
 		native_type& h,
 		io_parameters_t<raw_datagram_socket_t, close_t> const& args);
 };
-using abstract_raw_datagram_socket_handle = abstract_handle<raw_datagram_socket_t>;
 
 struct datagram_socket_t : basic_datagram_socket_t<object_t>
 {
@@ -183,55 +215,6 @@ struct datagram_socket_t : basic_datagram_socket_t<object_t>
 	{
 	};
 };
-using abstract_datagram_socket_handle = abstract_handle<datagram_socket_t>;
-
-
-namespace _datagram_socket_b {
-
-using datagram_socket_handle = blocking_handle<datagram_socket_t>;
-
-template<datagram_socket_object Object = datagram_socket_t>
-vsm::result<blocking_handle<Object>> bind(network_endpoint const& endpoint, auto&&... args)
-{
-	vsm::result<blocking_handle<Object>> r(vsm::result_value);
-	vsm_try_void(blocking_io<Object, socket_io::bind_t>(
-		*r,
-		make_io_args<Object, socket_io::bind_t>(endpoint)(vsm_forward(args)...)));
-	return r;
-}
-
-
-using raw_datagram_socket_handle = blocking_handle<raw_datagram_socket_t>;
-
-vsm::result<raw_datagram_socket_handle> raw_bind(network_endpoint const& endpoint, auto&&... args)
-{
-	return bind<raw_datagram_socket_t>(endpoint, vsm_forward(args)...);
-}
-
-} // namespace _datagram_socket_b
-
-namespace _datagram_socket_a {
-
-template<multiplexer_handle_for<datagram_socket_t> MultiplexerHandle>
-using basic_datagram_socket_handle = async_handle<datagram_socket_t, MultiplexerHandle>;
-
-template<datagram_socket_object Object = datagram_socket_t>
-ex::sender auto bind(network_endpoint const& endpoint, auto&&... args)
-{
-	return io_handle_sender<Object, socket_io::bind_t>(
-		vsm_lazy(make_io_args<Object, socket_io::bind_t>(endpoint)(vsm_forward(args)...)));
-}
-
-
-template<multiplexer_handle_for<raw_datagram_socket_t> MultiplexerHandle>
-using basic_raw_datagram_socket_handle = async_handle<raw_datagram_socket_t, MultiplexerHandle>;
-
-ex::sender auto raw_bind(network_endpoint const& endpoint, auto&&... args)
-{
-	return bind<raw_datagram_socket_t>(endpoint, vsm_forward(args)...);
-}
-
-} // namespace _datagram_socket_a
 
 } // namespace allio::detail
 

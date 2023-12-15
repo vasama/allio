@@ -4,9 +4,7 @@
 
 namespace allio {
 
+using detail::basic_pipe_pair;
 using detail::pipe_t;
-using detail::abstract_pipe_handle;
-
-namespace blocking { using namespace detail::_pipe_b; }
 
 } // namespace allio

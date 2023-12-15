@@ -1,10 +1,11 @@
-#include <allio/memory.hpp>
+#include <allio/detail/memory.hpp>
 
 #include <allio/impl/bounded_vector.hpp>
 
 #include <win32.h>
 
 using namespace allio;
+using namespace allio::detail;
 
 namespace {
 
@@ -33,12 +34,12 @@ static system_info const& get_system_info()
 }
 
 
-page_level allio::get_default_page_level()
+page_level detail::get_default_page_level()
 {
 	return get_page_level(get_system_info().page_size);
 }
 
-std::span<page_level const> allio::get_supported_page_levels()
+std::span<page_level const> detail::get_supported_page_levels()
 {
 	using supported_page_levels = bounded_vector<page_level, 2>;
 
@@ -59,7 +60,7 @@ std::span<page_level const> allio::get_supported_page_levels()
 	return value;
 }
 
-size_t allio::get_allocation_granularity(page_level const level)
+size_t detail::get_allocation_granularity(page_level const level)
 {
 	return std::max(get_system_info().allocation_granularity, get_page_size(level));
 }
