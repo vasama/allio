@@ -16,9 +16,9 @@ vsm::result<socket_with_flags> posix::create_socket(
 	int const address_family,
 	int type,
 	int const protocol,
-	socket_flags const flags)
+	io_flags const flags)
 {
-	if (vsm::no_flags(flags, socket_flags::inheritable))
+	if (vsm::no_flags(flags, io_flags::create_inheritable))
 	{
 		type |= SOCK_CLOEXEC;
 	}
@@ -29,6 +29,47 @@ vsm::result<socket_with_flags> posix::create_socket(
 		protocol);
 
 	if (socket == invalid_socket)
+	{
+		return vsm::unexpected(get_last_socket_error());
+	}
+
+	return vsm_lazy(socket_with_flags
+	{
+		.socket = unique_socket(socket),
+	});
+}
+
+vsm::result<socket_with_flags> posix::socket_accept(
+	socket_type const listen_socket,
+	socket_address& addr,
+	deadline const deadline,
+	io_flags const flags)
+{
+	if (deadline != deadline::never())
+	{
+		vsm_try_void(socket_poll_or_timeout(listen_socket, socket_poll_r, deadline));
+	}
+
+	int accept_flags = 0;
+
+	if (vsm::no_flags(flags, io_flags::create_inheritable))
+	{
+		accept_flags |= SOCK_CLOEXEC;
+	}
+
+	if (vsm::any_flags(flags, io_flags::create_non_blocking))
+	{
+		accept_flags |= SOCK_NONBLOCK;
+	}
+
+	addr.size = sizeof(socket_address_union);
+	socket_type const socket = accept4(
+		listen_socket,
+		&addr.addr,
+		&addr.size,
+		accept_flags);
+
+	if (socket == socket_error_value)
 	{
 		return vsm::unexpected(get_last_socket_error());
 	}

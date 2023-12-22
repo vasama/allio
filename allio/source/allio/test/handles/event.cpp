@@ -48,49 +48,49 @@ static event_mode generate_reset_mode()
 
 TEST_CASE("Events are not signaled on creation by default", "[event_handle][blocking]")
 {
-	auto const event = blocking::create_event(generate_reset_mode());
+	auto const event = blocking::event(generate_reset_mode());
 	REQUIRE(event);
 	REQUIRE(!wait(event));
 }
 
 TEST_CASE("Events can be signaled on creation if requested", "[event_handle][blocking]")
 {
-	auto const event = blocking::create_event(generate_reset_mode(), initially_signaled);
+	auto const event = blocking::event(generate_reset_mode(), initially_signaled);
 	REQUIRE(event);
 	REQUIRE(wait(event));
 }
 
 TEST_CASE("Manual reset events remain signaled after wait", "[event_handle][blocking]")
 {
-	auto const event = blocking::create_event(manual_reset_event, initially_signaled);
+	auto const event = blocking::event(manual_reset_event, initially_signaled);
 	REQUIRE(wait(event));
 	REQUIRE(wait(event));
 }
 
 TEST_CASE("Auto reset events become unsignaled after wait", "[event_handle][blocking]")
 {
-	auto const event = blocking::create_event(auto_reset_event, initially_signaled);
+	auto const event = blocking::event(auto_reset_event, initially_signaled);
 	REQUIRE(wait(event));
 	REQUIRE(!wait(event));
 }
 
 TEST_CASE("Events can be signaled after creation", "[event_handle][blocking]")
 {
-	auto const event = blocking::create_event(generate_reset_mode());
+	auto const event = blocking::event(generate_reset_mode());
 	event.signal();
 	REQUIRE(wait(event));
 }
 
 TEST_CASE("Events can be reset after being signaled", "[event_handle][blocking]")
 {
-	auto const event = blocking::create_event(generate_reset_mode(), initially_signaled);
+	auto const event = blocking::event(generate_reset_mode(), initially_signaled);
 	event.reset();
 	REQUIRE(!wait(event));
 }
 
 TEST_CASE("Events can be signaled concurrently with waits", "[event_handle][blocking][threading]")
 {
-	auto const event = blocking::create_event(generate_reset_mode());
+	auto const event = blocking::event(generate_reset_mode());
 
 	std::jthread const signal_thread([&]()
 	{
@@ -107,7 +107,7 @@ TEST_CASE("Auto reset event signals are only observed by one wait", "[event_hand
 	static constexpr size_t const thread_count = 4;
 	static constexpr size_t const signal_count = 10'000;
 
-	auto const event = blocking::create_event(auto_reset_event);
+	auto const event = blocking::event(auto_reset_event);
 
 	std::vector<std::jthread> wait_threads;
 	vsm::atomic<bool> stop_requested = false;
@@ -201,7 +201,7 @@ static auto wait_detached(exec::async_scope& scope, auto const& event)
 TEST_CASE("Asynchronous wait on signaled event may complete immediately", "[event_handle][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
-	auto const event = blocking::create_event(auto_reset_event, initially_signaled).via(multiplexer);
+	auto const event = blocking::event(auto_reset_event, initially_signaled).via(multiplexer);
 
 	exec::async_scope scope;
 	auto const signaled = wait_detached(scope, event);
@@ -217,7 +217,7 @@ TEST_CASE("Asynchronous wait on signaled event may complete immediately", "[even
 TEST_CASE("Asynchronous wait on unsignaled event completes after signaling", "[event_handle][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
-	auto const event = blocking::create_event(auto_reset_event).via(multiplexer);
+	auto const event = blocking::event(auto_reset_event).via(multiplexer);
 
 	exec::async_scope scope;
 	auto const signaled = wait_detached(scope, event);
@@ -231,7 +231,7 @@ TEST_CASE("Asynchronous wait on unsignaled event completes after signaling", "[e
 TEST_CASE("Auto reset event becomes unsignaled after asynchronous wait", "[event_handle][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
-	auto const event = blocking::create_event(auto_reset_event, initially_signaled).via(multiplexer);
+	auto const event = blocking::event(auto_reset_event, initially_signaled).via(multiplexer);
 
 	exec::async_scope scope;
 	(void)wait_detached(scope, event);
@@ -243,7 +243,7 @@ TEST_CASE("Auto reset event becomes unsignaled after asynchronous wait", "[event
 TEST_CASE("Manual reset event remains signaled after asynchronous wait", "[event_handle][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
-	auto const event = blocking::create_event(manual_reset_event, initially_signaled).via(multiplexer);
+	auto const event = blocking::event(manual_reset_event, initially_signaled).via(multiplexer);
 
 	exec::async_scope scope;
 	(void)wait_detached(scope, event);
@@ -255,7 +255,7 @@ TEST_CASE("Manual reset event remains signaled after asynchronous wait", "[event
 TEST_CASE("Auto reset event signals are only observed by one asynchronous wait", "[event_handle][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
-	auto const event = blocking::create_event(auto_reset_event).via(multiplexer);
+	auto const event = blocking::event(auto_reset_event).via(multiplexer);
 
 	exec::async_scope scope;
 	auto const signal1 = wait_detached(scope, event);
@@ -275,7 +275,7 @@ TEST_CASE("Auto reset event signals are only observed by one asynchronous wait",
 TEST_CASE("Manual reset event signals are observed by all asynchronous waits", "[event_handle][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
-	auto const event = blocking::create_event(manual_reset_event).via(multiplexer);
+	auto const event = blocking::event(manual_reset_event).via(multiplexer);
 
 	exec::async_scope scope;
 	auto const signal1 = wait_detached(scope, event);
@@ -292,7 +292,7 @@ TEST_CASE("Manual reset event signals are observed by all asynchronous waits", "
 #if 0 //TODO: Test opaque_handle wrapping event_handle
 TEST_CASE("blocking opaque signaling", "[event_handle][opaque_handle][blocking]")
 {
-	event_handle const event = create_event(manual_reset_event);
+	event_handle const event = event(manual_reset_event);
 	opaque_handle const opaque = make_opaque_handle(get_opaque_handle(event));
 
 	auto const poll = [&]() -> bool

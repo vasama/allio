@@ -60,6 +60,10 @@ int main(int const argc, char const* const* const argv)
 			{
 				out << argv[0] << endl;
 			}
+			else if (auto const value = parse(command, "print"))
+			{
+				out << *value << endl;
+			}
 			else if (auto const value = parse(command, "echo"))
 			{
 				set_binary_mode(stdin);

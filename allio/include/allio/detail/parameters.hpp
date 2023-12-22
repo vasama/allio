@@ -1,12 +1,19 @@
 #pragma once
 
 #include <vsm/concepts.hpp>
+#include <vsm/standard.hpp>
 #include <vsm/tag_invoke.hpp>
 #include <vsm/utility.hpp>
 
 #include <utility>
 
 namespace allio::detail {
+
+template<typename... Parameters>
+struct parameters_t : Parameters... {};
+
+using no_parameters_t = parameters_t<>;
+
 
 struct set_argument_t
 {
@@ -26,78 +33,31 @@ struct set_argument_t
 inline constexpr set_argument_t set_argument = {};
 
 
-template<typename P>
-auto&& parameter_value(P&& args)
+template<typename P, typename T>
+struct explicit_argument
 {
-	auto&& [value] = vsm_forward(args);
-#if __cpp_lib_forward_like
-	return std::forward_like<P>(value);
-#else
-	return static_cast<vsm::copy_cvref_t<P&&, decltype(value)>>(value);
-#endif
-}
+	using value_type = T;
+
+	T value;
+};
 
 template<typename P>
-using parameter_value_t = std::remove_cvref_t<decltype(parameter_value(std::declval<P>()))>;
-
-
-template<typename P, typename T = void>
-class explicit_parameter
+struct explicit_parameter
 {
-	using value_type = vsm::select_t<std::is_void_v<T>, parameter_value_t<P>, T>;
-
-	struct argument
+	P vsm_static_operator_invoke(std::convertible_to<typename P::value_type> auto&& value)
 	{
-		value_type value;
-
-		friend void tag_invoke(
-			set_argument_t,
-			P& arguments,
-			vsm::any_cvref_of<argument> auto&& argument)
-		{
-			parameter_value(arguments) = vsm_forward(argument).value;
-		}
-	};
-
-public:
-	constexpr argument vsm_static_operator_invoke(std::convertible_to<value_type> auto&& value)
-	{
-		return { { vsm_forward(value) } };
+		return { explicit_argument<P, typename P::value_type>{ vsm_forward(value) } };
 	}
 };
 
-template<typename P, typename T = void>
-class explicit_ref_parameter
+template<typename P>
+struct explicit_reference_parameter
 {
-	using pointer_type = vsm::select_t<std::is_void_v<T>, parameter_value_t<P>, T*>;
-	static_assert(std::is_pointer_v<pointer_type>);
-	using value_type = std::remove_pointer_t<pointer_type>;
-
-	struct argument_t
+	P vsm_static_operator_invoke(std::remove_pointer_t<typename P::value_type>& value)
 	{
-		pointer_type value;
-
-		friend void tag_invoke(
-			set_argument_t,
-			P& arguments,
-			vsm::any_cvref_of<argument_t> auto&& argument)
-		{
-			parameter_value(arguments) = vsm_forward(argument).value;
-		}
-	};
-
-public:
-	constexpr argument_t vsm_static_operator_invoke(value_type& value)
-	{
-		return { { &value } };
+		return { explicit_argument<P, typename P::value_type>{ &value } };
 	}
 };
-
-
-template<typename... Parameters>
-struct parameters_t : Parameters... {};
-
-struct no_parameters_t {};
 
 
 template<typename P>

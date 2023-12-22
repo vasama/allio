@@ -175,8 +175,8 @@ struct open_t
 
 	template<object Object>
 	friend vsm::result<void> tag_invoke(
-		blocking_io_t<Object, open_t>,
-		typename Object::native_type& h,
+		blocking_io_t<open_t>,
+		native_handle<Object>& h,
 		io_parameters_t<Object, open_t> const& a)
 		requires requires { Object::open(h, a); }
 	{
@@ -203,8 +203,8 @@ struct get_current_path_t
 
 	template<object Object>
 	friend vsm::result<size_t> tag_invoke(
-		blocking_io_t<Object, get_current_path_t>,
-		typename Object::native_type const& h,
+		blocking_io_t<get_current_path_t>,
+		native_handle<Object> const& h,
 		io_parameters_t<Object, get_current_path_t> const& a)
 		requires requires { Object::open(h, a); }
 	{
@@ -235,29 +235,45 @@ struct fs_object_t : platform_object_t
 	>;
 
 	static vsm::result<size_t> get_current_path(
-		native_type const& h,
+		native_handle<fs_object_t> const& h,
 		io_parameters_t<fs_object_t, get_current_path_t> const& a);
 
-	template<typename Handle>
-	struct abstract_interface : base_type::abstract_interface<Handle>
+	template<typename Handle, typename Traits>
+	struct facade : base_type::facade<Handle, Traits>
 	{
 		[[nodiscard]] auto read_current_path(any_path_buffer const buffer, auto&&... args) const
 		{
-			return Handle::io_traits_type::unwrap_result(
-				_read_current_path(buffer, vsm_forward(args)...));
+			auto r = _read_current_path(buffer, vsm_forward(args)...);
+
+			if constexpr (Traits::has_transform_result)
+			{
+				return Traits::transform_result(vsm_move(r));
+			}
+			else
+			{
+				return r;
+			}
 		}
 
 		template<typename Path = path>
 		[[nodiscard]] auto get_current_path(auto&&... args) const
 		{
-			return Handle::io_traits_type::unwrap_result(
-				_get_current_path<Path>(vsm_forward(args)...));
+			auto r = _get_current_path<Path>(vsm_forward(args)...);
+
+			if constexpr (Traits::has_transform_result)
+			{
+				return Traits::transform_result(vsm_move(r));
+			}
+			else
+			{
+				return r;
+			}
 		}
 
 	private:
 		vsm::result<size_t> _read_current_path(any_path_buffer const buffer, auto&&... args) const
 		{
-			io_parameters_t<typename Handle::object_type, get_current_path_t> a = {};
+			auto a = io_parameters_t<typename Handle::object_type, get_current_path_t>{};
 			a.buffer = buffer;
 			(set_argument(a, vsm_forward(args)), ...);
 

@@ -151,8 +151,8 @@ struct read_t
 
 	template<object Object>
 	friend vsm::result<directory_stream_view> tag_invoke(
-		blocking_io_t<Object, read_t>,
-		typename Object::native_type const& h,
+		blocking_io_t<read_t>,
+		native_handle<Object> const& h,
 		io_parameters_t<Object, read_t> const& a)
 		requires requires { Object::read(h, a); }
 	{
@@ -168,8 +168,8 @@ struct restart_t
 
 	template<object Object>
 	friend vsm::result<directory_stream_view> tag_invoke(
-		blocking_io_t<Object, restart_t>,
-		typename Object::native_type const& h,
+		blocking_io_t<restart_t>,
+		native_handle<Object> const& h,
 		io_parameters_t<Object, restart_t> const& a)
 		requires requires { Object::restart(h, a); }
 	{
@@ -194,37 +194,65 @@ struct directory_t : fs_object_t
 	>;
 
 	static vsm::result<void> open(
-		native_type& h,
+		native_handle<directory_t>& h,
 		io_parameters_t<directory_t, open_t> const& a);
 
 	static vsm::result<directory_stream_view> read(
-		native_type const& h,
+		native_handle<directory_t> const& h,
 		io_parameters_t<directory_t, read_t> const& a);
 
 	static vsm::result<void> restart(
-		native_type& h,
+		native_handle<directory_t>& h,
 		io_parameters_t<directory_t, restart_t> const& a);
 
 
-	template<typename Handle>
-	struct concrete_interface : base_type::concrete_interface<Handle>
+	template<typename Handle, typename Traits>
+	struct facade : base_type::facade<Handle, Traits>
 	{
 		[[nodiscard]] auto read(read_buffer const buffer) const
 		{
-			return Handle::io_traits_type::template observe<read_t>(
-				static_cast<Handle const&>(*this),
-				io_parameters_t<typename Handle::object_type, read_t>{ buffer });
+			auto a = io_parameters_t<typename Handle::object_type, read_t>{};
+			a.buffer = buffer;
+			return Traits::template observe<read_t>(static_cast<Handle const&>(*this), a);
 		}
 
 		[[nodiscard]] auto restart() const
 		{
-			return Handle::io_traits_type::unwrap_result(
-				blocking_io<typename Handle::object_type, restart_t>(
-					static_cast<Handle const&>(*this),
-					no_parameters_t()));
+			return Traits::template observe<restart_t>(
+				static_cast<Handle const&>(*this),
+				no_parameters_t());
 		}
 	};
 };
+
+template<typename Traits>
+[[nodiscard]] auto open_directory(fs_path const& path, auto&&... args)
+{
+	auto a = io_parameters_t<directory_t, fs_io::open_t>{};
+	a.path = path;
+	(set_argument(a, vsm_forward(args)), ...);
+	return Traits::template produce<directory_t, fs_io::open_t>(a);
+}
+
+template<typename Traits>
+[[nodiscard]] auto open_temp_directory(auto&&... args)
+{
+	auto a = io_parameters_t<directory_t, fs_io::open_t>{};
+	a.special = open_options::temporary;
+	a.path = path;
+	(set_argument(a, vsm_forward(args)), ...);
+	return Traits::template produce<directory_t, fs_io::open_t>(a);
+}
+
+template<typename Traits>
+[[nodiscard]] auto open_unique_directory(auto&&... args)
+{
+	auto a = io_parameters_t<directory_t, fs_io::open_t>{};
+	a.special = open_options::unique_name;
+	a.path = path;
+	(set_argument(a, vsm_forward(args)), ...);
+	return Traits::template produce<directory_t, fs_io::open_t>(a);
+}
 
 } // namespace allio::detail
 

@@ -75,7 +75,7 @@ handle_flags win32::set_file_completion_notification_modes(HANDLE const handle)
 
 
 vsm::result<void> platform_object_t::close(
-	native_type& h,
+	native_handle<platform_object_t>& h,
 	io_parameters_t<object_t, close_t> const&)
 {
 	if (!h.flags[impl_type::flags::pseudo_handle])

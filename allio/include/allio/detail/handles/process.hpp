@@ -28,231 +28,138 @@ enum class process_options : uint8_t
 	set_environment                     = 1 << 2,
 	wait_on_close                       = 1 << 3,
 };
+vsm_flag_enum(process_options);
 
-struct inherit_handles_implicit_t
+struct inherit_handles_t : explicit_argument<inherit_handles_t, bool> {};
+
+struct inherit_handles_parameter
 {
-	bool inherit_handles;
-};
 
-struct inherit_handles_explicit_t
-{
-	//TODO: Use a type-erased view like any_string_span over stream handles
 };
+inline constexpr inherit_handles_parameter inherit_handles = {};
 
-struct inherit_handles_t
-{
-	inherit_handles_implicit_t vsm_static_operator_invoke(bool const inherit_handles)
-	{
-		return { inherit_handles };
-	}
-
-	inherit_handles_explicit_t vsm_static_operator_invoke()
-	{
-		//TODO
-	}
-};
-inline constexpr inherit_handles_t inherit_handles = {};
-
-struct wait_on_close_t
-{
-	bool wait_on_close;
-};
+struct wait_on_close_t : explicit_argument<wait_on_close_t, bool> {};
 inline constexpr explicit_parameter<wait_on_close_t> wait_on_close = {};
 
-struct process_arguments_t
-{
-	any_string_span arguments;
-};
+struct process_arguments_t : explicit_argument<process_arguments_t, any_string_span> {};
 inline constexpr explicit_parameter<process_arguments_t> process_arguments = {};
 
-struct working_directory_t
-{
-	fs_path path;
-};
+struct working_directory_t : explicit_argument<working_directory_t, fs_path const&> {};
 inline constexpr explicit_parameter<working_directory_t> working_directory = {};
 
-struct process_environment_t
-{
-	any_string_span arguments;
-};
+struct process_environment_t : explicit_argument<process_environment_t, any_string_span> {};
 inline constexpr explicit_parameter<process_environment_t> process_environment = {};
 
 template<int Stream>
-struct redirect_stream_t
+struct redirect_stream_t : explicit_argument<
+	redirect_stream_t<Stream>,
+	native_handle<platform_object_t> const*> {};
+
+template<int Stream>
+struct redirect_stream_parameter
 {
-	native_platform_handle stream;
+	redirect_stream_t<Stream> vsm_static_operator_invoke(handle_for<platform_object_t> auto const& handle)
+	{
+		return { { &handle.native() } };
+	}
 };
 
-inline constexpr explicit_parameter<redirect_stream_t<0>> redirect_stdin = {};
-inline constexpr explicit_parameter<redirect_stream_t<1>> redirect_stdout = {};
-inline constexpr explicit_parameter<redirect_stream_t<2>> redirect_stderr = {};
+inline constexpr redirect_stream_parameter<0> redirect_stdin = {};
+inline constexpr redirect_stream_parameter<1> redirect_stdout = {};
+inline constexpr redirect_stream_parameter<2> redirect_stderr = {};
 
-struct with_exit_code_t
-{
-	process_exit_code exit_code;
-};
+struct with_exit_code_t : explicit_argument<with_exit_code_t, process_exit_code> {};
 inline constexpr explicit_parameter<with_exit_code_t> with_exit_code = {};
 
-namespace process_io {
-
-struct open_parameters : io_flags_t
+template<object BaseObject>
+class any_handle_span
 {
-	process_id id = {};
+	using native_handle_type = native_handle<BaseObject>;
 
-	friend void tag_invoke(set_argument_t, launch_parameters& args, process_id const value)
+	using copy_type = size_t(
+		void const* data,
+		size_t data_size,
+		size_t data_offset,
+		native_handle_type const** buffer,
+		size_t buffer_size);
+
+	void const* m_data;
+	size_t m_size;
+	copy_type* m_copy;
+
+public:
+	any_handle_span()
+		: m_data(nullptr)
+		, m_size(0)
+		, m_copy(nullptr)
 	{
-		args.id = value;
-	}
-};
-
-struct launch_parameters : io_flags_t
-{
-	process_options options = {};
-	any_string_span arguments = {};
-	any_string_span environment = {};
-	fs_path working_directory = {};
-	native_platform_handle redirect_stdin = {};
-	native_platform_handle redirect_stdout = {};
-	native_platform_handle redirect_stderr = {};
-	//TODO: Explicit handle inheritance
-
-	friend void tag_invoke(set_argument_t, launch_parameters& args, inherit_handles_t)
-	{
-		args.options |= process_options::inherit_handles;
 	}
 
-	friend void tag_invoke(set_argument_t, launch_parameters& args, inherit_handles_implicit_t const value)
+	template<handle_for<BaseObject> Handle>
+	explicit any_handle_span(Handle* const data, size_t const size)
+		: m_data(data)
+		, m_size(size)
+		, m_copy(_copy<Handle>)
 	{
-		if (value.inherit_handles)
+	}
+
+	template<std::ranges::contiguous_range Range>
+		requires handle_for<std::ranges::range_value_t<Range>, BaseObject>
+	any_handle_span(Range&& range)
+		: any_handle_span(std::ranges::data(range), std::ranges::size(range))
+	{
+	}
+
+	[[nodiscard]] bool empty() const
+	{
+		return m_size == 0;
+	}
+
+	[[nodiscard]] size_t size() const
+	{
+		return m_size;
+	}
+
+	native_handle_type const** copy(
+		size_t const offset,
+		size_t const count,
+		native_handle_type const** const buffer) const
+	{
+		return buffer + m_copy(m_data, m_size, offset, buffer, count);
+	}
+
+private:
+	template<typename T>
+	static size_t _copy(
+		void const* const data,
+		size_t const data_size,
+		size_t const data_offset,
+		native_handle_type** const buffer,
+		size_t const buffer_size)
+	{
+		vsm_assert(data_offset <= data_size);
+
+		size_t const size = std::min(
+			buffer_size,
+			data_size - data_offset);
+
+		for (size_t i = 0; i < size; ++i)
 		{
-			args.options |= process_options::inherit_handles;
+			T const& object = data[data_offset + i];
+
+			if constexpr (std::is_convertible_v<T const&, native_handle_type const&>)
+			{
+				buffer[i] = &static_cast<native_handle_type const&>(object);
+			}
+			else
+			{
+				buffer[i] = &static_cast<native_handle_type const&>(object.native());
+			}
 		}
-	}
 
-	friend void tag_invoke(set_argument_t, launch_parameters& args, wait_on_close_t const value)
-	{
-		if (value.wait_on_close)
-		{
-			args.options |= process_options::wait_on_close;
-		}
-	}
-
-	friend void tag_invoke(set_argument_t, launch_parameters& args, process_arguments_t const value)
-	{
-		args.arguments = value.arguments;
-	}
-
-	friend void tag_invoke(set_argument_t, launch_parameters& args, process_environment_t const value)
-	{
-		args.environment = value.environment;
-		args.options |= process_options::set_environment;
-	}
-
-	friend void tag_invoke(set_argument_t, launch_parameters& args, working_directory_t const value)
-	{
-		args.working_directory = value.path;
-	}
-
-	friend void tag_invoke(set_argument_t, launch_parameters& args, redirect_stream_t<0> const value)
-	{
-		args.redirect_stdin = value.stream;
-	}
-
-	friend void tag_invoke(set_argument_t, launch_parameters& args, redirect_stream_t<1> const value)
-	{
-		args.redirect_stdout = value.stream;
-	}
-
-	friend void tag_invoke(set_argument_t, launch_parameters& args, redirect_stream_t<2> const value)
-	{
-		args.redirect_stderr = value.stream;
+		return size;
 	}
 };
-
-struct teminate_parameters
-{
-	bool user_exit_code = false;
-	process_exit_code exit_code;
-
-	friend void tag_invoke(set_argument_t, launch_parameters& args, with_exit_code const value)
-	{
-		args.user_exit_code = true;
-		args.exit_coee = value.exit_code;
-	}
-};
-
-
-struct open_t
-{
-	using operation_concept = producer_t;
-	using params_type = open_parameters;
-	using result_type = void;
-	using runtime_concept = bounded_runtime_t;
-
-	template<object Object>
-	friend vsm::result<void> tag_invoke(
-		blocking_io_t<Object, open_t>,
-		typename Object::native_type& h,
-		io_parameters_t<Object, open_t> const& a)
-		requires requires { Object::open(h, a); }
-	{
-		return Object::open(h, a);
-	}
-};
-
-struct launch_t
-{
-	using operation_concept = producer_t;
-	using params_type = launch_parameters;
-	using result_type = void;
-
-	template<object Object>
-	friend vsm::result<void> tag_invoke(
-		blocking_io_t<Object, launch_t>,
-		typename Object::native_type& h,
-		io_parameters_t<Object, launch_t> const& a)
-		requires requires { Object::launch(h, a); }
-	{
-		return Object::launch(h, a);
-	}
-};
-
-struct terminate_t
-{
-	using operation_concept = void;
-	using params_type = teminate_parameters;
-	using result_type = void;
-	using runtime_concept = bounded_runtime_t;
-
-	template<object Object>
-	friend vsm::result<void> tag_invoke(
-		blocking_io_t<Object, terminate_t>,
-		typename Object::native_type const& h,
-		io_parameters_t<Object, terminate_t> const& a)
-		requires requires { Object::terminate(h, a); }
-	{
-		return Object::terminate(h, a);
-	}
-};
-
-struct wait_t
-{
-	using operation_concept = void;
-	using params_type = deadline_t;
-	using result_type = process_exit_code;
-
-	template<object Object>
-	friend vsm::result<process_exit_code> tag_invoke(
-		blocking_io_t<Object, wait_t>,
-		typename Object::native_type const& h,
-		io_parameters_t<Object, wait_t> const& a)
-		requires requires { Object::wait(h, a); }
-	{
-		return Object::wait(h, a);
-	}
-};
-
-} // namespace process_io
 
 struct process_t : platform_object_t
 {
@@ -263,75 +170,256 @@ struct process_t : platform_object_t
 		wait_on_close,
 	);
 
-	struct native_type : base_type::native_type
+	struct open_t
 	{
-		process_id parent_id;
-		process_id id;
+		using operation_concept = producer_t;
 
-		unix_process_reaper* reaper;
+		struct params_type : io_flags_t
+		{
+			process_id id;
+
+			friend void tag_invoke(set_argument_t, params_type& args, process_id const value)
+			{
+				args.id = value;
+			}
+		};
+
+		using result_type = void;
+		using runtime_concept = bounded_runtime_t;
+
+		template<object Object>
+		friend vsm::result<void> tag_invoke(
+			blocking_io_t<open_t>,
+			native_handle<Object>& h,
+			io_parameters_t<Object, open_t> const& a)
+			requires requires { Object::open(h, a); }
+		{
+			return Object::open(h, a);
+		}
 	};
 
-	using open_t = process_io::open_t;
-	using launch_t = process_io::launch_t;
-	using terminate_t = process_io::terminate_t;
-	using wait_t = process_io::wait_t;
-	
+	struct create_t
+	{
+		using operation_concept = producer_t;
+
+		struct params_type : io_flags_t
+		{
+			process_options options;
+			fs_path executable_path;
+			any_string_span arguments;
+			any_string_span environment;
+			fs_path working_directory;
+			any_handle_span<platform_object_t> inherit_handles;
+			native_handle<platform_object_t> const* redirect_stdin;
+			native_handle<platform_object_t> const* redirect_stdout;
+			native_handle<platform_object_t> const* redirect_stderr;
+
+			friend void tag_invoke(set_argument_t, params_type& args, inherit_handles_t const value)
+			{
+				if (value.value)
+				{
+					args.options |= process_options::inherit_handles;
+				}
+			}
+
+			friend void tag_invoke(set_argument_t, params_type& args, explicit_parameter<inherit_handles_t>)
+			{
+				args.options |= process_options::inherit_handles;
+			}
+
+			friend void tag_invoke(set_argument_t, params_type& args, wait_on_close_t const value)
+			{
+				if (value.value)
+				{
+					args.options |= process_options::wait_on_close;
+				}
+			}
+
+			friend void tag_invoke(set_argument_t, params_type& args, explicit_parameter<wait_on_close_t>)
+			{
+				args.options |= process_options::wait_on_close;
+			}
+
+			friend void tag_invoke(set_argument_t, params_type& args, process_arguments_t const value)
+			{
+				args.arguments = value.value;
+			}
+
+			friend void tag_invoke(set_argument_t, params_type& args, process_environment_t const value)
+			{
+				args.options |= process_options::set_environment;
+				args.environment = value.value;
+			}
+
+			friend void tag_invoke(set_argument_t, params_type& args, working_directory_t const value)
+			{
+				args.working_directory = value.value;
+			}
+
+			friend void tag_invoke(set_argument_t, params_type& args, redirect_stream_t<0> const value)
+			{
+				args.redirect_stdin = value.value;
+			}
+
+			friend void tag_invoke(set_argument_t, params_type& args, redirect_stream_t<1> const value)
+			{
+				args.redirect_stdout = value.value;
+			}
+
+			friend void tag_invoke(set_argument_t, params_type& args, redirect_stream_t<2> const value)
+			{
+				args.redirect_stderr = value.value;
+			}
+		};
+
+		using result_type = void;
+
+		template<object Object>
+		friend vsm::result<void> tag_invoke(
+			blocking_io_t<create_t>,
+			native_handle<Object>& h,
+			io_parameters_t<Object, create_t> const& a)
+			requires requires { Object::create(h, a); }
+		{
+			return Object::create(h, a);
+		}
+	};
+
+	struct terminate_t
+	{
+		using operation_concept = void;
+
+		struct params_type
+		{
+			bool set_exit_code;
+			process_exit_code exit_code;
+
+			friend void tag_invoke(set_argument_t, params_type& args, with_exit_code_t const value)
+			{
+				args.set_exit_code = true;
+				args.exit_code = value.value;
+			}
+		};
+
+		using result_type = void;
+		using runtime_concept = bounded_runtime_t;
+
+		template<object Object>
+		friend vsm::result<void> tag_invoke(
+			blocking_io_t<terminate_t>,
+			native_handle<Object> const& h,
+			io_parameters_t<Object, terminate_t> const& a)
+			requires requires { Object::terminate(h, a); }
+		{
+			return Object::terminate(h, a);
+		}
+	};
+
+	struct wait_t
+	{
+		using operation_concept = void;
+		using params_type = deadline_t;
+		using result_type = process_exit_code;
+
+		template<object Object>
+		friend vsm::result<process_exit_code> tag_invoke(
+			blocking_io_t<wait_t>,
+			native_handle<Object> const& h,
+			io_parameters_t<Object, wait_t> const& a)
+			requires requires { Object::wait(h, a); }
+		{
+			return Object::wait(h, a);
+		}
+	};
+
 	using operations = type_list_append
 	<
 		base_type::operations
 		, open_t
-		, launch_t
+		, create_t
 		, terminate_t
 		, wait_t
 	>;
 
 	static vsm::result<void> open(
-		native_type& h,
+		native_handle<process_t>& h,
 		io_parameters_t<process_t, open_t> const& args);
 
-	static vsm::result<void> launch(
-		native_type& h,
-		io_parameters_t<process_t, launch_t> const& args);
+	static vsm::result<void> create(
+		native_handle<process_t>& h,
+		io_parameters_t<process_t, create_t> const& args);
 
 	static vsm::result<void> terminate(
-		native_type const& h,
+		native_handle<process_t> const& h,
 		io_parameters_t<process_t, terminate_t> const& args);
 
 	static vsm::result<process_exit_code> wait(
-		native_type const& h,
+		native_handle<process_t> const& h,
 		io_parameters_t<process_t, wait_t> const& args);
 
 	static vsm::result<void> close(
-		native_type& h,
+		native_handle<process_t>& h,
 		io_parameters_t<process_t, close_t> const& args);
 
-	template<typename Handle>
-	struct abstract_interface : base_type::abstract_interface<Handle>
+	template<typename Handle, typename Traits>
+	struct facade : base_type::facade<Handle, Traits>
 	{
 		[[nodiscard]] process_id get_id() const
 		{
-			return static_cast<Handle const&>(*this).native().native_type::id;
+			using native_handle_type = native_handle<process_t>;
+			return static_cast<Handle const&>(*this).native().native_handle_type::id;
 		}
-	};
 
-	template<typename Handle>
-	struct concrete_interface : base_type::concrete_interface<Handle>
-	{
 		[[nodiscard]] auto wait(auto&&... args) const
 		{
-			return generic_io<wait_t>(
-				static_cast<Handle const&>(*this),
-				make_io_args<process_t, wait_t>()(vsm_forward(args)...));
+			auto a = io_parameters_t<process_t, wait_t>{};
+			(set_argument(a, vsm_forward(args)), ...);
+			return Traits::template observe<wait_t>(static_cast<Handle const&>(*this), a);
 		}
 
 		[[nodiscard]] auto terminate(auto&&... args) const
 		{
-			return generic_io<terminate_t>(
-				static_cast<Handle const&>(*this),
-				make_io_args<process_t, terminate_t>()(vsm_forward(args)...));
+			auto a = io_parameters_t<process_t, terminate_t>{};
+			(set_argument(a, vsm_forward(args)), ...);
+			auto r = blocking_io<terminate_t>(static_cast<Handle const&>(*this), a);
+
+			if constexpr (Traits::has_transform_result)
+			{
+				return Traits::transform_result(vsm_move(r));
+			}
+			else
+			{
+				return r;
+			}
 		}
 	};
 };
+
+template<>
+struct native_handle<process_t> : native_handle<process_t::base_type>
+{
+	process_id id;
+	unix_process_reaper* reaper;
+};
+
+
+template<typename Traits>
+[[nodiscard]] auto open_process(process_id const id, auto&&... args)
+{
+	auto a = io_parameters_t<process_t, process_t::open_t>{};
+	a.id = id;
+	(set_argument(a, vsm_forward(args)), ...);
+	return Traits::template produce<process_t, process_t::open_t>(a);
+}
+
+template<typename Traits>
+[[nodiscard]] auto create_process(fs_path const& path, auto&&... args)
+{
+	auto a = io_parameters_t<process_t, process_t::create_t>{};
+	a.executable_path = path;
+	(set_argument(a, vsm_forward(args)), ...);
+	return Traits::template produce<process_t, process_t::create_t>(a);
+}
 
 } // namespace allio::detail
 

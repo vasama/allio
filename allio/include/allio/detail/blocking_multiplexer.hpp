@@ -93,7 +93,7 @@ struct async_operation<Multiplexer, Object, Operation> : blocking_multiplexer::o
 
 	static io_result<R> submit(M&, H& h, C&, S&, A const& a, io_handler<M>&)
 	{
-		auto r = blocking_io<Object, Operation>(h, a);
+		auto r = blocking_io<Operation>(h, a);
 
 		if (!r)
 		{

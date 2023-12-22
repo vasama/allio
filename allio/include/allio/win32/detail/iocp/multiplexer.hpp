@@ -239,7 +239,7 @@ public:
 	bool cancel_wait(wait_packet packet, wait_slot& slot);
 
 
-	[[nodiscard]] static bool supports_synchronous_completion(platform_object_t::native_type const& h)
+	[[nodiscard]] static bool supports_synchronous_completion(native_handle<platform_object_t> const& h)
 	{
 		return h.flags[platform_object_t::impl_type::flags::skip_completion_port_on_success];
 	}
@@ -260,12 +260,12 @@ private:
 	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(iocp_multiplexer const& other);
 
 
-	friend vsm::result<void> tag_invoke(attach_handle_t, iocp_multiplexer& m, platform_object_t::native_type const& h, connector_type& c)
+	friend vsm::result<void> tag_invoke(attach_handle_t, iocp_multiplexer& m, native_handle<platform_object_t> const& h, connector_type& c)
 	{
 		return m.attach_handle(h.platform_handle, c);
 	}
 
-	friend vsm::result<void> tag_invoke(detach_handle_t, iocp_multiplexer& m, platform_object_t::native_type const& h, connector_type& c)
+	friend vsm::result<void> tag_invoke(detach_handle_t, iocp_multiplexer& m, native_handle<platform_object_t> const& h, connector_type& c)
 	{
 		return m.detach_handle(h.platform_handle, c);
 	}

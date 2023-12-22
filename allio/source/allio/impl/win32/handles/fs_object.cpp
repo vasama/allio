@@ -22,25 +22,25 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 		.desired_access = SYNCHRONIZE,
 	};
 
-	if (vsm::no_flags(args.flags, io_flags::create_multiplexable))
+	if (vsm::no_flags(args.flags, io_flags::create_non_blocking))
 	{
 		info.create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
 	}
 
-	switch (args.special & open_options::kind_mask)
+	switch (args.special & open_kind::mask)
 	{
-	case open_options::path:
+	case open_kind::path:
 		if (args.mode != file_mode::none)
 		{
 			return vsm::unexpected(error::invalid_argument);
 		}
 		break;
 
-	case open_options::file:
+	case open_kind::file:
 		info.create_options |= FILE_NON_DIRECTORY_FILE;
 		break;
 
-	case open_options::directory:
+	case open_kind::directory:
 		info.create_options |= FILE_DIRECTORY_FILE;
 		break;
 
@@ -328,21 +328,18 @@ static vsm::result<handle_with_flags> open_anonymous_file(open_parameters const&
 
 vsm::result<handle_with_flags> detail::open_file(open_parameters const& a)
 {
-	switch (a.special & open_options::mode_mask)
+	if (vsm::any_flags(a.special, open_options::anonymous))
 	{
-	case open_options(0):
 		return open_named_file(a);
-
-	case open_options::anonymous:
+	}
+	else
+	{
 		return open_anonymous_file(a);
-
-	default:
-		return vsm::unexpected(error::invalid_argument);
 	}
 }
 
 vsm::result<size_t> fs_object_t::get_current_path(
-	native_type const& h,
+	native_handle<fs_object_t> const& h,
 	io_parameters_t<fs_object_t, get_current_path_t> const& a)
 {
 	vsm_try(information, query_file_name_information(

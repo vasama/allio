@@ -102,7 +102,7 @@ static vsm::result<handle_with_flags> _open(open_parameters& a)
 }
 
 vsm::result<void> detail::open_fs_object(
-	fs_object_t::native_type& h,
+	native_handle<fs_object_t>& h,
 	io_parameters_t<fs_object_t, fs_io::open_t> const& a_ref,
 	open_options const kind)
 {
@@ -145,14 +145,8 @@ vsm::result<void> detail::open_fs_object(
 
 	vsm_try_bind((handle, flags), _open(a));
 
-	h = platform_object_t::native_type
-	{
-		object_t::native_type
-		{
-			object_t::flags::not_null | flags,
-		},
-		wrap_handle(handle.release()),
-	};
+	h.flags = object_t::flags::not_null | flags;
+	h.platform_handle = wrap_handle(handle.release());
 
 	return {};
 }

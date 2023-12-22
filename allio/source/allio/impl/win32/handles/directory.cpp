@@ -219,28 +219,14 @@ static vsm::result<directory_stream_native_handle> query_directory_file(
 
 
 vsm::result<void> directory_t::open(
-	native_type& h,
+	native_handle<directory_t>& h,
 	io_parameters_t<directory_t, open_t> const& a)
 {
-	vsm_try_bind((directory, flags), create_file(
-		unwrap_handle(a.path.base),
-		a.path.path,
-		open_parameters::make(open_kind::directory, a)));
-
-	h = platform_object_t::native_type
-	{
-		object_t::native_type
-		{
-			flags::not_null | flags,
-		},
-		wrap_handle(directory.release()),
-	};
-
-	return {};
+	return open_fs_object(h, a, open_kind::directory);
 }
 
 vsm::result<directory_stream_view> directory_t::read(
-	native_type const& h,
+	native_handle<directory_t> const& h,
 	io_parameters_t<directory_t, read_t> const& a)
 {
 	vsm_try(stream, query_directory_file(

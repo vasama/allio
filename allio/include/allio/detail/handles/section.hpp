@@ -16,7 +16,7 @@ vsm_flag_enum(section_options);
 
 struct backing_directory_t
 {
-	fs_object_t::native_type const* backing_directory;
+	native_handle<fs_object_t> const* backing_directory;
 };
 
 namespace section_io {
@@ -29,7 +29,7 @@ struct create_t
 	{
 		section_options options = {};
 		detail::protection protection = {};
-		fs_object_t::native_type const* backing_storage = nullptr;
+		native_handle<fs_object_t> const* backing_storage = nullptr;
 		fs_size max_size = 0;
 
 		friend void tag_invoke(set_argument_t, params_type& args, section_options const value)
@@ -53,8 +53,8 @@ struct create_t
 
 	template<object Object>
 	friend vsm::result<void> tag_invoke(
-		blocking_io_t<Object, create_t>,
-		typename Object::native_type& h,
+		blocking_io_t<create_t>,
+		native_handle<Object>& h,
 		io_parameters_t<Object, create_t> const& a)
 		requires requires { Object::create(h, a); }
 	{
@@ -68,11 +68,6 @@ struct section_t : platform_object_t
 {
 	using base_type = platform_object_t;
 
-	struct native_type : base_type::native_type
-	{
-		detail::protection protection;
-	};
-
 	using create_t = section_io::create_t;
 
 	using operations = type_list_append
@@ -82,17 +77,37 @@ struct section_t : platform_object_t
 	>;
 
 	static vsm::result<void> create(
-		native_type& h,
+		native_handle<section_t>& h,
 		io_parameters_t<section_t, create_t> const& a);
-
-	template<typename Handle>
-	struct abstract_interface : base_type::abstract_interface<Handle>
-	{
-		[[nodiscard]] detail::protection protection() const
-		{
-			return static_cast<Handle const&>(*this).native().native_type::protection;
-		}
-	};
 };
+
+template<>
+struct native_handle<section_t> : native_handle<section_t::base_type>
+{
+	detail::protection protection;
+};
+
+template<typename Traits>
+[[nodiscard]] auto create_section(fs_size const max_size, auto&&... args)
+{
+	auto a = io_parameters_t<section_t, section_io::create_t>{};
+	a.max_size = max_size;
+	(set_argument(a, vsm_forward(args)), ...);
+	return Traits::template produce<section_t, section_io::create_t>(a);
+}
+
+template<typename Traits>
+[[nodiscard]] auto create_section(
+	handle_for<detail::file_t> auto const& file,
+	fs_size const max_size,
+	auto&&... args)
+{
+	auto a = io_parameters_t<section_t, section_io::create_t>{};
+	a.options = section_options::backing_file;
+	a.backing_storage = &file.native();
+	a.max_size = max_size;
+	(set_argument(a, vsm_forward(args)), ...);
+	return Traits::template produce<section_t, section_io::create_t>(a);
+}
 
 } // namespace allio::detail

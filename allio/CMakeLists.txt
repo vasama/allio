@@ -63,18 +63,18 @@ vsm_add_library(allio::core
 		include/allio/detail/type_list.hpp
 		include/allio/detail/unique_handle.hpp
 
-		include/allio/detail/handles/datagram_socket.hpp
 		include/allio/detail/handles/directory.hpp
 		include/allio/detail/handles/event.hpp
 		include/allio/detail/handles/file.hpp
 		include/allio/detail/handles/fs_object.hpp
-		include/allio/detail/handles/listen_socket.hpp
 		include/allio/detail/handles/map.hpp
 		include/allio/detail/handles/opaque_object.hpp
 		include/allio/detail/handles/platform_object.hpp
 		include/allio/detail/handles/process.hpp
+		include/allio/detail/handles/raw_datagram_socket.hpp
+		include/allio/detail/handles/raw_listen_socket.hpp
+		include/allio/detail/handles/raw_socket.hpp
 		include/allio/detail/handles/section.hpp
-		include/allio/detail/handles/socket.hpp
 
 	SOURCES
 		source/allio/impl/error.cpp
@@ -179,9 +179,9 @@ vsm_configure(allio::core
 		source/allio/impl/win32/wsa.hpp
 
 		# handles
-		source/allio/impl/posix/handles/datagram_socket.cpp
-		source/allio/impl/posix/handles/listen_socket.cpp
-		source/allio/impl/posix/handles/socket.cpp
+		source/allio/impl/posix/handles/raw_datagram_socket.cpp
+		source/allio/impl/posix/handles/raw_listen_socket.cpp
+		source/allio/impl/posix/handles/raw_socket.cpp
 		source/allio/impl/win32/handles/directory.cpp
 		source/allio/impl/win32/handles/event.cpp
 		source/allio/impl/win32/handles/file.cpp
@@ -196,14 +196,15 @@ vsm_configure(allio::core
 		source/allio/impl/win32/handles/section.cpp
 
 		# iocp
-		source/allio/impl/win32/iocp/datagram_socket.cpp
 		source/allio/impl/win32/iocp/directory.cpp
 		source/allio/impl/win32/iocp/event.cpp
 		source/allio/impl/win32/iocp/file.cpp
-		source/allio/impl/win32/iocp/listen_socket.cpp
 		source/allio/impl/win32/iocp/multiplexer.cpp
 		source/allio/impl/win32/iocp/process.cpp
-		source/allio/impl/win32/iocp/socket.cpp
+		source/allio/impl/win32/iocp/raw_datagram_socket.cpp
+		source/allio/impl/win32/iocp/raw_listen_socket.cpp
+		source/allio/impl/win32/iocp/raw_socket.cpp
+		source/allio/impl/win32/iocp/raw_socket.hpp
 		source/allio/impl/win32/iocp/wait.cpp
 
 	TEST_SOURCES
@@ -274,16 +275,16 @@ vsm_configure(allio::core
 		source/allio/impl/linux/handles/platform_object.cpp
 		source/allio/impl/linux/handles/process.cpp
 		source/allio/impl/linux/handles/section.cpp
-		source/allio/impl/posix/handles/datagram_socket.cpp
-		source/allio/impl/posix/handles/listen_socket.cpp
-		source/allio/impl/posix/handles/socket.cpp
+		source/allio/impl/posix/handles/raw_datagram_socket.cpp
+		source/allio/impl/posix/handles/raw_listen_socket.cpp
+		source/allio/impl/posix/handles/raw_socket.cpp
 
 		# io_uring
-		source/allio/impl/linux/io_uring/datagram_socket.cpp
 		source/allio/impl/linux/io_uring/event.cpp
-		source/allio/impl/linux/io_uring/listen_socket.cpp
 		source/allio/impl/linux/io_uring/multiplexer.cpp
-		source/allio/impl/linux/io_uring/socket.cpp
+		source/allio/impl/linux/io_uring/raw_datagram_socket.cpp
+		source/allio/impl/linux/io_uring/raw_listen_socket.cpp
+		source/allio/impl/linux/io_uring/raw_socket.cpp
 		#source/allio/impl/linux/io_uring/process.cpp
 
 	TEST_SOURCES

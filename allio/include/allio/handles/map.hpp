@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/detail/handles/map.hpp>
+#include <allio/handles/section.hpp>
 #include <allio/memory.hpp>
 
 namespace allio {

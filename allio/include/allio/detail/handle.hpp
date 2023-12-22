@@ -1,7 +1,5 @@
 #pragma once
 
-#include <allio/detail/expected.hpp>
-#include <allio/detail/lifetime.hpp>
 #include <allio/detail/object.hpp>
 #include <allio/error.hpp>
 
@@ -14,28 +12,14 @@
 
 namespace allio::detail {
 
-template<typename Handle>
-concept handle = requires (Handle const& h)
-{
-	typename Handle::handle_concept;
-	requires object<typename Handle::object_type>;
-	typename Handle::io_traits_type;
-	requires optional_multiplexer_handle<typename Handle::multiplexer_handle_type>;
-	{ h.native() } -> std::same_as<typename Handle::object_type::native_type const&>;
-};
-
-template<typename Handle, typename Object>
-concept handle_for = handle<Handle> && std::is_same_v<typename Handle::object_type, Object>;
-
-
 struct adopt_handle_t {};
 inline constexpr adopt_handle_t adopt_handle = {};
 
 
-template<object Object, typename IoTraits>
+template<object Object>
 class basic_detached_handle;
 
-template<object Object, typename IoTraits, multiplexer_handle_for<Object> MultiplexerHandle>
+template<object Object, multiplexer_handle_for<Object> MultiplexerHandle>
 class basic_attached_handle;
 
 template<bool IsVoid>
@@ -44,129 +28,61 @@ struct _basic_handle;
 template<>
 struct _basic_handle<1>
 {
-	template<typename Object, typename IoTraits, typename MultiplexerHandle>
-	using type = basic_detached_handle<Object, IoTraits>;
+	template<typename Object, typename MultiplexerHandle>
+	using type = basic_detached_handle<Object>;
 };
 
 template<>
 struct _basic_handle<0>
 {
-	template<typename Object, typename IoTraits, typename MultiplexerHandle>
-	using type = basic_attached_handle<Object, IoTraits, MultiplexerHandle>;
+	template<typename Object, typename MultiplexerHandle>
+	using type = basic_attached_handle<Object, MultiplexerHandle>;
 };
 
-template<object Object, typename IoTraits, optional_multiplexer_handle_for<Object> MultiplexerHandle>
+template<object Object, optional_multiplexer_handle_for<Object> MultiplexerHandle>
 using basic_handle = typename _basic_handle<std::is_void_v<MultiplexerHandle>>::template type<Object, MultiplexerHandle>;
 
 
-using no_io_traits = expected_error_traits;
-
-struct rebind_handle_tag {};
+template<typename Handle, typename Connector>
+struct native_handle_pair
+{
+	vsm_no_unique_address Handle handle;
+	vsm_no_unique_address Connector connector;
+};
 
 template<object Object>
-class abstract_handle
-	: public Object::template abstract_interface<abstract_handle<Object>>
+class basic_detached_handle
 {
 public:
+	using handle_concept = void;
 	using object_type = Object;
-	using native_type = typename Object::native_type;
+	using multiplexer_handle_type = void;
+
+	using native_type = native_handle<Object>;
 	static_assert(std::is_default_constructible_v<native_type>);
 
-protected:
-	native_type m_native;
+private:
+	native_type m_native = {};
 
 public:
-	[[nodiscard]] native_type const& native() const
-	{
-		vsm_assert(*this); //PRECONDITION
-		return m_native;
-	}
+	template<object Object>
+	using rebind_object = basic_detached_handle<Object>;
 
-	[[nodiscard]] explicit operator bool() const
-	{
-		return m_native.object_t::native_type::flags[Object::flags::not_null];
-	}
+	template<optional_multiplexer_handle_for<Object> OtherMultiplexerHandle>
+	using rebind_multiplexer = basic_handle<Object, OtherMultiplexerHandle>;
 
-protected:
-	allio_detail_default_lifetime(abstract_handle);
 
-	explicit abstract_handle(
+	basic_detached_handle() = default;
+
+	explicit basic_detached_handle(
 		adopt_handle_t,
 		std::convertible_to<native_type> auto&& native)
 		: m_native(vsm_forward(native))
 	{
 	}
 
-	[[nodiscard]] native_type& _native()
-	{
-		return m_native;
-	}
-
-	[[nodiscard]] native_type const& _native() const
-	{
-		return m_native;
-	}
-
-	template<observer Operation>
-	friend vsm::result<io_result_t<Object, Operation>> tag_invoke(
-		blocking_io_t<Object, Operation>,
-		abstract_handle const& h,
-		io_parameters_t<Object, Operation> const& args)
-	{
-		return blocking_io<Object, Operation>(h.m_native, args);
-	}
-
-	template<object OtherObject, typename OtherIoTraits>
-	friend class basic_detached_handle;
-
-	template<object OtherObject, typename OtherIoTraits, multiplexer_handle_for<OtherObject> MultiplexerHandle>
-	friend class basic_attached_handle;
-};
-
-template<object Object, typename IoTraits>
-class basic_detached_handle final
-	: public abstract_handle<Object>
-	, public Object::template concrete_interface<basic_detached_handle<Object, IoTraits>>
-{
-	using abstract_handle_type = abstract_handle<Object>;
-
-public:
-	using handle_concept = void;
-
-	using io_traits_type = IoTraits;
-	using multiplexer_handle_type = void;
-
-	template<object NewObject>
-	using rebind_object = basic_detached_handle<NewObject, IoTraits>;
-
-	template<optional_multiplexer_handle_for<Object> NewMultiplexerHandle>
-	using rebind_multiplexer = basic_handle<Object, IoTraits, NewMultiplexerHandle>;
-
-
-	using native_type = typename Object::native_type;
-
-
-	basic_detached_handle()
-		: abstract_handle_type{}
-	{
-	}
-
-	explicit basic_detached_handle(
-		adopt_handle_t,
-		std::convertible_to<native_type> auto&& native)
-		: abstract_handle_type(adopt_handle, vsm_forward(native))
-	{
-	}
-
-	template<typename OtherIoTraits>
-	explicit basic_detached_handle(rebind_handle_tag, basic_detached_handle<Object, OtherIoTraits>&& other)
-		: abstract_handle_type(static_cast<abstract_handle_type&&>(other))
-	{
-		other.m_native = {};
-	}
-
 	basic_detached_handle(basic_detached_handle&& other)
-		: abstract_handle_type(static_cast<abstract_handle_type&&>(other))
+		: m_native(vsm_move(other.m_native))
 	{
 		other.m_native = {};
 	}
@@ -178,7 +94,7 @@ public:
 			close();
 		}
 
-		static_cast<abstract_handle_type&>(*this) = static_cast<abstract_handle_type&&>(other);
+		m_native = vsm_move(other.m_native);
 		other.m_native = {};
 
 		return *this;
@@ -193,146 +109,126 @@ public:
 	}
 
 
+	[[nodiscard]] native_type const& native() const
+	{
+		return m_native;
+	}
+
+	[[nodiscard]] explicit operator bool() const
+	{
+		using object_native_handle_type = native_handle<object_t>;
+		return m_native.object_native_handle_type::flags[object_t::flags::not_null];
+	}
+
+
 	void close()
 	{
-		unrecoverable(blocking_io<Object, close_t>(
+		unrecoverable(blocking_io<close_t>(
 			*this,
-			io_parameters_t<Object, close_t>{}));
+			no_parameters_t()));
 	}
 
 	[[nodiscard]] native_type release()
 	{
 		vsm_assert(*this); //PRECONDITION
-		vsm::result<native_type> r(
-			vsm::result_value,
-			vsm_move(abstract_handle_type::m_native));
-		abstract_handle_type::m_native = {};
+		native_type const r = vsm_move(m_native);
+		m_native = {};
 		return r;
 	}
 
-
-	template<multiplexer_for<Object> Multiplexer>
-	[[nodiscard]] auto via(Multiplexer& multiplexer) &&
-	{
-		return vsm_move(*this).template via<multiplexer_handle_t<Multiplexer>>(multiplexer);
-	}
-
-	#if 0
-	template<typename MultiplexerHandle>
-	[[nodiscard]] auto via(MultiplexerHandle&& multiplexer_handle) &&
-		requires multiplexer_handle_for<std::remove_cvref_t<MultiplexerHandle>, Object>
-	{
-		return vsm_move(*this).template via<std::remove_cvref_t<MultiplexerHandle>>(vsm_forward(multiplexer));
-	}
-	#endif
-
-	template<multiplexer_handle_for<Object> MultiplexerHandle>
-	[[nodiscard]] auto via(std::convertible_to<MultiplexerHandle> auto&& multiplexer) &&
-	{
-		return io_traits_type::unwrap_result(_via<MultiplexerHandle>(vsm_forward(multiplexer)));
-	}
-
 private:
-	template<multiplexer_handle_for<Object> MultiplexerHandle>
-	[[nodiscard]] vsm::result<basic_attached_handle<Object, IoTraits, MultiplexerHandle>> _via(
-		std::convertible_to<MultiplexerHandle> auto&& multiplexer)
+	template<multiplexer_handle_for<Object> OtherMultiplexerHandle>
+	static vsm::result<basic_attached_handle<Object, OtherMultiplexerHandle>> _rebind(
+		basic_detached_handle& h,
+		std::convertible_to<OtherMultiplexerHandle> auto&& multiplexer)
 	{
-		vsm::result<basic_attached_handle<Object, IoTraits, MultiplexerHandle>> r(
+		vsm::result<basic_attached_handle<Object, OtherMultiplexerHandle>> r(
 			vsm::result_value,
 			vsm_forward(multiplexer));
 
-		if (*this)
+		if (h)
 		{
-			vsm_try_void(r->_set_handle(static_cast<abstract_handle_type&&>(*this)));
+			auto const r_attach = attach_handle(
+				vsm_as_const(r->m_multiplexer_handle),
+				vsm_as_const(h.m_native),
+				r->m_connector);
+
+			if (r_attach)
+			{
+				r->m_native = vsm_move(h.m_native);
+				h.m_native = {};
+			}
+			else
+			{
+				r = vsm::unexpected(r_attach.error());
+			}
 		}
 
 		return r;
 	}
 
-	template<typename OtherIoTraits>
-	friend vsm::result<basic_detached_handle<Object, OtherIoTraits>> tag_invoke(
-		rebind_handle_t<basic_detached_handle<Object, OtherIoTraits>>,
-		basic_detached_handle&& h)
-	{
-		return vsm::result<basic_detached_handle<Object, OtherIoTraits>>(
-			vsm::result_value,
-			rebind_handle_tag(),
-			vsm_move(h));
-	}
-
-	template<typename OtherIoTraits, multiplexer_handle_for<Object> OtherMultiplexerHandle>
-	friend vsm::result<basic_attached_handle<Object, OtherIoTraits, OtherMultiplexerHandle>> tag_invoke(
-		rebind_handle_t<basic_attached_handle<Object, OtherIoTraits, OtherMultiplexerHandle>>,
+	template<multiplexer_handle_for<Object> OtherMultiplexerHandle>
+	friend vsm::result<basic_attached_handle<Object, OtherMultiplexerHandle>> tag_invoke(
+		rebind_handle_t<basic_attached_handle<Object, OtherMultiplexerHandle>>,
 		basic_detached_handle&& h,
 		std::convertible_to<OtherMultiplexerHandle> auto&& multiplexer)
 	{
-		return vsm_move(h).template via<OtherMultiplexerHandle>(vsm_forward(multiplexer));
+		return _rebind<OtherMultiplexerHandle>(h, vsm_forward(multiplexer));
 	}
 
-	template<mutation Operation>
-	friend vsm::result<io_result_t<Object, Operation>> tag_invoke(
-		blocking_io_t<Object, Operation>,
-		basic_detached_handle& h,
+	template<operation_c Operation>
+	friend vsm::result<io_result_t<basic_detached_handle, Operation>> tag_invoke(
+		blocking_io_t<Operation>,
+		handle_const_t<Operation, basic_detached_handle>& h,
 		io_parameters_t<Object, Operation> const& args)
 	{
-		return blocking_io<Object, Operation>(h.m_native, args);
+		return blocking_io<Operation>(h.m_native, args);
 	}
 
-	template<object OtherObject, typename OtherIoTraits, multiplexer_handle_for<OtherObject> MultiplexerHandle>
+	template<object OtherObject, multiplexer_handle_for<OtherObject> OtherMultiplexerHandle>
 	friend class basic_attached_handle;
 };
 
-
-template<typename Native, typename Connector>
-struct native_pair
+template<object Object, multiplexer_handle_for<Object> MultiplexerHandle>
+class basic_attached_handle
 {
-	vsm_no_unique_address Native native;
-	vsm_no_unique_address Connector connector;
-};
-
-template<object Object, typename IoTraits, multiplexer_handle_for<Object> MultiplexerHandle>
-class basic_attached_handle final
-	: public abstract_handle<Object>
-	, public Object::template concrete_interface<basic_attached_handle<Object, IoTraits, MultiplexerHandle>>
-{
-	using abstract_handle_type = abstract_handle<Object>;
-	using detached_handle_type = basic_detached_handle<Object, IoTraits>;
+	using detached_handle_type = basic_detached_handle<Object>;
 
 	using multiplexer_type = typename MultiplexerHandle::multiplexer_type;
 
 public:
 	using handle_concept = void;
-
-	using io_traits_type = IoTraits;
+	using object_type = Object;
 	using multiplexer_handle_type = MultiplexerHandle;
 
-	template<object NewObject>
-		requires multiplexer_handle_for<MultiplexerHandle, NewObject>
-	using rebind_object = basic_attached_handle<NewObject, IoTraits, MultiplexerHandle>;
+	using native_type = native_handle<Object>;
+	static_assert(std::is_default_constructible_v<native_type>);
 
-	template<optional_multiplexer_handle_for<Object> NewMultiplexerHandle>
-	using rebind_multiplexer = basic_handle<Object, IoTraits, NewMultiplexerHandle>;
-
-
-	using native_type = typename Object::native_type;
 	using connector_type = async_connector_t<multiplexer_type, Object>;
 	static_assert(std::is_default_constructible_v<connector_type>);
 
 private:
-	vsm_no_unique_address MultiplexerHandle m_multiplexer_handle;
+	native_type m_native = {};
+	vsm_no_unique_address MultiplexerHandle m_multiplexer_handle = {};
 	vsm_no_unique_address connector_type m_connector;
+
+public:
+	template<object Object>
+		requires multiplexer_handle_for<MultiplexerHandle, Object>
+	using rebind_object = basic_attached_handle<Object, MultiplexerHandle>;
+
+	template<optional_multiplexer_handle_for<Object> OtherMultiplexerHandle>
+	using rebind_multiplexer = basic_handle<Object, OtherMultiplexerHandle>;
+
+private:
 
 public:
 	basic_attached_handle()
 		requires std::is_default_constructible_v<MultiplexerHandle>
-		: abstract_handle_type{}
-		, m_multiplexer_handle{}
-	{
-	}
+		= default;
 
 	explicit basic_attached_handle(std::convertible_to<MultiplexerHandle> auto&& multiplexer_handle)
-		: abstract_handle_type{}
-		, m_multiplexer_handle(vsm_forward(multiplexer_handle))
+		: m_multiplexer_handle(vsm_forward(multiplexer_handle))
 	{
 	}
 
@@ -341,23 +237,14 @@ public:
 		std::convertible_to<MultiplexerHandle> auto&& multiplexer_handle,
 		std::convertible_to<native_type> auto&& native,
 		std::convertible_to<connector_type> auto&& connector)
-		: abstract_handle_type(adopt_handle, vsm_forward(native))
+		: m_native(vsm_forward(native))
 		, m_multiplexer_handle(vsm_forward(multiplexer_handle))
 		, m_connector(vsm_forward(connector))
 	{
 	}
 
-	template<typename OtherIoTraits>
-	explicit basic_attached_handle(basic_attached_handle<Object, OtherIoTraits, MultiplexerHandle>&& other)
-		: abstract_handle_type(static_cast<abstract_handle_type&&>(other))
-		, m_multiplexer_handle(vsm_move(other.m_multiplexer_handle))
-		, m_connector(vsm_move(other.m_connector))
-	{
-		other.m_native = {};
-	}
-
 	basic_attached_handle(basic_attached_handle&& other)
-		: abstract_handle_type(static_cast<abstract_handle_type&&>(other))
+		: m_native(vsm_move(other.m_native))
 		, m_multiplexer_handle(vsm_move(other.m_multiplexer_handle))
 		, m_connector(vsm_move(other.m_connector))
 	{
@@ -368,7 +255,7 @@ public:
 	{
 		close();
 
-		static_cast<abstract_handle_type&>(*this) = static_cast<abstract_handle_type&&>(other);
+		m_native = vsm_move(other.m_native);
 		m_multiplexer_handle = vsm_move(other.m_multiplexer_handle);
 		m_connector = vsm_move(other.m_connector);
 		other.m_native = {};
@@ -382,6 +269,11 @@ public:
 	}
 
 
+	[[nodiscard]] native_type const& native() const
+	{
+		return m_native;
+	}
+
 	[[nodiscard]] multiplexer_handle_type const& multiplexer() const
 	{
 		return m_multiplexer_handle;
@@ -392,71 +284,60 @@ public:
 		return m_connector;
 	}
 
+	[[nodiscard]] explicit operator bool() const
+	{
+		using object_native_handle_type = native_handle<object_t>;
+		return m_native.object_native_handle_type::flags[object_t::flags::not_null];
+	}
+
 
 	void close()
 	{
 		if (*this)
 		{
 			//TODO: Handle detach
-			vsm_verify(blocking_io<Object, close_t>(
-				abstract_handle_type::m_native,
-				io_parameters_t<Object, close_t>()));
+			unrecoverable(blocking_io<close_t>(
+				m_native,
+				no_parameters_t()));
+			vsm_assert(!*this);
 		}
 	}
 
-	[[nodiscard]] native_pair<native_type, connector_type> release()
+	[[nodiscard]] native_handle_pair<native_type, connector_type> release()
 	{
 		vsm_assert(*this); //PRECONDITION
-		native_pair<native_type, connector_type> r =
+		native_handle_pair<native_type, connector_type> r =
 		{
-			vsm_move(abstract_handle_type::m_native),
+			vsm_move(m_native),
 			vsm_move(m_connector),
 		};
-		abstract_handle_type::m_native = {};
+		m_native = {};
 		return r;
 	}
 
-	[[nodiscard]] auto detach() &&
-	{
-		return io_traits_type::unwrap_result(_detach());
-	}
 
 private:
-	[[nodiscard]] vsm::result<void> _set_handle(abstract_handle_type&& h)
+	static vsm::result<detached_handle_type> _rebind(
+		basic_attached_handle& h)
 	{
-		vsm_assert(!*this);
+		vsm::result<detached_handle_type> r(vsm::result_value);
 
-		auto& h_native = h._native();
-
-		vsm_try_void(attach_handle(
-			vsm_as_const(m_multiplexer_handle),
-			vsm_as_const(h_native),
-			m_connector));
-
-		abstract_handle_type::m_native = vsm_move(h_native);
-		h_native = {};
-
-		return {};
-	}
-
-	[[nodiscard]] vsm::result<detached_handle_type> _detach()
-	{
-		if (!*this)
+		if (h.object_t::native_type::flags[object_t::flags::not_null])
 		{
-			return vsm::unexpected(error::handle_is_null);
+			auto const r_detach = detach_handle(
+				vsm_as_const(h.m_multiplexer_handle),
+				vsm_as_const(h.m_native));
+
+			if (r_detach)
+			{
+				r->m_native = vsm_move(h.m_native);
+				h.m_native = {};
+			}
+			else
+			{
+				r = vsm::unexpected(r_detach.error());
+			}
 		}
-	
-		vsm_try_void(detach_handle(
-			vsm_as_const(m_multiplexer_handle),
-			vsm_as_const(abstract_handle_type::m_native),
-			m_connector));
-
-		vsm::result<detached_handle_type> r(
-			vsm::result_value,
-			adopt_handle,
-			abstract_handle_type::m_native);
-
-		abstract_handle_type::m_native = {};
 
 		return r;
 	}
@@ -465,51 +346,49 @@ private:
 		rebind_handle_t<detached_handle_type>,
 		basic_attached_handle&& h)
 	{
-		return vsm_move(h).detach();
+		return _rebind(h);
 	}
 
-	template<typename OtherIoTraits>
-	friend vsm::result<basic_attached_handle<Object, OtherIoTraits, MultiplexerHandle>> tag_invoke(
-		rebind_handle_t<basic_attached_handle<Object, OtherIoTraits, MultiplexerHandle>>,
-		basic_attached_handle&& h)
+	template<observer Operation>
+	friend vsm::result<io_result_t<basic_attached_handle, Operation>> tag_invoke(
+		blocking_io_t<Operation>,
+		basic_attached_handle const& h,
+		io_parameters_t<Object, Operation> const& args)
 	{
-		return vsm::result<basic_attached_handle<Object, OtherIoTraits, MultiplexerHandle>>(
-			vsm::result_value,
-			rebind_handle_tag(),
-			vsm_move(h));
+		return blocking_io<Operation>(h.m_native, args);
 	}
 
 	template<operation_c Operation>
-	friend io_result<io_result_t<Object, Operation, MultiplexerHandle>> tag_invoke(
+	friend io_result<io_result_t<basic_attached_handle, Operation>> tag_invoke(
 		submit_io_t,
 		handle_const_t<Operation, basic_attached_handle>& h,
 		async_operation_t<multiplexer_type, Object, Operation>& s,
-		io_parameters_t<Object, Operation> const& args,
+		io_parameters_t<Object, Operation> const& a,
 		io_handler<multiplexer_type>& handler)
 	{
 		return submit_io(
 			vsm_as_const(h.m_multiplexer_handle),
-			h._native(),
+			h.m_native,
 			h.m_connector,
 			s,
-			args,
+			a,
 			handler);
 	}
 
 	template<operation_c Operation>
-	friend io_result<io_result_t<Object, Operation, MultiplexerHandle>> tag_invoke(
+	friend io_result<io_result_t<basic_attached_handle, Operation>> tag_invoke(
 		notify_io_t,
 		handle_const_t<Operation, basic_attached_handle>& h,
 		async_operation_t<multiplexer_type, Object, Operation>& s,
-		io_parameters_t<Object, Operation> const& args,
+		io_parameters_t<Object, Operation> const& a,
 		typename multiplexer_type::io_status_type&& status)
 	{
 		return notify_io(
 			vsm_as_const(h.m_multiplexer_handle),
-			h._native(),
+			h.m_native,
 			h.m_connector,
 			s,
-			args,
+			a,
 			vsm_move(status));
 	}
 
@@ -519,15 +398,15 @@ private:
 		basic_attached_handle const& h,
 		async_operation_t<multiplexer_type, Object, Operation>& s)
 	{
-		cancel_io(
+		return cancel_io(
 			h.m_multiplexer_handle,
-			h._native(),
+			h.m_native,
 			h.m_connector,
 			s);
 	}
 
 
-	template<object OtherObject, typename OtherIoTraits>
+	template<object OtherObject>
 	friend class basic_detached_handle;
 };
 

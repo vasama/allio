@@ -20,7 +20,7 @@ vsm::result<handle_with_flags> open_file(open_parameters const& a);
 vsm::result<handle_with_flags> open_unique_file(open_parameters const& a);
 
 vsm::result<void> open_fs_object(
-	fs_object_t::native_type& h,
+	native_handle<fs_object_t>& h,
 	io_parameters_t<fs_object_t, fs_io::open_t> const& a,
 	open_options kind);
 

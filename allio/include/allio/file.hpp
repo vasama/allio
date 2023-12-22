@@ -4,6 +4,6 @@
 
 namespace allio {
 
-using namespace blocking::file;
+using namespace blocking::files;
 
 } // namespace allio

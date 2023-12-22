@@ -16,24 +16,14 @@ fs_path detail::get_null_device_path()
 }
 
 vsm::result<void> file_t::open(
-	native_type& h,
+	native_handle<file_t>& h,
 	io_parameters_t<file_t, open_t> const& a)
 {
-
-	h = platform_object_t::native_type
-	{
-		object_t::native_type
-		{
-			flags::not_null | flags,
-		},
-		wrap_handle(directory.release()),
-	};
-
-	return {};
+	return open_fs_object(h, a, open_kind::file);
 }
 
 vsm::result<fs_size> file_t::tell(
-	native_type const& h,
+	native_handle<file_t> const& h,
 	io_parameters_t<file_t, tell_t> const&)
 {
 	FILE_POSITION_INFORMATION information;
@@ -55,7 +45,7 @@ vsm::result<fs_size> file_t::tell(
 }
 
 vsm::result<void> file_t::seek(
-	native_type const& h,
+	native_handle<file_t> const& h,
 	io_parameters_t<file_t, seek_t> const& a)
 {
 	FILE_POSITION_INFORMATION information = {};
@@ -78,28 +68,28 @@ vsm::result<void> file_t::seek(
 }
 
 vsm::result<size_t> file_t::stream_read(
-	native_type const& h,
+	native_handle<file_t> const& h,
 	io_parameters_t<file_t, stream_read_t> const& a)
 {
 	return win32::stream_read(h, a);
 }
 
 vsm::result<size_t> file_t::stream_write(
-	native_type const& h,
+	native_handle<file_t> const& h,
 	io_parameters_t<file_t, stream_write_t> const& a)
 {
 	return win32::stream_write(h, a);
 }
 
 vsm::result<size_t> file_t::random_read(
-	native_type const& h,
+	native_handle<file_t> const& h,
 	io_parameters_t<file_t, random_read_t> const& a)
 {
 	return win32::random_read(h, a);
 }
 
 vsm::result<size_t> file_t::random_write(
-	native_type const& h,
+	native_handle<file_t> const& h,
 	io_parameters_t<file_t, random_write_t> const& a)
 {
 	return win32::random_write(h, a);

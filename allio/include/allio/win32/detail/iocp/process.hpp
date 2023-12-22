@@ -12,7 +12,7 @@ struct async_connector<iocp_multiplexer, process_t>
 	: iocp_multiplexer::connector_type
 {
 	using M = iocp_multiplexer;
-	using H = process_t::native_type;
+	using H = native_handle<process_t>;
 	using C = async_connector_t<M, process_t>;
 
 	static vsm::result<void> attach(M&, H const&, C&)
@@ -29,14 +29,14 @@ struct async_connector<iocp_multiplexer, process_t>
 };
 
 template<>
-struct async_operation<iocp_multiplexer, process_t, process_io::wait_t>
+struct async_operation<iocp_multiplexer, process_t, process_t::wait_t>
 	: iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
-	using H = process_t::native_type const;
+	using H = native_handle<process_t> const;
 	using C = async_connector_t<M, process_t> const;
-	using S = async_operation_t<M, process_t, process_io::wait_t>;
-	using A = io_parameters_t<process_t, process_io::wait_t>;
+	using S = async_operation_t<M, process_t, process_t::wait_t>;
+	using A = io_parameters_t<process_t, process_t::wait_t>;
 
 	iocp_wait_state wait_state;
 

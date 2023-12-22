@@ -87,7 +87,7 @@ static vsm::result<handle_with_flags> create_named_pipe_file(io_flags const flag
 	ULONG create_options = 0;
 	handle_flags h_flags = handle_flags::none;
 
-	if (vsm::no_flags(flags, io_flags::create_multiplexable))
+	if (vsm::no_flags(flags, io_flags::create_non_blocking))
 	{
 		create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
 		h_flags |= platform_object_t::impl_type::flags::synchronous;
@@ -146,7 +146,7 @@ static vsm::result<handle_with_flags> create_pipe(
 	ULONG create_options = FILE_NON_DIRECTORY_FILE;
 	handle_flags h_flags = handle_flags::none;
 
-	if (vsm::no_flags(flags, io_flags::create_multiplexable))
+	if (vsm::no_flags(flags, io_flags::create_non_blocking))
 	{
 		create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
 		h_flags |= platform_object_t::impl_type::flags::synchronous;
@@ -183,7 +183,7 @@ static vsm::result<handle_with_flags> create_pipe(
 }
 
 vsm::result<void> pipe_pair_t::create_pair(
-	native_type& h,
+	native_handle<pipe_pair_t>& h,
 	io_parameters_t<pipe_pair_t, create_pair_t> const& a)
 {
 #if 0
@@ -207,45 +207,27 @@ vsm::result<void> pipe_pair_t::create_pair(
 	}
 #endif
 
-	vsm_try_bind((server_handle, server_flags), create_named_pipe_file(a.flags));
-	vsm_try_bind((client_handle, client_flags), create_pipe(server_handle.get(), a.flags));
+	vsm_try_bind((server_handle, server_flags), ::create_named_pipe_file(a.flags));
+	vsm_try_bind((client_handle, client_flags), ::create_pipe(server_handle.get(), a.flags));
 
-	h = native_type
-	{
-		object_t::native_type
-		{
-			flags::not_null,
-		},
-		platform_object_t::native_type
-		{
-			object_t::native_type
-			{
-				flags::not_null | server_flags,
-			},
-			wrap_handle(server_handle.release()),
-		},
-		platform_object_t::native_type
-		{
-			object_t::native_type
-			{
-				flags::not_null | client_flags,
-			},
-			wrap_handle(client_handle.release()),
-		},
-	};
+	h.flags = flags::not_null;
+	h.r_h.flags = object_t::flags::not_null;
+	h.r_h.platform_handle = wrap_handle(server_handle.release());
+	h.w_h.flags = object_t::flags::not_null;
+	h.w_h.platform_handle = wrap_handle(client_handle.release());
 
 	return {};
 }
 
 vsm::result<size_t> pipe_t::stream_read(
-	native_type const& h,
+	native_handle<pipe_t> const& h,
 	io_parameters_t<pipe_t, stream_read_t> const& a)
 {
 	return win32::stream_read(h, a);
 }
 
 vsm::result<size_t> pipe_t::stream_write(
-	native_type const& h,
+	native_handle<pipe_t> const& h,
 	io_parameters_t<pipe_t, stream_write_t> const& a)
 {
 	return win32::stream_write(h, a);

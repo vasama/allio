@@ -1,11 +1,12 @@
 #pragma once
 
-#include <allio/detail/default_io_traits.hpp>
+#include <allio/detail/default_traits.hpp>
 #include <allio/detail/event_queue.hpp>
 #include <allio/detail/execution.hpp>
 #include <allio/detail/external_synchronization.hpp>
 #include <allio/detail/get_multiplexer.hpp>
 #include <allio/detail/handles/event.hpp>
+#include <allio/senders/event.hpp>
 
 #include <vsm/assert.h>
 #include <vsm/intrusive/mpsc_queue.hpp>
@@ -56,8 +57,7 @@ class event_queue
 	};
 
 
-	//TODO: Use noexcept io traits. That would make all of this easier.
-	using event_handle_type = sender_handle<event_t, MultiplexerHandle>;
+	using event_handle_type = senders::basic_event_handle<MultiplexerHandle>;
 
 	event_handle_type m_event;
 	vsm::intrusive::mpsc_queue<operation_base> m_mpsc_queue;
@@ -72,16 +72,17 @@ public:
 	template<std::convertible_to<MultiplexerHandle> Multiplexer>
 	[[nodiscard]] static vsm::result<event_queue> create(Multiplexer&& multiplexer)
 	{
-		blocking_handle<event_t> event;
-		io_parameters_t<event_t, event_t::create_t> a = {};
-		a.options = event_options::auto_reset;
-		vsm_try_void(blocking_io<event_t, event_t::create_t>(event, a));
+		basic_detached_handle<event_t> detached;
 
-		vsm_try(sender_event, rebind_handle<event_handle_type>(
-			vsm_move(event),
+		auto a = io_parameters_t<event_t, event_t::create_t>{};
+		a.options = event_options::auto_reset;
+		vsm_try_void(blocking_io<event_t::create_t>(detached, a));
+
+		vsm_try(attached, rebind_handle<event_handle_type>(
+			vsm_move(detached),
 			vsm_forward(multiplexer)));
 
-		return vsm::result<event_queue>(vsm::result_value, vsm_move(sender_event));
+		return vsm::result<event_queue>(vsm::result_value, vsm_move(attached));
 	}
 
 	[[nodiscard]] MultiplexerHandle const& multiplexer() const
@@ -127,7 +128,7 @@ public:
 	{
 		if (m_mpsc_queue.push_back(&event))
 		{
-			vsm_verify(blocking_io<event_t, event_io::signal_t>(
+			vsm_verify(blocking_io<event_t::signal_t>(
 				m_event,
 				no_parameters_t()));
 		}

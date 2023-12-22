@@ -14,35 +14,37 @@ using namespace allio::detail;
 using namespace allio::win32;
 
 vsm::result<void> event_t::create(
-	native_type& h,
+	native_handle<event_t>& h,
 	io_parameters_t<event_t, create_t> const& a)
 {
 	handle_flags flags = flags::none;
 	EVENT_TYPE event_type = NotificationEvent;
 
-	if (a.mode == event_mode::auto_reset)
+	if (vsm::any_flags(a.options, event_options::auto_reset))
 	{
 		flags |= flags::auto_reset;
 		event_type = SynchronizationEvent;
 	}
 
+	//TODO: Inheritable
 	unique_handle handle;
 	NTSTATUS const status = NtCreateEvent(
 		vsm::out_resource(handle),
 		EVENT_ALL_ACCESS,
 		/* ObjectAttributes: */ nullptr,
 		event_type,
-		a.initially_signaled);
+		vsm::any_flags(a.options, event_options::initially_signaled));
 
 	if (!NT_SUCCESS(status))
 	{
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
-	h = native_type
+	h = native_handle<event_t>
 	{
-		platform_object_t::native_type
+		native_handle<platform_object_t>
 		{
+			native_handle<object_t>
 			{
 				flags::not_null | flags,
 			},
@@ -54,7 +56,7 @@ vsm::result<void> event_t::create(
 }
 
 vsm::result<void> event_t::signal(
-	native_type const& h,
+	native_handle<event_t> const& h,
 	io_parameters_t<event_t, signal_t> const&)
 {
 	NTSTATUS const status = NtSetEvent(
@@ -70,7 +72,7 @@ vsm::result<void> event_t::signal(
 }
 
 vsm::result<void> event_t::reset(
-	native_type const& h,
+	native_handle<event_t> const& h,
 	io_parameters_t<event_t, reset_t> const&)
 {
 	NTSTATUS const status = NtResetEvent(
@@ -86,7 +88,7 @@ vsm::result<void> event_t::reset(
 }
 
 vsm::result<void> event_t::wait(
-	native_type const& h,
+	native_handle<event_t> const& h,
 	io_parameters_t<event_t, wait_t> const& a)
 {
 	NTSTATUS const status = win32::NtWaitForSingleObject(

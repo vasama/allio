@@ -627,6 +627,8 @@ inline PEB* NtCurrentPeb()
 }
 
 
+//TODO: Is initialising IO_STATUS_BLOCKs ever actually necessary?
+[[deprecated]]
 inline IO_STATUS_BLOCK make_io_status_block()
 {
 	return

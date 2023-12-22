@@ -11,7 +11,7 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-static protection get_file_protection(fs_object_t::native_type const& h)
+static protection get_file_protection(native_handle<fs_object_t> const& h)
 {
 	protection protection = protection::none;
 	if (h.flags[fs_object_t::flags::readable])
@@ -71,7 +71,7 @@ static vsm::result<ULONG> get_page_protection(protection const protection)
 }
 
 vsm::result<void> section_t::create(
-	native_type& h,
+	native_handle<section_t>& h,
 	io_parameters_t<section_t, create_t> const& a)
 {
 	static constexpr auto storage_options =
@@ -160,18 +160,9 @@ vsm::result<void> section_t::create(
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
-	h = native_type
-	{
-		platform_object_t::native_type
-		{
-			object_t::native_type
-			{
-				flags::not_null,
-			},
-			wrap_handle(handle.release()),
-		},
-		protection,
-	};
+	h.flags = flags::not_null;
+	h.platform_handle = wrap_handle(handle.release());
+	h.protection = protection;
 
 	return {};
 }

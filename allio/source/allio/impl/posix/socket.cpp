@@ -2,8 +2,8 @@
 
 #include <allio/step_deadline.hpp>
 
-#include <vsm/defer.hpp>
 #include <vsm/lazy.hpp>
+#include <vsm/numeric.hpp>
 #include <vsm/utility.hpp>
 
 using namespace allio;
@@ -131,11 +131,11 @@ vsm::result<socket_address> socket_address::get(socket_type const socket)
 vsm::result<void> posix::socket_listen(
 	socket_type const socket,
 	socket_address const& addr,
-	uint32_t const* const p_backlog)
+	uint32_t const _backlog)
 {
-	int const backlog = p_backlog != nullptr
-		? std::min<uint32_t>(*p_backlog, std::numeric_limits<int>::max())
-		: SOMAXCONN;
+	int const backlog = _backlog == 0
+		? SOMAXCONN
+		: vsm::saturate<int>(_backlog);
 
 	//TODO: Separate bind.
 	vsm_try_void(socket_bind(socket, addr));
@@ -147,35 +147,6 @@ vsm::result<void> posix::socket_listen(
 
 	return {};
 }
-
-vsm::result<socket_with_flags> posix::socket_accept(
-	socket_type const listen_socket,
-	socket_address& addr,
-	deadline const deadline)
-{
-	if (deadline != deadline::never())
-	{
-		vsm_try_void(socket_poll_or_timeout(listen_socket, socket_poll_r, deadline));
-	}
-
-	//TODO: CLOEXEC
-	addr.size = sizeof(socket_address_union);
-	socket_type const socket = accept(
-		listen_socket,
-		&addr.addr,
-		&addr.size);
-
-	if (socket == socket_error_value)
-	{
-		return vsm::unexpected(get_last_socket_error());
-	}
-
-	return vsm_lazy(socket_with_flags
-	{
-		.socket = unique_socket(socket),
-	});
-}
-
 
 static vsm::result<void> socket_connect_with_timeout(
 	socket_type const socket,

@@ -4,6 +4,7 @@
 #include <allio/error.hpp>
 #include <allio/deadline.hpp>
 #include <allio/detail/handle_flags.hpp>
+#include <allio/detail/object.hpp>
 #include <allio/detail/platform.hpp>
 #include <allio/network.hpp>
 
@@ -106,20 +107,11 @@ inline vsm::result<int> choose_protocol(int const address_family, int const type
 }
 
 
-enum class socket_flags
-{
-	none                    = 0,
-	inheritable             = 1 << 0,
-	multiplexable           = 1 << 1,
-	registered_io           = 1 << 2,
-};
-vsm_flag_enum(socket_flags);
-
 vsm::result<socket_with_flags> create_socket(
 	int address_family,
 	int type,
 	int protocol,
-	socket_flags flags);
+	detail::io_flags flags);
 
 inline vsm::result<void> socket_bind(
 	socket_type const socket,
@@ -143,20 +135,13 @@ inline vsm::result<void> socket_bind(
 vsm::result<void> socket_listen(
 	socket_type socket,
 	socket_address const& addr,
-	uint32_t const* backlog);
-
-vsm::result<void> socket_listen(
-	socket_type const socket,
-	socket_address const& addr,
-	std::same_as<std::optional<uint32_t>> auto const& backlog)
-{
-	return socket_listen(socket, addr, backlog ? &*backlog : nullptr);
-}
+	uint32_t backlog);
 
 vsm::result<socket_with_flags> socket_accept(
 	socket_type listen_socket,
 	socket_address& addr,
-	deadline deadline);
+	deadline deadline,
+	detail::io_flags flags);
 
 vsm::result<void> socket_connect(
 	socket_type socket,

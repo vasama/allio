@@ -4,6 +4,6 @@
 
 namespace allio {
 
-using namespace blocking::directory;
+using namespace blocking::directories;
 
 } // namespace allio

@@ -228,7 +228,7 @@ void mmap_deleter<mmap_type::anonymous>::operator()(mmap_view const view) vsm_st
 }
 
 
-static bool check_address_range(map_t::native_type const& h, auto const& a)
+static bool check_address_range(native_handle<map_t> const& h, auto const& a)
 {
 	uintptr_t const h_beg = reinterpret_cast<uintptr_t>(h.base);
 	uintptr_t const h_end = h_beg + h.size;
@@ -240,7 +240,7 @@ static bool check_address_range(map_t::native_type const& h, auto const& a)
 }
 
 
-template<object Object, std::convertible_to<typename Object::native_type> H>
+template<object Object, std::convertible_to<native_handle<Object>> H>
 static vsm::result<unique_ptr<shared_native_handle<Object>>> make_shared_handle(H&& h)
 {
 	using shared_type = shared_native_handle<Object>;
@@ -253,7 +253,7 @@ static vsm::result<unique_ptr<shared_native_handle<Object>>> make_shared_handle(
 
 
 static vsm::result<void> _map_section(
-	map_t::native_type& h,
+	native_handle<map_t>& h,
 	io_parameters_t<map_t, map_io::map_memory_t> const& a)
 {
 	if (a.section == nullptr)
@@ -261,7 +261,7 @@ static vsm::result<void> _map_section(
 		return vsm::unexpected(error::invalid_argument);
 	}
 
-	section_t::native_type const& section_h = *a.section;
+	native_handle<section_t> const& section_h = *a.section;
 
 	if (!section_h.flags[object_t::flags::not_null])
 	{
@@ -295,47 +295,32 @@ static vsm::result<void> _map_section(
 	vsm_try(allocation_type, get_page_level_allocation_type(page_level));
 
 	//TODO: Use a type erased section handle parameter and share already shared handles.
-	vsm_try(section, win32::duplicate_handle(unwrap_handle(section_h.platform_handle)));
-	vsm_try(shared_section, make_shared_handle<section_t>(section_t::native_type
-	{
-		platform_object_t::native_type
-		{
-			object_t::native_type
-			{
-				section_t::flags::not_null,
-			},
-			wrap_handle(section.get()),
-		},
-	}));
+	vsm_try(duplicate_section, win32::duplicate_handle(unwrap_handle(section_h.platform_handle)));
+	vsm_try(shared_section, make_shared_handle<section_t>(section_h));
+	shared_section->h.platform_handle = wrap_handle(duplicate_section.release());
 
 	vsm_try(map, map_view_of_section(
 		GetCurrentProcess(),
-		section.get(),
+		duplicate_section.get(),
 		a.section_offset,
 		reinterpret_cast<void*>(a.address),
 		a.size,
 		allocation_type,
 		page_protection));
 
-	h = map_t::native_type
-	{
-		object_t::native_type
-		{
-			map_t::flags::not_null,
-		},
-		shared_section.release(),
-		map.get().base,
-		map.get().size,
-	};
+	h.flags = object_t::flags::not_null;
+	h.section = shared_section.release();
+	h.base = map.get().base;
+	h.size = map.get().size;
 
-	(void)section.release();
+	(void)duplicate_section.release();
 	(void)map.release();
 
 	return {};
 }
 
 static vsm::result<void> _map_anonymous(
-	map_t::native_type& h,
+	native_handle<map_t>& h,
 	io_parameters_t<map_t, map_io::map_memory_t> const& a)
 {
 	if (a.section != nullptr)
@@ -380,23 +365,17 @@ static vsm::result<void> _map_anonymous(
 		h_flags |= map_t::flags::page_level_1;
 	}
 
-	h = map_t::native_type
-	{
-		object_t::native_type
-		{
-			map_t::flags::not_null | h_flags,
-		},
-		/* section: */ nullptr,
-		map.get().base,
-		map.get().size,
-	};
+	h.flags = object_t::flags::not_null | h_flags;
+	h.base = map.get().base;
+	h.size = map.get().size;
+
 	(void)map.release();
 
 	return {};
 }
 
 vsm::result<void> map_t::map_memory(
-	native_type& h,
+	native_handle<map_t>& h,
 	io_parameters_t<map_t, map_memory_t> const& a)
 {
 	if (vsm::any_flags(a.options, map_options::backing_section))
@@ -410,7 +389,7 @@ vsm::result<void> map_t::map_memory(
 }
 
 vsm::result<void> map_t::commit(
-	native_type const& h,
+	native_handle<map_t> const& h,
 	io_parameters_t<map_t, commit_t> const& a)
 {
 	if (h.section != nullptr)
@@ -440,7 +419,7 @@ vsm::result<void> map_t::commit(
 }
 
 vsm::result<void> map_t::decommit(
-	native_type const& h,
+	native_handle<map_t> const& h,
 	io_parameters_t<map_t, decommit_t> const& a)
 {
 	if (h.section != nullptr)
@@ -457,7 +436,7 @@ vsm::result<void> map_t::decommit(
 
 #if 0
 vsm::result<void> map_t::protect(
-	native_type const& h,
+	native_handle<map_t> const& h,
 	io_parameters_t<map_t, protect_t> const& a)
 {
 	if (!check_address_range(h, a))
@@ -483,7 +462,7 @@ vsm::result<void> map_t::protect(
 #endif
 
 vsm::result<void> map_t::close(
-	native_type& h,
+	native_handle<map_t>& h,
 	io_parameters_t<map_t, close_t> const&)
 {
 	//TODO: Change close to return void?

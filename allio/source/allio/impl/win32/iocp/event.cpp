@@ -7,12 +7,8 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-using M = iocp_multiplexer;
-using H = event_t::native_type;
-using C = async_connector_t<M, event_t>;
-
-using wait_t = event_io::wait_t;
-using wait_s = async_operation<M, event_t, wait_t>;
+using wait_t = event_t::wait_t;
+using wait_s = async_operation<iocp_multiplexer, event_t, wait_t>;
 using wait_a = io_parameters_t<event_t, wait_t>;
 
 io_result<void> wait_s::submit(M& m, H const& h, C const&, wait_s& s, wait_a const&, io_handler<M>& handler)

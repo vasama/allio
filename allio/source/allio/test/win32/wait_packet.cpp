@@ -1,4 +1,4 @@
-#include <allio/event.hpp>
+#include <allio/blocking/event.hpp>
 #include <allio/impl/win32/completion_port.hpp>
 #include <allio/impl/win32/wait_packet.hpp>
 
@@ -28,9 +28,9 @@ TEST_CASE("wait packet can be used to wait for events", "[wait_packet][win32][ke
 	bool const is_initially_signaled = GENERATE(false, true);
 	CAPTURE(is_initially_signaled);
 
-	auto const event = blocking::create_event(
+	auto const event = blocking::event(
 		auto_reset_event,
-		initially_signaled(is_initially_signaled)).value();
+		initially_signaled(is_initially_signaled));
 
 	auto const wait_packet = create_wait_packet().value();
 
@@ -40,7 +40,7 @@ TEST_CASE("wait packet can be used to wait for events", "[wait_packet][win32][ke
 	auto const wait_status = random_integer<NTSTATUS>();
 
 	bool const already_signaled = associate_wait_packet(
-		unwrap_wait_packet(wait_packet.get()),
+		wait_packet.get(),
 		completion_port.get(),
 		unwrap_handle(event.native().platform_handle),
 		key_context,
@@ -76,7 +76,7 @@ TEST_CASE("wait packet can be used to wait for events", "[wait_packet][win32][ke
 	auto const cancel = [&](bool const remove_queued_completion) -> bool
 	{
 		return cancel_wait_packet(
-			unwrap_wait_packet(wait_packet.get()),
+			wait_packet.get(),
 			remove_queued_completion).value();
 	};
 
@@ -109,7 +109,7 @@ TEST_CASE("wait packet can be used to wait for events", "[wait_packet][win32][ke
 
 		SECTION("an uncompleted wait can be completed")
 		{
-			event.signal().value();
+			event.signal();
 			REQUIRE(get_completion());
 		}
 
@@ -118,12 +118,12 @@ TEST_CASE("wait packet can be used to wait for events", "[wait_packet][win32][ke
 			REQUIRE(cancel(
 				/* remove_queued_completion: */ GENERATE(false, true)));
 
-			event.signal().value();
+			event.signal();
 			REQUIRE(!get_completion());
 		}
 	}
 
-	event.signal().value();
+	event.signal();
 	REQUIRE(!get_completion());
 }
 
@@ -141,7 +141,7 @@ TEST_CASE("wait packets do not support skipping the completion port on synchrono
 	};
 
 	NTSTATUS const status = NtSetInformationFile(
-		unwrap_wait_packet(wait_packet.get()),
+		wait_packet.get(),
 		&io_status_block,
 		&information,
 		sizeof(information),

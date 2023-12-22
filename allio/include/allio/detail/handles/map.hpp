@@ -40,7 +40,7 @@ struct map_memory_t
 		map_options options = {};
 		detail::protection protection = {};
 		detail::page_level page_level = {};
-		section_t::native_type const* section = nullptr;
+		native_handle<section_t> const* section = nullptr;
 		fs_size section_offset = 0;
 		size_t size = 0;
 		uintptr_t address = 0;
@@ -80,8 +80,8 @@ struct map_memory_t
 
 	template<object Object>
 	friend vsm::result<void> tag_invoke(
-		blocking_io_t<Object, map_memory_t>,
-		typename Object::native_type& h,
+		blocking_io_t<map_memory_t>,
+		native_handle<Object>& h,
 		io_parameters_t<Object, map_memory_t> const& a)
 		requires requires { Object::map_memory(h, a); }
 	{
@@ -110,8 +110,8 @@ struct commit_t
 
 	template<object Object>
 	friend vsm::result<void> tag_invoke(
-		blocking_io_t<Object, commit_t>,
-		typename Object::native_type const& h,
+		blocking_io_t<commit_t>,
+		native_handle<Object> const& h,
 		io_parameters_t<Object, commit_t> const& a)
 		requires requires { Object::commit(h, a); }
 	{
@@ -134,8 +134,8 @@ struct decommit_t
 
 	template<object Object>
 	friend vsm::result<void> tag_invoke(
-		blocking_io_t<Object, decommit_t>,
-		typename Object::native_type const& h,
+		blocking_io_t<decommit_t>,
+		native_handle<Object> const& h,
 		io_parameters_t<Object, decommit_t> const& a)
 		requires requires { Object::decommit(h, a); }
 	{
@@ -151,7 +151,7 @@ template<object Object>
 struct shared_native_handle
 {
 	vsm::atomic<size_t> ref_count;
-	typename Object::native_type h;
+	native_handle<Object> h;
 
 	void acquire()
 	{
@@ -162,7 +162,7 @@ struct shared_native_handle
 	{
 		if (ref_count.fetch_sub(1, std::memory_order_acq_rel) == 1)
 		{
-			unrecoverable(blocking_io<Object, close_t>(
+			unrecoverable(blocking_io<close_t>(
 				h,
 				no_parameters_t()));
 
@@ -175,6 +175,8 @@ struct shared_native_handle
 	}
 };
 
+using shared_section_handle = shared_native_handle<section_t>;
+
 struct map_t : object_t
 {
 	using base_type = object_t;
@@ -184,16 +186,6 @@ struct map_t : object_t
 		page_level_1,
 		page_level_2,
 	);
-
-	using shared_section_handle = shared_native_handle<section_t>;
-
-	struct native_type : base_type::native_type
-	{
-		shared_section_handle* section;
-
-		void* base;
-		size_t size;
-	};
 
 	using map_memory_t = map_io::map_memory_t;
 	using commit_t = map_io::commit_t;
@@ -208,76 +200,103 @@ struct map_t : object_t
 	>;
 
 	static vsm::result<void> map_memory(
-		native_type& h,
+		native_handle<map_t>& h,
 		io_parameters_t<map_t, map_memory_t> const& a);
 
 	static vsm::result<void> commit(
-		native_type const& h,
+		native_handle<map_t> const& h,
 		io_parameters_t<map_t, commit_t> const& a);
 
 	static vsm::result<void> decommit(
-		native_type const& h,
+		native_handle<map_t> const& h,
 		io_parameters_t<map_t, decommit_t> const& a);
 
 	static vsm::result<void> close(
-		native_type& h,
+		native_handle<map_t>& h,
 		io_parameters_t<map_t, close_t> const& a);
 
-	static page_level get_page_level(native_type const& h);
+	static page_level get_page_level(native_handle<map_t> const& h);
 
-	template<typename Handle>
-	struct abstract_interface : base_type::abstract_interface<Handle>
+	template<typename Handle, typename Traits>
+	struct facade : base_type::facade<Handle, Traits>
 	{
 		[[nodiscard]] void* base() const
 		{
-			return static_cast<Handle const&>(*this).native().native_type::base;
+			using native_handle_type = native_handle<map_t>;
+			return static_cast<Handle const&>(*this).native().native_handle_type::base;
 		}
 
 		[[nodiscard]] size_t size() const
 		{
-			return static_cast<Handle const&>(*this).native().native_type::size;
+			using native_handle_type = native_handle<map_t>;
+			return static_cast<Handle const&>(*this).native().native_handle_type::size;
 		}
-	
+
 		[[nodiscard]] detail::page_level page_level() const
 		{
 			return get_page_level(static_cast<Handle const&>(*this).native());
 		}
-	
+
 		[[nodiscard]] size_t page_size() const
 		{
 			return detail::get_page_size(page_level());
 		}
-	};
 
-	template<typename Handle>
-	struct concrete_interface : base_type::concrete_interface<Handle>
-	{
 		[[nodiscard]] auto commit(void* const base, size_t const size, auto&&... args) const
 		{
-			io_parameters_t<typename Handle::object_type, commit_t> a = {};
+			auto a = io_parameters_t<typename Handle::object_type, commit_t>{};
 			a.base = base;
 			a.size = size;
 			(set_argument(a, vsm_forward(args)), ...);
-
-			return Handle::io_traits_type::unwrap_result(
-				blocking_io<typename Handle::object_type, commit_t>(
-					static_cast<Handle const&>(*this),
-					a));
+			return Traits::template observe<commit_t>(static_cast<Handle const&>(*this), a);
 		}
 
 		[[nodiscard]] auto decommit(void* const base, size_t const size, auto&&... args) const
 		{
-			io_parameters_t<typename Handle::object_type, decommit_t> a = {};
+			auto a = io_parameters_t<typename Handle::object_type, decommit_t>{};
 			a.base = base;
 			a.size = size;
 			(set_argument(a, vsm_forward(args)), ...);
-
-			return Handle::io_traits_type::unwrap_result(
-				blocking_io<typename Handle::object_type, decommit_t>(
-					static_cast<Handle const&>(*this),
-					a));
+			return Traits::template observe<decommit_t>(static_cast<Handle const&>(*this), a);
 		}
 	};
 };
+
+template<>
+struct native_handle<map_t> : native_handle<map_t::base_type>
+{
+	shared_section_handle* section;
+
+	void* base;
+	size_t size;
+};
+
+template<typename Traits>
+[[nodiscard]] auto map_memory(
+	size_t const size,
+	auto&&... args)
+{
+	auto a = io_parameters_t<map_t, map_io::map_memory_t>{};
+	a.options = map_options::initial_commit;
+	a.size = size;
+	(set_argument(a, vsm_forward(args)), ...);
+	return Traits::template produce<map_t, map_io::map_memory_t>(a);
+}
+
+template<typename Traits>
+[[nodiscard]] auto map_section(
+	handle_for<section_t> auto const& section,
+	fs_size const offset,
+	size_t const size,
+	auto&&... args)
+{
+	auto a = io_parameters_t<map_t, map_io::map_memory_t>{};
+	a.options = map_options::initial_commit | map_options::backing_section;
+	a.section = &section.native();
+	a.section_offset = offset;
+	a.size = size;
+	(set_argument(a, vsm_forward(args)), ...);
+	return Traits::template produce<map_t, map_io::map_memory_t>(a);
+}
 
 } // namespace allio::detail

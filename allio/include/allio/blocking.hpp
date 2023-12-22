@@ -1,9 +1,9 @@
 #pragma once
 
-#include <allio/detail/default_io_traits.hpp>
+#include <allio/detail/default_traits.hpp>
 
 namespace allio::blocking {
 
-using io_traits = detail::blocking_io_traits;
+using traits_type = detail::default_blocking_traits;
 
 } // namespace allio::blocking

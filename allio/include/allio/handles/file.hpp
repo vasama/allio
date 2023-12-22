@@ -6,6 +6,5 @@
 namespace allio {
 
 using detail::file_t;
-using abstract_file_handle = detail::abstract_handle<file_t>;
 
 } // namespace allio

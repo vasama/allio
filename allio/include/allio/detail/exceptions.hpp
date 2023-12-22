@@ -11,7 +11,7 @@ namespace allio::detail {
 
 template<any_cvref_of_template<vsm::expected> R>
 	requires std::is_same_v<typename std::remove_cvref_t<R>::error_type, std::error_code>
-typename std::remove_cvref_t<R>::value_type throw_on_error(R&& r)
+vsm::copy_cvref_t<R, typename std::remove_cvref_t<R>::value_type> throw_on_error(R&& r)
 {
 	if (r)
 	{
@@ -22,13 +22,5 @@ typename std::remove_cvref_t<R>::value_type throw_on_error(R&& r)
 		throw_error(r.error());
 	}
 }
-
-struct exception_error_traits
-{
-	static auto unwrap_result(auto&& result)
-	{
-		return throw_on_error(vsm_forward(result));
-	}
-};
 
 } // namespace allio::detail

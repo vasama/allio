@@ -36,20 +36,20 @@ template<typename R>
 using set_value_signature = typename _set_value_signature<std::is_void_v<R>>::template type<R>;
 
 
-template<object Object, typename IoTraits, multiplexer_handle MultiplexerHandle, operation_c Operation>
+template<handle Handle, operation_c Operation>
 class io_sender
 {
-	using handle_type = handle_const_t<
-		Operation,
-		basic_attached_handle<Object, IoTraits, MultiplexerHandle>>;
+	using object_type = typename Handle::object_type;
+	using handle_type = handle_const_t<Operation, Handle>;
 
-	using multiplexer_type = typename MultiplexerHandle::multiplexer_type;
+	using multiplexer_handle_type = typename Handle::multiplexer_handle_type;
+	using multiplexer_type = typename multiplexer_handle_type::multiplexer_type;
 
-	using operation_type = async_operation_t<multiplexer_type, Object, Operation>;
+	using operation_type = async_operation_t<multiplexer_type, object_type, Operation>;
 	using io_status_type = typename multiplexer_type::io_status_type;
 
-	using params_type = io_parameters_t<Object, Operation>;
-	using result_type = io_result_t<Object, Operation, MultiplexerHandle>;
+	using params_type = io_parameters_t<object_type, Operation>;
+	using result_type = io_result_t<Handle, Operation>;
 
 	template<typename Receiver>
 	class operation
@@ -112,17 +112,32 @@ class io_sender
 			handle_result(vsm_move(r));
 		}
 
-		void handle_result(io_result<result_type>&& r)
+		template<typename R>
+		void handle_result(io_result<R>&& r)
 		{
 			if (r.has_value())
 			{
-				if constexpr (std::is_void_v<result_type>)
+				if constexpr (std::is_void_v<R>)
 				{
 					ex::set_value(vsm_move(m_receiver));
 				}
 				else
 				{
-					ex::set_value(vsm_move(m_receiver), vsm_move(*r));
+					if constexpr (std::is_same_v<R, result_type>)
+					{
+						ex::set_value(vsm_move(m_receiver), vsm_move(*r));
+					}
+					else
+					{
+						if (auto r2 = rebind_handle<result_type>(vsm_move(*r)))
+						{
+							ex::set_value(vsm_move(m_receiver), vsm_move(*r2));
+						}
+						else
+						{
+							ex::set_error(vsm_move(m_receiver), r2.error());
+						}
+					}
 				}
 			}
 			else if (r.is_cancelled())
@@ -174,12 +189,9 @@ public:
 };
 
 
-template<object Object, typename IoTraits, producer Operation>
+template<object Object, producer Operation, template<typename> typename HandleTemplate>
 class io_handle_sender
 {
-	template<typename MultiplexerHandle>
-	using handle_t = basic_attached_handle<Object, IoTraits, MultiplexerHandle>;
-
 	using params_type = io_parameters_t<Object, Operation>;
 
 	template<multiplexer_handle_for<Object> MultiplexerHandle, ex::receiver Receiver>
@@ -191,7 +203,7 @@ class io_handle_sender
 	{
 		using stoppable_base = ex::__in_place_stoppable_base<operation<MultiplexerHandle, Receiver>>;
 
-		using handle_type = handle_t<MultiplexerHandle>;
+		using handle_type = HandleTemplate<MultiplexerHandle>;
 		using multiplexer_type = typename MultiplexerHandle::multiplexer_type;
 		using operation_type = async_operation_t<multiplexer_type, Object, Operation>;
 		using io_status_type = typename multiplexer_type::io_status_type;
@@ -282,7 +294,7 @@ public:
 	template<typename E>
 	friend auto tag_invoke(ex::get_completion_signatures_t, io_handle_sender const&, E&&)
 		-> ex::completion_signatures<
-			ex::set_value_t(handle_t<environment_multiplexer_handle_t<E>>),
+			ex::set_value_t(HandleTemplate<environment_multiplexer_handle_t<E>>),
 			ex::set_error_t(std::error_code),
 			ex::set_stopped_t()
 		>;

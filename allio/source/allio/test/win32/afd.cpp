@@ -358,12 +358,12 @@ static vsm::result<unique_handle> afd_socket(
 	int const address_family,
 	int const type,
 	int const protocol,
-	posix::socket_flags const flags)
+	io_flags const flags)
 {
 	ULONG endpoint_flags = 0;
 	ULONG create_options = 0;
 
-	if (vsm::any_flags(flags, posix::socket_flags::multiplexable))
+	if (vsm::any_flags(flags, io_flags::create_non_blocking))
 	{
 	}
 	else
@@ -371,7 +371,7 @@ static vsm::result<unique_handle> afd_socket(
 		create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
 	}
 
-	if (vsm::any_flags(flags, posix::socket_flags::registered_io))
+	if (vsm::any_flags(flags, io_flags::create_registered_io))
 	{
 		//TODO
 	}
@@ -797,7 +797,7 @@ TEST_CASE("AFD", "[windows][afd]")
 			address_family,
 			type,
 			protocol,
-			posix::socket_flags::none).value();
+			io_flags::none).value();
 
 		posix::socket_listen(socket.get(), addr, nullptr).value();
 
@@ -816,7 +816,7 @@ TEST_CASE("AFD", "[windows][afd]")
 		address_family,
 		type,
 		protocol,
-		posix::socket_flags::none).value();
+		io_flags::none).value();
 	g_socket_filter = (HANDLE)socket.get();
 
 	posix::socket_connect(

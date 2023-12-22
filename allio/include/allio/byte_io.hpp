@@ -55,8 +55,8 @@ struct stream_read_t
 
 	template<object Object>
 	friend vsm::result<size_t> tag_invoke(
-		blocking_io_t<Object, stream_read_t>,
-		typename Object::native_type const& h,
+		blocking_io_t<stream_read_t>,
+		native_handle<Object> const& h,
 		io_parameters_t<Object, stream_read_t> const& a)
 		requires requires { Object::stream_read(h, a); }
 	{
@@ -72,8 +72,8 @@ struct stream_write_t
 
 	template<object Object>
 	friend vsm::result<size_t> tag_invoke(
-		blocking_io_t<Object, stream_write_t>,
-		typename Object::native_type const& h,
+		blocking_io_t<stream_write_t>,
+		native_handle<Object> const& h,
 		io_parameters_t<Object, stream_write_t> const& a)
 		requires requires { Object::stream_write(h, a); }
 	{
@@ -89,8 +89,8 @@ struct random_read_t
 
 	template<object Object>
 	friend vsm::result<size_t> tag_invoke(
-		blocking_io_t<Object, random_read_t>,
-		typename Object::native_type const& h,
+		blocking_io_t<random_read_t>,
+		native_handle<Object> const& h,
 		io_parameters_t<Object, random_read_t> const& a)
 		requires requires { Object::random_read(h, a); }
 	{
@@ -106,8 +106,8 @@ struct random_write_t
 
 	template<object Object>
 	friend vsm::result<size_t> tag_invoke(
-		blocking_io_t<Object, random_write_t>,
-		typename Object::native_type const& h,
+		blocking_io_t<random_write_t>,
+		native_handle<Object> const& h,
 		io_parameters_t<Object, random_write_t> const& a)
 		requires requires { Object::random_write(h, a); }
 	{
@@ -115,17 +115,15 @@ struct random_write_t
 	}
 };
 
-template<typename Handle>
-struct stream_interface
+template<typename Handle, typename Traits>
+struct stream_facade
 {
 	[[nodiscard]] auto read_some(read_buffer const buffer, auto&&... args) const
 	{
 		io_parameters_t<typename Handle::object_type, stream_read_t> a = {};
 		a.buffers = buffer;
 		(set_argument(a, vsm_forward(args)), ...);
-		return Handle::io_traits_type::template observe<stream_read_t>(
-			static_cast<Handle const&>(*this),
-			a);
+		return Traits::template observe<stream_read_t>(static_cast<Handle const&>(*this), a);
 	}
 
 	[[nodiscard]] auto read_some(read_buffers const buffers, auto&&... args) const
@@ -133,9 +131,7 @@ struct stream_interface
 		io_parameters_t<typename Handle::object_type, stream_read_t> a = {};
 		a.buffers = buffers;
 		(set_argument(a, vsm_forward(args)), ...);
-		return Handle::io_traits_type::template observe<stream_read_t>(
-			static_cast<Handle const&>(*this),
-			a);
+		return Traits::template observe<stream_read_t>(static_cast<Handle const&>(*this), a);
 	}
 
 	[[nodiscard]] auto write_some(write_buffer const buffer, auto&&... args) const
@@ -143,9 +139,7 @@ struct stream_interface
 		io_parameters_t<typename Handle::object_type, stream_write_t> a = {};
 		a.buffers = buffer;
 		(set_argument(a, vsm_forward(args)), ...);
-		return Handle::io_traits_type::template observe<stream_write_t>(
-			static_cast<Handle const&>(*this),
-			a);
+		return Traits::template observe<stream_write_t>(static_cast<Handle const&>(*this), a);
 	}
 
 	[[nodiscard]] auto write_some(write_buffers const buffers, auto&&... args) const
@@ -153,9 +147,7 @@ struct stream_interface
 		io_parameters_t<typename Handle::object_type, stream_write_t> a = {};
 		a.buffers = buffers;
 		(set_argument(a, vsm_forward(args)), ...);
-		return Handle::io_traits_type::template observe<stream_write_t>(
-			static_cast<Handle const&>(*this),
-			a);
+		return Traits::template observe<stream_write_t>(static_cast<Handle const&>(*this), a);
 	}
 };
 

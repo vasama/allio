@@ -12,9 +12,12 @@ using namespace allio::win32;
 static constexpr DWORD SIO_POLL = _WSAIORW(IOC_WS2, 31);
 
 
+//TODO: Add using in a public header.
+using detail::io_flags;
+
 TEST_CASE("WSA supports unix stream sockets", "[windows][wsa][socket]")
 {
-	REQUIRE(posix::create_socket(AF_UNIX, SOCK_STREAM, 0, socket_flags::none));
+	REQUIRE(posix::create_socket(AF_UNIX, SOCK_STREAM, 0, io_flags::none));
 }
 
 TEST_CASE("WSA async connect and accept", "[windows][wsa][socket][async]")
@@ -27,7 +30,7 @@ TEST_CASE("WSA async connect and accept", "[windows][wsa][socket][async]")
 			addr.addr.sa_family,
 			SOCK_STREAM,
 			IPPROTO_TCP,
-			socket_flags::multiplexable).value().socket;
+			io_flags::create_non_blocking).value().socket;
 	};
 
 	auto const completion_port = create_completion_port(1).value();
@@ -42,7 +45,7 @@ TEST_CASE("WSA async connect and accept", "[windows][wsa][socket][async]")
 		completion_port.get(),
 		/* key_context: */ nullptr).value();
 
-	posix::socket_listen(listen_socket.get(), addr, nullptr).value();
+	posix::socket_listen(listen_socket.get(), addr, 0).value();
 
 	auto const server_socket = create_socket();
 	wsa_accept_address_buffer accept_addr;
@@ -160,7 +163,7 @@ TEST_CASE("WSA async connect and accept", "[windows][wsa][socket][async]")
 TEST_CASE("WSA does not support unix datagram sockets", "[windows][datagram_socket][wsa]")
 {
 	// The purpose of this test is to quickly detect future support for this feature.
-	REQUIRE(!posix::create_socket(AF_UNIX, SOCK_DGRAM, 0, socket_flags::none));
+	REQUIRE(!posix::create_socket(AF_UNIX, SOCK_DGRAM, 0, io_flags::none));
 }
 
 TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][datagram_socket][blocking]")
@@ -171,7 +174,7 @@ TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][datagram_soc
 			AF_INET,
 			SOCK_DGRAM,
 			IPPROTO_UDP,
-			socket_flags::none).value().socket;
+			io_flags::none).value().socket;
 	};
 
 	auto const receive_socket = create_socket();
@@ -225,7 +228,7 @@ TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram
 			addr.addr.sa_family,
 			SOCK_DGRAM,
 			IPPROTO_UDP,
-			socket_flags::multiplexable).value().socket;
+			io_flags::create_non_blocking).value().socket;
 	};
 
 	auto const completion_port = create_completion_port(1).value();
@@ -351,7 +354,7 @@ TEST_CASE("WSA RIO", "[windows][wsa][rio]")
 		AF_INET,
 		SOCK_STREAM,
 		IPPROTO_TCP,
-		socket_flags::multiplexable | socket_flags::registered_io).value().socket;
+		io_flags::create_non_blocking | io_flags::create_registered_io).value().socket;
 
 	auto const completion_port = create_completion_port(1).value();
 	OVERLAPPED rio_overlapped;

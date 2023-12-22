@@ -6,10 +6,13 @@
 namespace allio::blocking {
 inline namespace pipe {
 
-using pipe_handle = detail::blocking_handle<pipe_t>;
+using pipe_handle = traits_type::handle<pipe_t>;
 using pipe_handle_pair = detail::basic_pipe_pair<pipe_handle>;
 
-#include <allio/detail/handles/pipe_io.ipp>
+[[nodiscard]] pipe_handle_pair create_pipe(auto&&... args)
+{
+	return detail::create_pipe<traits_type>(vsm_forward(args)...);
+}
 
 } // inline namespace pipe
 } // namespace allio::blocking

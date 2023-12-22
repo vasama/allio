@@ -1,5 +1,7 @@
-#include <allio/blocking/listen_socket.hpp>
-#include <allio/senders/listen_socket.hpp>
+#include <allio/blocking/raw_listen_socket.hpp>
+#include <allio/blocking/raw_socket.hpp>
+#include <allio/senders/raw_listen_socket.hpp>
+#include <allio/senders/raw_socket.hpp>
 
 #include <allio/sync_wait.hpp>
 #include <allio/task.hpp>
@@ -8,22 +10,46 @@
 
 #include <catch2/catch_all.hpp>
 
+#include <format>
+
 using namespace allio;
 namespace ex = stdexec;
+
+namespace {
+
+class match_error
+{
+	std::error_condition m_error_condition;
+
+public:
+	explicit match_error(std::error_condition const error_condition)
+		: m_error_condition(error_condition)
+	{
+	}
+
+	bool match(std::system_error const& e) const
+	{
+		return e.code().default_error_condition() == m_error_condition;
+	}
+
+	std::string toString() const
+	{
+		return std::format("Equals: '{}'", m_error_condition.message());
+	}
+};
+
+} // namespace
 
 TEST_CASE("a stream socket can connect to a listening socket and exchange data", "[socket_handle][blocking]")
 {
 	using namespace blocking;
 
-	using socket_object = raw_socket_t;
-	using listen_socket_object = raw_listen_socket_t;
-
 	auto const endpoint = test::generate_endpoint();
-	auto const listen_socket = listen<listen_socket_object>(endpoint);
+	auto const listen_socket = raw_listen(endpoint);
 
 	auto connect_future = test::spawn([&]()
 	{
-		return connect<socket_object>(endpoint);
+		return raw_connect(endpoint);
 	});
 
 	auto const server_socket = listen_socket.accept().socket;
@@ -32,15 +58,19 @@ TEST_CASE("a stream socket can connect to a listening socket and exchange data",
 	SECTION("The server socket has no data to read")
 	{
 		signed char value = 0;
-		auto const r = server_socket.read_some(as_read_buffer(&value, 1), deadline::instant());
-		REQUIRE(r.error() == error::async_operation_timed_out);
+		REQUIRE_THROWS_MATCHES(
+			(void)server_socket.read_some(as_read_buffer(&value, 1), deadline::instant()),
+			std::system_error,
+			match_error(std::errc::timed_out));
 	}
 
 	SECTION("The client socket has no data to read")
 	{
 		signed char value = 0;
-		auto const r = client_socket.read_some(as_read_buffer(&value, 1), deadline::instant());
-		REQUIRE(r.error() == error::async_operation_timed_out);
+		REQUIRE_THROWS_MATCHES(
+			(void)client_socket.read_some(as_read_buffer(&value, 1), deadline::instant()),
+			std::system_error,
+			match_error(std::errc::timed_out));
 	}
 
 	SECTION("The client can send data to the server")

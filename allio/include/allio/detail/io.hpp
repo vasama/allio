@@ -51,6 +51,7 @@ concept modifier =
 	std::is_same_v<typename Operation::operation_concept, modifier_t>;
 
 
+#if 0
 template<object Object, operation_c Operation, optional_multiplexer_handle_for<Object> MultiplexerHandle>
 auto _io_result()
 {
@@ -66,6 +67,16 @@ auto _io_result()
 
 template<object Object, typename Operation, optional_multiplexer_handle_for<Object> MultiplexerHandle = void>
 using io_result_t = decltype(_io_result<Object, Operation, MultiplexerHandle>());
+#else
+template<handle Handle, operation_c Operation>
+typename Operation::template result_type_template<Handle> _io_result(int);
+
+template<handle Handle, operation_c Operation>
+typename Operation::result_type _io_result(...);
+
+template<handle Handle, operation_c Operation>
+using io_result_t = decltype(_io_result<Handle, Operation>(0));
+#endif
 
 
 template<object Object, operation_c Operation>
@@ -93,19 +104,33 @@ template<operation_c Operation, typename T>
 using handle_const_t = typename _handle_const<mutation<Operation>>::template type<T>;
 
 
-template<object Object, operation_c Operation>
+template<operation_c Operation>
 struct blocking_io_t
 {
-	template<typename Handle>
-	auto vsm_static_operator_invoke(Handle& h, io_parameters_t<Object, Operation> const& a)
-		requires vsm::tag_invocable<blocking_io_t, Handle&, io_parameters_t<Object, Operation> const&>
+	template<object Object>
+	auto vsm_static_operator_invoke(native_handle<Object>& h, io_parameters_t<Object, Operation> const& a)
+		requires vsm::tag_invocable<blocking_io_t, native_handle<Object>&, io_parameters_t<Object, Operation> const&>
+	{
+		return vsm::tag_invoke(blocking_io_t(), h, a);
+	}
+
+	template<object Object>
+	auto vsm_static_operator_invoke(native_handle<Object> const& h, io_parameters_t<Object, Operation> const& a)
+		requires vsm::tag_invocable<blocking_io_t, native_handle<Object> const&, io_parameters_t<Object, Operation> const&>
+	{
+		return vsm::tag_invoke(blocking_io_t(), h, a);
+	}
+
+	template<handle Handle>
+	auto vsm_static_operator_invoke(Handle& h, io_parameters_t<typename Handle::object_type, Operation> const& a)
+		requires vsm::tag_invocable<blocking_io_t, Handle&, io_parameters_t<typename Handle::object_type, Operation> const&>
 	{
 		return vsm::tag_invoke(blocking_io_t(), h, a);
 	}
 };
 
-template<object Object, operation_c Operation>
-inline constexpr blocking_io_t<Object, Operation> blocking_io = {};
+template<operation_c Operation>
+inline constexpr blocking_io_t<Operation> blocking_io = {};
 
 
 template<typename Handler, typename Status>
@@ -354,6 +379,10 @@ template<multiplexer Multiplexer, object Object, operation_c Operation>
 using async_operation_t = async_operation<Multiplexer, Object, Operation>;
 
 
+//TODO: Move this somewhere else. Maybe a handle forward declaration header.
+template<object Object, multiplexer_handle_for<Object> MultiplexerHandle>
+class basic_attached_handle;
+
 // A default async implementation using blocking I/O
 // is provided for observers with bounded runtime.
 template<multiplexer Multiplexer, object Object, observer Operation>
@@ -365,11 +394,11 @@ struct async_operation<Multiplexer, Object, Operation>
 	using C = async_connector_t<Multiplexer, Object> const;
 	using S = async_operation_t<Multiplexer, Object, Operation>;
 	using A = io_parameters_t<Object, Operation>;
-	using R = io_result_t<Object, Operation, Multiplexer>;
+	using R = io_result_t<basic_attached_handle<Object, basic_multiplexer_handle<Multiplexer>>, Operation>;
 
 	static io_result<R> submit(M&, H& h, C&, S&, A const& a, io_handler<M>&)
 	{
-		return blocking_io<Object, Operation>(h, a);
+		return blocking_io<Operation>(h, a);
 	}
 
 	static io_result<R> notify(M&, H&, C&, S&, A const&, typename M::io_status_type&&)

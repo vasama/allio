@@ -4,6 +4,6 @@
 
 namespace allio {
 
-using namespace blocking::map;
+using namespace blocking::mapping;
 
 } // namespace allio

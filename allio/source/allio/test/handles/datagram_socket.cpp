@@ -1,5 +1,5 @@
-#include <allio/blocking/datagram_socket.hpp>
-#include <allio/senders/datagram_socket.hpp>
+#include <allio/blocking/raw_datagram_socket.hpp>
+#include <allio/senders/raw_datagram_socket.hpp>
 
 #include <allio/sync_wait.hpp>
 #include <allio/task.hpp>
@@ -27,8 +27,6 @@ TEST_CASE("Datagram socket can send and receive data", "[datagram_socket][blocki
 {
 	using namespace blocking;
 
-	using datagram_socket_object = raw_datagram_socket_t;
-
 	auto const endpoint_factory = test::generate_endpoint_factory();
 	if (!is_supported_address_kind(endpoint_factory->address_kind()))
 	{
@@ -36,7 +34,7 @@ TEST_CASE("Datagram socket can send and receive data", "[datagram_socket][blocki
 	}
 
 	auto const server_endpoint = endpoint_factory->create_endpoint();
-	auto const server_socket = bind<datagram_socket_object>(server_endpoint);
+	auto const server_socket = raw_bind(server_endpoint);
 
 	SECTION("The server socket has no data available to read")
 	{
@@ -56,7 +54,7 @@ TEST_CASE("Datagram socket can send and receive data", "[datagram_socket][blocki
 	SECTION("The client can send data to the server")
 	{
 		auto const client_endpoint = endpoint_factory->create_endpoint();
-		auto const client_socket = bind<datagram_socket_object>(client_endpoint);
+		auto const client_socket = raw_bind(client_endpoint);
 
 		signed char value = 42;
 		client_socket.send_to(server_endpoint, as_write_buffer(&value, 1));
@@ -72,8 +70,6 @@ TEST_CASE("Datagram socket can asynchronously send and receive data", "[datagram
 {
 	using namespace senders;
 
-	using datagram_socket_object = raw_datagram_socket_t;
-
 	auto const endpoint_factory = test::generate_endpoint_factory();
 	if (!is_supported_address_kind(endpoint_factory->address_kind()))
 	{
@@ -85,10 +81,10 @@ TEST_CASE("Datagram socket can asynchronously send and receive data", "[datagram
 	sync_wait(multiplexer, [&]() -> task<void>
 	{
 		auto const server_endpoint = endpoint_factory->create_endpoint();
-		auto const server_socket = co_await bind<datagram_socket_object>(server_endpoint);
+		auto const server_socket = co_await raw_bind(server_endpoint);
 
 		auto const client_endpoint = endpoint_factory->create_endpoint();
-		auto const client_socket = co_await bind<datagram_socket_object>(client_endpoint);
+		auto const client_socket = co_await raw_bind(client_endpoint);
 
 		co_await ex::when_all
 		(

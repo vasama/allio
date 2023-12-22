@@ -15,10 +15,6 @@ struct process_info
 };
 
 vsm::result<detail::unique_handle> open_process(DWORD id);
-
-vsm::result<process_info> launch_process(
-	detail::io_parameters_t<process_t, process_t::launch_t> const& args);
-
 vsm::result<process_exit_code> get_process_exit_code(HANDLE handle);
 
 } // namespace allio::win32

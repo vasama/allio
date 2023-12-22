@@ -5,7 +5,7 @@
 
 namespace allio {
 
-using namespace senders::event;
+using namespace senders::events;
 
 using event_handle = basic_event_handle<default_multiplexer_handle>;
 

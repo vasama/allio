@@ -11,11 +11,13 @@
 #include <allio/impl/win32/path.hpp>
 #include <allio/win32/kernel_error.hpp>
 
+#include <vsm/intrusive/forward_list.hpp>
 #include <vsm/lazy.hpp>
 #include <vsm/numeric.hpp>
 #include <vsm/utility.hpp>
 
 #include <bit>
+#include <memory>
 #include <optional>
 
 #include <win32.h>
@@ -36,58 +38,163 @@ struct attribute_list_deleter
 using unique_attribute_list = std::unique_ptr<_PROC_THREAD_ATTRIBUTE_LIST, attribute_list_deleter>;
 
 template<size_t Capacity>
-using attribute_storage = basic_dynamic_buffer<std::byte, alignof(std::max_align_t), Capacity>;
+using attribute_list_storage = basic_dynamic_buffer<std::byte, alignof(std::max_align_t), Capacity>;
 
-} // namespace
+class attribute_list_builder
+{
+public:
+	class attribute : public vsm::intrusive::forward_list_link
+	{
+		DWORD_PTR m_attribute;
+		void const* m_value;
+		size_t m_value_size;
+
+	public:
+		attribute() = default;
+
+		explicit attribute(
+			attribute_list_builder& builder,
+			DWORD_PTR const attribute,
+			void const* const value,
+			size_t const value_size)
+			: m_attribute(attribute)
+			, m_value(value)
+			, m_value_size(value_size)
+		{
+			builder.m_list.push_back(this);
+		}
+
+		attribute(attribute const&) = delete;
+		attribute& operator=(attribute const&) = delete;
+
+	private:
+		friend attribute_list_builder;
+	};
+
+private:
+	vsm::intrusive::forward_list<attribute> m_list;
+	size_t m_list_size;
+
+public:
+	template<size_t Capacity>
+	[[nodiscard]] vsm::result<unique_attribute_list> build(
+		attribute_list_storage<Capacity>& storage) const
+	{
+		vsm::result<unique_attribute_list> r(vsm::result_value);
+		if (auto const attribute_count = vsm::truncate<DWORD>(m_list_size))
+		{
+			SIZE_T buffer_size = 0;
+			(void)InitializeProcThreadAttributeList(
+				/* lpAttributeList: */ nullptr,
+				attribute_count,
+				/* dwFlags: */ 0,
+				&buffer_size);
+
+			vsm_try(byte_buffer, storage.reserve(buffer_size));
+			auto const list = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(byte_buffer);
+
+			if (!InitializeProcThreadAttributeList(
+				list,
+				attribute_count,
+				/* dwFlags: */ 0,
+				&buffer_size))
+			{
+				return vsm::unexpected(get_last_error());
+			}
+
+			r.emplace(list);
+
+			for (attribute const& a : m_list)
+			{
+				if (!UpdateProcThreadAttribute(
+					list,
+					/* dwFlags: */ 0,
+					a.m_attribute,
+					const_cast<void*>(a.m_value),
+					a.m_value_size,
+					/* lpPreviousValue: */ nullptr,
+					/* lpReturnSize: */ 0))
+				{
+					return vsm::unexpected(get_last_error());
+				}
+			}
+		}
+		return r;
+	}
+};
+using attribute = attribute_list_builder::attribute;
+
 
 template<size_t Capacity>
-static vsm::result<unique_attribute_list> create_attribute_list(
-	attribute_storage<Capacity>& storage,
-	size_t const size)
+using inherit_handles_storage = basic_dynamic_buffer<std::byte, alignof(HANDLE), Capacity * sizeof(HANDLE)>;
+
+//TODO: Use std::start_lifetime_as_array
+template<typename T>
+static T* start_lifetime_as_array(void* const storage, size_t const size)
 {
-	auto const attribute_count = vsm::saturate<DWORD>(size);
-
-	SIZE_T buffer_size = 0;
-	(void)InitializeProcThreadAttributeList(
-		/* lpAttributeList: */ nullptr,
-		attribute_count,
-		/* dwFlags: */ 0,
-		&buffer_size);
-
-	vsm_try(byte_buffer, storage.reserve(buffer_size));
-	auto const buffer = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(byte_buffer);
-
-	if (!InitializeProcThreadAttributeList(
-		buffer,
-		attribute_count,
-		/* dwFlags: */ 0,
-		&buffer_size))
-	{
-		return vsm::unexpected(get_last_error());
-	}
-
-	return vsm_lazy(unique_attribute_list(buffer));
+	return reinterpret_cast<T*>(storage);
 }
 
-static vsm::result<void> update_attribute_list(
-	PPROC_THREAD_ATTRIBUTE_LIST const list,
-	DWORD_PTR const attribute,
-	void const* const value,
-	size_t const value_size)
+template<size_t Capacity>
+static vsm::result<attribute> make_inherit_handles_attribute(
+	attribute_list_builder& builder,
+	basic_dynamic_buffer<std::byte, alignof(HANDLE), Capacity>& storage,
+	std::span<HANDLE const> const internal_handles,
+	any_handle_span<platform_object_t> const user_handles)
 {
-	if (!UpdateProcThreadAttribute(
-		list,
-		/* dwFlags: */ 0,
-		attribute,
-		const_cast<void*>(value),
-		value_size,
-		/* lpPreviousValue: */ nullptr,
-		/* lpReturnSize: */ 0))
+	using native_handle_type = native_handle<platform_object_t>;
+	using pointer_type = native_handle_type const*;
+
+	union user_handle_union
 	{
-		return vsm::unexpected(get_last_error());
+		pointer_type pointer;
+		HANDLE handle;
+	};
+
+	HANDLE const* handle_array = internal_handles.data();
+	size_t handle_count = internal_handles.size();
+
+	if (size_t const user_handle_count = user_handles.size())
+	{
+		size_t const new_handle_count = handle_count + user_handle_count;
+		vsm_try(buffer, storage.reserve(new_handle_count * sizeof(HANDLE)));
+
+		user_handles.copy(
+			/* offset: */ 0,
+			user_handle_count,
+			start_lifetime_as_array<pointer_type>(buffer, user_handle_count));
+
+		auto const user_handle_array = start_lifetime_as_array<user_handle_union>(
+			buffer,
+			user_handle_count);
+
+		for (auto& u : std::span(user_handle_array, user_handle_count))
+		{
+			u.handle = unwrap_handle(u.pointer->platform_handle);
+		}
+
+		auto const new_handle_array = start_lifetime_as_array<HANDLE>(
+			buffer,
+			new_handle_count);
+
+		memcpy(
+			new_handle_array + user_handle_count,
+			handle_array,
+			handle_count * sizeof(HANDLE));
+
+		handle_array = new_handle_array;
+		handle_count = new_handle_count;
 	}
-	return {};
+
+	return vsm::result<attribute>(
+		vsm::result_value,
+		builder,
+		PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+		handle_array,
+		handle_count * sizeof(HANDLE));
 }
+
+} // namespace
 
 
 vsm::result<unique_handle> win32::open_process(DWORD const id)
@@ -105,39 +212,69 @@ vsm::result<unique_handle> win32::open_process(DWORD const id)
 	return vsm_lazy(unique_handle(handle));
 }
 
-vsm::result<process_info> win32::launch_process(
-	io_parameters_t<process_t, process_t::launch_t> const& a)
+vsm::result<process_exit_code> win32::get_process_exit_code(HANDLE const handle)
 {
-	if (a.path.base != native_platform_handle::null)
+	DWORD exit_code;
+	if (!GetExitCodeProcess(handle, &exit_code))
+	{
+		return vsm::unexpected(get_last_error());
+	}
+	return static_cast<process_exit_code>(exit_code);
+}
+
+
+vsm::result<void> process_t::open(
+	native_handle<process_t>& h,
+	io_parameters_t<process_t, open_t> const& a)
+{
+	vsm_try(handle, win32::open_process(a.id.integer()));
+
+	handle_flags flags = flags::none;
+
+	h.flags = flags::not_null;
+	h.platform_handle = wrap_handle(handle.release());
+	h.id = a.id;
+
+	return {};
+}
+
+vsm::result<void> process_t::create(
+	native_handle<process_t>& h,
+	io_parameters_t<process_t, create_t> const& a)
+{
+	if (a.executable_path.base != native_platform_handle::null)
 	{
 		return vsm::unexpected(error::unsupported_operation);
 	}
 
-	if (a.working_directory)
-	{
-		if (a.working_directory->base != native_platform_handle::null)
-		{
-			return vsm::unexpected(error::unsupported_operation);
-		}
-	}
-
 	api_string_storage string_storage(4);
+
 	//TODO: Use a smarter path specific function over make_api_string.
-	vsm_try(path, make_api_string(string_storage, a.path.path.string()));
-	vsm_try(command_line, make_command_line(string_storage, a.path.path.string(), a.command_line));
+	vsm_try(path, make_api_string(
+		string_storage,
+		a.executable_path.path.string()));
+
+	vsm_try(command_line, make_command_line(
+		string_storage,
+		a.executable_path.path.string(),
+		a.arguments));
 
 	wchar_t* environment = nullptr;
-	if (a.environment)
+	if (vsm::any_flags(a.options, process_options::set_environment))
 	{
-		vsm_try_assign(environment, make_environment_block(string_storage, *a.environment));
+		vsm_try_assign(environment, make_environment_block(
+			string_storage,
+			a.environment));
 	}
 
-	wchar_t const* working_directory = nullptr;
-	if (a.working_directory)
+	vsm_try(working_directory, make_api_string(
+		string_storage,
+		a.working_directory.path.string()));
+
+	//TODO: Only if the path is relative
+	if (a.working_directory.base != native_platform_handle::null)
 	{
-		vsm_try_assign(working_directory, make_api_string(
-			string_storage,
-			a.working_directory->path.string()));
+		return vsm::unexpected(error::unsupported_operation);
 	}
 
 	SECURITY_ATTRIBUTES process_attributes = {};
@@ -149,43 +286,29 @@ vsm::result<process_info> win32::launch_process(
 	STARTUPINFOEXW startup_info = {};
 	startup_info.StartupInfo.cb = sizeof(startup_info);
 
-	bool inherit_handles = a.inherit_handles_count != 0;
+	attribute_list_builder attributes;
 
-	size_t attribute_count = 0;
-	size_t inherit_handles_count = 0;
-
-	bounded_vector<std::pair<void const*, size_t>, 2> inherit_handles_sets;
-
-	auto const push_inherit_handles_set = [&](void const* const data, size_t const size)
-	{
-		attribute_count += inherit_handles_count == 0;
-		vsm_verify(inherit_handles_sets.try_push_back({ data, size }));
-		inherit_handles_count += size;
-	};
-
-	if (a.inherit_handles_array != nullptr)
-	{
-		push_inherit_handles_set(a.inherit_handles_array, a.inherit_handles_count);
-	}
+	bool inherit_handles = vsm::any_flags(a.options, process_options::inherit_handles);
+	std::span<HANDLE const> inherit_handles_internal;
 
 	// Standard stream handle redirection:
 	{
 		bool redirect_standard_streams = false;
 
-		if (a.std_input != native_platform_handle::null)
+		if (a.redirect_stdin != nullptr)
 		{
 			redirect_standard_streams = true;
-			startup_info.StartupInfo.hStdInput = unwrap_handle(a.std_input);
+			startup_info.StartupInfo.hStdInput = unwrap_handle(a.redirect_stdin->platform_handle);
 		}
-		if (a.std_output != native_platform_handle::null)
+		if (a.redirect_stdout != nullptr)
 		{
 			redirect_standard_streams = true;
-			startup_info.StartupInfo.hStdOutput = unwrap_handle(a.std_output);
+			startup_info.StartupInfo.hStdOutput = unwrap_handle(a.redirect_stdout->platform_handle);
 		}
-		if (a.std_error != native_platform_handle::null)
+		if (a.redirect_stderr != nullptr)
 		{
 			redirect_standard_streams = true;
-			startup_info.StartupInfo.hStdError = unwrap_handle(a.std_error);
+			startup_info.StartupInfo.hStdError = unwrap_handle(a.redirect_stderr->platform_handle);
 		}
 
 		if (redirect_standard_streams)
@@ -210,53 +333,20 @@ vsm::result<process_info> win32::launch_process(
 
 			// If the user did not request inheritance,
 			// the inheritance is restricted to just the standard stream handles.
-			push_inherit_handles_set(&startup_info.StartupInfo.hStdInput, 3);
+			inherit_handles_internal = std::span(&startup_info.StartupInfo.hStdInput, 3);
 		}
 	}
 
-	attribute_storage<256> attribute_storage;
-	unique_attribute_list attribute_list;
+	inherit_handles_storage<8> inherit_handles_storage;
+	vsm_try(inherit_handles_attribute, make_inherit_handles_attribute(
+		attributes,
+		inherit_handles_storage,
+		inherit_handles_internal,
+		a.inherit_handles));
 
-	if (attribute_count != 0)
-	{
-		vsm_try_assign(attribute_list, create_attribute_list(
-			attribute_storage,
-			attribute_count));
-	}
-
-	dynamic_buffer<HANDLE, 8> inherit_handles_storage;
-
-	if (inherit_handles_sets.size() != 0)
-	{
-		void const* inherit_handles_array;
-
-		if (inherit_handles_sets.size() == 1)
-		{
-			inherit_handles_array = inherit_handles_sets.front().first;
-			vsm_assert(inherit_handles_count == inherit_handles_sets.front().second);
-		}
-		else
-		{
-			vsm_try(array, inherit_handles_storage.reserve(inherit_handles_count));
-			size_t index = 0;
-
-			for (auto const& set : inherit_handles_sets)
-			{
-				vsm_assert(index <= inherit_handles_count);
-				memcpy(array + index, set.first, set.second * sizeof(HANDLE));
-				index += set.second;
-			}
-
-			vsm_assert(index == inherit_handles_count);
-			inherit_handles_array = array;
-		}
-
-		vsm_try_void(update_attribute_list(
-			attribute_list.get(),
-			PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
-			inherit_handles_array,
-			inherit_handles_count * sizeof(HANDLE)));
-	}
+	attribute_list_storage<256> attribute_list_storage;
+	vsm_try(attribute_list, attributes.build(attribute_list_storage));
+	startup_info.lpAttributeList = attribute_list.get();
 
 	PROCESS_INFORMATION process_information;
 	if (!CreateProcessW(
@@ -277,82 +367,27 @@ vsm::result<process_info> win32::launch_process(
 	unique_handle process(process_information.hProcess);
 	unique_handle thread(process_information.hThread);
 
-	return vsm_lazy(process_info
-	{
-		.handle = vsm_move(process),
-		.id = process_information.dwProcessId,
-	});
-}
-
-vsm::result<process_exit_code> win32::get_process_exit_code(HANDLE const handle)
-{
-	DWORD exit_code;
-	if (!GetExitCodeProcess(handle, &exit_code))
-	{
-		return vsm::unexpected(get_last_error());
-	}
-	return static_cast<process_exit_code>(exit_code);
-}
-
-
-vsm::result<void> process_t::open(
-	native_type& h,
-	io_parameters_t<process_t, open_t> const& a)
-{
-	vsm_try(handle, win32::open_process(a.id.integer()));
-
-	handle_flags flags = flags::none;
-
-	h = native_type
-	{
-		platform_object_t::native_type
-		{
-			object_t::native_type
-			{
-				flags::not_null | flags,
-			},
-			wrap_handle(handle.release()),
-		},
-		process_id{},
-		a.id,
-	};
-
-	return {};
-}
-
-vsm::result<void> process_t::launch(
-	native_type& h,
-	io_parameters_t<process_t, launch_t> const& a)
-{
-	vsm_try_bind((handle, id), win32::launch_process(a));
-
-	h = native_type
-	{
-		platform_object_t::native_type
-		{
-			object_t::native_type
-			{
-				flags::not_null,
-			},
-			wrap_handle(handle.release()),
-		},
-		process_id{},
-		process_id(id),
-	};
+	h.flags = flags::not_null;
+	h.platform_handle = wrap_handle(process.release());
+	h.id = process_id(process_information.dwProcessId);
 
 	return {};
 }
 
 vsm::result<void> process_t::terminate(
-	native_type const& h,
+	native_handle<process_t> const& h,
 	io_parameters_t<process_t, terminate_t> const& a)
 {
 	HANDLE const handle = unwrap_handle(h.platform_handle);
 
+	process_exit_code const exit_code = a.set_exit_code
+		? a.exit_code
+		: EXIT_FAILURE;
+
 	NTSTATUS status = NtTerminateProcess(
 		handle,
 		//TODO: Does this require some kind of transformation?
-		static_cast<NTSTATUS>(a.exit_code.value_or(EXIT_FAILURE)));
+		static_cast<NTSTATUS>(exit_code));
 
 	switch (status)
 	{
@@ -384,7 +419,7 @@ vsm::result<void> process_t::terminate(
 }
 
 vsm::result<process_exit_code> process_t::wait(
-	native_type const& h,
+	native_handle<process_t> const& h,
 	io_parameters_t<process_t, wait_t> const& a)
 {
 	if (h.id.integer() == GetCurrentProcessId())
@@ -413,13 +448,15 @@ vsm::result<process_exit_code> process_t::wait(
 }
 
 vsm::result<void> process_t::close(
-	native_type& h,
+	native_handle<process_t>& h,
 	io_parameters_t<process_t, close_t> const& a)
 {
+	vsm_assert(h.reaper == nullptr);
 	return base_type::close(h, a);
 }
 
 
+#if 0 //TODO: this_process
 blocking::process_handle const& this_process::get_handle()
 {
 	static constexpr auto make_handle = []()
@@ -468,3 +505,4 @@ vsm::result<blocking::process_handle> this_process::open()
 		}
 	));
 }
+#endif
