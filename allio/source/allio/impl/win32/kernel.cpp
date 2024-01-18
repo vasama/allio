@@ -44,6 +44,7 @@ using namespace allio::win32;
 	X(ntdll,        NtDeviceIoControlFile,                  STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtQueryObject,                          STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtTerminateProcess,                     STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtCreateNamedPipeFile,                  STATUS_NOT_SUPPORTED) \
 
 namespace {
 

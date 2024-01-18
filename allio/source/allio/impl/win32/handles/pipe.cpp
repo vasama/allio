@@ -7,6 +7,7 @@
 #include <allio/impl/win32/kernel.hpp>
 
 #include <vsm/lazy.hpp>
+#include <vsm/numeric.hpp>
 #include <vsm/out_resource.hpp>
 
 #include <win32.h>
@@ -21,7 +22,7 @@ static UNICODE_STRING make_unicode_string(std::wstring_view const string)
 
 	UNICODE_STRING unicode_string;
 	unicode_string.Buffer = const_cast<wchar_t*>(string.data());
-	unicode_string.Length = string.size() * sizeof(wchar_t);
+	unicode_string.Length = vsm::truncating(string.size() * sizeof(wchar_t));
 	unicode_string.MaximumLength = unicode_string.Length;
 
 	return unicode_string;
@@ -110,7 +111,7 @@ static vsm::result<handle_with_flags> create_named_pipe_file(io_flags const flag
 		/* MaximumInstances: */ 1,
 		/* InboundQuota: */ 4096,
 		/* OutboundQuota: */ 4096,
-		/* DefaultTimeout: */ nullptr);
+		kernel_timeout(std::chrono::milliseconds(INFINITE)));
 	vsm_assert(status != STATUS_PENDING);
 
 	if (!NT_SUCCESS(status))
@@ -182,9 +183,9 @@ static vsm::result<handle_with_flags> create_pipe(
 	return vsm_lazy(handle_with_flags{ vsm_move(handle), h_flags });
 }
 
-vsm::result<void> pipe_pair_t::create_pair(
-	native_handle<pipe_pair_t>& h,
-	io_parameters_t<pipe_pair_t, create_pair_t> const& a)
+vsm::result<basic_detached_handle<pipe_t>> pipe_t::create_pair(
+	native_handle<pipe_t>& h,
+	io_parameters_t<pipe_t, create_pair_t> const& a)
 {
 #if 0
 	SECURITY_ATTRIBUTES security_attributes = {};
@@ -207,16 +208,20 @@ vsm::result<void> pipe_pair_t::create_pair(
 	}
 #endif
 
-	vsm_try_bind((server_handle, server_flags), ::create_named_pipe_file(a.flags));
-	vsm_try_bind((client_handle, client_flags), ::create_pipe(server_handle.get(), a.flags));
+	vsm_try_bind((server_handle, server_flags), ::create_named_pipe_file(a.read_pipe.flags));
+	vsm_try_bind((client_handle, client_flags), ::create_pipe(server_handle.get(), a.write_pipe.flags));
 
 	h.flags = flags::not_null;
-	h.r_h.flags = object_t::flags::not_null;
-	h.r_h.platform_handle = wrap_handle(server_handle.release());
-	h.w_h.flags = object_t::flags::not_null;
-	h.w_h.platform_handle = wrap_handle(client_handle.release());
+	h.platform_handle = wrap_handle(server_handle.release());
 
-	return {};
+	native_handle<pipe_t> w_h = {};
+	w_h.flags = flags::not_null;
+	w_h.platform_handle = wrap_handle(client_handle.release());
+
+	return vsm::result<basic_detached_handle<pipe_t>>(
+		vsm::result_value,
+		adopt_handle,
+		w_h);
 }
 
 vsm::result<size_t> pipe_t::stream_read(

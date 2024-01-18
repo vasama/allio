@@ -44,6 +44,8 @@ struct explicit_argument
 template<typename P>
 struct explicit_parameter
 {
+	static_assert(std::is_object_v<typename P::value_type>);
+
 	P vsm_static_operator_invoke(std::convertible_to<typename P::value_type> auto&& value)
 	{
 		return { explicit_argument<P, typename P::value_type>{ vsm_forward(value) } };
@@ -53,6 +55,8 @@ struct explicit_parameter
 template<typename P>
 struct explicit_reference_parameter
 {
+	static_assert(std::is_pointer_v<typename P::value_type>);
+
 	P vsm_static_operator_invoke(std::remove_pointer_t<typename P::value_type>& value)
 	{
 		return { explicit_argument<P, typename P::value_type>{ &value } };
@@ -63,7 +67,7 @@ struct explicit_reference_parameter
 template<typename P>
 P make_args(auto&&... args)
 {
-	P arguments;
+	P arguments = {};
 	(set_argument(arguments, vsm_forward(args)), ...);
 	return arguments;
 }

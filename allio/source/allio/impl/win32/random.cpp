@@ -6,6 +6,8 @@
 
 #include <bcrypt.h>
 
+#pragma comment(lib, "Bcrypt.lib")
+
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;

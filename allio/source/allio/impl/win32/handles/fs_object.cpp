@@ -330,11 +330,11 @@ vsm::result<handle_with_flags> detail::open_file(open_parameters const& a)
 {
 	if (vsm::any_flags(a.special, open_options::anonymous))
 	{
-		return open_named_file(a);
+		return open_anonymous_file(a);
 	}
 	else
 	{
-		return open_anonymous_file(a);
+		return open_named_file(a);
 	}
 }
 

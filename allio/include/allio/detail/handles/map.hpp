@@ -14,19 +14,10 @@ enum class map_options : uint8_t
 };
 vsm_flag_enum(map_options);
 
-struct initial_commit_t
-{
-	bool initial_commit;
-};
+struct initial_commit_t : explicit_argument<initial_commit_t, bool> {};
 inline constexpr explicit_parameter<initial_commit_t> initial_commit = {};
 
-struct reserve_only_t {};
-inline constexpr reserve_only_t reserve_only = {};
-
-struct at_fixed_address_t
-{
-	uintptr_t address;
-};
+struct at_fixed_address_t : explicit_argument<at_fixed_address_t, uintptr_t> {};
 inline constexpr explicit_parameter<at_fixed_address_t> at_fixed_address = {};
 
 namespace map_io {
@@ -47,15 +38,10 @@ struct map_memory_t
 
 		friend void tag_invoke(set_argument_t, params_type& args, initial_commit_t const value)
 		{
-			if (!value.initial_commit)
+			if (!value.value)
 			{
 				args.options &= ~map_options::initial_commit;
 			}
-		}
-
-		friend void tag_invoke(set_argument_t, params_type& args, reserve_only_t)
-		{
-			args.options &= ~map_options::initial_commit;
 		}
 
 		friend void tag_invoke(set_argument_t, params_type& args, detail::protection const value)
@@ -71,7 +57,7 @@ struct map_memory_t
 		friend void tag_invoke(set_argument_t, params_type& args, at_fixed_address_t const value)
 		{
 			args.options |= map_options::at_fixed_address;
-			args.address = value.address;
+			args.address = value.value;
 		}
 	};
 

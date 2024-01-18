@@ -19,31 +19,37 @@ enum class io_flags : uint8_t
 vsm_flag_enum(io_flags);
 
 
-struct inheritable_t
-{
-	bool inheritable;
-};
+struct inheritable_t : explicit_argument<inheritable_t, bool> {};
+inline constexpr explicit_parameter<inheritable_t> inheritable = {};
 
-struct non_blocking_t
-{
-	bool non_blocking;
-};
+struct non_blocking_t : explicit_argument<non_blocking_t, bool> {};
+inline constexpr explicit_parameter<non_blocking_t> non_blocking = {};
 
 struct io_flags_t
 {
 	io_flags flags = {};
 
+	friend void tag_invoke(set_argument_t, io_flags_t& args, explicit_parameter<inheritable_t>)
+	{
+		args.flags |= io_flags::create_inheritable;
+	}
+
 	friend void tag_invoke(set_argument_t, io_flags_t& args, inheritable_t const value)
 	{
-		if (value.inheritable)
+		if (value.value)
 		{
 			args.flags |= io_flags::create_inheritable;
 		}
 	}
 
+	friend void tag_invoke(set_argument_t, io_flags_t& args, explicit_parameter<non_blocking_t>)
+	{
+		args.flags |= io_flags::create_non_blocking;
+	}
+
 	friend void tag_invoke(set_argument_t, io_flags_t& args, non_blocking_t const value)
 	{
-		if (value.non_blocking)
+		if (value.value)
 		{
 			args.flags |= io_flags::create_non_blocking;
 		}

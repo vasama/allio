@@ -101,6 +101,8 @@ static vsm::result<posix::unique_socket> wsa_accept(
 	posix::socket_type const listen_socket,
 	posix::socket_address& addr)
 {
+	addr.size = sizeof(posix::socket_address_union);
+
 	SOCKET const socket = WSAAccept(
 		listen_socket,
 		&addr.addr,

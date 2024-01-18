@@ -145,6 +145,15 @@ vsm::result<void> detail::open_fs_object(
 
 	vsm_try_bind((handle, flags), _open(a));
 
+	if (vsm::any_flags(a.mode, file_mode::read_data))
+	{
+		flags |= fs_object_t::flags::readable;
+	}
+	if (vsm::any_flags(a.mode, file_mode::write_data))
+	{
+		flags |= fs_object_t::flags::writable;
+	}
+
 	h.flags = object_t::flags::not_null | flags;
 	h.platform_handle = wrap_handle(handle.release());
 

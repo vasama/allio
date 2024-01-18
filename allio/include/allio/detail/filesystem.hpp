@@ -77,7 +77,7 @@ struct fs_entry_info
 
 struct fs_path
 {
-	native_platform_handle base = {};
+	native_platform_handle base;
 	any_path_view path;
 
 	fs_path() = default;

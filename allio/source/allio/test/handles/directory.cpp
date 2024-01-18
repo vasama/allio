@@ -45,7 +45,7 @@ static std::unordered_set<std::string> fill_directory(path_view const base_path,
 
 using stream_buffer = std::array<std::byte, 4096>;
 
-TEST_CASE("Directory entries can be read", "[directory_handle][blocking]")
+TEST_CASE("Directory entries can be read", "[directory][blocking]")
 {
 	static constexpr size_t file_count = 400;
 
@@ -93,7 +93,7 @@ static path get_temp_path(std::string_view const name)
 	return path((std::filesystem::temp_directory_path() / name).string());
 }
 
-TEST_CASE("directory_handle::read", "[directory_handle]")
+TEST_CASE("directory::read", "[directory]")
 {
 	static constexpr size_t file_count = 400;
 
@@ -107,7 +107,7 @@ TEST_CASE("directory_handle::read", "[directory_handle]")
 	}
 	REQUIRE(files.size() == file_count);
 
-	directory_handle directory = open_directory(directory_path);
+	directory directory = open_directory(directory_path);
 
 	std::byte stream_buffer[4096];
 	directory_stream stream(stream_buffer);

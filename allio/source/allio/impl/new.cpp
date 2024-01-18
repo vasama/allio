@@ -17,7 +17,7 @@ allio::detail::allocation vsm_weak(allio_memory_acquire)(size_t const min_size, 
 extern "C"
 void vsm_weak(allio_memory_release)(void* const memory, size_t /* size_hint */, size_t const alignment, bool /* automatic */)
 {
-	operator delete(memory, static_cast<std::align_val_t>(alignment), std::nothrow)
+	operator delete(memory, static_cast<std::align_val_t>(alignment), std::nothrow);
 }
 
 

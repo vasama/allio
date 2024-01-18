@@ -17,7 +17,7 @@
 using namespace allio;
 
 #if 0
-TEST_CASE("Waiting on the current process returns an error", "[process_handle]")
+TEST_CASE("Waiting on the current process returns an error", "[process]")
 {
 	auto const& process = this_process::get_handle();
 
@@ -27,7 +27,7 @@ TEST_CASE("Waiting on the current process returns an error", "[process_handle]")
 }
 #endif
 
-TEST_CASE("Child process can be created", "[process_handle]")
+TEST_CASE("Child process can be created", "[process]")
 {
 	using namespace blocking;
 
@@ -37,7 +37,7 @@ TEST_CASE("Child process can be created", "[process_handle]")
 	REQUIRE(process.wait() == EXIT_SUCCESS);
 }
 
-TEST_CASE("Child process can be created with arguments", "[process_handle]")
+TEST_CASE("Child process can be created with arguments", "[process]")
 {
 	using namespace blocking;
 
@@ -51,10 +51,10 @@ TEST_CASE("Child process can be created with arguments", "[process_handle]")
 
 		REQUIRE(process.wait() == EXIT_SUCCESS);
 	}
-	test::check_file_content(allio_detail_test_program_output, "hello");
+	test::check_file_content(allio_detail_test_program_output, "hello\n");
 }
 
-TEST_CASE("Child process exit code can be observed", "[process_handle]")
+TEST_CASE("Child process exit code can be observed", "[process]")
 {
 	using namespace blocking;
 
@@ -68,7 +68,7 @@ TEST_CASE("Child process exit code can be observed", "[process_handle]")
 	REQUIRE(process.wait() == exit_code);
 }
 
-TEST_CASE("Child process working directory can be changed", "[process_handle]")
+TEST_CASE("Child process working directory can be changed", "[process]")
 {
 	using namespace blocking;
 
@@ -83,17 +83,30 @@ TEST_CASE("Child process working directory can be changed", "[process_handle]")
 	{
 		std::string const args[] = { std::format("getcwd") };
 
+#if 0
+		auto a0 = path_view(allio_detail_test_program);
+		auto a1 = process_arguments(args);
+
+		auto a2_v = detail::fs_path(path_view(wdir));
+		auto a2 = working_directory(a2_v);
+
+		auto const process = create_process(
+			a0,
+			a1,
+			a2);
+#else
 		auto const process = create_process(
 			path_view(allio_detail_test_program),
 			process_arguments(args),
 			working_directory(path_view(wdir)));
+#endif
 
 		REQUIRE(process.wait() == EXIT_SUCCESS);
 	}
 	test::check_file_content(allio_detail_test_program_output, wdir + '\n');
 }
 
-TEST_CASE("Child process environment can be changed", "[process_handle]")
+TEST_CASE("Child process environment can be changed", "[process]")
 {
 	using namespace blocking;
 
@@ -127,14 +140,18 @@ TEST_CASE("Child process environment can be changed", "[process_handle]")
 		"foo bar\n");
 }
 
-TEST_CASE("Child stdin can be redirected", "[process_handle][pipe_handle]")
+TEST_CASE("Child stdin can be redirected", "[process][pipe_handle]")
 {
 	using namespace blocking;
 
-	auto pipe = create_pipe();
+	auto pipe = create_pipe(inheritable);
 
 	static constexpr std::string_view data = "input data";
-	REQUIRE(pipe.write_pipe.write_some(as_write_buffer(data.data(), data.size())) == data.size());
+
+	REQUIRE(pipe.write_pipe.write_some(
+		as_write_buffer(data.data(), data.size())) == data.size());
+
+	pipe.write_pipe.close();
 
 	std::filesystem::remove(allio_detail_test_program_output);
 	{
@@ -145,20 +162,19 @@ TEST_CASE("Child stdin can be redirected", "[process_handle][pipe_handle]")
 			process_arguments(args),
 			redirect_stdin(pipe.read_pipe));
 
-		pipe.read_pipe.close();
 		REQUIRE(process.wait() == EXIT_SUCCESS);
 	}
-	test::check_file_content(allio_detail_test_program_output, "input data");
+	test::check_file_content(allio_detail_test_program_output, "input data\n");
 }
 
-TEST_CASE("Child stdout can be redirected", "[process_handle][pipe_handle]")
+TEST_CASE("Child stdout can be redirected", "[process][pipe_handle]")
 {
 	using namespace blocking;
 
-	auto pipe = create_pipe();
+	auto pipe = create_pipe(inheritable);
 
 	static constexpr std::string_view input_data = "input data";
-	std::string const args[] = { std::format("stdout={}", input_data) };
+	std::string const args[] = { std::format("cout={}", input_data) };
 
 	auto const process = create_process(
 		path_view(allio_detail_test_program),
@@ -173,17 +189,17 @@ TEST_CASE("Child stdout can be redirected", "[process_handle][pipe_handle]")
 	size_t const output_size = pipe.read_pipe.read_some(
 		as_read_buffer(output_data, std::size(output_data)));
 
-	REQUIRE(std::string_view(output_data, output_size) == input_data);
+	REQUIRE(std::string_view(output_data, output_size) == "input data\n");
 }
 
-TEST_CASE("Child stderr can be redirected", "[process_handle][pipe_handle]")
+TEST_CASE("Child stderr can be redirected", "[process][pipe_handle]")
 {
 	using namespace blocking;
 
-	auto pipe = create_pipe();
+	auto pipe = create_pipe(inheritable);
 
 	static constexpr std::string_view input_data = "input data";
-	std::string const args[] = { std::format("stderr={}", input_data) };
+	std::string const args[] = { std::format("cerr={}", input_data) };
 
 	auto const process = create_process(
 		path_view(allio_detail_test_program),
@@ -198,10 +214,10 @@ TEST_CASE("Child stderr can be redirected", "[process_handle][pipe_handle]")
 	size_t const output_size = pipe.read_pipe.read_some(
 		as_read_buffer(output_data, std::size(output_data)));
 
-	REQUIRE(std::string_view(output_data, output_size) == input_data);
+	REQUIRE(std::string_view(output_data, output_size) == "input data\n");
 }
 
-TEST_CASE("Child process can be terminated", "[process_handle]")
+TEST_CASE("Child process can be terminated", "[process]")
 {
 	using namespace blocking;
 

@@ -12,7 +12,7 @@ static bool is_allio_category(std::error_category const& category)
 		strcmp(category.name(), error_category_name) == 0;
 }
 
-static bool is_not_enough_memory(std::error const e)
+static bool is_not_enough_memory(std::error_code const e)
 {
 	return
 		is_allio_category(e.category()) &&
@@ -29,6 +29,6 @@ void detail::throw_error(std::error_code const e)
 	}
 	else
 	{
-		throw std::system_error(error);
+		throw std::system_error(e);
 	}
 }

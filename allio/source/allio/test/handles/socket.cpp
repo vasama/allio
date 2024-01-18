@@ -40,7 +40,7 @@ public:
 
 } // namespace
 
-TEST_CASE("a stream socket can connect to a listening socket and exchange data", "[socket_handle][blocking]")
+TEST_CASE("a stream socket can connect to a listening socket and exchange data", "[socket][blocking]")
 {
 	using namespace blocking;
 
@@ -94,7 +94,7 @@ TEST_CASE("a stream socket can connect to a listening socket and exchange data",
 	}
 }
 
-TEST_CASE("a stream socket can asynchronously connect to a listening socket and exchange data", "[socket_handle][async]")
+TEST_CASE("a stream socket can asynchronously connect to a listening socket and exchange data", "[socket][async]")
 {
 	using namespace senders;
 

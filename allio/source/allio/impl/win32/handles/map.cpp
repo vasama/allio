@@ -72,6 +72,9 @@ static vsm::result<ULONG> get_page_level_allocation_type(page_level const level)
 {
 	auto const supported_levels = get_supported_page_levels();
 
+	// Windows only supports two paging levels.
+	vsm_assert(supported_levels.size() <= 2);
+
 	if (level == supported_levels.front())
 	{
 		return 0;
@@ -79,9 +82,6 @@ static vsm::result<ULONG> get_page_level_allocation_type(page_level const level)
 
 	if (supported_levels.size() > 1)
 	{
-		// Windows only supports two paging levels.
-		vsm_assert(supported_levels.size() == 2);
-
 		if (level == supported_levels.back())
 		{
 			return MEM_LARGE_PAGES;
@@ -296,12 +296,13 @@ static vsm::result<void> _map_section(
 
 	//TODO: Use a type erased section handle parameter and share already shared handles.
 	vsm_try(duplicate_section, win32::duplicate_handle(unwrap_handle(section_h.platform_handle)));
+
 	vsm_try(shared_section, make_shared_handle<section_t>(section_h));
 	shared_section->h.platform_handle = wrap_handle(duplicate_section.release());
 
 	vsm_try(map, map_view_of_section(
 		GetCurrentProcess(),
-		duplicate_section.get(),
+		unwrap_handle(shared_section->h.platform_handle),
 		a.section_offset,
 		reinterpret_cast<void*>(a.address),
 		a.size,
@@ -312,8 +313,6 @@ static vsm::result<void> _map_section(
 	h.section = shared_section.release();
 	h.base = map.get().base;
 	h.size = map.get().size;
-
-	(void)duplicate_section.release();
 	(void)map.release();
 
 	return {};
@@ -486,4 +485,20 @@ vsm::result<void> map_t::close(
 	}
 	h = {};
 	return {};
+}
+
+page_level map_t::get_page_level(native_handle<map_t> const& h)
+{
+	if (!h.flags[flags::page_level_1])
+	{
+		return get_default_page_level();
+	}
+
+	auto const supported_levels = get_supported_page_levels();
+
+	// Windows only supports two paging levels.
+	// Large pages must be supported if the flag was set.
+	vsm_assert(supported_levels.size() == 2);
+
+	return supported_levels[1];
 }

@@ -88,5 +88,5 @@ protection test::test_memory_protection(void* const base, size_t const size)
 		context.requested_access &= ~context.attempted_access;
 	}
 
-	return protection;
+	return protection | protection::none;
 }

@@ -46,49 +46,52 @@ static event_mode generate_reset_mode()
 	return get_reset_mode(GENERATE(false, true));
 }
 
-TEST_CASE("Events are not signaled on creation by default", "[event_handle][blocking]")
+
+/* Blocking events */
+
+TEST_CASE("Events are not signaled on creation by default", "[event][blocking]")
 {
 	auto const event = blocking::event(generate_reset_mode());
 	REQUIRE(event);
 	REQUIRE(!wait(event));
 }
 
-TEST_CASE("Events can be signaled on creation if requested", "[event_handle][blocking]")
+TEST_CASE("Events can be signaled on creation if requested", "[event][blocking]")
 {
 	auto const event = blocking::event(generate_reset_mode(), initially_signaled);
 	REQUIRE(event);
 	REQUIRE(wait(event));
 }
 
-TEST_CASE("Manual reset events remain signaled after wait", "[event_handle][blocking]")
+TEST_CASE("Manual reset events remain signaled after wait", "[event][blocking]")
 {
 	auto const event = blocking::event(manual_reset_event, initially_signaled);
 	REQUIRE(wait(event));
 	REQUIRE(wait(event));
 }
 
-TEST_CASE("Auto reset events become unsignaled after wait", "[event_handle][blocking]")
+TEST_CASE("Auto reset events become unsignaled after wait", "[event][blocking]")
 {
 	auto const event = blocking::event(auto_reset_event, initially_signaled);
 	REQUIRE(wait(event));
 	REQUIRE(!wait(event));
 }
 
-TEST_CASE("Events can be signaled after creation", "[event_handle][blocking]")
+TEST_CASE("Events can be signaled after creation", "[event][blocking]")
 {
 	auto const event = blocking::event(generate_reset_mode());
 	event.signal();
 	REQUIRE(wait(event));
 }
 
-TEST_CASE("Events can be reset after being signaled", "[event_handle][blocking]")
+TEST_CASE("Events can be reset after being signaled", "[event][blocking]")
 {
 	auto const event = blocking::event(generate_reset_mode(), initially_signaled);
 	event.reset();
 	REQUIRE(!wait(event));
 }
 
-TEST_CASE("Events can be signaled concurrently with waits", "[event_handle][blocking][threading]")
+TEST_CASE("Events can be signaled concurrently with waits", "[event][blocking][threading]")
 {
 	auto const event = blocking::event(generate_reset_mode());
 
@@ -101,7 +104,7 @@ TEST_CASE("Events can be signaled concurrently with waits", "[event_handle][bloc
 	REQUIRE(wait(event, deadline::never()));
 }
 
-TEST_CASE("Auto reset event signals are only observed by one wait", "[event_handle][blocking][threading]")
+TEST_CASE("Auto reset event signals are only observed by one wait", "[event][blocking][threading]")
 {
 	//TODO: Pick thread count based on CPU count.
 	static constexpr size_t const thread_count = 4;
@@ -171,6 +174,8 @@ TEST_CASE("Auto reset event signals are only observed by one wait", "[event_hand
 }
 
 
+/* Asynchronous events */
+
 static auto wait_detached(exec::async_scope& scope, auto const& event)
 {
 	class shared_bool
@@ -198,7 +203,7 @@ static auto wait_detached(exec::async_scope& scope, auto const& event)
 	return shared_bool(vsm_move(ptr));
 }
 
-TEST_CASE("Asynchronous wait on signaled event may complete immediately", "[event_handle][async]")
+TEST_CASE("Asynchronous wait on signaled event may complete immediately", "[event][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
 	auto const event = blocking::event(auto_reset_event, initially_signaled).via(multiplexer);
@@ -214,7 +219,7 @@ TEST_CASE("Asynchronous wait on signaled event may complete immediately", "[even
 	REQUIRE(signaled);
 }
 
-TEST_CASE("Asynchronous wait on unsignaled event completes after signaling", "[event_handle][async]")
+TEST_CASE("Asynchronous wait on unsignaled event completes after signaling", "[event][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
 	auto const event = blocking::event(auto_reset_event).via(multiplexer);
@@ -228,7 +233,7 @@ TEST_CASE("Asynchronous wait on unsignaled event completes after signaling", "[e
 	REQUIRE(signaled);
 }
 
-TEST_CASE("Auto reset event becomes unsignaled after asynchronous wait", "[event_handle][async]")
+TEST_CASE("Auto reset event becomes unsignaled after asynchronous wait", "[event][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
 	auto const event = blocking::event(auto_reset_event, initially_signaled).via(multiplexer);
@@ -240,7 +245,7 @@ TEST_CASE("Auto reset event becomes unsignaled after asynchronous wait", "[event
 	REQUIRE(!wait(event));
 }
 
-TEST_CASE("Manual reset event remains signaled after asynchronous wait", "[event_handle][async]")
+TEST_CASE("Manual reset event remains signaled after asynchronous wait", "[event][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
 	auto const event = blocking::event(manual_reset_event, initially_signaled).via(multiplexer);
@@ -252,7 +257,7 @@ TEST_CASE("Manual reset event remains signaled after asynchronous wait", "[event
 	REQUIRE(wait(event));
 }
 
-TEST_CASE("Auto reset event signals are only observed by one asynchronous wait", "[event_handle][async]")
+TEST_CASE("Auto reset event signals are only observed by one asynchronous wait", "[event][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
 	auto const event = blocking::event(auto_reset_event).via(multiplexer);
@@ -272,7 +277,7 @@ TEST_CASE("Auto reset event signals are only observed by one asynchronous wait",
 	(void)multiplexer.poll();
 }
 
-TEST_CASE("Manual reset event signals are observed by all asynchronous waits", "[event_handle][async]")
+TEST_CASE("Manual reset event signals are observed by all asynchronous waits", "[event][async]")
 {
 	auto multiplexer = default_multiplexer::create().value();
 	auto const event = blocking::event(manual_reset_event).via(multiplexer);
@@ -289,10 +294,10 @@ TEST_CASE("Manual reset event signals are observed by all asynchronous waits", "
 }
 
 
-#if 0 //TODO: Test opaque_handle wrapping event_handle
-TEST_CASE("blocking opaque signaling", "[event_handle][opaque_handle][blocking]")
+#if 0 //TODO: Test opaque_handle wrapping event
+TEST_CASE("blocking opaque signaling", "[event][opaque_handle][blocking]")
 {
-	event_handle const event = event(manual_reset_event);
+	event const event = event(manual_reset_event);
 	opaque_handle const opaque = make_opaque_handle(get_opaque_handle(event));
 
 	auto const poll = [&]() -> bool

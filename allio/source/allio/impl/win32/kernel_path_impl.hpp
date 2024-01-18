@@ -437,7 +437,7 @@ private:
 		static_assert(root_template.size() <= storage_type::max_root_size);
 		static constexpr size_t drive_offset = root_template.find(L'X');
 
-		wchar_t* root_buffer = m_storage.m_root;
+		wchar_t* const root_buffer = m_storage.m_root;
 		memcpy(root_buffer, root_template.data(), root_template.size() * sizeof(wchar_t));
 		root_buffer[drive_offset] = drive;
 
@@ -549,15 +549,6 @@ private:
 	{
 		wchar_t const* beg = path.beg;
 		wchar_t const* const end = path.end;
-
-		if (end - beg >= 4 &&
-			is_separator(beg[0]) &&
-			is_separator(beg[1]) &&
-			(beg[2] == '.' || beg[2] == '?') &&
-			is_separator(beg[3]))
-		{
-			beg += 4;
-		}
 
 		if (has_drive_letter(beg, end))
 		{
@@ -871,7 +862,7 @@ private:
 			tag...);
 	}
 
-	vsm::result<void> _make_path_select(std::basic_string_view<char32_t>, std::same_as<null_terminated_t> auto... tag)
+	vsm::result<void> _make_path_select(std::basic_string_view<char32_t>, std::same_as<null_terminated_t> auto...)
 	{
 		return vsm::unexpected(error::unsupported_encoding);
 	}

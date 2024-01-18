@@ -15,12 +15,51 @@ static constexpr DWORD SIO_POLL = _WSAIORW(IOC_WS2, 31);
 //TODO: Add using in a public header.
 using detail::io_flags;
 
+namespace {
+
+template<size_t Size>
+class completion_storage
+{
+	FILE_IO_COMPLETION_INFORMATION m_completions[Size];
+	size_t m_completion_count = 0;
+
+public:
+	size_t remove(
+		detail::unique_handle const& completion_port,
+		size_t const max_completions = static_cast<size_t>(-1))
+	{
+		size_t const count = remove_io_completions(
+			completion_port.get(),
+			std::span(m_completions).subspan(m_completion_count, max_completions),
+			std::chrono::milliseconds(100)).value();
+		m_completion_count += count;
+		return count;
+	}
+
+	FILE_IO_COMPLETION_INFORMATION const& get(OVERLAPPED const& overlapped) const
+	{
+		auto const beg = m_completions;
+		auto const end = m_completions + m_completion_count;
+		auto const it = std::find_if(beg, end, [&](auto const& completion)
+			{
+				return completion.ApcContext == &overlapped;
+			});
+		REQUIRE(it != end);
+		return *it;
+	}
+};
+
+} // namespace
+
+
+/* Stream sockets */
+
 TEST_CASE("WSA supports unix stream sockets", "[windows][wsa][socket]")
 {
 	REQUIRE(posix::create_socket(AF_UNIX, SOCK_STREAM, 0, io_flags::none));
 }
 
-TEST_CASE("WSA async connect and accept", "[windows][wsa][socket][async]")
+TEST_CASE("WSA asynchronous connect and accept", "[windows][wsa][socket][async]")
 {
 	auto const addr = socket_address::make(ipv4_endpoint(ipv4_address::localhost, 51234)).value();
 
@@ -76,40 +115,30 @@ TEST_CASE("WSA async connect and accept", "[windows][wsa][socket][async]")
 	REQUIRE(WSA_IO_PENDING == wsa_connect_ex(client_socket.get(), addr, connect_overlapped));
 
 
-	// Handle completions
+	/* Handle completions */
+
+	completion_storage<3> completions;
+
+	// Remove up to one completion, expecting one.
+	REQUIRE(completions.remove(completion_port, 1) == 1);
+
+	// Remove up to two completions, expecting one.
+	REQUIRE(completions.remove(completion_port, 2) == 1);
+
+	// Accept completion
 	{
-		FILE_IO_COMPLETION_INFORMATION completions[3];
+		auto const& completion = completions.get(accept_overlapped);
+		REQUIRE(NT_SUCCESS(completion.IoStatusBlock.Status));
+	}
 
-		auto const get_completions = [&](size_t const index, size_t const count)
-		{
-			return std::span(completions).subspan(index, count);
-		};
-
-		REQUIRE(remove_io_completions(completion_port.get(), get_completions(0, 1), std::chrono::milliseconds(100)).value() == 1);
-		REQUIRE(remove_io_completions(completion_port.get(), get_completions(1, 2), std::chrono::milliseconds(100)).value() == 1);
-
-		auto const get_completion = [&](OVERLAPPED const& overlapped) -> FILE_IO_COMPLETION_INFORMATION const&
-		{
-			return completions[0].ApcContext == &overlapped ? completions[0] : completions[1];
-		};
-
-		// Accept completion
-		{
-			auto const& completion = get_completion(accept_overlapped);
-			REQUIRE(completion.ApcContext == &accept_overlapped);
-			REQUIRE(NT_SUCCESS(completion.IoStatusBlock.Status));
-		}
-
-		// Connect completion
-		{
-			auto const& completion = get_completion(connect_overlapped);
-			REQUIRE(completion.ApcContext == &connect_overlapped);
-			REQUIRE(NT_SUCCESS(completion.IoStatusBlock.Status));
-		}
+	// Connect completion
+	{
+		auto const& completion = completions.get(connect_overlapped);
+		REQUIRE(NT_SUCCESS(completion.IoStatusBlock.Status));
 	}
 
 #if 0
-	SECTION("Asynchoronous polling")
+	SECTION("Asynchronous polling")
 	{
 		struct AFD_HANDLE
 		{
@@ -159,6 +188,8 @@ TEST_CASE("WSA async connect and accept", "[windows][wsa][socket][async]")
 #endif
 }
 
+
+/* Datagram sockets */
 
 TEST_CASE("WSA does not support unix datagram sockets", "[windows][datagram_socket][wsa]")
 {
@@ -234,7 +265,7 @@ TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram
 	auto const completion_port = create_completion_port(1).value();
 
 
-	/* receive */
+	/* Receive */
 
 	auto const receive_socket = create_socket();
 	socket_bind(receive_socket.get(), addr).value();
@@ -274,7 +305,7 @@ TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram
 	}
 
 
-	/* send */
+	/* Send */
 
 	auto const send_socket = create_socket();
 
@@ -286,6 +317,7 @@ TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram
 	signed char send_value = 42;
 
 	OVERLAPPED send_overlapped = {};
+	bool send_pending = false;
 	{
 		WSABUF buf =
 		{
@@ -308,39 +340,32 @@ TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram
 		if (r == SOCKET_ERROR)
 		{
 			REQUIRE(WSAGetLastError() == ERROR_IO_PENDING);
+			send_pending = true;
 		}
 	}
-	
 
-	/* handle completions */
 
-	FILE_IO_COMPLETION_INFORMATION completions[3];
+	/* Handle completions */
 
-	auto const get_completions = [&](size_t const index, size_t const count)
+	completion_storage<3> completions;
+
+	// Remove up to one completion, expecting one.
+	REQUIRE(completions.remove(completion_port, 1) == 1);
+
+	// Remove up to two completions, expecting one if the send is pending.
+	REQUIRE(completions.remove(completion_port, 2) == static_cast<size_t>(send_pending));
+
+	// Receive completion
 	{
-		return std::span(completions).subspan(index, count);
-	};
-
-	REQUIRE(remove_io_completions(completion_port.get(), get_completions(0, 1), std::chrono::milliseconds(100)).value() == 1);
-	REQUIRE(remove_io_completions(completion_port.get(), get_completions(1, 2), std::chrono::milliseconds(100)).value() == 1);
-
-	auto const get_completion = [&](OVERLAPPED const& overlapped) -> FILE_IO_COMPLETION_INFORMATION const&
-	{
-		return completions[0].ApcContext == &overlapped ? completions[0] : completions[1];
-	};
-
-	// receive completion
-	{
-		auto const& completion = get_completion(receive_overlapped);
-		REQUIRE(completion.ApcContext == &receive_overlapped);
+		auto const& completion = completions.get(receive_overlapped);
 		REQUIRE(NT_SUCCESS(completion.IoStatusBlock.Status));
 		REQUIRE(completion.IoStatusBlock.Information == 1);
 	}
 
-	// send completion
+	// Send completion
+	if (send_pending)
 	{
-		auto const& completion = get_completion(send_overlapped);
-		REQUIRE(completion.ApcContext == &send_overlapped);
+		auto const& completion = completions.get(send_overlapped);
 		REQUIRE(NT_SUCCESS(completion.IoStatusBlock.Status));
 		REQUIRE(completion.IoStatusBlock.Information == 1);
 	}

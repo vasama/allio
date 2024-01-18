@@ -42,18 +42,21 @@ vsm_add_library(allio::core
 		include/allio/step_deadline.hpp
 		include/allio/sync_wait.hpp
 
-		include/allio/handles/datagram_socket.hpp
+		include/allio/handles/basic_datagram_socket.hpp
+		include/allio/handles/basic_listen_socket.hpp
+		include/allio/handles/basic_socket.hpp
 		include/allio/handles/directory.hpp
 		include/allio/handles/event.hpp
 		include/allio/handles/file.hpp
 		include/allio/handles/fs_object.hpp
-		include/allio/handles/listen_socket.hpp
 		include/allio/handles/map.hpp
 		include/allio/handles/opaque_object.hpp
 		include/allio/handles/platform_object.hpp
 		include/allio/handles/process.hpp
+		include/allio/handles/raw_datagram_socket.hpp
+		include/allio/handles/raw_listen_socket.hpp
+		include/allio/handles/raw_socket.hpp
 		include/allio/handles/section.hpp
-		include/allio/handles/socket.hpp
 
 		include/allio/detail/any_handle.hpp
 		include/allio/detail/api.hpp
@@ -78,7 +81,9 @@ vsm_add_library(allio::core
 
 	SOURCES
 		source/allio/impl/error.cpp
+		source/allio/impl/exceptions.cpp
 		source/allio/impl/network.cpp
+		source/allio/impl/new.cpp
 		source/allio/impl/random.hpp
 		source/allio/impl/transcode.hpp
 		source/allio/impl/unique_name.cpp

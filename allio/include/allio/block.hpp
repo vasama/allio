@@ -6,7 +6,7 @@
 namespace allio {
 
 template<detail::observer Operation, detail::handle Handle>
-detail::io_result_t<typename Handle::object_type, Operation> block(Handle& handle, auto&&... args)
+detail::io_result_t<Handle, Operation> block(Handle& handle, auto&&... args)
 {
 	return detail::throw_on_error(detail::blocking_io<Operation>(
 		handle,
@@ -14,7 +14,7 @@ detail::io_result_t<typename Handle::object_type, Operation> block(Handle& handl
 }
 
 template<detail::observer Operation, detail::handle Handle>
-vsm::result<detail::io_result_t<typename Handle::object_type, Operation>> try_block(Handle& handle, auto&&... args)
+vsm::result<detail::io_result_t<Handle, Operation>> try_block(Handle& handle, auto&&... args)
 {
 	return detail::blocking_io<Operation>(
 		handle,

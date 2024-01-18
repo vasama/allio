@@ -11,39 +11,40 @@
 using namespace allio;
 namespace ex = stdexec;
 
-TEST_CASE("Files can be read and written", "[file_handle][blocking]")
+TEST_CASE("Files can be read", "[file][blocking]")
 {
 	using namespace blocking;
 
 	auto const path = test::get_temp_path();
 
-	SECTION("File content can be read")
+	test::write_file_content(path, "allio");
 	{
-		test::write_file_content(path, "allio");
-		{
-			auto const file = open_file(path);
+		auto const file = open_file(path);
 
-			char data[] = "trash";
-			REQUIRE(file.read_some(0, as_read_buffer(data, 5)) == 5);
-			REQUIRE(memcmp(data, "allio", 5) == 0);
-		}
-	}
-
-	SECTION("File content can be written")
-	{
-		test::write_file_content(path, "trash");
-		{
-			auto const file = open_file(path);
-
-			char data[] = "allio";
-			REQUIRE(file.write_some(0, as_write_buffer(data, 5)) == 5);
-		}
-		test::check_file_content(path, "allio");
+		char data[] = "trash";
+		REQUIRE(file.read_some(0, as_read_buffer(data, 5)) == 5);
+		REQUIRE(memcmp(data, "allio", 5) == 0);
 	}
 }
 
+TEST_CASE("Files can be written", "[file][blocking]")
+{
+	using namespace blocking;
+
+	auto const path = test::get_temp_path();
+
+	test::write_file_content(path, "trash");
+	{
+		auto const file = open_file(path);
+
+		char data[] = "allio";
+		REQUIRE(file.write_some(0, as_write_buffer(data, 5)) == 5);
+	}
+	test::check_file_content(path, "allio");
+}
+
 #if 0
-TEST_CASE("file_handle::read_at", "[file_handle]")
+TEST_CASE("file::read_at", "[file]")
 {
 	path const file_path = test::get_temp_file_path("allio-test-file");
 
@@ -53,7 +54,7 @@ TEST_CASE("file_handle::read_at", "[file_handle]")
 
 	test::write_file_content(file_path, "allio");
 	{
-		file_handle file;
+		file file;
 		file.set_multiplexer(multiplexer.get());
 		file.open(file_path, { .multiplexable = multiplexable });
 
@@ -63,7 +64,7 @@ TEST_CASE("file_handle::read_at", "[file_handle]")
 	}
 }
 
-TEST_CASE("file_handle::write_at", "[file_handle]")
+TEST_CASE("file::write_at", "[file]")
 {
 	path const file_path = test::get_temp_file_path("allio-test-file");
 
@@ -72,7 +73,7 @@ TEST_CASE("file_handle::write_at", "[file_handle]")
 
 	test::write_file_content(file_path, "trash");
 	{
-		file_handle file;
+		file file;
 		file.set_multiplexer(multiplexer.get());
 		file.open(file_path, { .multiplexable = multiplexable, .mode = file_mode::write });
 
@@ -81,7 +82,7 @@ TEST_CASE("file_handle::write_at", "[file_handle]")
 	test::check_file_content(file_path, "allio");
 }
 
-TEST_CASE("file_handle::read_at_async", "[file_handle]")
+TEST_CASE("file::read_at_async", "[file]")
 {
 	path const file_path = test::get_temp_file_path("allio-test-file");
 
@@ -90,7 +91,7 @@ TEST_CASE("file_handle::read_at_async", "[file_handle]")
 	test::write_file_content(file_path, "allio");
 	sync_wait(*multiplexer, [&]() -> detail::execution::task<void>
 	{
-		file_handle file = co_await error_into_except(open_file_async(*multiplexer, file_path));
+		file file = co_await error_into_except(open_file_async(*multiplexer, file_path));
 
 		char buffer[] = "trash";
 		co_await error_into_except(file.read_at_async(0, as_read_buffer(buffer, 5)));
@@ -98,7 +99,7 @@ TEST_CASE("file_handle::read_at_async", "[file_handle]")
 	}());
 }
 
-TEST_CASE("file_handle::write_at_async", "[file_handle]")
+TEST_CASE("file::write_at_async", "[file]")
 {
 	path const file_path = test::get_temp_file_path("allio-test-file");
 
@@ -107,7 +108,7 @@ TEST_CASE("file_handle::write_at_async", "[file_handle]")
 	test::write_file_content(file_path, "trash");
 	sync_wait(*multiplexer, [&]() -> detail::execution::task<void>
 	{
-		file_handle file = co_await error_into_except(open_file_async(*multiplexer, file_path,
+		file file = co_await error_into_except(open_file_async(*multiplexer, file_path,
 		{
 			.mode = file_mode::write,
 		}));
@@ -117,7 +118,7 @@ TEST_CASE("file_handle::write_at_async", "[file_handle]")
 	test::check_file_content(file_path, "allio");
 }
 
-TEST_CASE("file_handle::write_at with many vectors", "[file_handle]")
+TEST_CASE("file::write_at with many vectors", "[file]")
 {
 	static constexpr size_t buffer_count = 0xFFFF;
 
@@ -155,7 +156,7 @@ TEST_CASE("file_handle::write_at with many vectors", "[file_handle]")
 
 	unique_multiplexer_ptr const multiplexer = test::generate_multiplexer(true);
 
-	file_handle file;
+	file file;
 	file.set_multiplexer(multiplexer.get());
 	file.open(file_path,
 	{

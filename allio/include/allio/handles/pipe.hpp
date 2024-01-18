@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/detail/handles/pipe.hpp>
+#include <allio/handles/object.hpp>
 
 namespace allio {
 

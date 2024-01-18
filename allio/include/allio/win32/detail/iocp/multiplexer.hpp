@@ -18,10 +18,7 @@ namespace allio::detail {
 
 namespace iocp {
 
-struct max_concurrent_threads_t
-{
-	size_t max_concurrent_threads = 1;
-};
+struct max_concurrent_threads_t : explicit_argument<max_concurrent_threads_t, size_t> {};
 inline constexpr explicit_parameter<max_concurrent_threads_t> max_concurrent_threads = {};
 
 } // namespace iocp
@@ -148,13 +145,20 @@ private:
 	vsm::linear<HANDLE> m_completion_port;
 
 
-	using create_parameters = iocp::max_concurrent_threads_t;
+	struct create_parameters
+	{
+		size_t max_concurrent_threads;
+	};
+
 	using poll_parameters = deadline_t;
 
 public:
 	[[nodiscard]] static vsm::result<iocp_multiplexer> create(auto&&... args)
 	{
-		return _create(make_args<create_parameters>(vsm_forward(args)...));
+		auto a = create_parameters{};
+		a.max_concurrent_threads = 1;
+		(set_argument(a, vsm_forward(args)), ...);
+		return _create(a);
 	}
 
 	[[nodiscard]] static vsm::result<iocp_multiplexer> create(iocp_multiplexer const& other)

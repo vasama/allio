@@ -62,6 +62,7 @@ public:
 			, m_value_size(value_size)
 		{
 			builder.m_list.push_back(this);
+			++builder.m_list_size;
 		}
 
 		attribute(attribute const&) = delete;
@@ -73,7 +74,7 @@ public:
 
 private:
 	vsm::intrusive::forward_list<attribute> m_list;
-	size_t m_list_size;
+	size_t m_list_size = 0;
 
 public:
 	template<size_t Capacity>
@@ -113,7 +114,7 @@ public:
 					const_cast<void*>(a.m_value),
 					a.m_value_size,
 					/* lpPreviousValue: */ nullptr,
-					/* lpReturnSize: */ 0))
+					/* lpReturnSize: */ nullptr))
 				{
 					return vsm::unexpected(get_last_error());
 				}
@@ -186,12 +187,17 @@ static vsm::result<attribute> make_inherit_handles_attribute(
 		handle_count = new_handle_count;
 	}
 
-	return vsm::result<attribute>(
-		vsm::result_value,
-		builder,
-		PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
-		handle_array,
-		handle_count * sizeof(HANDLE));
+	if (handle_count != 0)
+	{
+		return vsm::result<attribute>(
+			vsm::result_value,
+			builder,
+			PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+			handle_array,
+			handle_count * sizeof(HANDLE));
+	}
+
+	return {};
 }
 
 } // namespace
@@ -267,14 +273,18 @@ vsm::result<void> process_t::create(
 			a.environment));
 	}
 
-	vsm_try(working_directory, make_api_string(
-		string_storage,
-		a.working_directory.path.string()));
-
-	//TODO: Only if the path is relative
+	//TODO: Only error if the path is relative.
 	if (a.working_directory.base != native_platform_handle::null)
 	{
 		return vsm::unexpected(error::unsupported_operation);
+	}
+
+	wchar_t const* working_directory = nullptr;
+	if (!a.working_directory.path.empty())
+	{
+		vsm_try_assign(working_directory, make_api_string(
+			string_storage,
+			a.working_directory.path.string()));
 	}
 
 	SECURITY_ATTRIBUTES process_attributes = {};

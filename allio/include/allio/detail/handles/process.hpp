@@ -44,7 +44,7 @@ inline constexpr explicit_parameter<wait_on_close_t> wait_on_close = {};
 struct process_arguments_t : explicit_argument<process_arguments_t, any_string_span> {};
 inline constexpr explicit_parameter<process_arguments_t> process_arguments = {};
 
-struct working_directory_t : explicit_argument<working_directory_t, fs_path const&> {};
+struct working_directory_t : explicit_argument<working_directory_t, fs_path> {};
 inline constexpr explicit_parameter<working_directory_t> working_directory = {};
 
 struct process_environment_t : explicit_argument<process_environment_t, any_string_span> {};

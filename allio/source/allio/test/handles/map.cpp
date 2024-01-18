@@ -22,9 +22,9 @@ static constexpr size_t large_reservation_size = GiB;
 static constexpr size_t large_reservation_size = TiB;
 #endif
 
-TEST_CASE("Anonymous mappings can reserve large amounts of address space", "[map_handle]")
+TEST_CASE("Anonymous mappings can reserve large amounts of address space", "[map]")
 {
-	auto const map = map_memory(large_reservation_size, reserve_only);
+	auto const map = map_memory(large_reservation_size, initial_commit(false));
 
 	auto const page_size = map.page_size();
 	auto const page_0 = reinterpret_cast<char*>(map.base());
@@ -47,7 +47,7 @@ TEST_CASE("Anonymous mappings can reserve large amounts of address space", "[map
 		[=](char const x) { return x == 2; }));
 }
 
-TEST_CASE("The protection of anonymous mappings can be changed", "[map_handle][causes_faults]")
+TEST_CASE("The protection of anonymous mappings can be changed", "[map][causes_faults]")
 {
 	auto const map = map_memory(1, protection::none);
 
@@ -75,7 +75,7 @@ TEST_CASE("The protection of anonymous mappings can be changed", "[map_handle][c
 	REQUIRE(test::test_memory_protection(base, size) == protection::read_write);
 }
 
-TEST_CASE("Sections using backing files can be created and mapped", "[section_handle][map_handle]")
+TEST_CASE("Sections using backing files can be created and mapped", "[section_handle][map]")
 {
 	path const file_path = test::get_temp_path();
 	auto const mode = GENERATE(file_mode::read, file_mode::read_write);

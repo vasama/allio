@@ -56,10 +56,17 @@ private:
 	[[nodiscard]] auto _via(std::convertible_to<MultiplexerHandle> auto&& multiplexer)
 	{
 		using handle_type = typename Handle::template rebind_multiplexer<MultiplexerHandle>;
-	
+
+#if 0
+		auto r = tag_invoke(
+			rebind_handle_t<rebind<handle_type>>(),
+			vsm_move(*this),
+			vsm_forward(multiplexer));
+#else
 		auto r = rebind_handle<rebind<handle_type>>(
 			vsm_move(*this),
 			vsm_forward(multiplexer));
+#endif
 
 		if constexpr (Traits::has_transform_result)
 		{
@@ -87,13 +94,20 @@ private:
 
 	friend vsm::result<basic_facade> tag_invoke(
 		rebind_handle_t<basic_facade>,
+		vsm::not_same_as<basic_facade> auto&& h,
 		auto&&... args)
-		requires requires { rebind_handle<Handle>(vsm_forward(args)...); }
+		requires requires { rebind_handle<Handle>(vsm_forward(h), vsm_forward(args)...); }
 	{
-		vsm_try(h, rebind_handle<Handle>(vsm_forward(args)...));
-		return vsm::result<basic_facade>(vsm::result_value, vsm_move(h));
+		vsm_try(new_h, rebind_handle<Handle>(
+			vsm_forward(h),
+			vsm_forward(args)...));
+
+		return vsm::result<basic_facade>(
+			vsm::result_value,
+			vsm_move(new_h));
 	}
 
+#if 0
 	template<handle OtherHandle>
 	friend vsm::result<basic_facade<OtherHandle, Traits>> tag_invoke(
 		rebind_handle_t<basic_facade<OtherHandle, Traits>>,
@@ -108,6 +122,7 @@ private:
 			vsm::result_value,
 			vsm_move(new_h));
 	}
+#endif
 };
 
 template<attached_handle Handle, typename Traits>
@@ -165,13 +180,20 @@ private:
 
 	friend vsm::result<basic_facade> tag_invoke(
 		rebind_handle_t<basic_facade>,
+		vsm::not_same_as<basic_facade> auto&& h,
 		auto&&... args)
-		requires requires { rebind_handle<Handle>(vsm_forward(args)...); }
+		requires requires { rebind_handle<Handle>(vsm_forward(h), vsm_forward(args)...); }
 	{
-		vsm_try(h, rebind_handle<Handle>(vsm_forward(args)...));
-		return vsm::result<basic_facade>(vsm::result_value, vsm_move(h));
+		vsm_try(new_h, rebind_handle<Handle>(
+			vsm_forward(h),
+			vsm_forward(args)...));
+
+		return vsm::result<basic_facade>(
+			vsm::result_value,
+			vsm_move(new_h));
 	}
 
+#if 0
 	template<handle OtherHandle>
 	friend vsm::result<basic_facade<OtherHandle, Traits>> tag_invoke(
 		rebind_handle_t<basic_facade<OtherHandle, Traits>>,
@@ -186,6 +208,7 @@ private:
 			vsm::result_value,
 			vsm_move(new_h));
 	}
+#endif
 };
 
 
@@ -210,15 +233,23 @@ struct default_traits
 		using result_type = io_result_t<basic_facade<Handle, default_traits>, Operation>;
 
 		auto r = blocking_io<Operation>(h, a);
-		auto&& v = throw_on_error(vsm_move(r));
+		using value_type = typename decltype(r)::value_type;
 
-		if constexpr (std::is_same_v<std::remove_cvref_t<decltype(v)>, result_type>)
+		if (!r)
 		{
-			return vsm_move(v);
+			throw_error(r.error());
+		}
+
+		if constexpr (std::is_same_v<value_type, result_type>)
+		{
+			if constexpr (!std::is_void_v<result_type>)
+			{
+				return vsm_move(*r);
+			}
 		}
 		else
 		{
-			return throw_on_error(rebind_handle<result_type>(vsm_move(v)));
+			return throw_on_error(rebind_handle<result_type>(vsm_move(*r)));
 		}
 	}
 
