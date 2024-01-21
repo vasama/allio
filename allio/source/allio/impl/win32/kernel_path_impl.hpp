@@ -51,6 +51,7 @@ class basic_kernel_path_converter
 
 	bool m_win32_api_form = false;
 	bool m_reject_local_device_current_directory = false;
+	bool m_reject_dos_device_name = true;
 
 	wchar_t* m_buffer_beg = nullptr;
 	wchar_t* m_buffer_pos = nullptr;
@@ -285,6 +286,7 @@ private:
 
 				if (consume("LPT") || consume("COM"))
 				{
+					// Match "LPT[0-9]" or "COM[0-9]".
 					if (std::iswdigit(*beg))
 					{
 						++beg;
@@ -296,6 +298,7 @@ private:
 
 				if (consume("CON"))
 				{
+					// Match "CONIN$", "CONOUT$" or "CON".
 					return consume("IN$") || consume("OUT$") || true;
 				}
 			}
@@ -316,22 +319,62 @@ private:
 		return false;
 	}
 
-	template<typename Char>
-	vsm::result<size_t> push_canonical_impl(Char const* const beg, Char const* end, size_t backtrack, auto const push_literal)
+
+	struct canonicalization_context
 	{
-		bool need_separator = m_buffer_pos != m_buffer_end && *m_buffer_pos != Char('\\');
+		size_t backtrack = 0;
+		bool trailing_separator = true;
+
+		template<typename Char>
+		explicit canonicalization_context(Char const* const beg, Char const* const end)
+			: trailing_separator(beg != end && is_separator(end[-1]))
+		{
+		}
+	};
+
+	template<typename Char>
+	vsm::result<void> push_canonical_impl(
+		Char const* const beg,
+		Char const* end,
+		canonicalization_context& context,
+		auto const push_literal)
+	{
+		// Relative paths never begin with a separator.
+		vsm_assert(beg == end || !is_separator(*beg));
+
+		// Any subsequent part of the path does not begin with a separator.
+		vsm_assert(m_buffer_pos == m_buffer_end || *m_buffer_pos != Char('\\'));
 
 		Char const* flush_end = end;
 		auto const flush = [&](Char const* const flush_beg, Char const* const new_flush_end) -> vsm::result<void>
 		{
-			if (need_separator && flush_beg != flush_end && flush_end[-1] != Char('\\'))
+			Char const* const literal_beg = flush_beg;
+			Char const* literal_end = flush_end;
+			flush_end = new_flush_end;
+
+			if (literal_beg == literal_end)
 			{
-				wchar_t const* const separator = L"\\";
-				vsm_try_void(push_literal(separator, separator + 1));
-				need_separator = false;
+				return {};
 			}
 
-			return push_literal(flush_beg, std::exchange(flush_end, new_flush_end));
+			if (context.trailing_separator)
+			{
+				if (literal_end[-1] != Char('\\'))
+				{
+					wchar_t const* const separator = L"\\";
+					vsm_try_void(push_literal(separator, separator + 1));
+				}
+			}
+			else
+			{
+				if (literal_end[-1] == Char('\\'))
+				{
+					vsm_verify(--literal_end != literal_beg);
+				}
+			}
+
+			context.trailing_separator = true;
+			return push_literal(literal_beg, literal_end);
 		};
 
 		while (beg != end)
@@ -367,45 +410,54 @@ private:
 
 				if (segment_size == 2 && segment_beg[1] == '.')
 				{
-					++backtrack;
+					++context.backtrack;
 					vsm_try_void(flush(separator_end, segment_beg));
 					continue;
 				}
 			}
 
-			if (is_untrimmed_name(segment_beg, segment_end) || is_device_name(segment_beg, segment_end))
+			if (is_untrimmed_name(segment_beg, segment_end))
 			{
 				return vsm::unexpected(error::invalid_path);
 			}
 
-			if (backtrack != 0)
+			if (m_reject_dos_device_name && is_device_name(segment_beg, segment_end))
 			{
-				--backtrack;
+				return vsm::unexpected(error::invalid_path);
+			}
+
+			if (context.backtrack != 0)
+			{
+				--context.backtrack;
 				flush_end = segment_beg;
 				continue;
 			}
 
-			if (size_t const separator_size = separator_end - separator_beg)
+			if (separator_beg != separator_end)
 			{
-				if (separator_size > 1 || *separator_beg == Char('/'))
+				if (separator_end - separator_beg > 1 || *separator_beg != Char('\\'))
 				{
-					vsm_try_void(flush(separator_end, segment_end));
-
-					wchar_t const* const separator = L"\\";
-					vsm_try_void(push_literal(separator, separator + 1));
+					bool const has_canonical_separator = *separator_beg == Char('\\');
+					vsm_try_void(flush(separator_end, segment_end + has_canonical_separator));
 				}
 			}
 		}
 
 		vsm_try_void(flush(beg, beg));
 
-		return backtrack;
+		return {};
 	}
 
 	template<typename Char>
-	vsm::result<size_t> push_canonical(Char const* const beg, Char const* const end, size_t backtrack = 0)
+	vsm::result<void> push_canonical(
+		Char const* const beg,
+		Char const* const end,
+		canonicalization_context& context)
 	{
-		return push_canonical_impl(beg, end, backtrack,
+		return push_canonical_impl(
+			beg,
+			end,
+			context,
 			[this]<typename C>(C const* const beg, C const* const end) -> vsm::result<void>
 			{
 				return push_literal(beg, end);
@@ -414,11 +466,26 @@ private:
 	}
 
 	template<typename Char>
+	vsm::result<void> push_canonical(
+		Char const* const beg,
+		Char const* const end)
+	{
+		canonicalization_context context(beg, end);
+		return push_canonical(beg, end, context);
+	}
+
+	template<typename Char>
 	vsm::result<void> push_canonical_literal(Char const* const beg, Char const* const end)
 	{
+		size_t const path_size = m_buffer_end - m_buffer_pos;
+
 		bool first_segment = true;
-		vsm_try_discard(push_canonical_impl(beg, end, 0,
-			[this, &first_segment]<typename C>(C const* const beg, C const* const end) -> vsm::result<void>
+		canonicalization_context context(beg, end);
+		vsm_try_discard(push_canonical_impl(
+			beg,
+			end,
+			context,
+			[&]<typename C>(C const* const beg, C const* const end) -> vsm::result<void>
 			{
 				if (first_segment)
 				{
@@ -428,6 +495,12 @@ private:
 				return vsm::unexpected(error::invalid_path);
 			}
 		));
+
+		if (m_buffer_end - m_buffer_pos != path_size + (end - beg))
+		{
+			return vsm::unexpected(error::invalid_path);
+		}
+
 		return {};
 	}
 
@@ -455,7 +528,7 @@ private:
 		wchar_t drive;
 		bool requires_trailing_separator;
 		path_section<wchar_t> root;
-		path_section<wchar_t> dyn_root;
+		path_section<wchar_t> dynamic_root;
 		path_section<wchar_t> relative;
 	};
 
@@ -488,10 +561,13 @@ private:
 					return vsm::unexpected(error::invalid_current_directory);
 				}
 
-				wchar_t const* const root = L"\\??\\";
+				static constexpr std::wstring_view root = L"\\??\\";
+				static constexpr wchar_t const* root_beg = root.data();
+				static constexpr wchar_t const* root_end = root.data() + root.size();
+
 				return current_path
 				{
-					.root = { root, root + 4 },
+					.root = { root_beg, root_end },
 					.relative = { beg + 1, end },
 				};
 			}
@@ -515,12 +591,15 @@ private:
 			wchar_t const* const relative_beg = skip_separators(beg, end);
 			bool const has_trailing_separator = share_end != relative_beg;
 
-			wchar_t const* root = L"\\??\\UNC\\";
+			static constexpr std::wstring_view root = L"\\??\\UNC\\";
+			static constexpr wchar_t const* root_beg = root.data();
+			static constexpr wchar_t const* root_end = root.data() + root.size();
+
 			return current_path
 			{
 				.requires_trailing_separator = !has_trailing_separator,
-				.root = { root, root + 8 },
-				.dyn_root = { server_beg, share_end + has_trailing_separator },
+				.root = { root_beg, root_end },
+				.dynamic_root = { server_beg, share_end + has_trailing_separator },
 				.relative = { relative_beg, end },
 			};
 		}
@@ -547,12 +626,9 @@ private:
 
 	static vsm::result<wchar_t> detect_current_drive(path_section<wchar_t> const path)
 	{
-		wchar_t const* beg = path.beg;
-		wchar_t const* const end = path.end;
-
-		if (has_drive_letter(beg, end))
+		if (has_drive_letter(path.beg, path.end))
 		{
-			return *beg;
+			return *path.beg;
 		}
 
 		return vsm::unexpected(error::invalid_current_directory);
@@ -562,9 +638,9 @@ private:
 	// X:/*
 	//    ^
 	template<typename Char>
-	vsm::result<void> set_drive_absolute_path(Char const* beg, Char const* const end, wchar_t const drive)
+	vsm::result<void> set_drive_absolute_path(Char const* const beg, Char const* const end, wchar_t const drive)
 	{
-		vsm_try_discard(push_canonical(beg, end));
+		vsm_try_void(push_canonical(beg, end));
 		vsm_try_void(push_drive_root(drive));
 
 		m_handle = handle_type{};
@@ -578,10 +654,15 @@ private:
 	{
 		if (canonicalize)
 		{
-			vsm_try_discard(push_canonical(beg, end));
+			vsm_try_void(push_canonical(skip_separators(beg, end), end));
 		}
 		else
 		{
+			if (beg != end && is_separator(*beg))
+			{
+				return vsm::unexpected(error::invalid_path);
+			}
+
 			vsm_try_void(push_canonical_literal(beg, end));
 		}
 
@@ -614,8 +695,14 @@ private:
 		Char const* const share_beg = beg;
 		Char const* const share_end = beg = find_separator(beg, end);
 
-		vsm_try_discard(push_canonical(skip_separators(beg, end), end));
-		vsm_try_discard(push_canonical(server_beg, share_end));
+		canonicalization_context context(beg, end);
+
+		beg = skip_separators(beg, end);
+		vsm_try_void(push_canonical(beg, end, context));
+
+		context.backtrack = 0;
+		vsm_try_void(push_canonical(server_beg, share_end, context));
+
 		vsm_try_void(push_literal(std::wstring_view(L"\\??\\UNC\\")));
 
 		m_handle = handle_type{};
@@ -641,7 +728,7 @@ private:
 		auto const current = m_context.get_current_directory(m_lock);
 		vsm_try(current_drive, detect_current_drive(current.path));
 
-		vsm_try_discard(push_canonical(beg, end));
+		vsm_try_void(push_canonical(beg, end));
 		vsm_try_void(push_drive_root(current_drive));
 
 		return {};
@@ -709,9 +796,10 @@ private:
 	template<typename Char>
 	vsm::result<void> set_relative_from_handle(Char const* const beg, Char const* const end)
 	{
-		vsm_try(backtrack, push_canonical(beg, end));
+		canonicalization_context context(beg, end);
+		vsm_try_void(push_canonical(beg, end, context));
 
-		if (backtrack != 0)
+		if (context.backtrack != 0)
 		{
 			// Handle relative paths cannot backtrack.
 			return vsm::unexpected(error::invalid_path);
@@ -738,29 +826,24 @@ private:
 	{
 		vsm_assert(!m_handle);
 
-		vsm_try(backtrack, push_canonical(beg, end));
+		canonicalization_context context(beg, end);
+		vsm_try_void(push_canonical(beg, end, context));
 
-		if (backtrack == 0 && current_handle && !m_win32_api_form)
+		if (context.backtrack == 0 && current_handle && !m_win32_api_form)
 		{
 			m_handle = current_handle;
 		}
 		else
 		{
-			if (backtrack != 0)
+			if (context.backtrack != 0)
 			{
 				// Backtracking with a local device current directory has unpredictable results.
 				m_reject_local_device_current_directory = true;
 			}
 
 			vsm_try(current, get_current_path());
-			vsm_try_assign(backtrack, push_canonical(current.relative.beg, current.relative.end, backtrack));
-
-			if (backtrack != 0 && current.requires_trailing_separator)
-			{
-				vsm_try_void(push_literal(std::wstring_view(L"\\")));
-			}
-
-			vsm_try_discard(push_canonical(current.dyn_root.beg, current.dyn_root.end));
+			vsm_try_void(push_canonical(current.relative.beg, current.relative.end, context));
+			vsm_try_void(push_canonical(current.dynamic_root.beg, current.dynamic_root.end));
 			vsm_try_void(push_literal(current.root.beg, current.root.end));
 		}
 
@@ -777,11 +860,16 @@ private:
 		vsm_assert(beg != end);
 
 		size_t const size = end - beg;
-		switch (Char const first = *beg)
+		switch (*beg)
 		{
 		case '\\':
-			if (size >= 4 && beg[1] == '?' && beg[2] == '?' && beg[3] == '\\')
+			if (size >= 3 && beg[1] == '?' && beg[2] == '?' && (size == 3 || size >= 4 && beg[3] == '\\'))
 			{
+				if (size <= 4)
+				{
+					return vsm::unexpected(error::invalid_path);
+				}
+
 				return push_literal(beg, end);
 			}
 

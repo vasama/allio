@@ -83,18 +83,20 @@ This means that all files produced by ALLIO can also be opened using Win32 APIs,
 
 * Any path containing a relative component with trailing dots and/or spaces. E.g. (`x/y./z`).
   The reason for this is that Win32 APIs will quietly strip any trailing dots and spaces.
-* Any path containing a relative component with a special device name, optionally followed by spaces, a dot or colon and other characters. E.g. (`C:/NUL`, `C:/NUL.txt`, `C:/NUL:txt`)
+* Any path containing a relative component with a DOS device name, optionally followed by spaces, a dot or colon and other characters. E.g. (`C:/NUL`, `C:/NUL.txt`, `C:/NUL:txt`)
   The reason for this is that Win32 APIs will either reject or quietly convert any such paths to paths referring to the specified device.
 
-  The special device names are:
+  The DOS device names are:
   * `AUX`
-  * `PRN`
-  * `NUL`
   * `COM0` to `COM9`
-  * `LPT0` to `LPT9`
   * `CON`
   * `CONIN$`
   * `CONOUT$`
+  * `LPT0` to `LPT9`
+  * `NUL`
+  * `PRN`
+
+  To open a DOS device using ALLIO, use an NT object path directly (e.g. `\??\NUL`).
 * Any root local device paths containing a non-canonical relative path.
   The reason for this is that Win32 APIs will sometimes skip canonicalization of such paths.
   ALLIO could follow suit and simply convert such paths to NT object paths, but passing non-canonical paths to the kernel is not particularly useful. For passing paths to the kernel directly, the NT object path prefix (`\??\`) can be used.
@@ -102,3 +104,4 @@ This means that all files produced by ALLIO can also be opened using Win32 APIs,
   The reason for this is that Win32 APIs have unpredictable behaviour when the current working directory path is a local device path.
   E.g. when the current working directory path is `//./C:/`, the path `/` is converted to `\??\UNC\` by the Win32 APIs.
 * Any drive relative paths on a drive which is not the drive of the current working directory and when the path on that drive is not a drive absolute path on that drive. E.g. the path `X:Y` is rejected when the path on drive `X:` is `Z:\`. Win32 APIs in contrast would interpret the path as `Z:\Y`.
+* NT object path without a relative path (`\??` or `\??\`). Win32 APIs interpret this as an absolute path containing a component named `??`. E.g. when the current working directory path is `C:\`, the path `\??\` is converted to `\??\C:\??\` by Win32 APIs.

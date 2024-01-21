@@ -78,10 +78,10 @@ struct test_context
 	}
 };
 
+using test_path_converter = detail::kernel_path_impl::basic_kernel_path_converter<test_context>;
 using test_path_parameters = detail::kernel_path_impl::basic_kernel_path_parameters<test_handle>;
 using test_path_storage = detail::kernel_path_impl::basic_kernel_path_storage<unique_test_lock>;
 using test_path = detail::kernel_path_impl::basic_kernel_path<test_handle>;
-using test_converter = detail::kernel_path_impl::basic_kernel_path_converter<test_context>;
 
 } // namespace
 
@@ -103,7 +103,7 @@ static Char const(&test_string(char const(&utf8)[Size], wchar_t const(&wide)[Siz
 
 static vsm::result<test_path> make_test_path(test_context& context, test_path_storage& storage, test_path_parameters const& args)
 {
-	return test_converter::make_path(context, storage, args);
+	return test_path_converter::make_path(context, storage, args);
 }
 
 TEMPLATE_TEST_CASE("win32::make_kernel_path", "[win32][kernel_path]", char, wchar_t)
@@ -247,18 +247,6 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path", "[win32][kernel_path]", char, wcha
 	}
 }
 
-
-static test_path make_test_path2(
-	test_context& context,
-	test_path_storage& storage,
-	test_path_parameters const& args)
-{
-	return test_converter::make_path(
-		context,
-		storage,
-		args).value();
-}
-
 TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wchar_t)
 {
 	using char_type = TestType;
@@ -266,8 +254,8 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 	using string_view_type = std::basic_string_view<char_type>;
 
 	test_context context;
-
 	test_path_storage storage;
+
 	auto const make_path = [&](string_view_type const path) -> test_path
 	{
 		test_path_parameters const args =
@@ -275,19 +263,25 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 			.path = basic_path_view<char_type>(path),
 		};
 
-		return test_converter::make_path(context, storage, args).value();
+		return test_path_converter::make_path(context, storage, args).value();
 	};
+
+	#define CHECK_CONVERSION(from, to) \
+		SECTION("Convert '" from "'") \
+		{ \
+			CHECK(make_path(S(from)).path == std::wstring_view(L"" to)); \
+		}
+
+	#define CHECK_REJECTION(from) \
+		SECTION("Convert '" from "'") \
+		{ \
+			REQUIRE_THROWS(make_path(S(from))); \
+		}
 
 	SECTION("Valid paths")
 	{
 		context.current_path = L"A:\\B";
 		context.current_path_on_drive[L'C'] = L"C:\\D";
-
-		#define CHECK_CONVERSION(from, to) \
-			SECTION("Convert '" from "'") \
-			{ \
-				CHECK(make_path(S(from)).path == std::wstring_view(L"" to)); \
-			}
 
 		// Relative
 		CHECK_CONVERSION(".",                                   "\\??\\A:\\B");
@@ -320,6 +314,7 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 
 		// Drive absolute
 		CHECK_CONVERSION("A:/",                                 "\\??\\A:\\");
+		CHECK_CONVERSION("A://",                                "\\??\\A:\\");
 		CHECK_CONVERSION("A:/Y/Z",                              "\\??\\A:\\Y\\Z");
 		CHECK_CONVERSION("A:/Y//Z",                             "\\??\\A:\\Y\\Z");
 		CHECK_CONVERSION("A:/Y/./Z",                            "\\??\\A:\\Y\\Z");
@@ -329,6 +324,7 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 		// UNC
 		CHECK_CONVERSION("//server/share",                      "\\??\\UNC\\server\\share");
 		CHECK_CONVERSION("//server/share/",                     "\\??\\UNC\\server\\share\\");
+		CHECK_CONVERSION("//server/share//",                    "\\??\\UNC\\server\\share\\");
 		CHECK_CONVERSION("//server/share/Y/Z",                  "\\??\\UNC\\server\\share\\Y\\Z");
 		CHECK_CONVERSION("//server/share/Y/./Z",                "\\??\\UNC\\server\\share\\Y\\Z");
 		CHECK_CONVERSION("//server/share/../Y/Z",               "\\??\\UNC\\server\\share\\Y\\Z");
@@ -336,6 +332,7 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 
 		// Local device
 		CHECK_CONVERSION("\\\\.\\",                             "\\??\\");
+		CHECK_CONVERSION("\\\\.\\\\",                           "\\??\\");
 		CHECK_CONVERSION("\\\\.\\Y/Z",                          "\\??\\Y\\Z");
 		CHECK_CONVERSION("\\\\.\\Y//Z",                         "\\??\\Y\\Z");
 		CHECK_CONVERSION("\\\\.\\Y/./Z",                        "\\??\\Y\\Z");
@@ -347,24 +344,27 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 		CHECK_CONVERSION("\\\\?\\",                             "\\??\\");
 		CHECK_CONVERSION("\\\\?\\Y\\Z",                         "\\??\\Y\\Z");
 
-		// NT
+		// NT object paths are passed through verbatim:
 		CHECK_CONVERSION("\\??\\X:/./Y/../Z",                   "\\??\\X:/./Y/../Z");
-
-		#undef CHECK_CONVERSION
 	}
 
 	SECTION("Miscellaneous invalid paths")
 	{
 		// UNC paths without share names are rejected:
-		REQUIRE_THROWS(make_path(S("\\\\server")));
+		CHECK_REJECTION("\\\\server");
 
 		// Non-canonical root local device paths are rejected:
-		REQUIRE_THROWS(make_path(S("\\\\?\\A/B")));
-		REQUIRE_THROWS(make_path(S("\\\\?\\A\\.\\B")));
-		REQUIRE_THROWS(make_path(S("\\\\?\\A\\..\\B")));
+		CHECK_REJECTION("\\\\?\\\\");
+		CHECK_REJECTION("\\\\?\\\\A");
+		CHECK_REJECTION("\\\\?\\.\\A");
+		CHECK_REJECTION("\\\\?\\..\\A");
+		CHECK_REJECTION("\\\\?\\A/B");
+		CHECK_REJECTION("\\\\?\\A\\.\\B");
+		CHECK_REJECTION("\\\\?\\A\\..\\B");
 
-		// NT paths without relative components are rejected:
-		REQUIRE_THROWS(make_path(S("\\??\\")));
+		// NT object paths without relative components are rejected:
+		CHECK_REJECTION("\\??");
+		CHECK_REJECTION("\\??\\");
 	}
 
 	SECTION("Paths containing special device names")
@@ -452,18 +452,20 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 	{
 		context.current_path = L"\\\\.\\C:\\";
 
-		REQUIRE_NOTHROW(make_path(S(".")));
-		REQUIRE_NOTHROW(make_path(S("Y/..")));
-		REQUIRE_NOTHROW(make_path(S("D:\\")));
-		REQUIRE_NOTHROW(make_path(S("\\\\server\\share")));
-		REQUIRE_NOTHROW(make_path(S("\\\\.\\D:\\")));
-		REQUIRE_NOTHROW(make_path(S("\\\\?\\D:\\")));
-		REQUIRE_NOTHROW(make_path(S("\\??\\D:\\")));
+		CHECK_CONVERSION(".",                                   "\\??\\C:");
+		CHECK_CONVERSION("Y",                                   "\\??\\C:\\Y");
+		CHECK_CONVERSION("Y/",                                  "\\??\\C:\\Y\\");
+		CHECK_CONVERSION("Y/..",                                "\\??\\C:");
+		CHECK_CONVERSION("D:\\",                                "\\??\\D:\\");
+		CHECK_CONVERSION("\\\\server\\share",                   "\\??\\UNC\\server\\share");
+		CHECK_CONVERSION("\\\\.\\D:\\",                         "\\??\\D:\\");
+		CHECK_CONVERSION("\\\\?\\D:\\",                         "\\??\\D:\\");
+		CHECK_CONVERSION("\\??\\D:\\",                          "\\??\\D:\\");
 
-		REQUIRE_THROWS(make_path(S("\\")));
-		REQUIRE_THROWS(make_path(S("C:")));
-		REQUIRE_THROWS(make_path(S("..")));
-		REQUIRE_THROWS(make_path(S("Y/../..")));
+		CHECK_REJECTION("\\");
+		CHECK_REJECTION("C:");
+		CHECK_REJECTION("..");
+		CHECK_REJECTION("Y/../..");
 	}
 
 	SECTION("Invalid drive current directory")
@@ -471,127 +473,12 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 		context.current_path = L"C:\\";
 		context.current_path_on_drive[L'D'] = L"E:\\";
 
-		REQUIRE_THROWS(make_path(S("D:")));
-		REQUIRE_THROWS(make_path(S("D:Y")));
+		CHECK_CONVERSION("D:\\",                                "\\??\\D:\\");
 
-		REQUIRE_NOTHROW(make_path(S("D:\\")));
+		CHECK_REJECTION("D:");
+		CHECK_REJECTION("D:Y");
 	}
+
+	#undef CHECK_CONVERSION
+	#undef CHECK_REJECTION
 }
-
-#if 0
-TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wchar_t)
-{
-	using char_type = TestType;
-	using string_type = std::basic_string<char_type>;
-	using string_view_type = std::basic_string_view<char_type>;
-
-	test_context context;
-	test_path_storage storage;
-
-	struct root_path_pair
-	{
-		string_view_type win32_root;
-		string_view_type kernel_root;
-	};
-
-	auto const root = GENERATE(
-		as<root_path_pair>()
-		, root_path_pair{ S(""),                        S("\\??") }
-		, root_path_pair{ S("X:"),                      S("\\??\\X:") }
-		, root_path_pair{ S("Y:"),                      S("\\??\\Y:") }
-		, root_path_pair{ S("\\\\server\\share"),       S("\\??\\UNC\\server\\share") }
-		, root_path_pair{ S("\\\\."),                   S("\\??") }
-		, root_path_pair{ S("\\\\?"),                   S("\\??") }
-		, root_path_pair{ S("\\??"),                    S("\\??") }
-	);
-
-	std::vector<string_view_type> win32_segments;
-	std::vector<string_view_type> kernel_segments;
-	bool contains_device_name = false;
-
-	if (root.starts_with(S("\\")) && GENERATE(0, 1))
-	{
-		segments.push_back(S("X:"));
-	}
-
-	for (int i = 0, c = GENERATE(0, 1, 2); i < c; ++i)
-	{
-		auto segment = GENERATE(
-			as<string_view_type>()
-			, S("")
-			, S(".")
-			, S("..")
-			, S("ABC")
-			, S("COM1")
-			, S("COM10")
-		);
-
-		win32_segments.push_back(segment);
-
-		if (segment == S("") || segment == S("."))
-		{
-		}
-		else if (segment == S(".."))
-		{
-			if (!kernel_segments.empty())
-			{
-				kernel_segments.pop_back();
-			}
-		}
-		else
-		{
-			kernel_segments.push_back(segment);
-		}
-
-		if (segment == S("COM1"))
-		{
-			contains_device_name = true;
-		}
-	}
-
-	if (!segments.empty())
-	{
-		auto const suffix = GENERATE(
-			as<string_view_type>()
-			, S("")
-			, S(".")
-			, S(".ext")
-		);
-
-		segments.back() += suffix;
-	}
-
-	auto const join = [](std::span<string_view_type const> const segments) -> string_type
-	{
-		string_type s;
-		for (string_view_type const segment : segments)
-		{
-			if (!s.empty())
-			{
-				s += S("\\");
-			}
-			s += segment;
-		}
-		return s;
-	};
-
-
-	string_type win32_path = string_type(root.win32_root);
-
-	if (!win32_segments.empty())
-	{
-		if ()
-
-		win32_path += join(win32_segments);
-	}
-
-
-	string_type kernel_path = string_type(root.kernel_root);
-
-	if (!kernel_segments.empty())
-	{
-		kernel_path += S("\\");
-		kernel_path += join(kernel_segments);
-	}
-}
-#endif
