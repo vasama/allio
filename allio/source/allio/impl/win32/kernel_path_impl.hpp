@@ -132,7 +132,7 @@ private:
 
 	vsm::result<std::pair<wchar_t*, wchar_t*>> push_buffer(size_t const new_data_size)
 	{
-		if (new_data_size <= m_buffer_pos - m_buffer_beg)
+		if (new_data_size <= static_cast<size_t>(m_buffer_pos - m_buffer_beg))
 		{
 			wchar_t* const buffer_pos = m_buffer_pos;
 			wchar_t* const new_buffer_pos = buffer_pos - new_data_size;
@@ -212,7 +212,7 @@ private:
 		wchar_t* const buffer_beg = m_buffer_beg;
 		wchar_t* const buffer_pos = m_buffer_pos;
 
-		if (size <= buffer_pos - buffer_beg)
+		if (size <= static_cast<size_t>(buffer_pos - buffer_beg))
 		{
 			// If this piece fits in the existing buffer, just copy it.
 			wchar_t* const new_buffer_pos = buffer_pos - size;
@@ -361,7 +361,7 @@ private:
 			{
 				if (literal_end[-1] != Char('\\'))
 				{
-					wchar_t const* const separator = L"\\";
+					static constexpr wchar_t const* separator = L"\\";
 					vsm_try_void(push_literal(separator, separator + 1));
 				}
 			}
@@ -477,7 +477,7 @@ private:
 	template<typename Char>
 	vsm::result<void> push_canonical_literal(Char const* const beg, Char const* const end)
 	{
-		size_t const path_size = m_buffer_end - m_buffer_pos;
+		size_t const old_path_size = m_buffer_end - m_buffer_pos;
 
 		bool first_segment = true;
 		canonicalization_context context(beg, end);
@@ -496,7 +496,11 @@ private:
 			}
 		));
 
-		if (m_buffer_end - m_buffer_pos != path_size + (end - beg))
+		size_t const new_path_size = m_buffer_end - m_buffer_pos;
+
+		// The size of the resulting path must match the input.
+		// This catches any skipped components at the front and back.
+		if (new_path_size != old_path_size + static_cast<size_t>(end - beg))
 		{
 			return vsm::unexpected(error::invalid_path);
 		}
@@ -526,9 +530,8 @@ private:
 	struct current_path
 	{
 		wchar_t drive;
-		bool requires_trailing_separator;
 		path_section<wchar_t> root;
-		path_section<wchar_t> dynamic_root;
+		path_section<wchar_t> dynamic_root[2];
 		path_section<wchar_t> relative;
 	};
 
@@ -589,7 +592,6 @@ private:
 			wchar_t const* const share_end = beg = find_separator(beg, end);
 
 			wchar_t const* const relative_beg = skip_separators(beg, end);
-			bool const has_trailing_separator = share_end != relative_beg;
 
 			static constexpr std::wstring_view root = L"\\??\\UNC\\";
 			static constexpr wchar_t const* root_beg = root.data();
@@ -597,9 +599,12 @@ private:
 
 			return current_path
 			{
-				.requires_trailing_separator = !has_trailing_separator,
 				.root = { root_beg, root_end },
-				.dynamic_root = { server_beg, share_end + has_trailing_separator },
+				.dynamic_root =
+				{
+					{ share_beg, share_end },
+					{ server_beg, server_end },
+				},
 				.relative = { relative_beg, end },
 			};
 		}
@@ -624,14 +629,20 @@ private:
 		return vsm::unexpected(error::invalid_current_directory);
 	}
 
-	static vsm::result<wchar_t> detect_current_drive(path_section<wchar_t> const path)
+	vsm::result<void> push_current_path_root(current_path const& current)
 	{
-		if (has_drive_letter(path.beg, path.end))
+		for (auto const& dynamic_root : current.dynamic_root)
 		{
-			return *path.beg;
+			if (dynamic_root.beg == dynamic_root.end)
+			{
+				break;
+			}
+
+			vsm_try_void(push_literal(std::wstring_view(L"\\")));
+			vsm_try_void(push_literal(dynamic_root.beg, dynamic_root.end));
 		}
 
-		return vsm::unexpected(error::invalid_current_directory);
+		return push_literal(current.root.beg, current.root.end);
 	}
 
 
@@ -644,6 +655,7 @@ private:
 		vsm_try_void(push_drive_root(drive));
 
 		m_handle = handle_type{};
+
 		return {};
 	}
 
@@ -669,6 +681,7 @@ private:
 		vsm_try_void(push_literal(std::wstring_view(L"\\??\\")));
 
 		m_handle = handle_type{};
+
 		return {};
 	}
 
@@ -684,7 +697,7 @@ private:
 		}
 
 		Char const* const server_beg = beg;
-		Char const* const server_end = beg = find_separator(beg, end);
+		beg = find_separator(beg, end);
 
 		// Expect exactly one separator and at least one non-separator character.
 		if (beg == end || ++beg == end || is_separator(*beg))
@@ -692,8 +705,10 @@ private:
 			return vsm::unexpected(error::invalid_path);
 		}
 
-		Char const* const share_beg = beg;
 		Char const* const share_end = beg = find_separator(beg, end);
+
+		// DOS device names are permitted in UNC paths.
+		m_reject_dos_device_name = false;
 
 		canonicalization_context context(beg, end);
 
@@ -702,10 +717,10 @@ private:
 
 		context.backtrack = 0;
 		vsm_try_void(push_canonical(server_beg, share_end, context));
-
 		vsm_try_void(push_literal(std::wstring_view(L"\\??\\UNC\\")));
 
 		m_handle = handle_type{};
+
 		return {};
 	}
 
@@ -718,6 +733,9 @@ private:
 		if (m_handle)
 		{
 			// Absolute path relative to handle is not allowed.
+			// This is because "absolute" paths are not quite truly absolute,
+			// and the meaning of this combination would be a path relative to
+			// the root of the particular filesystem referred to by the handle.
 			return vsm::unexpected(error::invalid_path);
 		}
 
@@ -726,12 +744,10 @@ private:
 
 		m_lock = m_context.lock();
 		auto const current = m_context.get_current_directory(m_lock);
-		vsm_try(current_drive, detect_current_drive(current.path));
+		vsm_try(classification, classify_current_path(current.path));
 
 		vsm_try_void(push_canonical(beg, end));
-		vsm_try_void(push_drive_root(current_drive));
-
-		return {};
+		return push_current_path_root(classification);
 	}
 
 	// X:*
@@ -843,8 +859,7 @@ private:
 
 			vsm_try(current, get_current_path());
 			vsm_try_void(push_canonical(current.relative.beg, current.relative.end, context));
-			vsm_try_void(push_canonical(current.dynamic_root.beg, current.dynamic_root.end));
-			vsm_try_void(push_literal(current.root.beg, current.root.end));
+			vsm_try_void(push_current_path_root(current));
 		}
 
 		return {};
@@ -863,10 +878,13 @@ private:
 		switch (*beg)
 		{
 		case '\\':
+			// Match "\??" and "\??\*".
 			if (size >= 3 && beg[1] == '?' && beg[2] == '?' && (size == 3 || size >= 4 && beg[3] == '\\'))
 			{
 				if (size <= 4)
 				{
+					// Reject "\??", "\??\". Win32 APIs don't recognize these
+					// and convert them to e.g. "\??\C:\??" and "\??\C:\??\".
 					return vsm::unexpected(error::invalid_path);
 				}
 

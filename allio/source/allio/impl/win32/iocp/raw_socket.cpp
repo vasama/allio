@@ -132,10 +132,10 @@ io_result<size_t> read_s::submit(M& m, H const& h, C const&, read_s& s, read_a c
 	// another thread will race to complete this operation.
 	vsm_try(already_completed, submit_socket_io(m, h, [&]()
 	{
-		if (WSARecv(
+		if (win32::WSARecv(
 			posix::unwrap_socket(h.platform_handle),
-			wsa_buffers.data(),
-			vsm::saturating(wsa_buffers.size()),
+			wsa_buffers.data,
+			wsa_buffers.size,
 			&transferred,
 			&flags,
 			&overlapped,
@@ -193,10 +193,10 @@ io_result<size_t> write_s::submit(M& m, H const& h, C const&, write_s& s, write_
 	// another thread will race to complete this operation.
 	vsm_try(already_completed, submit_socket_io(m, h, [&]()
 	{
-		if (WSASend(
+		if (win32::WSASend(
 			posix::unwrap_socket(h.platform_handle),
-			wsa_buffers.data(),
-			vsm::saturating(wsa_buffers.size()),
+			wsa_buffers.data,
+			wsa_buffers.size,
 			&transferred,
 			/* dwFlags: */ 0,
 			&overlapped,

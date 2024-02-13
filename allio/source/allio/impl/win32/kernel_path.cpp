@@ -42,12 +42,12 @@ struct peb_context
 			wchar_t const* const beg = environment;
 			wchar_t const* const end = beg + std::wcslen(beg);
 
-			if (end - beg > 4 &&
-				beg[0] == L'=' &&
-				beg[1] == drive &&
-				beg[2] == L':' &&
-				beg[3] == L'=')
+			// Match "=X:=*".
+			if (end - beg >= 4 && beg[0] == L'=' && beg[1] == drive && beg[2] == L':' && beg[3] == L'=')
 			{
+				//TODO: If the path has a relative component, open a directory handle.
+				//      Do this because Win32 also tests for the validity of this path.
+				//      Otherwise reject the path. Win32 falls back to drive root.
 				return path_section{ beg + 4, end };
 			}
 

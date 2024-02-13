@@ -18,7 +18,7 @@ These paths are of the form `C:x/y/z`.
 They are prefixed with a drive letter (`C:`) which is not followed by a separator and is optionally followed by a relative path.
 Within a Windows user mode program, such paths are relative to the current working directory on the specified drive.
 
-### Current Drive Absolute Paths
+### Absolute Paths
 
 These paths are of the form `/x/y/z`.
 
@@ -52,7 +52,7 @@ They are prefixed with the local device prefix `//?` and optionally followed by 
 They behave similarly to local device paths, but are not canonicalized during conversion to NT object paths.
 In contrast to the Win32 APIs, any such paths which are not already in canonical form are rejected by ALLIO.
 
-## NT Kernel Compatible Paths
+## NT Kernel Paths
 
 ### Canonical Relative Paths
 
@@ -81,7 +81,7 @@ This means that all files produced by ALLIO can also be opened using Win32 APIs,
 
 ### Win32 Paths Rejected by ALLIO
 
-* Any path containing a relative component with trailing dots and/or spaces. E.g. (`x/y./z`).
+* Any path containing a relative component with trailing dots and/or spaces. E.g. (`x/y./z` and `x/y ./z`).
   The reason for this is that Win32 APIs will quietly strip any trailing dots and spaces.
 * Any path containing a relative component with a DOS device name, optionally followed by spaces, a dot or colon and other characters. E.g. (`C:/NUL`, `C:/NUL.txt`, `C:/NUL:txt`)
   The reason for this is that Win32 APIs will either reject or quietly convert any such paths to paths referring to the specified device.
@@ -97,11 +97,22 @@ This means that all files produced by ALLIO can also be opened using Win32 APIs,
   * `PRN`
 
   To open a DOS device using ALLIO, use an NT object path directly (e.g. `\??\NUL`).
-* Any root local device paths containing a non-canonical relative path.
+* Any root local device paths containing a non-canonical relative path (e.g. `\\?\A/B`).
   The reason for this is that Win32 APIs will sometimes skip canonicalization of such paths.
-  ALLIO could follow suit and simply convert such paths to NT object paths, but passing non-canonical paths to the kernel is not particularly useful. For passing paths to the kernel directly, the NT object path prefix (`\??\`) can be used.
-* Any relative paths when the current working directory path is a local device path.
-  The reason for this is that Win32 APIs have unpredictable behaviour when the current working directory path is a local device path.
-  E.g. when the current working directory path is `//./C:/`, the path `/` is converted to `\??\UNC\` by the Win32 APIs.
-* Any drive relative paths on a drive which is not the drive of the current working directory and when the path on that drive is not a drive absolute path on that drive. E.g. the path `X:Y` is rejected when the path on drive `X:` is `Z:\`. Win32 APIs in contrast would interpret the path as `Z:\Y`.
-* NT object path without a relative path (`\??` or `\??\`). Win32 APIs interpret this as an absolute path containing a component named `??`. E.g. when the current working directory path is `C:\`, the path `\??\` is converted to `\??\C:\??\` by Win32 APIs.
+  ALLIO could follow suit and simply convert such paths to NT object paths, but rejecting non-canonical paths is more useful than passing them to the kernel.
+  For explicitly passing paths to the kernel verbatim, the NT object path prefix (`\??\`) can be used.
+* Any drive relative path on a drive which is not the drive of the current working directory and when the current working directory path on that drive is not a drive absolute path on that drive.
+  E.g. the path `X:Y` is rejected when the path on drive `X:` is `Z:\`.
+  The reason for this is that Win32 APIs will interpret the path as `Z:\Y`, which is not a path on drive `X:`.
+* Any UNC path without a server or share name (e.g. `//` and `//server`).
+  The reason for this is that a valid UNC path requires both a server and a share name.
+* When the current directory is a local device path (e.g. `//./C:/`):
+  * Any relative path containing backtracking relative to the current working directory path (e.g. `../X` and `X/../..`).
+  * Any drive relative path (e.g. `C:X`).
+  * Any absolute path (e.g. `/X`).
+
+  The reason for this is that Win32 APIs have unpredictable behaviour in these cases.
+  E.g. when the current working directory path is `//./C:/`, the path `/` is converted to `\??\UNC\` by Win32 APIs.
+* An NT object path prefix without a relative path (`\??` or `\??\`).
+  The reason for this is that Win32 APIs will interpret these as absolute paths containing a component named `??`.
+  E.g. when the current working directory path is `C:\`, the path `\??\` is converted to `\??\C:\??\` by Win32 APIs.

@@ -6,7 +6,7 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-io_result<void> iocp_wait_state::submit(M& m, H const& h, S& s, io_handler<M>& handler)
+io_result<void> iocp_wait_state::submit(M& m, H const& h, S&, io_handler<M>& handler)
 {
 	vsm_try(lease, m.lease_wait_packet(wait_packet));
 
@@ -29,7 +29,7 @@ io_result<void> iocp_wait_state::submit(M& m, H const& h, S& s, io_handler<M>& h
 	return io_pending(error::async_operation_pending);
 }
 
-io_result<void> iocp_wait_state::notify(M& m, H const& h, S& s, M::io_status_type const status)
+io_result<void> iocp_wait_state::notify(M& m, H const&, S&, M::io_status_type const status)
 {
 	vsm_assert(&status.slot == &wait_slot);
 
@@ -43,7 +43,7 @@ io_result<void> iocp_wait_state::notify(M& m, H const& h, S& s, M::io_status_typ
 	return {};
 }
 
-void iocp_wait_state::cancel(M& m, H const& h, S& s)
+void iocp_wait_state::cancel(M& m, H const&, S&)
 {
 	m.cancel_wait(wait_packet.get(), wait_slot);
 	m.release_wait_packet(vsm_move(wait_packet));

@@ -2,152 +2,15 @@
 
 #include <allio/detail/unique_handle.hpp>
 #include <allio/impl/win32/kernel.hpp>
+#include <allio/impl/win32/thread_event.hpp>
 #include <allio/step_deadline.hpp>
 #include <allio/win32/handles/platform_object.hpp>
 
 #include <vsm/out_resource.hpp>
 
-#include <thread>
-
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
-
-namespace {
-
-class thread_event
-{
-	HANDLE m_event = NULL;
-	bool m_reset = false;
-
-public:
-	thread_event() = default;
-
-	explicit thread_event(HANDLE const event)
-		: m_event(event)
-	{
-	}
-
-	thread_event(thread_event&& other)
-		: m_event(other.m_event)
-	{
-		other.m_event = NULL;
-	}
-
-	thread_event& operator=(thread_event&& other) &
-	{
-		reset_event();
-
-		m_event = other.m_event;
-		other.m_event = NULL;
-
-		return *this;
-	}
-
-	~thread_event()
-	{
-		reset_event();
-	}
-
-
-	[[nodiscard]] HANDLE get()
-	{
-		m_reset = true;
-		return m_event;
-	}
-
-	[[nodiscard]] NTSTATUS wait(deadline const deadline)
-	{
-		NTSTATUS const status = win32::NtWaitForSingleObject(
-			m_event,
-			/* Alertable: */ false,
-			kernel_timeout(deadline));
-
-		if (NT_SUCCESS(status))
-		{
-			m_reset = false;
-		}
-
-		return status;
-	}
-
-	[[nodiscard]] NTSTATUS wait_for_io(
-		HANDLE const handle,
-		IO_STATUS_BLOCK& io_status_block,
-		deadline deadline)
-	{
-		if (io_status_block.Status == STATUS_PENDING)
-		{
-			NTSTATUS status = wait(deadline);
-
-			if (status != STATUS_WAIT_0)
-			{
-				if (io_status_block.Status == STATUS_PENDING)
-				{
-					status = NtCancelIoFileEx(
-						handle,
-						&io_status_block,
-						&io_status_block);
-	
-					if (NT_SUCCESS(status))
-					{
-						vsm_assert(io_status_block.Status != STATUS_PENDING);
-					}
-				}
-			}
-
-			while (io_status_block.Status == STATUS_PENDING)
-			{
-				std::this_thread::yield();
-			}
-		}
-		return io_status_block.Status;
-	}
-
-private:
-	void reset_event()
-	{
-		if (m_event != NULL && m_reset)
-		{
-			NTSTATUS const status = NtResetEvent(
-				m_event,
-				/* PreviousState: */ nullptr);
-
-			vsm_assert(NT_SUCCESS(status));
-		}
-	}
-};
-
-} // namespace
-
-//TODO: Apply event based overlapped I/O to other synchronous I/O operations.
-static vsm::result<thread_event> get_thread_event()
-{
-	auto const make_event = []() -> vsm::result<unique_handle>
-	{
-		vsm::result<unique_handle> r(vsm::result_value);
-
-		NTSTATUS const status = NtCreateEvent(
-			vsm::out_resource(*r),
-			EVENT_ALL_ACCESS,
-			/* ObjectAttributes: */ nullptr,
-			SynchronizationEvent,
-			/* InitialState: */ false);
-
-		if (!NT_SUCCESS(status))
-		{
-			r = vsm::unexpected(static_cast<kernel_error>(status));
-		}
-
-		return r;
-	};
-
-	static auto const event = make_event();
-	return event.transform([](unique_handle const& h)
-	{
-		return thread_event(h.get());
-	});
-}
 
 template<auto const& Syscall>
 static vsm::result<size_t> do_byte_io(
@@ -156,11 +19,8 @@ static vsm::result<size_t> do_byte_io(
 {
 	static constexpr bool is_random = requires { a.offset; };
 
-	thread_event event;
-	if (h.flags[platform_object_t::impl_type::flags::synchronous])
-	{
-		vsm_try_assign(event, get_thread_event());
-	}
+	//TODO: Apply event based overlapped I/O to other synchronous I/O operations.
+	vsm_try(event, thread_event::get_for(h));
 
 	step_deadline absolute_deadline = a.deadline;
 
@@ -184,7 +44,7 @@ static vsm::result<size_t> do_byte_io(
 		IO_STATUS_BLOCK io_status_block;
 		NTSTATUS status = Syscall(
 			handle,
-			event.get(),
+			event,
 			/* ApcRoutine: */ nullptr,
 			/* ApcContext: */ nullptr,
 			&io_status_block,

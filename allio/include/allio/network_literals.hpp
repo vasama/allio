@@ -49,12 +49,13 @@ constexpr bool _parse_ipv4(vsm::literal_parser& p, ipv4_parse_result& r)
 		return false;
 	}
 
-	if ((r.is_endpoint = p.consume(':')))
+	if (p.consume(':'))
 	{
 		if (!p.consume_integer(r.port))
 		{
 			return false;
 		}
+		r.is_endpoint = true;
 	}
 
 	return true;

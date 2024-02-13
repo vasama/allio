@@ -6,7 +6,7 @@
 
 using namespace allio;
 
-void detail::unrecoverable_error_default(std::error_code const error)
+void detail::unrecoverable_error_default(std::error_code)
 {
 	std::abort();
 }
@@ -65,6 +65,7 @@ struct default_error_handler : error_handler
 	void handle_error(error_information const& information) override
 	{
 		//TODO: Handle error somehow.
+		(void)information;
 	}
 };
 

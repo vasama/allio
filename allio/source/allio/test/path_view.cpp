@@ -221,7 +221,7 @@ TEST_CASE("path_view standard compliance 1", "[path_view]")
 
 	path_view const a_path = path_view(std::string_view(buffer));
 	std::filesystem::path const s_path(buffer);
-	std::string const& s_path_string = s_path.string();
+	//std::string const& s_path_string = s_path.string();
 
 
 #ifdef __GLIBCXX__

@@ -253,12 +253,12 @@ private:
 		return vsm_forward(callable)(std::wstring_view(reinterpret_cast<wchar_t const*>(string.data()), string.size()));
 	}
 
-	[[nodiscard]] static vsm::result<void> _visit(auto&& callable, std::basic_string_view<char32_t>)
+	[[nodiscard]] static vsm::result<void> _visit(auto&&, std::basic_string_view<char32_t>)
 	{
 		return vsm::unexpected(error::unsupported_encoding);
 	}
 
-	[[nodiscard]] static vsm::result<void> _visit(auto&& callable, detail::string_length_out_of_range_t)
+	[[nodiscard]] static vsm::result<void> _visit(auto&&, detail::string_length_out_of_range_t)
 	{
 		return vsm::unexpected(error::argument_string_too_long);
 	}

@@ -1,4 +1,5 @@
-#include <allio/directory.hpp>
+#include <allio/blocking/directory.hpp>
+#include <allio/senders/directory.hpp>
 
 #include <allio/sync_wait.hpp>
 #include <allio/task.hpp>
@@ -47,6 +48,8 @@ using stream_buffer = std::array<std::byte, 4096>;
 
 TEST_CASE("Directory entries can be read", "[directory][blocking]")
 {
+	using namespace blocking;
+
 	static constexpr size_t file_count = 400;
 
 	auto const path = test::get_temp_path();
@@ -70,6 +73,42 @@ TEST_CASE("Directory entries can be read", "[directory][blocking]")
 	}
 	REQUIRE(file_names.empty());
 }
+
+#if 0
+TEST_CASE("Directory entries can be read asynchronously", "[directory][async]")
+{
+	using namespace senders;
+
+	static constexpr size_t file_count = 400;
+
+	auto const path = test::get_temp_path();
+	auto file_names = fill_directory(path, file_count);
+
+	auto multiplexer = default_multiplexer::create().value();
+
+	sync_wait(multiplexer, [&]() -> task<void>
+	{
+		auto const directory = co_await open_directory(path);
+
+		while (true)
+		{
+			stream_buffer buffer;
+			auto const stream = co_await directory.read(buffer);
+
+			if (!stream)
+			{
+				break;
+			}
+
+			for (directory_entry const entry : stream)
+			{
+				REQUIRE(file_names.erase(entry.get_name().value()));
+			}
+		}
+		REQUIRE(file_names.empty());
+	}());
+}
+#endif
 
 #if 0
 

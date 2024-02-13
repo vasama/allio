@@ -177,6 +177,8 @@ vsm_configure(allio::core
 		source/allio/impl/win32/posix_socket.hpp
 		source/allio/impl/win32/random.cpp
 		source/allio/impl/win32/secrets.cpp
+		source/allio/impl/win32/thread_event.hpp
+		source/allio/impl/win32/thread_event.cpp
 		source/allio/impl/win32/transcode.cpp
 		source/allio/impl/win32/wait_packet.cpp
 		source/allio/impl/win32/wait_packet.hpp
@@ -215,6 +217,7 @@ vsm_configure(allio::core
 	TEST_SOURCES
 		source/allio/test/win32/afd.cpp
 		source/allio/test/win32/command_line.cpp
+		source/allio/test/win32/directory.cpp
 		source/allio/test/win32/kernel_path.cpp
 		source/allio/test/win32/memory.cpp
 		#source/allio/test/win32/timer2.cpp

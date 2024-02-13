@@ -67,7 +67,7 @@ public:
 	void push_back(U&& value)
 	{
 		vsm_assert(m_size < MaxSize);
-		T* const ptr = new (reinterpret_cast<T*>(m_storage) + m_size) T(vsm_forward(value));
+		new (reinterpret_cast<T*>(m_storage) + m_size) T(vsm_forward(value));
 		++m_size;
 	}
 

@@ -78,6 +78,7 @@ io_result<void> send_s::submit(M& m, H const& h, C const&, send_s& s, send_a con
 {
 	vsm_try(addr, posix::socket_address::make(a.endpoint));
 	vsm_try(wsa_buffers, make_wsa_buffers(s.buffers, a.buffers.buffers()));
+	//TODO: Datagram send cannot truncate the buffers.
 
 	DWORD transferred;
 
@@ -89,10 +90,10 @@ io_result<void> send_s::submit(M& m, H const& h, C const&, send_s& s, send_a con
 
 	vsm_try(already_completed, submit_socket_io(m, h, [&]()
 	{
-		if (WSASendTo(
+		if (win32::WSASendTo(
 			posix::unwrap_socket(h.platform_handle),
-			wsa_buffers.data(),
-			wsa_buffers.size(),
+			wsa_buffers.data,
+			wsa_buffers.size,
 			&transferred,
 			/* dwFlags: */ 0,
 			&addr.addr,
@@ -157,10 +158,10 @@ io_result<receive_result> recv_s::submit(M& m, H const& h, C const&, recv_s& s, 
 
 	vsm_try(already_completed, submit_socket_io(m, h, [&]()
 	{
-		if (WSARecvFrom(
+		if (win32::WSARecvFrom(
 			posix::unwrap_socket(h.platform_handle),
-			wsa_buffers.data(),
-			wsa_buffers.size(),
+			wsa_buffers.data,
+			wsa_buffers.size,
 			&transferred,
 			&flags,
 			&addr_buffer.addr,

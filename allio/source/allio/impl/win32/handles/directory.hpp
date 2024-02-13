@@ -9,6 +9,7 @@ namespace allio::win32 {
 
 NTSTATUS query_directory_file_start(
 	HANDLE handle,
+	HANDLE event,
 	read_buffer buffer,
 	bool restart,
 	PIO_APC_ROUTINE apc_routine,
@@ -17,7 +18,8 @@ NTSTATUS query_directory_file_start(
 
 NTSTATUS query_directory_file_completed(
 	read_buffer buffer,
-	IO_STATUS_BLOCK const& io_status_block,
+	NTSTATUS status,
+	ULONG_PTR information,
 	detail::directory_stream_native_handle& out_stream);
 
 } // namespace allio::win32

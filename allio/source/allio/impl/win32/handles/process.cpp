@@ -129,9 +129,9 @@ using attribute = attribute_list_builder::attribute;
 template<size_t Capacity>
 using inherit_handles_storage = basic_dynamic_buffer<std::byte, alignof(HANDLE), Capacity * sizeof(HANDLE)>;
 
-//TODO: Use std::start_lifetime_as_array
+//TODO: Use std::start_lifetime_as_array once it's supported.
 template<typename T>
-static T* start_lifetime_as_array(void* const storage, size_t const size)
+static T* start_lifetime_as_array(void* const storage, size_t)
 {
 	return reinterpret_cast<T*>(storage);
 }
@@ -353,6 +353,9 @@ vsm::result<void> process_t::create(
 		inherit_handles_storage,
 		inherit_handles_internal,
 		a.inherit_handles));
+
+	// The attribute is automatically used as part of the attribute list.
+	(void)inherit_handles_attribute;
 
 	attribute_list_storage<256> attribute_list_storage;
 	vsm_try(attribute_list, attributes.build(attribute_list_storage));

@@ -133,7 +133,7 @@ TEST_CASE("wait packets do not support skipping the completion port on synchrono
 
 	auto const wait_packet = create_wait_packet().value();
 
-	IO_STATUS_BLOCK io_status_block = make_io_status_block();
+	IO_STATUS_BLOCK io_status_block;
 
 	FILE_IO_COMPLETION_NOTIFICATION_INFORMATION information =
 	{

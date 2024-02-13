@@ -29,6 +29,11 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 
 	switch (args.special & open_kind::mask)
 	{
+		vsm_msvc_warning(push)
+
+		// Disable C4063: Case is not a valid value for switch of enum.
+		vsm_msvc_warning(disable: 4063)
+
 	case open_kind::path:
 		if (args.mode != file_mode::none)
 		{
@@ -43,6 +48,8 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 	case open_kind::directory:
 		info.create_options |= FILE_DIRECTORY_FILE;
 		break;
+
+		vsm_msvc_warning(pop)
 
 	default:
 		return vsm::unexpected(error::invalid_argument);
@@ -125,10 +132,10 @@ static vsm::result<handle_with_flags> _create_file(
 	LARGE_INTEGER allocation_size;
 	allocation_size.QuadPart = 0;
 
-	IO_STATUS_BLOCK io_status_block = make_io_status_block();
+	IO_STATUS_BLOCK io_status_block;
 
 	unique_handle handle;
-	NTSTATUS status = win32::NtCreateFile(
+	NTSTATUS const status = win32::NtCreateFile(
 		vsm::out_resource(handle),
 		info.desired_access,
 		&object_attributes,
@@ -140,11 +147,7 @@ static vsm::result<handle_with_flags> _create_file(
 		info.create_options,
 		/* EaBuffer: */ nullptr,
 		/* EaLength: */ 0);
-
-	if (status == STATUS_PENDING)
-	{
-		status = io_wait(handle.get(), &io_status_block, deadline::never());
-	}
+	vsm_assert(status != STATUS_PENDING);
 
 	if (!NT_SUCCESS(status))
 	{
@@ -256,7 +259,7 @@ static vsm::result<file_name_information_ptr> query_file_name_information(HANDLE
 		return vsm::unexpected(r.error());
 	}
 
-	IO_STATUS_BLOCK io_status_block = make_io_status_block();
+	IO_STATUS_BLOCK io_status_block;
 
 	NTSTATUS const status = NtQueryInformationFile(
 		handle,

@@ -10,12 +10,14 @@
 using namespace allio;
 using namespace allio::win32;
 
-static bool is_wide_encoding(encoding const e)
-{
-	return e == encoding::narrow_execution_encoding || e == encoding::utf16;
-}
-
 namespace {
+
+template<typename T>
+size_t ptr_sub(T const* const lhs, T const* const rhs)
+{
+	vsm_assert(lhs >= rhs);
+	return static_cast<size_t>(lhs - rhs);
+}
 
 struct builder : api_string_builder
 {
@@ -70,7 +72,7 @@ struct builder : api_string_builder
 		if (escape_count == 0)
 		{
 			// The input and output have the same size.
-			vsm_assert((out_end - out_beg) == (end - beg));
+			vsm_assert(ptr_sub(out_end, out_beg) == ptr_sub(end, beg));
 
 			// If no escaping is required, we may still need to copy or shift
 			// the input string. Use memmove to shift the string after transcoding.
@@ -82,7 +84,7 @@ struct builder : api_string_builder
 		else
 		{
 			// The input and output differ in size by the number of escapes.
-			vsm_assert((out_end - out_beg) - (end - beg) == escape_count);
+			vsm_assert(ptr_sub(out_end, out_beg) - ptr_sub(end, beg) == escape_count);
 
 			while (beg != end)
 			{
@@ -120,7 +122,7 @@ struct builder : api_string_builder
 
 		wchar_t* const arg_beg = out_beg + info.requires_quotes;
 		wchar_t* const arg_end = out_end - info.requires_quotes - /* space or null terminator */ 1;
-		vsm_assert(arg_end - arg_beg == argument.size() + info.escape_count);
+		vsm_assert(ptr_sub(arg_end, arg_beg) == argument.size() + info.escape_count);
 
 		copy_and_escape(
 			argument.data(),

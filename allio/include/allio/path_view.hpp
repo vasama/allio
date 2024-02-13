@@ -8,6 +8,7 @@
 #include <vsm/box.hpp>
 #include <vsm/preprocessor.h>
 
+#include <compare>
 #include <span>
 #include <string_view>
 
@@ -281,7 +282,7 @@ public:
 	}
 
 
-	constexpr int compare(basic_path_view const other) const
+	constexpr std::strong_ordering compare(basic_path_view const other) const
 	{
 		return compare(*this, other);
 	}
@@ -298,7 +299,7 @@ public:
 
 	friend constexpr auto operator<=>(basic_path_view const lhs, basic_path_view const rhs)
 	{
-		return compare(lhs, rhs) <=> 0;
+		return compare(lhs, rhs);
 	}
 
 
@@ -310,7 +311,7 @@ public:
 
 private:
 	static constexpr bool equal(basic_path_view lhs, basic_path_view rhs);
-	static constexpr int compare(basic_path_view lhs, basic_path_view rhs);
+	static constexpr std::strong_ordering compare(basic_path_view lhs, basic_path_view rhs);
 
 	friend string_view_type tag_invoke(get_path_string_t, basic_path_view const& self)
 	{

@@ -100,7 +100,6 @@ static Char const(&test_string(char const(&utf8)[Size], wchar_t const(&wide)[Siz
 
 #define S(...) (::test_string<char_type>(__VA_ARGS__, L"" __VA_ARGS__))
 
-
 static vsm::result<test_path> make_test_path(test_context& context, test_path_storage& storage, test_path_parameters const& args)
 {
 	return test_path_converter::make_path(context, storage, args);
@@ -160,7 +159,7 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path", "[win32][kernel_path]", char, wcha
 		TEST_ARGS("X:\\COM1:blah",                            0, std::nullopt); // Rejected due to device name.
 		TEST_ARGS("X:\\COM1  .blah",                          0, std::nullopt); // Rejected due to device name.
 		TEST_ARGS("\\\\.\\X:\\COM1",                          0, std::nullopt); // Rejected due to device name.
-		TEST_ARGS("\\\\abc\\xyz\\COM1",                       0, std::nullopt); // Rejected due to device name.
+		TEST_ARGS("\\\\abc\\xyz\\COM1",                       0, L"\\??\\UNC\\abc\\xyz\\COM1");
 		TEST_ARGS("\\\\?\\X:\\ABC\\DEF",                      0, L"\\??\\X:\\ABC\\DEF");
 		TEST_ARGS("\\\\?\\X:\\",                              0, L"\\??\\X:\\");
 		TEST_ARGS("\\\\?\\X:",                                0, L"\\??\\X:");
@@ -223,7 +222,7 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path", "[win32][kernel_path]", char, wcha
 		context.current_path = L"\\\\server\\share";
 
 		TEST_ARGS("ABC\\DEF",                                 0, L"\\??\\UNC\\server\\share\\ABC\\DEF");
-		TEST_ARGS(".",                                        0, L"\\??\\UNC\\server\\share");
+		TEST_ARGS(".",                                        0, L"\\??\\UNC\\server\\share\\");
 		TEST_ARGS("ABC\\DEF. .",                              0, std::nullopt); // Rejected due to trailing dots/spaces.
 		TEST_ARGS("ABC\\COM1\\DEF",                           0, std::nullopt); // Rejected due to device name.
 		TEST_ARGS("ABC/DEF",                                  0, L"\\??\\UNC\\server\\share\\ABC\\DEF");
@@ -281,6 +280,7 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 	SECTION("Valid paths")
 	{
 		context.current_path = L"A:\\B";
+		context.current_path_on_drive[L'A'] = L"A:\\B2";
 		context.current_path_on_drive[L'C'] = L"C:\\D";
 
 		// Relative
@@ -303,6 +303,14 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 		CHECK_CONVERSION("/Y/../Z",                             "\\??\\A:\\Z");
 
 		// Drive relative
+		CHECK_CONVERSION("A:",                                  "\\??\\A:\\B");
+		CHECK_CONVERSION("A:.",                                 "\\??\\A:\\B");
+		CHECK_CONVERSION("A:./",                                "\\??\\A:\\B\\");
+		CHECK_CONVERSION("A:Y/Z",                               "\\??\\A:\\B\\Y\\Z");
+		CHECK_CONVERSION("A:Y//Z",                              "\\??\\A:\\B\\Y\\Z");
+		CHECK_CONVERSION("A:Y/./Z",                             "\\??\\A:\\B\\Y\\Z");
+		CHECK_CONVERSION("A:../Y/Z",                            "\\??\\A:\\Y\\Z");
+		CHECK_CONVERSION("A:Y/../Z",                            "\\??\\A:\\B\\Z");
 		CHECK_CONVERSION("C:",                                  "\\??\\C:\\D");
 		CHECK_CONVERSION("C:.",                                 "\\??\\C:\\D");
 		CHECK_CONVERSION("C:./",                                "\\??\\C:\\D\\");
@@ -324,11 +332,19 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 		// UNC
 		CHECK_CONVERSION("//server/share",                      "\\??\\UNC\\server\\share");
 		CHECK_CONVERSION("//server/share/",                     "\\??\\UNC\\server\\share\\");
+		CHECK_CONVERSION("//server/share/.",                    "\\??\\UNC\\server\\share");
+		CHECK_CONVERSION("//server/share/..",                   "\\??\\UNC\\server\\share");
 		CHECK_CONVERSION("//server/share//",                    "\\??\\UNC\\server\\share\\");
 		CHECK_CONVERSION("//server/share/Y/Z",                  "\\??\\UNC\\server\\share\\Y\\Z");
 		CHECK_CONVERSION("//server/share/Y/./Z",                "\\??\\UNC\\server\\share\\Y\\Z");
 		CHECK_CONVERSION("//server/share/../Y/Z",               "\\??\\UNC\\server\\share\\Y\\Z");
 		CHECK_CONVERSION("//server/share/Y/../Z",               "\\??\\UNC\\server\\share\\Z");
+		CHECK_CONVERSION("//NUL/share",                         "\\??\\UNC\\NUL\\share");
+		CHECK_CONVERSION("//NUL/share/Y",                       "\\??\\UNC\\NUL\\share\\Y");
+		CHECK_CONVERSION("//server/NUL",                        "\\??\\UNC\\server\\NUL");
+		CHECK_CONVERSION("//server/NUL/Y",                      "\\??\\UNC\\server\\NUL\\Y");
+		CHECK_CONVERSION("//server/share/NUL",                  "\\??\\UNC\\server\\share\\NUL");
+		CHECK_CONVERSION("//server/share/Y/NUL",                "\\??\\UNC\\server\\share\\Y\\NUL");
 
 		// Local device
 		CHECK_CONVERSION("\\\\.\\",                             "\\??\\");
@@ -374,6 +390,9 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 		path += GENERATE(
 			as<string_view_type>()
 			, S("")
+			, S(".\\")
+			, S("\\")
+			, S("X:\\")
 			, S("\\\\.\\")
 			, S("\\\\?\\")
 		);
@@ -392,7 +411,7 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 
 		if (path.ends_with(char_type('*')))
 		{
-			path.back() = char_type('0') + GENERATE(range(0, 10));
+			path.back() = char_type('0' + GENERATE(range(0, 10)));
 		}
 
 		path += GENERATE(
@@ -404,9 +423,16 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 			, S(" :txt")
 		);
 
+		path += GENERATE(
+			as<string_view_type>()
+			, S("")
+			, S("\\Y")
+		);
+
 		CAPTURE(path);
 
-		// All win32 paths containing device names are rejected.
+		// All Win32 paths, except UNC paths,
+		// containing DOS device names are rejected.
 		REQUIRE_THROWS(make_path(path));
 	}
 
@@ -417,12 +443,15 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 		path += GENERATE(
 			as<string_view_type>()
 			, S("")
+			, S(".\\")
+			, S("\\")
 			, S("X:\\")
+			, S("\\\\server\\share\\")
 			, S("\\\\.\\")
 			, S("\\\\?\\")
 		);
 
-		path += S("y");
+		path += S("Y");
 		path += GENERATE(
 			as<string_view_type>()
 			, S(".")
@@ -436,10 +465,11 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 			, S(" . . ")
 		);
 
-		if (GENERATE(0, 1))
-		{
-			path += S("\\z");
-		}
+		path += GENERATE(
+			as<string_view_type>()
+			, S("")
+			, S("\\Z")
+		);
 
 		CAPTURE(path);
 
@@ -448,11 +478,73 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 		REQUIRE_THROWS(make_path(path));
 	}
 
+	SECTION("UNC current directory")
+	{
+		SECTION("Without relative path")
+		{
+			context.current_path = L"\\\\server\\share";
+
+			CHECK_CONVERSION("Y",                                   "\\??\\UNC\\server\\share\\Y");
+			CHECK_CONVERSION("Y/",                                  "\\??\\UNC\\server\\share\\Y\\");
+			CHECK_CONVERSION("Y/.",                                 "\\??\\UNC\\server\\share\\Y");
+			CHECK_CONVERSION("Y/..",                                "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("Y/../",                               "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION(".",                                   "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("./",                                  "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("./Y",                                 "\\??\\UNC\\server\\share\\Y");
+			CHECK_CONVERSION("./Y/",                                "\\??\\UNC\\server\\share\\Y\\");
+			CHECK_CONVERSION("..",                                  "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("../",                                 "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("../Y",                                "\\??\\UNC\\server\\share\\Y");
+			CHECK_CONVERSION("../Y/",                               "\\??\\UNC\\server\\share\\Y\\");
+			CHECK_CONVERSION("/",                                   "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("/Y",                                  "\\??\\UNC\\server\\share\\Y");
+			CHECK_CONVERSION("/Y/",                                 "\\??\\UNC\\server\\share\\Y\\");
+			CHECK_CONVERSION("/Y/.",                                "\\??\\UNC\\server\\share\\Y");
+			CHECK_CONVERSION("/Y/..",                               "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("/Y/../",                              "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("/.",                                  "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("/./",                                 "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("/..",                                 "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("/../",                                "\\??\\UNC\\server\\share\\");
+		}
+
+		SECTION("With relative path 'X'")
+		{
+			context.current_path = L"\\\\server\\share\\X";
+
+			CHECK_CONVERSION("Y",                                   "\\??\\UNC\\server\\share\\X\\Y");
+			CHECK_CONVERSION("Y/",                                  "\\??\\UNC\\server\\share\\X\\Y\\");
+			CHECK_CONVERSION("Y/.",                                 "\\??\\UNC\\server\\share\\X\\Y");
+			CHECK_CONVERSION("Y/..",                                "\\??\\UNC\\server\\share\\X");
+			CHECK_CONVERSION("Y/../",                               "\\??\\UNC\\server\\share\\X\\");
+			CHECK_CONVERSION(".",                                   "\\??\\UNC\\server\\share\\X");
+			CHECK_CONVERSION("./",                                  "\\??\\UNC\\server\\share\\X\\");
+			CHECK_CONVERSION("./Y",                                 "\\??\\UNC\\server\\share\\X\\Y");
+			CHECK_CONVERSION("./Y/",                                "\\??\\UNC\\server\\share\\X\\Y\\");
+			CHECK_CONVERSION("..",                                  "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("../",                                 "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("../Y",                                "\\??\\UNC\\server\\share\\Y");
+			CHECK_CONVERSION("../Y/",                               "\\??\\UNC\\server\\share\\Y\\");
+			CHECK_CONVERSION("/",                                   "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("/Y",                                  "\\??\\UNC\\server\\share\\Y");
+			CHECK_CONVERSION("/Y/",                                 "\\??\\UNC\\server\\share\\Y\\");
+			CHECK_CONVERSION("/Y/.",                                "\\??\\UNC\\server\\share\\Y");
+			CHECK_CONVERSION("/Y/..",                               "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("/Y/../",                              "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("/.",                                  "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("/./",                                 "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("/..",                                 "\\??\\UNC\\server\\share\\");
+			CHECK_CONVERSION("/../",                                "\\??\\UNC\\server\\share\\");
+		}
+	}
+
 	SECTION("Local device current directory")
 	{
 		context.current_path = L"\\\\.\\C:\\";
 
 		CHECK_CONVERSION(".",                                   "\\??\\C:");
+		CHECK_CONVERSION("./",                                  "\\??\\C:\\");
 		CHECK_CONVERSION("Y",                                   "\\??\\C:\\Y");
 		CHECK_CONVERSION("Y/",                                  "\\??\\C:\\Y\\");
 		CHECK_CONVERSION("Y/..",                                "\\??\\C:");
@@ -470,7 +562,6 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 
 	SECTION("Invalid drive current directory")
 	{
-		context.current_path = L"C:\\";
 		context.current_path_on_drive[L'D'] = L"E:\\";
 
 		CHECK_CONVERSION("D:\\",                                "\\??\\D:\\");

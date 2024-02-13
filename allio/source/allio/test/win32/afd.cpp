@@ -647,7 +647,6 @@ static NTSTATUS NTAPI NtDeviceIoControlFile_hook(
 
 TEST_CASE("AFD", "[windows][afd]")
 {
-	kernel_init().value();
 	wsa_init().value();
 
 #if 0

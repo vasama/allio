@@ -41,9 +41,9 @@ public:
 		auto const beg = m_completions;
 		auto const end = m_completions + m_completion_count;
 		auto const it = std::find_if(beg, end, [&](auto const& completion)
-			{
-				return completion.ApcContext == &overlapped;
-			});
+		{
+			return completion.ApcContext == &overlapped;
+		});
 		REQUIRE(it != end);
 		return *it;
 	}
@@ -290,7 +290,7 @@ TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram
 		DWORD transferred;
 		DWORD flags = 0;
 
-		int const r = WSARecvFrom(
+		int const r = win32::WSARecvFrom(
 			receive_socket.get(),
 			&buf,
 			1,
@@ -326,7 +326,7 @@ TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram
 		};
 		DWORD transferred;
 
-		int const r = WSASendTo(
+		int const r = win32::WSASendTo(
 			send_socket.get(),
 			&buf,
 			1,
@@ -372,39 +372,200 @@ TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram
 }
 
 
-#if 0
+#if 1
+namespace {
+
+template<size_t Size>
+class rio_completion_storage
+{
+	RIORESULT m_completions[Size];
+	size_t m_completion_count = 0;
+
+public:
+	size_t remove(
+		unique_rio_cq const& completion_queue,
+		size_t const max_completions = static_cast<size_t>(-1))
+	{
+		size_t const count = rio_dequeue_completion(
+			completion_queue.get(),
+			std::span(m_completions).subspan(m_completion_count, max_completions));
+		m_completion_count += count;
+		return count;
+	}
+
+	RIORESULT const& get(auto const& context_object) const
+	{
+		auto const beg = m_completions;
+		auto const end = m_completions + m_completion_count;
+		auto const it = std::find_if(beg, end, [&](auto const& completion)
+		{
+			return completion.RequestContext == reinterpret_cast<ULONGLONG>(&context_object);
+		});
+		REQUIRE(it != end);
+		return *it;
+	}
+};
+
+} // namespace
+
 TEST_CASE("WSA RIO", "[windows][wsa][rio]")
 {
-	auto const socket = posix::create_socket(
-		AF_INET,
-		SOCK_STREAM,
-		IPPROTO_TCP,
-		io_flags::create_non_blocking | io_flags::create_registered_io).value().socket;
+	auto const addr = socket_address::make(ipv4_endpoint(ipv4_address::localhost, 51234)).value();
+
+	auto const create_socket = [&]()
+	{
+		return posix::create_socket(
+			addr.addr.sa_family,
+			SOCK_STREAM,
+			IPPROTO_TCP,
+			io_flags::create_non_blocking | io_flags::create_registered_io).value().socket;
+	};
 
 	auto const completion_port = create_completion_port(1).value();
-	OVERLAPPED rio_overlapped;
 
+
+	unique_socket server_socket;
+	unique_socket client_socket;
+	{
+		auto const listen_socket = create_socket();
+
+		set_completion_information(
+			(HANDLE)listen_socket.get(),
+			completion_port.get(),
+			/* key_context: */ nullptr).value();
+
+		posix::socket_listen(listen_socket.get(), addr, 0).value();
+
+		server_socket = create_socket();
+		wsa_accept_address_buffer accept_addr;
+
+		OVERLAPPED accept_overlapped = {};
+		REQUIRE(wsa_accept_ex(
+			listen_socket.get(),
+			server_socket.get(),
+			accept_addr,
+			accept_overlapped) == WSA_IO_PENDING);
+
+
+		client_socket = create_socket();
+
+		set_completion_information(
+			(HANDLE)client_socket.get(),
+			completion_port.get(),
+			/* key_context: */ nullptr).value();
+
+		// The socket must be bound before calling ConnectEx.
+		{
+			posix::socket_address_union bind_addr;
+			memset(&bind_addr, 0, sizeof(bind_addr));
+			bind_addr.addr.sa_family = addr.addr.sa_family;
+
+			socket_bind(client_socket.get(), bind_addr, addr.size).value();
+		}
+
+		OVERLAPPED connect_overlapped = {};
+		REQUIRE(wsa_connect_ex(
+			client_socket.get(),
+			addr,
+			connect_overlapped) == WSA_IO_PENDING);
+
+		completion_storage<2> completions;
+		REQUIRE(completions.remove(completion_port, 1) == 1);
+		REQUIRE(completions.remove(completion_port, 1) == 1);
+		REQUIRE(NT_SUCCESS(completions.get(accept_overlapped).IoStatusBlock.Status));
+		REQUIRE(NT_SUCCESS(completions.get(connect_overlapped).IoStatusBlock.Status));
+	}
+
+
+	OVERLAPPED cq_overlapped;
 	auto const cq = rio_create_completion_queue(
-		10,
+		/* queue_size: */ 4,
 		completion_port.get(),
-		nullptr,
-		rio_overlapped).value();
+		/* completion_key: */ nullptr,
+		cq_overlapped).value();
 
-	auto const rq = rio_create_request_queue(
-		socket.get(),
-		10,
-		10,
-		10,
-		10,
+	char server_context = 0;
+	auto const server_rq = rio_create_request_queue(
+		server_socket.get(),
+		/* max_outstanding_receive: */ 1,
+		/* max_receive_data_buffers: */ 1,
+		/* max_outstanding_send: */ 1,
+		/* max_send_data_buffers: */ 1,
 		cq.get(),
 		cq.get(),
-		nullptr);
+		&server_context).value();
 
-	WSA_FLAG_REGISTERED_IO;
-	auto const rio = wsa_get_rio(socket.get()).value();
-	int x = 0;
+	char client_context = 0;
+	auto const client_rq = rio_create_request_queue(
+		client_socket.get(),
+		/* max_outstanding_receive: */ 1,
+		/* max_receive_data_buffers: */ 1,
+		/* max_outstanding_send: */ 1,
+		/* max_send_data_buffers: */ 1,
+		cq.get(),
+		cq.get(),
+		&client_context).value();
 
-	WSAIoctl;
-	SIO_ADDRESS_LIST_CHANGE
+	alignas(4096) std::byte storage[4096];
+	auto const buffer_id = rio_register_buffer(storage).value();
+
+	storage[0] = std::byte(0);
+	RIO_BUF recv_buf =
+	{
+		.BufferId = buffer_id.get(),
+		.Offset = 0,
+		.Length = 2048,
+	};
+
+	char recv_context = 0;
+	REQUIRE(RIOReceive(
+		server_rq,
+		&recv_buf,
+		/* DataBufferCount: */ 1,
+		/* Flags: */ 0,
+		&recv_context));
+
+	storage[2048] = std::byte(42);
+	RIO_BUF send_buf =
+	{
+		.BufferId = buffer_id.get(),
+		.Offset = 2048,
+		.Length = 1,
+	};
+
+	char send_context = 0;
+	REQUIRE(RIOSend(
+		client_rq,
+		&send_buf,
+		/* DataBufferCount: */ 1,
+		/* Flags: */ 0,
+		&send_context));
+
+	REQUIRE(RIONotify(cq.get()) == ERROR_SUCCESS);
+
+	completion_storage<2> completions;
+	REQUIRE(completions.remove(completion_port, 1) == 1);
+	(void)completions.get(cq_overlapped);
+
+	rio_completion_storage<3> rio_completions;
+	REQUIRE(rio_completions.remove(cq) == 2);
+
+	// Handle recv completion
+	{
+		auto const& r = rio_completions.get(recv_context);
+		REQUIRE(r.SocketContext == reinterpret_cast<ULONGLONG>(&server_context));
+		REQUIRE(r.Status == ERROR_SUCCESS);
+		REQUIRE(r.BytesTransferred == 1);
+	}
+
+	// Handle send completion
+	{
+		auto const& r = rio_completions.get(send_context);
+		REQUIRE(r.SocketContext == reinterpret_cast<ULONGLONG>(&client_context));
+		REQUIRE(r.Status == ERROR_SUCCESS);
+		REQUIRE(r.BytesTransferred == 1);
+	}
+
+	REQUIRE(storage[0] == std::byte(42));
 }
 #endif

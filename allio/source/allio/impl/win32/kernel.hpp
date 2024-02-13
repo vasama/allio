@@ -638,8 +638,10 @@ inline IO_STATUS_BLOCK make_io_status_block()
 	};
 }
 
+[[deprecated]]
 NTSTATUS io_wait(HANDLE handle, IO_STATUS_BLOCK* isb, deadline deadline);
-NTSTATUS io_cancel(HANDLE handle, IO_STATUS_BLOCK* isb);
+
+NTSTATUS io_cancel(HANDLE handle, IO_STATUS_BLOCK& io_status_block);
 
 
 class kernel_timeout

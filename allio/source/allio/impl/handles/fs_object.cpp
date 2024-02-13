@@ -7,11 +7,6 @@
 using namespace allio;
 using namespace allio::detail;
 
-static bool is_empty_path(fs_path const& path)
-{
-	return path.base == native_platform_handle::null && path.path.empty();
-}
-
 namespace {
 
 class unique_file_name
@@ -115,6 +110,11 @@ vsm::result<void> detail::open_fs_object(
 	{
 		switch (kind)
 		{
+			vsm_msvc_warning(push)
+
+			// Disable C4063: Case is not a valid value for switch of enum.
+			vsm_msvc_warning(disable: 4063)
+
 		case open_kind::path:
 			a.mode = file_mode::none;
 			break;
@@ -126,6 +126,8 @@ vsm::result<void> detail::open_fs_object(
 		case open_kind::directory:
 			a.mode = file_mode::read;
 			break;
+
+			vsm_msvc_warning(pop)
 		}
 	}
 

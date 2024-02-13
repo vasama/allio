@@ -47,6 +47,7 @@ TEST_CASE("a stream socket can connect to a listening socket and exchange data",
 	auto const endpoint = test::generate_endpoint();
 	auto const listen_socket = raw_listen(endpoint);
 
+	// Connect in a background thread.
 	auto connect_future = test::spawn([&]()
 	{
 		return raw_connect(endpoint);

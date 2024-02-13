@@ -46,6 +46,11 @@ static vsm::result<ULONG> get_page_protection(protection const protection)
 {
 	switch (protection)
 	{
+		vsm_msvc_warning(push)
+
+		// Disable C4063: Case is not a valid value for switch of enum.
+		vsm_msvc_warning(disable: 4063)
+
 	case protection::none:
 		return PAGE_NOACCESS;
 
@@ -63,6 +68,8 @@ static vsm::result<ULONG> get_page_protection(protection const protection)
 
 	case protection::execute | protection::read | protection::write:
 		return PAGE_EXECUTE_READWRITE;
+
+		vsm_msvc_warning(pop)
 	}
 
 	return vsm::unexpected(error::unsupported_operation);
@@ -120,6 +127,7 @@ static vsm::result<unique_anonymous_mmap> allocate_virtual_memory(
 	return {};
 }
 
+#if 0
 static vsm::result<ULONG> protect_virtual_memory(
 	HANDLE const process,
 	void* base,
@@ -141,6 +149,7 @@ static vsm::result<ULONG> protect_virtual_memory(
 
 	return old_page_protection;
 }
+#endif
 
 static vsm::result<void> free_virtual_memory(
 	HANDLE const process,

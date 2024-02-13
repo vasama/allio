@@ -13,7 +13,7 @@ vsm_optional/0.1
 vsm_result/0.1
 vsm_tag_ptr/0.1
 vsm_unique_resource/0.1
-p2300/6fda0d5553c046c7b69733d652cc5a8827ca9e1a
+p2300/cf6f9266c337157fab4c818ee2c84717236a734f
 
 # tls/openssl
 openssl/[^3.1.4]

@@ -1,9 +1,10 @@
-#include <allio/handles/directory.hpp>
+#include <allio/detail/handles/directory.hpp>
 #include <allio/impl/win32/handles/directory.hpp>
 
 #include <allio/impl/transcode.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/peb.hpp>
+#include <allio/impl/win32/thread_event.hpp>
 #include <allio/win32/kernel_error.hpp>
 
 #include <vsm/numeric.hpp>
@@ -121,6 +122,7 @@ static bool filter_entry(directory_stream_entry const& entry)
 
 NTSTATUS win32::query_directory_file_start(
 	HANDLE const handle,
+	HANDLE const event,
 	read_buffer const buffer,
 	bool const restart,
 	PIO_APC_ROUTINE const apc_routine,
@@ -137,7 +139,7 @@ NTSTATUS win32::query_directory_file_start(
 	//TODO: Align args.buffer first.
 	return NtQueryDirectoryFileEx(
 		handle,
-		/* Event: */ NULL,
+		event,
 		apc_routine,
 		apc_context,
 		&io_status_block,
@@ -150,10 +152,11 @@ NTSTATUS win32::query_directory_file_start(
 
 NTSTATUS win32::query_directory_file_completed(
 	read_buffer const buffer,
-	IO_STATUS_BLOCK const& io_status_block,
+	NTSTATUS const status,
+	ULONG_PTR const information,
 	directory_stream_native_handle& out_stream)
 {
-	NTSTATUS const status = io_status_block.Status;
+	vsm_assert(status != STATUS_PENDING);
 
 	if (!NT_SUCCESS(status))
 	{
@@ -166,7 +169,7 @@ NTSTATUS win32::query_directory_file_completed(
 		return status;
 	}
 
-	if (io_status_block.Information == 0)
+	if (information == 0)
 	{
 		return STATUS_BUFFER_TOO_SMALL;
 	}
@@ -184,13 +187,15 @@ NTSTATUS win32::query_directory_file_completed(
 
 static vsm::result<directory_stream_native_handle> query_directory_file(
 	HANDLE const handle,
+	thread_event& event,
 	read_buffer const buffer,
 	bool const restart)
 {
-	IO_STATUS_BLOCK io_status_block = make_io_status_block();
+	IO_STATUS_BLOCK io_status_block;
 
 	NTSTATUS status = query_directory_file_start(
 		handle,
+		event,
 		buffer,
 		restart,
 		/* apc_routine: */ nullptr,
@@ -199,14 +204,16 @@ static vsm::result<directory_stream_native_handle> query_directory_file(
 
 	if (status == STATUS_PENDING)
 	{
-		status = io_wait(handle, &io_status_block, deadline::never());
+		//TODO: Deadline
+		status = event.wait_for_io(handle, io_status_block, deadline::never());
 	}
 	vsm_assert(io_status_block.Status == status);
 
 	directory_stream_native_handle stream;
 	status = query_directory_file_completed(
 		buffer,
-		io_status_block,
+		status,
+		io_status_block.Information,
 		stream);
 
 	if (!NT_SUCCESS(status))
@@ -229,8 +236,11 @@ vsm::result<directory_stream_view> directory_t::read(
 	native_handle<directory_t> const& h,
 	io_parameters_t<directory_t, read_t> const& a)
 {
+	vsm_try(event, thread_event::get_for(h));
+
 	vsm_try(stream, query_directory_file(
 		unwrap_handle(h.platform_handle),
+		event,
 		a.buffer,
 		/* restart: */ false));
 
@@ -238,6 +248,7 @@ vsm::result<directory_stream_view> directory_t::read(
 }
 
 
+#if 0
 static constexpr size_t max_unicode_string_size = 0x7FFE;
 static vsm::result<UNICODE_STRING> make_unicode_path(platform_path_view const path)
 {
@@ -270,7 +281,6 @@ static vsm::result<void> _set_current_directory(platform_path_view const path)
 }
 
 
-#if 0
 vsm::result<size_t> this_process::get_current_directory(any_path_buffer const buffer)
 {
 	unique_peb_lock peb_lock;

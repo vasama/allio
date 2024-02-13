@@ -7,6 +7,7 @@
 #include <allio/impl/win32/wsa.hpp>
 
 #include <vsm/lazy.hpp>
+#include <vsm/numeric.hpp>
 
 #include <algorithm>
 
@@ -33,7 +34,7 @@ static vsm::result<posix::unique_socket> wsa_socket(
 	int const protocol,
 	DWORD const flags)
 {
-	SOCKET const socket = WSASocketW(
+	SOCKET const socket = win32::WSASocketW(
 		address_family,
 		type,
 		protocol,
@@ -55,8 +56,6 @@ vsm::result<posix::socket_with_flags> posix::create_socket(
 	int const protocol,
 	io_flags const flags)
 {
-	vsm_try_void(wsa_init());
-
 	DWORD w_flags = 0;
 	handle_flags h_flags = handle_flags::none;
 
@@ -103,7 +102,7 @@ static vsm::result<posix::unique_socket> wsa_accept(
 {
 	addr.size = sizeof(posix::socket_address_union);
 
-	SOCKET const socket = WSAAccept(
+	SOCKET const socket = win32::WSAAccept(
 		listen_socket,
 		&addr.addr,
 		&addr.size,
@@ -160,7 +159,7 @@ vsm::result<posix::socket_with_flags> posix::socket_accept(
 vsm::result<posix::socket_poll_mask> posix::socket_poll(
 	socket_type const socket,
 	socket_poll_mask const mask,
-	deadline const deadline)
+	deadline const)
 {
 	WSAPOLLFD poll_fd =
 	{
@@ -168,7 +167,7 @@ vsm::result<posix::socket_poll_mask> posix::socket_poll(
 		.events = mask,
 	};
 
-	int const r = WSAPoll(
+	int const r = win32::WSAPoll(
 		&poll_fd,
 		/* fds: */ 1,
 		//TODO: WSAPoll timeout
@@ -181,10 +180,12 @@ vsm::result<posix::socket_poll_mask> posix::socket_poll(
 
 	if (r == 0)
 	{
-		return 0;
+		return static_cast<socket_poll_mask>(0);
 	}
 
-	vsm_assert(poll_fd.revents & mask);
+	vsm_assert((poll_fd.revents & mask) != 0);
+	vsm_assert((poll_fd.revents & ~mask) == 0);
+
 	return poll_fd.revents;
 }
 
@@ -210,10 +211,10 @@ vsm::result<size_t> posix::socket_scatter_read(
 	DWORD flags = 0;
 
 	DWORD transferred;
-	int const r = WSARecv(
+	int const r = win32::WSARecv(
 		socket,
-		wsa_buffers.data(),
-		wsa_buffers.size(),
+		wsa_buffers.data,
+		wsa_buffers.size,
 		&transferred,
 		&flags,
 		/* lpOverlapped: */ nullptr,
@@ -235,10 +236,10 @@ vsm::result<size_t> posix::socket_gather_write(
 	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
 
 	DWORD transferred;
-	int const r = WSASend(
+	int const r = win32::WSASend(
 		socket,
-		wsa_buffers.data(),
-		wsa_buffers.size(),
+		wsa_buffers.data,
+		wsa_buffers.size,
 		&transferred,
 		/* dwFlags: */ 0,
 		/* lpOverlapped: */ nullptr,
@@ -265,10 +266,10 @@ vsm::result<size_t> posix::socket_receive_from(
 
 	addr.size = sizeof(socket_address_union);
 
-	if (WSARecvFrom(
+	if (win32::WSARecvFrom(
 		socket,
-		wsa_buffers.data(),
-		wsa_buffers.size(),
+		wsa_buffers.data,
+		wsa_buffers.size,
 		&transferred,
 		&flags,
 		&addr.addr,
@@ -292,10 +293,10 @@ vsm::result<void> posix::socket_send_to(
 	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
 
 	DWORD transferred;
-	if (WSASendTo(
+	if (win32::WSASendTo(
 		socket,
-		wsa_buffers.data(),
-		wsa_buffers.size(),
+		wsa_buffers.data,
+		wsa_buffers.size,
 		&transferred,
 		/* dwFlags: */ 0,
 		&addr.addr,

@@ -4,6 +4,7 @@
 #include <allio/win32/kernel_error.hpp>
 
 #include <vsm/lazy.hpp>
+#include <vsm/numeric.hpp>
 
 using namespace allio;
 using namespace allio::detail;
@@ -16,7 +17,7 @@ vsm::result<unique_handle> win32::create_completion_port(size_t const max_concur
 		&handle,
 		IO_COMPLETION_ALL_ACCESS,
 		/* ObjectAttributes: */ nullptr,
-		max_concurrent_threads);
+		vsm::saturating(max_concurrent_threads));
 
 	if (!NT_SUCCESS(status))
 	{
@@ -31,7 +32,7 @@ vsm::result<void> win32::set_completion_information(
 	HANDLE const completion_port,
 	void* const key_context)
 {
-	IO_STATUS_BLOCK io_status_block = make_io_status_block();
+	IO_STATUS_BLOCK io_status_block;
 
 	FILE_COMPLETION_INFORMATION file_completion_information =
 	{
@@ -104,7 +105,7 @@ vsm::result<size_t> win32::remove_io_completions(
 		status = NtRemoveIoCompletionEx(
 			completion_port,
 			buffer.data(),
-			buffer.size(),
+			vsm::saturating(buffer.size()),
 			&num_entries_removed,
 			kernel_timeout(deadline),
 			/* Alertable: */ false);

@@ -3,6 +3,7 @@
 #include <vsm/assert.h>
 
 #include <algorithm>
+#include <compare>
 
 namespace allio {
 namespace detail::path_impl {
@@ -48,8 +49,11 @@ constexpr Char const* skip_separators(Char const* const beg, Char const* const e
 }
 
 template<typename Char>
-constexpr int compare_chars(Char const* l_beg, Char const* const l_end, Char const* r_beg, Char const* const r_end)
+constexpr std::strong_ordering compare_chars(Char const* l_beg, Char const* const l_end, Char const* r_beg, Char const* const r_end)
 {
+	return std::lexicographical_compare_three_way(l_beg, l_end, r_beg, r_end);
+
+#if 0
 	size_t const size1 = l_end - l_beg;
 	size_t const size2 = r_end - r_beg;
 
@@ -63,6 +67,7 @@ constexpr int compare_chars(Char const* l_beg, Char const* const l_end, Char con
 	}
 
 	return size1 - size2;
+#endif
 }
 
 
@@ -228,7 +233,7 @@ constexpr bool is_same_drive(
 
 
 template<typename Char>
-constexpr std::pair<int, bool> root_path_compare(
+constexpr std::pair<std::strong_ordering, bool> root_path_compare(
 	Char const*& l_beg_ref, Char const* const l_end,
 	Char const*& r_beg_ref, Char const* const r_end)
 {
@@ -239,9 +244,9 @@ constexpr std::pair<int, bool> root_path_compare(
 	Char const* const r_root_name_end = find_root_name_end(r_beg, r_end);
 
 	// If the root names are not equal, the paths are not equivalent.
-	if (int const cmp = compare_chars(l_beg, l_root_name_end, r_beg, r_root_name_end))
+	if (auto const ordering = compare_chars(l_beg, l_root_name_end, r_beg, r_root_name_end); ordering != 0)
 	{
-		return { cmp, false };
+		return { ordering, false };
 	}
 
 	// Skip root directories.
@@ -254,13 +259,13 @@ constexpr std::pair<int, bool> root_path_compare(
 	// Equivalent paths are either both absolute or both relative.
 	if (l_absolute != r_absolute)
 	{
-		return { static_cast<int>(l_absolute) - static_cast<int>(r_absolute), false };
+		return { l_absolute <=> r_absolute, false };
 	}
 
 	l_beg_ref = l_beg;
 	r_beg_ref = r_beg;
 
-	return { 0, l_absolute };
+	return { std::strong_ordering::equal, l_absolute };
 }
 
 template<typename Char>
@@ -652,7 +657,7 @@ constexpr bool basic_path_view<Char>::equal(basic_path_view const lhs, basic_pat
 	Char const* r_beg = rhs_string.data();
 	Char const* const r_end = r_beg + lhs_string.size();
 
-	if (root_path_compare(l_beg, l_end, r_beg, r_end).first)
+	if (root_path_compare(l_beg, l_end, r_beg, r_end).first != 0)
 	{
 		return false;
 	}
@@ -689,7 +694,7 @@ constexpr bool basic_path_view<Char>::equal(basic_path_view const lhs, basic_pat
 }
 
 template <typename Char>
-constexpr int basic_path_view<Char>::compare(basic_path_view const lhs, basic_path_view const rhs)
+constexpr std::strong_ordering basic_path_view<Char>::compare(basic_path_view const lhs, basic_path_view const rhs)
 {
 	using namespace detail::path_impl;
 
@@ -702,9 +707,9 @@ constexpr int basic_path_view<Char>::compare(basic_path_view const lhs, basic_pa
 	Char const* r_beg = rhs_string.data();
 	Char const* const r_end = r_beg + lhs_string.size();
 
-	if (int const cmp = root_path_compare(l_beg, l_end, r_beg, r_end).first)
+	if (auto const ordering = root_path_compare(l_beg, l_end, r_beg, r_end).first; ordering != 0)
 	{
-		return cmp;
+		return ordering;
 	}
 
 	while (true)
@@ -716,15 +721,15 @@ constexpr int basic_path_view<Char>::compare(basic_path_view const lhs, basic_pa
 		r_beg = find_separator(r_beg, r_end);
 
 		// Compare components.
-		if (int const cmp = compare_chars(l_c_beg, l_beg, r_c_beg, r_beg))
+		if (auto const ordering = compare_chars(l_c_beg, l_beg, r_c_beg, r_beg); ordering != 0)
 		{
-			return cmp;
+			return ordering;
 		}
 
 		// If one path ends and the other doesn't, the comparison result depends on which path ends.
 		if (bool const l_e = l_beg == l_end, r_e = r_beg == r_end; l_e || r_e)
 		{
-			return static_cast<int>(!l_e) - static_cast<int>(!r_e);
+			return r_e <=> l_e;
 		}
 
 		l_beg = skip_separators(l_beg + 1, l_end);
@@ -733,7 +738,7 @@ constexpr int basic_path_view<Char>::compare(basic_path_view const lhs, basic_pa
 		// If one path ends and the other doesn't, the comparison result depends on which path ends.
 		if (bool const l_e = l_beg == l_end, r_e = r_beg == r_end; l_e || r_e)
 		{
-			return static_cast<int>(!l_e) - static_cast<int>(!r_e);
+			return r_e <=> l_e;
 		}
 	}
 }
