@@ -6,6 +6,9 @@
 #include <vsm/assert.h>
 #include <vsm/result.hpp>
 
+#include <limits>
+#include <string_view>
+
 #include <win32.h>
 #include <winternl.h>
 
@@ -627,21 +630,40 @@ inline PEB* NtCurrentPeb()
 }
 
 
-//TODO: Is initialising IO_STATUS_BLOCKs ever actually necessary?
-[[deprecated]]
-inline IO_STATUS_BLOCK make_io_status_block()
+[[nodiscard]] inline LARGE_INTEGER make_large_integer(int64_t const value)
 {
-	return
+	return LARGE_INTEGER
 	{
-		.Status = -1,
-		.Information = 0,
+		.QuadPart = value,
 	};
 }
 
-[[deprecated]]
-NTSTATUS io_wait(HANDLE handle, IO_STATUS_BLOCK* isb, deadline deadline);
+[[nodiscard]] inline UNICODE_STRING make_unicode_string()
+{
+	UNICODE_STRING unicode_string;
+	unicode_string.Buffer = nullptr;
+	unicode_string.Length = 0;
+	unicode_string.MaximumLength = 0;
+	return unicode_string;
+}
 
-NTSTATUS io_cancel(HANDLE handle, IO_STATUS_BLOCK& io_status_block);
+[[nodiscard]] inline UNICODE_STRING make_unicode_string(std::wstring_view const string)
+{
+	using size_type = decltype(UNICODE_STRING::Length);
+	static constexpr size_t max_size = std::numeric_limits<size_type>::max() / sizeof(wchar_t);
+	vsm_assert(string.size() <= max_size); //PRECONDITION
+
+	UNICODE_STRING unicode_string;
+	unicode_string.Buffer = const_cast<wchar_t*>(string.data());
+	unicode_string.Length = static_cast<size_type>(string.size() * sizeof(wchar_t));
+	unicode_string.MaximumLength = unicode_string.Length;
+
+	return unicode_string;
+}
+
+
+// Returns true iff the operation was actually cancelled by this call.
+bool io_cancel(HANDLE handle, IO_STATUS_BLOCK& io_status_block);
 
 
 class kernel_timeout

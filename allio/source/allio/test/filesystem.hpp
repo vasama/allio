@@ -15,7 +15,7 @@
 
 namespace allio::test {
 
-inline path get_temp_path()
+inline std::filesystem::path get_temp_stdfs_path()
 {
 	static constexpr std::string_view name_prefix = "allio_test_";
 	static constexpr size_t name_suffix_size = 32;
@@ -41,7 +41,13 @@ inline path get_temp_path()
 #endif
 
 	std::filesystem::remove_all(path);
-	return allio::path(path.string());
+
+	return path;
+}
+
+inline path get_temp_path()
+{
+	return allio::path(get_temp_stdfs_path().string());
 }
 
 

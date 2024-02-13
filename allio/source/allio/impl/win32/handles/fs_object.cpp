@@ -200,14 +200,8 @@ vsm::result<handle_with_flags> win32::create_file(
 		.handle = base_handle,
 		.path = path,
 	}));
-	vsm_assert(kernel_path.path.size() <= static_cast<USHORT>(-1) / sizeof(wchar_t));
 
-	UNICODE_STRING unicode_string;
-	unicode_string.Buffer = const_cast<wchar_t*>(kernel_path.path.data());
-	unicode_string.Length = static_cast<USHORT>(kernel_path.path.size() * sizeof(wchar_t));
-	unicode_string.MaximumLength = unicode_string.Length;
-
-	return _create_file(kernel_path.handle, unicode_string, info);
+	return _create_file(kernel_path.handle, make_unicode_string(kernel_path.path), info);
 }
 
 vsm::result<handle_with_flags> win32::reopen_file(
@@ -216,12 +210,7 @@ vsm::result<handle_with_flags> win32::reopen_file(
 {
 	vsm_assert(handle != NULL); //PRECONDITION
 
-	UNICODE_STRING unicode_string;
-	unicode_string.Buffer = nullptr;
-	unicode_string.Length = 0;
-	unicode_string.MaximumLength = unicode_string.Length;
-
-	return _create_file(handle, unicode_string, info);
+	return _create_file(handle, make_unicode_string(), info);
 }
 
 

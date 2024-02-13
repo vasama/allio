@@ -144,67 +144,18 @@ allio_kernel_functions(allio_x_entry)
 #undef allio_x_entry
 
 
-NTSTATUS win32::io_wait(HANDLE const handle, IO_STATUS_BLOCK* const isb, deadline)
+bool win32::io_cancel(HANDLE const handle, IO_STATUS_BLOCK& io_status_block)
 {
-	if (isb->Status == STATUS_PENDING)
+	if (io_status_block.Status == STATUS_PENDING)
 	{
-		do
+		if (NT_SUCCESS(NtCancelIoFileEx(
+			handle,
+			&io_status_block,
+			&io_status_block)))
 		{
-			//TODO: deadline
-			NTSTATUS status = NtWaitForSingleObject(
-				handle,
-				/* Alertable: */ FALSE,
-				/* Timeout: */ nullptr);
-
-			if (status == STATUS_TIMEOUT)
-			{
-				status = io_cancel(handle, *isb);
-
-				if (status < 0 && status != STATUS_CANCELLED)
-				{
-					abort();
-				}
-
-				return isb->Status = STATUS_TIMEOUT;
-			}
+			return true;
 		}
-		while (isb->Status == STATUS_PENDING);
-	}
-	else
-	{
-		vsm_assert(isb->Status != -1);
-	}
-	return isb->Status;
-}
-
-NTSTATUS win32::io_cancel(HANDLE const handle, IO_STATUS_BLOCK& io_status_block)
-{
-	if (io_status_block.Status != STATUS_PENDING)
-	{
-		return io_status_block.Status;
 	}
 
-	NTSTATUS status = NtCancelIoFileEx(
-		handle,
-		&io_status_block,
-		&io_status_block);
-
-	if (status < 0)
-	{
-		if (status == STATUS_NOT_FOUND)
-		{
-			//TODO: why consider it cancelled here?
-			return io_status_block.Status = STATUS_CANCELLED;
-		}
-
-		return status;
-	}
-
-	if (io_status_block.Status == 0)
-	{
-		//TODO: why consider it cancelled here?
-		return io_status_block.Status = STATUS_CANCELLED;
-	}
-
-	return io_status_block.Status;
+	return false;
 }

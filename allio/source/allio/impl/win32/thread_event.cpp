@@ -42,12 +42,14 @@ vsm::result<thread_event> thread_event::get()
 
 [[nodiscard]] NTSTATUS thread_event::wait(deadline const deadline)
 {
+	vsm_assert(m_event != NULL); //PRECONDITION
+
 	NTSTATUS const status = win32::NtWaitForSingleObject(
 		m_event,
 		/* Alertable: */ false,
 		kernel_timeout(deadline));
 
-	if (NT_SUCCESS(status))
+	if (status == STATUS_WAIT_0)
 	{
 		m_reset = false;
 	}
@@ -60,6 +62,8 @@ vsm::result<thread_event> thread_event::get()
 	IO_STATUS_BLOCK& io_status_block,
 	deadline const deadline)
 {
+	vsm_assert(m_event != NULL); //PRECONDITION
+
 	NTSTATUS status;
 
 	auto const read_status = [&]() -> NTSTATUS
@@ -72,19 +76,16 @@ vsm::result<thread_event> thread_event::get()
 	{
 		NTSTATUS wait_status = wait(deadline);
 
-		if (wait_status != STATUS_WAIT_0)
+		if (wait_status != STATUS_WAIT_0 && read_status() == STATUS_PENDING)
 		{
-			if (read_status() == STATUS_PENDING)
-			{
-				wait_status = NtCancelIoFileEx(
-					handle,
-					&io_status_block,
-					&io_status_block);
+			wait_status = NtCancelIoFileEx(
+				handle,
+				&io_status_block,
+				&io_status_block);
 
-				if (NT_SUCCESS(wait_status))
-				{
-					vsm_assert(read_status() != STATUS_PENDING);
-				}
+			if (NT_SUCCESS(wait_status))
+			{
+				vsm_assert(read_status() != STATUS_PENDING);
 			}
 		}
 

@@ -16,23 +16,11 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-static UNICODE_STRING make_unicode_string(std::wstring_view const string)
-{
-	vsm_assert(string.size() <= 0x7fff); //PRECONDITION
-
-	UNICODE_STRING unicode_string;
-	unicode_string.Buffer = const_cast<wchar_t*>(string.data());
-	unicode_string.Length = vsm::truncating(string.size() * sizeof(wchar_t));
-	unicode_string.MaximumLength = unicode_string.Length;
-
-	return unicode_string;
-}
-
 static vsm::result<HANDLE> get_named_pipe_directory()
 {
 	static constexpr auto open = []() -> vsm::result<unique_handle>
 	{
-		UNICODE_STRING path = make_unicode_string(L"\\Device\\NamedPipe\\");
+		UNICODE_STRING path = win32::make_unicode_string(L"\\Device\\NamedPipe\\");
 
 		OBJECT_ATTRIBUTES object_attributes = {};
 		object_attributes.Length = sizeof(object_attributes);

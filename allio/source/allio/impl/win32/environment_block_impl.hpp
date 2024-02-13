@@ -8,9 +8,8 @@ namespace allio::win32 {
 
 class environment_block_builder
 {
-	static constexpr size_t max_environment_block_size = 0x7ffe;
-
 	// Reserve one extra character for the null terminator.
+	static constexpr size_t max_environment_block_size = 0x7ffe;
 	static constexpr size_t dynamic_buffer_size = max_environment_block_size + 1;
 
 	environment_block_storage& m_storage;
@@ -23,7 +22,7 @@ public:
 	environment_block_builder(environment_block_builder const&) = delete;
 	environment_block_builder& operator=(environment_block_builder const&) = delete;
 
-	static vsm::result<wchar_t*> make(
+	static [[nodiscard]] vsm::result<wchar_t*> make(
 		environment_block_storage& storage,
 		any_string_span const environment)
 	{
@@ -36,7 +35,7 @@ private:
 	{
 	}
 
-	vsm::result<void> allocate_dynamic_buffer()
+	[[nodiscard]] vsm::result<void> allocate_dynamic_buffer()
 	{
 		wchar_t* const new_buffer_beg = new (std::nothrow) wchar_t[dynamic_buffer_size];
 		if (new_buffer_beg == nullptr)
@@ -55,7 +54,7 @@ private:
 		return {};
 	}
 
-	vsm::result<void> push_variable(std::wstring_view const variable)
+	[[nodiscard]] vsm::result<void> push_variable(std::wstring_view const variable)
 	{
 		if (variable.find(L'=') == std::wstring_view::npos)
 		{
@@ -69,7 +68,7 @@ private:
 		return {};
 	}
 
-	vsm::result<void> push_variable(std::string_view const variable)
+	[[nodiscard]] vsm::result<void> push_variable(std::string_view const variable)
 	{
 		if (variable.find('=') == std::string_view::npos)
 		{
@@ -121,14 +120,14 @@ private:
 		return {};
 	}
 
-	vsm::result<void> push_variable(std::basic_string_view<char8_t> const variable)
+	[[nodiscard]] vsm::result<void> push_variable(std::basic_string_view<char8_t> const variable)
 	{
 		return push_variable(std::basic_string_view<char>(
 			reinterpret_cast<char const*>(variable.data()),
 			variable.size()));
 	}
 
-	vsm::result<void> push_variable(std::basic_string_view<char16_t> const variable)
+	[[nodiscard]] vsm::result<void> push_variable(std::basic_string_view<char16_t> const variable)
 	{
 		//TODO: This is technically UB.
 		return push_variable(std::basic_string_view<wchar_t>(
@@ -136,22 +135,22 @@ private:
 			variable.size()));
 	}
 
-	vsm::result<void> push_variable(std::basic_string_view<char32_t>)
+	[[nodiscard]] vsm::result<void> push_variable(std::basic_string_view<char32_t>)
 	{
 		return vsm::unexpected(error::unsupported_encoding);
 	}
 
-	vsm::result<void> push_variable(detail::string_length_out_of_range_t)
+	[[nodiscard]] vsm::result<void> push_variable(detail::string_length_out_of_range_t)
 	{
 		return vsm::unexpected(error::environment_variables_too_long);
 	}
 
-	vsm::result<void> push_variable(any_string_view const variable)
+	[[nodiscard]] vsm::result<void> push_variable(any_string_view const variable)
 	{
 		return argument.visit(vsm_lift_borrow(push_variable));
 	}
-	
-	vsm::result<wchar_t*> _make(any_string_span const environment)
+
+	[[nodiscard]] vsm::result<wchar_t*> _make(any_string_span const environment)
 	{
 		auto const set_buffer = [&](wchar_t* const beg, size_t const size)
 		{
