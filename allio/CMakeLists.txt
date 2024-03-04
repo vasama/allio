@@ -216,6 +216,8 @@ vsm_configure(allio::core
 
 	TEST_SOURCES
 		source/allio/test/win32/afd.cpp
+		source/allio/test/win32/afd_impl.cpp
+		source/allio/test/win32/afd_test.cpp
 		source/allio/test/win32/command_line.cpp
 		source/allio/test/win32/directory.cpp
 		source/allio/test/win32/kernel_path.cpp

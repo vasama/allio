@@ -1,4 +1,4 @@
-#include "afd.hpp"
+#include <allio/impl/win32/afd.hpp>
 
 #include <allio/detail/unique_handle.hpp>
 #include <allio/impl/posix/socket.hpp>
@@ -11,9 +11,6 @@
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
-
-template<typename Socket>
-using socket_pair = std::pair<Socket, Socket>;
 
 static posix::socket_address make_addr()
 {
@@ -67,7 +64,7 @@ static test::future<posix::unique_socket> spawn_accept(posix::socket_address con
 }
 
 [[maybe_unused]]
-static socket_pair<posix::unique_socket> make_socket_pair()
+static std::pair<posix::unique_socket, posix::unique_socket> make_socket_pair()
 {
 	auto const addr = make_addr();
 
@@ -147,13 +144,6 @@ static ULONG afd_select(HANDLE const socket, ULONG const events)
 
 	return info.Handle.Events;
 }
-
-#if 0
-static socket_pair<unique_handle> afd_make_socket_pair()
-{
-
-}
-#endif
 
 
 TEST_CASE("AFD Socket connect", "[windows][afd]")
@@ -258,7 +248,7 @@ TEST_CASE("AFD Listen socket polling", "[windows][afd]")
 	afd_bind(socket.get(), AFD_SHARE_UNIQUE, addr);
 	afd_listen(socket.get(), 1);
 
-	auto const connect = spawn_connect(addr);
+	auto connect = spawn_connect(addr);
 
 	auto const events = afd_select(
 		socket.get(),
@@ -292,9 +282,4 @@ TEST_CASE("AFD Stream socket polling", "[windows][afd]")
 		AFD_EVENT_RECEIVE | AFD_EVENT_SEND);
 
 	REQUIRE(events == expected_events);
-}
-
-TEST_CASE("AFD Stream socket send and receive", "[windows][afd]")
-{
-
 }
