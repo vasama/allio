@@ -1,5 +1,6 @@
 [requires]
 vsm_box/0.1
+vsm_cmake/0.1
 vsm_core/0.1
 vsm_flags/0.1
 vsm_intrusive/0.1
@@ -13,7 +14,7 @@ vsm_optional/0.1
 vsm_result/0.1
 vsm_tag_ptr/0.1
 vsm_unique_resource/0.1
-p2300/cf6f9266c337157fab4c818ee2c84717236a734f
+p2300/4da0880ac55eb6c5e68f4bb7075b69a924007bd8
 
 # tls/openssl
 openssl/[^3.1.4]

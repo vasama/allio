@@ -16,7 +16,7 @@ find_package(vsm-optional REQUIRED)
 find_package(vsm-result REQUIRED)
 find_package(vsm-tag_ptr REQUIRED)
 find_package(vsm-unique_resource REQUIRED)
-find_package(p2300 REQUIRED)
+find_package(P2300 REQUIRED)
 
 vsm_add_library(allio::core
 	HEADERS
@@ -107,7 +107,7 @@ vsm_add_library(allio::core
 		vsm::result
 		vsm::tag_ptr
 		vsm::unique_resource
-		p2300::p2300
+		P2300::P2300
 
 	TEST_SOURCES
 		source/allio/test/filesystem.hpp
@@ -216,6 +216,8 @@ vsm_configure(allio::core
 
 	TEST_SOURCES
 		source/allio/test/win32/afd.cpp
+		source/allio/test/win32/afd_impl.cpp
+		source/allio/test/win32/afd_test.cpp
 		source/allio/test/win32/command_line.cpp
 		source/allio/test/win32/directory.cpp
 		source/allio/test/win32/kernel_path.cpp
