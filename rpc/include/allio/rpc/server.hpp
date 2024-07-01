@@ -15,7 +15,7 @@ class basic_server
 
 	struct key_selector
 	{
-		std::string_view vsm_static_operator_invoke(handler_type const& handler)
+		vsm_static_operator std::string_view operator()(handler_type const& handler) vsm_static_operator_const
 		{
 			return handler.m_identifier;
 		}

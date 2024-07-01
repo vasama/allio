@@ -68,8 +68,8 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 	openssl_state_base server_state;
 	openssl_state_base client_state;
 
-	server_state.m_ssl = server_state.create_ssl(server_ssl_ctx.get()).value();
-	client_state.m_ssl = client_state.create_ssl(client_ssl_ctx.get()).value();
+	server_state.initialize(server_ssl_ctx.get()).value();
+	client_state.initialize(client_ssl_ctx.get()).value();
 
 	stream client_to_server;
 	stream server_to_client;
@@ -83,7 +83,7 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 			p_member,
 			vsm_forward(args)...);
 	};
-	
+
 	auto const enter_client = [&](auto const p_member, auto&&... args) -> bool
 	{
 		return enter(
@@ -134,7 +134,13 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 		}
 	}
 
-	char write_buffer[] = "The quick brown fox jumps over the lazy dog";
+	char write_buffer[] =
+		"Lorem ipsum dolor sit amet, consectetur adipisci elit, sed eiusmod tempor incidunt ut "
+		"labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco "
+		"laboris nisi ut aliquid ex ea commodi consequat. Quis aute iure reprehenderit in "
+		"voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint obcaecat "
+		"cupiditat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+
 	char read_buffer[sizeof(write_buffer)] = {};
 
 	bool read_pending = true;

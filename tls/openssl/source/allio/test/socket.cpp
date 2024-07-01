@@ -1,6 +1,9 @@
+#if 1
 #include <allio/openssl/listen_socket.hpp>
 #include <allio/openssl/socket.hpp>
 
+#include <allio/blocking.hpp>
+#include <allio/senders.hpp>
 #include <allio/sync_wait.hpp>
 #include <allio/task.hpp>
 #include <allio/test/network.hpp>
@@ -13,7 +16,16 @@ using namespace allio::openssl;
 
 namespace ex = stdexec;
 
-TEST_CASE("a stream socket can connect to a listening socket and exchange data", "[openssl][socket][blocking]")
+void f(
+	detail::native_handle<detail::openssl_socket_t>& h,
+	detail::connect_t::params_type_template<detail::openssl_socket_t> const& a)
+{
+	detail::openssl_socket_t::blocking_io<detail::connect_t>(h, a);
+}
+
+TEST_CASE(
+	"a stream socket can connect to a listening socket and exchange data",
+	"[openssl][socket][blocking]")
 {
 	using namespace blocking;
 
@@ -26,29 +38,33 @@ TEST_CASE("a stream socket can connect to a listening socket and exchange data",
 		tls_private_key("tls/openssl/keys/server-private-key.pem"_path)).value();
 
 	auto const endpoint = test::generate_endpoint();
-	auto const listen_socket = listen<listen_socket_object>(endpoint, server_security).value();
+	auto const listen_socket = detail::listen<listen_socket_object, traits_type>(
+		endpoint,
+		server_security);
 
 	auto connect_future = test::spawn([&]()
 	{
 		auto const client_security = openssl::create_socket_security_context().value();
-		return connect<socket_object>(endpoint, client_security).value();
+		return detail::connect<socket_object, traits_type>(endpoint, client_security);
 	});
 
-	auto const server_socket = listen_socket.accept().value().socket;
-	auto const client_socket = connect_future.get().value();
+	auto const server_socket = listen_socket.accept().socket;
+	auto const client_socket = connect_future.get();
 
 	signed char value = 42;
-	REQUIRE(client_socket.write_some(as_write_buffer(&value, 1)).value() == 1);
+	REQUIRE(client_socket.write_some(as_write_buffer(&value, 1)) == 1);
 
 	static_cast<volatile signed char&>(value) = 0;
-	REQUIRE(server_socket.read_some(as_read_buffer(&value, 1)).value() == 1);
+	REQUIRE(server_socket.read_some(as_read_buffer(&value, 1)) == 1);
 	REQUIRE(value == 42);
 }
 
 #if 0
-TEST_CASE("OpenSSL sockets can asynchronously connect and exchange data", "[openssl][socket][async]")
+TEST_CASE(
+	"OpenSSL sockets can asynchronously connect and exchange data",
+	"[openssl][socket][async]")
 {
-	using namespace async;
+	using namespace senders;
 
 	auto const endpoint = test::generate_endpoint();
 
@@ -95,4 +111,5 @@ TEST_CASE("OpenSSL sockets can asynchronously connect and exchange data", "[open
 		);
 	}());
 }
+#endif
 #endif

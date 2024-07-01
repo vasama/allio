@@ -4,6 +4,8 @@
 #include <allio/detail/network_security.hpp>
 
 #include <vsm/assert.h>
+#include <vsm/atomic.hpp>
+#include <vsm/intrusive/mpsc_queue.hpp>
 #include <vsm/standard.hpp>
 #include <vsm/result.hpp>
 
@@ -19,7 +21,7 @@ void openssl_release_ssl_ctx(openssl_ssl_ctx* ssl_ctx);
 
 struct openssl_ssl_ctx_deleter
 {
-	void vsm_static_operator_invoke(openssl_ssl_ctx* const ssl_ctx)
+	vsm_static_operator void operator()(openssl_ssl_ctx* const ssl_ctx) vsm_static_operator_const
 	{
 		openssl_release_ssl_ctx(ssl_ctx);
 	}
@@ -33,7 +35,7 @@ class openssl_security_context
 {
 	openssl_ssl_ctx_ptr m_ssl_ctx;
 
-public:
+protected:
 	explicit openssl_security_context(openssl_ssl_ctx_ptr ssl_ctx)
 		: m_ssl_ctx(vsm_move(ssl_ctx))
 	{
@@ -54,7 +56,7 @@ void openssl_release_ssl(openssl_ssl* ssl);
 
 struct openssl_ssl_deleter
 {
-	void vsm_static_operator_invoke(openssl_ssl* const ssl)
+	vsm_static_operator void operator()(openssl_ssl* const ssl) vsm_static_operator_const
 	{
 		openssl_release_ssl(ssl);
 	}
@@ -64,6 +66,8 @@ using openssl_ssl_ptr = std::unique_ptr<openssl_ssl, openssl_ssl_deleter>;
 
 template<typename T>
 using openssl_result = vsm::result<T, std::monostate>;
+
+struct openssl_operation_base : vsm::intrusive::mpsc_queue_link {};
 
 struct openssl_state_base
 {
@@ -82,6 +86,13 @@ struct openssl_state_base
 	bool m_want_read = false;
 	bool m_want_write = false;
 
+	vsm::intrusive::mpsc_queue<openssl_operation_base> m_queue;
+
+	openssl_state_base() = default;
+	openssl_state_base(openssl_state_base const&) = delete;
+	openssl_state_base& operator=(openssl_state_base const&) = delete;
+	virtual ~openssl_state_base() = default;
+
 	vsm::result<void> initialize(openssl_ssl_ctx* ssl_ctx);
 
 	vsm::result<openssl_result<void>> accept();
@@ -90,11 +101,37 @@ struct openssl_state_base
 
 	vsm::result<openssl_result<size_t>> read(read_buffer user_buffer);
 	vsm::result<openssl_result<size_t>> write(write_buffer user_buffer);
+
+	read_buffer get_read_buffer()
+	{
+		return read_buffer(m_r_beg, m_r_end);
+	}
+
+	void read_completed(size_t const transferred)
+	{
+		
+		m_want_read = false;
+	}
+
+	write_buffer get_write_buffer()
+	{
+		return write_buffer(m_w_beg, m_w_pos);
+	}
+
+	void write_completed(size_t const transferred)
+	{
+		m_want_write = false;
+	}
+
+	void delete_context();
 };
 
+template<typename RawOperationStates>
 struct openssl_state : openssl_state_base
 {
+	RawOperationStates m_raw_state;
 
+	static vsm::result<openssl_state*> create(openssl_ssl_ctx* const ssl_ctx);
 };
 
 #if 0

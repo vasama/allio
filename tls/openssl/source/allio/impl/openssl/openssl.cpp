@@ -1,13 +1,14 @@
 #include <allio/openssl/detail/openssl.hpp>
 #include <allio/error.hpp>
-#include <allio/file.hpp>
 #include <allio/impl/new.hpp>
 #include <allio/impl/secrets.hpp>
+#include <allio/nothrow/blocking/file.hpp>
 
 #include <vsm/assert.h>
 #include <vsm/defer.hpp>
 #include <vsm/numeric.hpp>
 #include <vsm/standard.hpp>
+#include <vsm/standard/string.hpp>
 
 #include <openssl/err.h>
 #include <openssl/bio.h>
@@ -18,8 +19,33 @@
 
 using namespace allio;
 using namespace allio::detail;
+namespace files = allio::nothrow::blocking::files;
 
 namespace {
+
+static std::string get_error_string(unsigned long const e)
+{
+	// 120 from OpenSSL documentation.
+	// - 1 for the null terminator.
+	static constexpr size_t buffer_size = 120 - 1;
+
+	std::string buffer;
+	vsm::resize_and_overwrite(
+		buffer,
+		buffer_size,
+		[&](char* const p, size_t const n) -> size_t
+		{
+			ERR_error_string_n(
+				e,
+				p,
+				// The function overwrites the null terminator.
+				n + 1);
+
+			return strnlen(p, n);
+		});
+	return buffer;
+}
+
 
 enum class openssl_error : unsigned {};
 
@@ -27,13 +53,26 @@ struct openssl_error_category : std::error_category
 {
 	const char* name() const noexcept override
 	{
-		return "OpenSSL-Crypto";
+		return "OpenSSL-CRYPTO";
 	}
 
 	std::string message(int const e) const override
 	{
-		//TODO
-		return "openssl error";
+		static bool const init = [&]() -> bool
+		{
+			return OPENSSL_init_crypto(
+				OPENSSL_INIT_LOAD_CRYPTO_STRINGS,
+				/* settings: */ nullptr) == 1;
+		}();
+
+		if (init)
+		{
+			return get_error_string(static_cast<unsigned long>(e));
+		}
+		else
+		{
+			return std::format("OpenSSL:{:08x}", static_cast<unsigned int>(e));
+		}
 	}
 };
 static openssl_error_category const openssl_error_category_instance;
@@ -60,8 +99,22 @@ struct ssl_error_category : std::error_category
 
 	std::string message(int const e) const override
 	{
-		//TODO
-		return "ssl error";
+		static bool const init = [&]() -> bool
+		{
+			return OPENSSL_init_ssl(
+				OPENSSL_INIT_LOAD_SSL_STRINGS |
+				OPENSSL_INIT_LOAD_CRYPTO_STRINGS,
+				/* settings: */ nullptr) == 1;
+		}();
+
+		if (init)
+		{
+			return get_error_string(static_cast<unsigned long>(e));
+		}
+		else
+		{
+			return std::format("OpenSSL:{:08x}", static_cast<unsigned int>(e));
+		}
 	}
 };
 static ssl_error_category const ssl_error_category_instance;
@@ -96,7 +149,7 @@ namespace {
 template<typename T, auto Function>
 struct openssl_deleter
 {
-	void vsm_static_operator_invoke(T* const pointer)
+	vsm_static_operator void operator()(T* const pointer) vsm_static_operator_const
 	{
 		Function(pointer);
 	}
@@ -122,7 +175,7 @@ static vsm::result<openssl_make_ptr_t<Make, Free, Args...>> openssl_make(Args co
 		return vsm::unexpected(get_last_openssl_error());
 	}
 
-	return vsm_lazy(openssl_make_ptr_t<Make, Free, Args...>(ptr));
+	return vsm::result<openssl_make_ptr_t<Make, Free, Args...>>(vsm::result_value, ptr);
 }
 
 
@@ -161,7 +214,7 @@ inline constexpr auto& bio_function = _bio_function<decltype(F)>::template funct
 template<typename T>
 static int bio_method_destroy(BIO* const bio)
 {
-	delete static_cast<typename T::data_type*>(BIO_get_data(bio));
+	object_deleter()(static_cast<typename T::data_type*>(BIO_get_data(bio)));
 	return 1;
 }
 
@@ -216,7 +269,7 @@ static vsm::result<bio_ptr> create_bio(typename T::data_type& data)
 }
 
 template<typename T>
-static vsm::result<bio_ptr> create_bio(std::unique_ptr<typename T::data_type> data)
+static vsm::result<bio_ptr> create_bio(unique_ptr<typename T::data_type> data)
 {
 	static auto const method_r = create_bio_method<T, true>();
 
@@ -254,11 +307,11 @@ struct file_bio
 
 	struct data_type
 	{
-		blocking::file_handle file;
+		files::file_handle file;
 		fs_size file_offset;
 		std::error_code file_error;
 
-		explicit data_type(blocking::file_handle&& file)
+		explicit data_type(files::file_handle&& file)
 			: file(vsm_move(file))
 			, file_offset(0)
 			, file_error{}
@@ -329,7 +382,7 @@ struct file_bio
 
 static vsm::result<bio_ptr> make_raw_file_bio(fs_path const& path)
 {
-	vsm_try(file, blocking::open_file(path, file_mode::read));
+	vsm_try(file, files::open_file(path, file_mode::read));
 	vsm_try(data, make_unique<file_bio::data_type>(vsm_move(file)));
 	return create_bio<file_bio>(vsm_move(data));
 }
@@ -342,41 +395,106 @@ static vsm::result<bio_ptr> make_file_bio(fs_path const& path)
 }
 
 
+enum class secret_format
+{
+	der,
+	pem,
+};
+
+static vsm::result<std::optional<secret_format>> get_mime_type_format(std::string_view const mime_type)
+{
+	if (mime_type.empty())
+	{
+		return std::nullopt;
+	}
+
+	if (mime_type == "application/x-pem-file")
+	{
+		return secret_format::pem;
+	}
+
+	return vsm::unexpected(error::unsupported_input_format);
+}
+
+static vsm::result<secret_format> deduce_secret_format(BIO* const bio)
+{
+	return secret_format::pem;
+}
+
 template<typename Callable>
-auto read_secret(tls_secret const& secret, Callable&& callable)
+static auto read_secret(tls_secret const& secret, Callable&& callable)
 	-> std::invoke_result_t<Callable&&, BIO*>
 {
 	switch (secret.kind())
 	{
 	case tls_secret_kind::none:
-		break;
+		return nullptr;
 
 	case tls_secret_kind::data:
 		{
 			vsm_try(bio, make_memory_bio(secret.data()));
 			return vsm_forward(callable)(bio.get());
 		}
-		break;
 
 	case tls_secret_kind::path:
 		{
 			vsm_try(bio, make_file_bio(secret.path()));
 			return vsm_forward(callable)(bio.get());
 		}
-		break;
 	}
 
-	return nullptr;
+	vsm_unreachable();
+};
+
+template<typename Callable>
+static auto read_secret(tls_secret const& secret, Callable&& callable)
+	-> std::invoke_result_t<Callable&&, BIO*, secret_format>
+{
+	if (secret.kind() == tls_secret_kind::none)
+	{
+		return nullptr;
+	}
+
+	vsm_try(mime_type_format, get_mime_type_format(secret.mime_type()));
+
+	auto const get_format = [&](BIO* const bio)
+	{
+		return mime_type_format
+			? vsm::result<secret_format>(*mime_type_format)
+			: deduce_secret_format(bio);
+	};
+
+	return read_secret(secret, [&](BIO* const bio) -> std::invoke_result_t<Callable&&, BIO*, secret_format>
+	{
+		vsm_try(format, mime_type_format
+			? vsm::result<secret_format>(*mime_type_format)
+			: deduce_secret_format(bio));
+
+		return vsm_forward(callable)(bio, format);
+	});
 }
+
 
 using x509_ptr = openssl_ptr<X509, X509_free>;
 
 static vsm::result<x509_ptr> read_x509(tls_secret const& secret)
 {
-	return read_secret(secret, [&](BIO* const bio)
+	return read_secret(secret, [&](BIO* const bio, secret_format const format) -> vsm::result<x509_ptr>
 	{
-		//TODO: User specified format
-		return openssl_make<PEM_read_bio_X509, X509_free>(bio, nullptr, nullptr, nullptr);
+		switch (format)
+		{
+		case secret_format::der:
+			break;
+
+		case secret_format::pem:
+			return openssl_make<PEM_read_bio_X509, X509_free>(
+				bio,
+				/* out: */ nullptr,
+				/* password callback: */ nullptr,
+				/* password callback userdata:*/ nullptr);
+		}
+
+		return vsm::unexpected(error::unsupported_input_format);
 	});
 }
 
@@ -384,10 +502,22 @@ using pkey_ptr = openssl_ptr<EVP_PKEY, EVP_PKEY_free>;
 
 static vsm::result<pkey_ptr> read_pkey(tls_secret const& secret)
 {
-	return read_secret(secret, [&](BIO* const bio)
+	return read_secret(secret, [&](BIO* const bio, secret_format const format) -> vsm::result<pkey_ptr>
 	{
-		//TODO: User specified format
-		return openssl_make<PEM_read_bio_PrivateKey, EVP_PKEY_free>(bio, nullptr, nullptr, nullptr);
+		switch (format)
+		{
+		case secret_format::der:
+			break;
+
+		case secret_format::pem:
+			return openssl_make<PEM_read_bio_PrivateKey, EVP_PKEY_free>(
+				bio,
+				/* out: */ nullptr,
+				/* password callback: */ nullptr,
+				/* password callback userdata:*/ nullptr);
+		}
+
+		return vsm::unexpected(error::unsupported_input_format);
 	});
 }
 
@@ -432,8 +562,17 @@ void detail::openssl_release_ssl_ctx(openssl_ssl_ctx* const ssl_ctx)
 
 static vsm::result<int> get_tls_version(security_context_parameters const& args)
 {
-	switch (args.tls_min_version.value_or(tls_version::tls_1_2))
+	tls_version min_version = args.min_version;
+	if (min_version == tls_version::default_value)
 	{
+		min_version = tls_version::tls_1_2;
+	}
+
+	switch (min_version)
+	{
+	case tls_version::ssl_1:
+	case tls_version::ssl_2:
+		return vsm::unexpected(error::unsupported_operation);
 	case tls_version::ssl_3:
 		return SSL3_VERSION;
 	case tls_version::tls_1_0:
@@ -444,11 +583,15 @@ static vsm::result<int> get_tls_version(security_context_parameters const& args)
 		return TLS1_2_VERSION;
 	case tls_version::tls_1_3:
 		return TLS1_3_VERSION;
+	case tls_version::default_value:
+		vsm_unreachable();
 	}
 	return vsm::unexpected(error::invalid_argument);
 }
 
-static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(security_context_parameters const& args, bool const client)
+static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(
+	security_context_parameters const& args,
+	bool const client)
 {
 	auto const ssl_method = client ? TLS_client_method() : TLS_server_method();
 	vsm_try(ssl_ctx, openssl_make<SSL_CTX_new, SSL_CTX_free>(ssl_method));
@@ -463,11 +606,15 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(security_context_paramete
 	{
 		int verify = SSL_VERIFY_NONE;
 
-		auto const default_verification = client
-			? tls_verification::required
-			: tls_verification::optional;
+		tls_verification verification = args.verification;
+		if (verification == tls_verification::default_value)
+		{
+			verification = client
+				? tls_verification::required
+				: tls_verification::optional;
+		}
 
-		switch (args.tls_verification.value_or(default_verification))
+		switch (verification)
 		{
 		case tls_verification::none:
 			break;
@@ -484,26 +631,33 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(security_context_paramete
 			}
 			verify = SSL_VERIFY_PEER;
 			break;
+
+		case tls_verification::default_value:
+			vsm_unreachable();
 		}
 
 		SSL_CTX_set_verify(
 			ssl_ctx.get(),
 			verify,
-			nullptr); //TODO: Verify callback
+			/* callback: */ nullptr); //TODO: Verify callback
 
 		if (verify != SSL_VERIFY_NONE)
 		{
 			if (client)
 			{
+				if (vsm::any_flags(args.options, tls_options::use_system_certificates))
+				{
+					//TODO: Use the system trust store on Windows.
+					if (!SSL_CTX_set_default_verify_paths(ssl_ctx.get()))
+					{
+						return vsm::unexpected(get_last_openssl_error());
+					}
+				}
+
 #if 1 //TODO: Just for testing
 				if (!SSL_CTX_load_verify_file(
 					ssl_ctx.get(),
 					"D:\\Code\\allio\\tls\\openssl\\keys\\server-certificate.pem"))
-				{
-					return vsm::unexpected(get_last_openssl_error());
-				}
-#else
-				if (!SSL_CTX_set_default_verify_paths(ssl_ctx.get()))
 				{
 					return vsm::unexpected(get_last_openssl_error());
 				}
@@ -512,20 +666,20 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(security_context_paramete
 		}
 	}
 
-	if (args.tls_certificate)
+	if (args.certificate)
 	{
-		vsm_try(x509, read_x509(args.tls_certificate));
+		vsm_try(x509, read_x509(args.certificate));
 		SSL_CTX_use_certificate(ssl_ctx.get(), x509.get());
 	}
 
-	if (args.tls_private_key)
+	if (args.private_key)
 	{
-		vsm_try(pkey, read_pkey(args.tls_private_key));
+		vsm_try(pkey, read_pkey(args.private_key));
 		SSL_CTX_use_PrivateKey(ssl_ctx.get(), pkey.get());
 	}
 
 #if 0
-	switch (args.tls_certificate.kind())
+	switch (args.certificate.kind())
 	{
 	case tls_secret_kind::none:
 		break;
@@ -533,7 +687,7 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(security_context_paramete
 	case tls_secret_kind::data:
 		{
 			//TODO: User specified format
-			auto const data = args.tls_certificate.data();
+			auto const data = args.certificate.data();
 			if (!SSL_CTX_use_certificate_ASN1(
 				ssl_ctx.get(),
 				//TODO: Checked saturate
@@ -550,7 +704,7 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(security_context_paramete
 			//TODO: User specified format
 			if (!SSL_CTX_use_certificate_file(
 				ssl_ctx.get(),
-				args.tls_certificate.path(),
+				args.certificate.path(),
 				SSL_FILETYPE_PEM))
 			{
 				return vsm::unexpected(get_last_openssl_error());
@@ -559,7 +713,7 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(security_context_paramete
 		break;
 	}
 
-	switch (args.tls_private_key.kind())
+	switch (args.private_key.kind())
 	{
 	case tls_secret_kind::none:
 		break;
@@ -567,7 +721,7 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(security_context_paramete
 	case tls_secret_kind::data:
 		{
 			//TODO: User specified format
-			auto const data = args.tls_private_key.data();
+			auto const data = args.private_key.data();
 			if (!SSL_CTX_use_PrivateKey_ASN1(
 				EVP_PKEY_NONE,
 				ssl_ctx.get(),
@@ -585,7 +739,7 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(security_context_paramete
 			//TODO: User specified format
 			if (!SSL_CTX_use_PrivateKey_file(
 				ssl_ctx.get(),
-				args.tls_private_key.path(),
+				args.private_key.path(),
 				SSL_FILETYPE_PEM))
 			{
 				return vsm::unexpected(get_last_openssl_error());
@@ -595,15 +749,19 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(security_context_paramete
 	}
 #endif
 
-	return vsm_lazy(openssl_ssl_ctx_ptr(reinterpret_cast<openssl_ssl_ctx*>(ssl_ctx.release())));
+	return vsm::result<openssl_ssl_ctx_ptr>(
+		vsm::result_value,
+		reinterpret_cast<openssl_ssl_ctx*>(ssl_ctx.release()));
 }
 
-vsm::result<openssl_ssl_ctx_ptr> detail::openssl_create_client_ssl_ctx(security_context_parameters const& args)
+vsm::result<openssl_ssl_ctx_ptr> detail::openssl_create_client_ssl_ctx(
+	security_context_parameters const& args)
 {
 	return create_ssl_ctx(args, /* client: */ true);
 }
 
-vsm::result<openssl_ssl_ctx_ptr> detail::openssl_create_server_ssl_ctx(security_context_parameters const& args)
+vsm::result<openssl_ssl_ctx_ptr> detail::openssl_create_server_ssl_ctx(
+	security_context_parameters const& args)
 {
 	return create_ssl_ctx(args, /* client: */ false);
 }
@@ -694,7 +852,7 @@ struct openssl_state_base::bio_type
 	}
 };
 
-vsm::result<openssl_ssl_ptr> openssl_state_base::create_ssl(openssl_ssl_ctx* const _ssl_ctx)
+vsm::result<void> openssl_state_base::initialize(openssl_ssl_ctx* const _ssl_ctx)
 {
 	auto const ssl_ctx = reinterpret_cast<SSL_CTX*>(_ssl_ctx);
 
@@ -704,14 +862,16 @@ vsm::result<openssl_ssl_ptr> openssl_state_base::create_ssl(openssl_ssl_ctx* con
 	auto const p_bio = bio.release();
 	SSL_set_bio(ssl.get(), p_bio, p_bio);
 
-	return vsm_lazy(openssl_ssl_ptr(reinterpret_cast<openssl_ssl*>(ssl.release())));
+	m_ssl.reset(reinterpret_cast<openssl_ssl*>(ssl.release()));
+
+	return {};
 }
 
 vsm::result<openssl_result<void>> openssl_state_base::accept()
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
-	vsm_try(r, ssl_try<SSL_accept, 0>(ssl));
+	vsm_try(r, ssl_try<SSL_accept, /* SuccessThreshold: */ 0>(ssl));
 
 	if (!r)
 	{
@@ -730,7 +890,7 @@ vsm::result<openssl_result<void>> openssl_state_base::connect()
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
-	vsm_try(r, ssl_try<SSL_connect, 0>(ssl));
+	vsm_try(r, ssl_try<SSL_connect, /* SuccessThreshold: */ 0>(ssl));
 
 	if (!r)
 	{
@@ -749,7 +909,7 @@ vsm::result<openssl_result<void>> openssl_state_base::disconnect()
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
-	vsm_try(r, ssl_try<SSL_shutdown, 0>(ssl));
+	vsm_try(r, ssl_try<SSL_shutdown, /* SuccessThreshold: */ 0>(ssl));
 
 	if (!r)
 	{
@@ -765,7 +925,7 @@ vsm::result<openssl_result<size_t>> openssl_state_base::read(read_buffer const b
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
-	vsm_try(r, ssl_try<SSL_read, 1>(
+	vsm_try(r, ssl_try<SSL_read, /* SuccessThreshold: */ 1>(
 		ssl,
 		buffer.data(),
 		vsm::saturating(buffer.size())));
@@ -787,7 +947,7 @@ vsm::result<openssl_result<size_t>> openssl_state_base::write(write_buffer const
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
-	vsm_try(r, ssl_try<SSL_write, 1>(
+	vsm_try(r, ssl_try<SSL_write, /* SuccessThreshold: */ 1>(
 		ssl,
 		buffer.data(),
 		vsm::saturating(buffer.size())));

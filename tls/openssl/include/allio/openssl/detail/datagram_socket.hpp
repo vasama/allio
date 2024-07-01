@@ -6,9 +6,9 @@ namespace allio::detail {
 
 struct openssl_ssl;
 
-struct openssl_datagram_socket_t : basic_datagram_socket_t<object_t>
+struct openssl_datagram_socket_t : datagram_socket_base_t<object_t>
 {
-	using base_type = basic_datagram_socket_t<object_t>;
+	using base_type = datagram_socket_base_t<object_t>;
 
 	struct native_type : raw_datagram_socket_t::native_type
 	{
