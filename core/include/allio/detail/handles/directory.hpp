@@ -69,12 +69,6 @@ enum class directory_stream_pointer : uintptr_t
 	directory_stream_pointer pointer);
 
 
-enum class [[deprecated]] directory_stream_native_handle : uintptr_t
-{
-	end                                 = 0,
-	directory_end                       = static_cast<uintptr_t>(-1),
-};
-
 class directory_entry_view
 {
 	directory_stream_pointer m_pointer;
@@ -297,11 +291,11 @@ struct directory_iterator_t : object_t
 	{
 		using operation_concept = void;
 		//TODO: Template this once directory_entry et. al. are themselves templated.
-		using result_type = directory_entry_view;
+		using result_type = bool;
 		using params_type = no_parameters_t;
 
 		template<std::same_as<directory_iterator_t> Object>
-		static vsm::result<directory_entry_view> blocking_io(
+		static vsm::result<bool> blocking_io(
 			native_handle<Object> const& h,
 			io_parameters_t<Object, next_t> const& a)
 			requires requires { Object::next(h, a); }
@@ -310,7 +304,7 @@ struct directory_iterator_t : object_t
 		}
 	};
 
-	static vsm::result<directory_entry_view> next(
+	static vsm::result<bool> next(
 		native_handle<directory_iterator_t> const& h,
 		io_parameters_t<directory_iterator_t, next_t> const& a);
 };
@@ -337,7 +331,7 @@ struct async_operation<Multiplexer, directory_iterator_t, directory_iterator_t::
 	using H = native_handle<directory_iterator_t> const;
 	using C = async_connector_t<M, directory_iterator_t> const;
 	using S = async_operation_t<M, directory_iterator_t, directory_iterator_t::next_t>;
-	using R = directory_entry_view;
+	using R = bool;
 	using A = no_parameters_t;
 
 	async_operation_t<Multiplexer, directory_t, directory_io::read_t> _directory_read;
@@ -354,6 +348,14 @@ struct async_operation<Multiplexer, directory_iterator_t, directory_iterator_t::
 		vsm_assert(h.stream_position != directory_stream_position::end_of_directory); //PRECONDITION
 
 		s._handler = &handler;
+
+		if (h.stream_position != directory_stream_position::end_of_stream)
+		{
+			auto const cur_pointer = h.storage.data() + h.stream_position;
+			auto const new_pointer = next_directory_entry(cur_pointer);
+			h.stream_position = new_pointer - h.storage.data();
+		}
+
 		if (h.stream_position == directory_stream_position::end_of_stream)
 		{
 			if (h.storage.size() == 0)
@@ -370,7 +372,8 @@ struct async_operation<Multiplexer, directory_iterator_t, directory_iterator_t::
 				handler));
 		}
 
-		return _next_directory_entry(h);
+		//TODO: Figure out why return true doesn't work here.
+		return vsm::result<bool>(h.stream_position != directory_stream_position::end_of_directory);
 	}
 
 	static io_result<R> notify(
@@ -408,7 +411,8 @@ struct async_operation<Multiplexer, directory_iterator_t, directory_iterator_t::
 				handler));
 		}
 
-		return _next_directory_entry(h);
+		//TODO: Figure out why return true doesn't work here.
+		return vsm::result<bool>(h.stream_position != directory_stream_position::end_of_directory);
 	}
 
 	static void cancel(M& m, H const& h, C const& c, S& s)
@@ -469,21 +473,30 @@ struct async_operation<Multiplexer, directory_iterator_t, directory_iterator_t::
 	{
 		if (r)
 		{
-			h.stream_position = (*r).get_stream_pointer() - h.storage.data();
-			//TODO: Figure out why return true didn't work.
-			return vsm::result<bool>(true);
-		}
+			auto const pointer = (*r).get_stream_pointer();
+			h.stream_position = pointer - h.storage.data();
 
-		if (r.error() != std::errc::no_buffer_space)
+			if (pointer != directory_stream_pointer::end_of_stream)
+			{
+				//TODO: Figure out why return true didn't work.
+				return vsm::result<bool>(true);
+			}
+		}
+		else
 		{
-			return vsm::propagate_error(r);
-		}
+			if (r.error() != std::errc::no_buffer_space)
+			{
+				return vsm::propagate_error(r);
+			}
 
-		//TODO: Figure out if there's a better growth strategy.
-		vsm_try_discard(h.storage.reserve(h.storage.size() * 3 / 2));
+			//TODO: Figure out if there's a better growth strategy.
+			vsm_try_discard(h.storage.reserve(h.storage.size() * 3 / 2));
+		}
+		//TODO: Figure out why return true didn't work.
 		return vsm::result<bool>(false);
 	}
 
+#if 0
 	static directory_entry_view _next_directory_entry(H& h)
 	{
 		vsm_assert(h.stream_position < directory_stream_position::end_of_directory);
@@ -492,6 +505,7 @@ struct async_operation<Multiplexer, directory_iterator_t, directory_iterator_t::
 		h.stream_position = next_directory_entry(pointer) - storage;
 		return directory_entry_view(pointer);
 	}
+#endif
 };
 
 template<typename MultiplexerHandle>
@@ -575,7 +589,7 @@ public:
 	}
 
 private:
-	[[deprecated]] friend vsm::result<directory_entry_view> tag_invoke(
+	[[deprecated]] friend vsm::result<bool> tag_invoke(
 		blocking_io_t<directory_iterator_t::next_t>,
 		directory_iterator_handle const& h,
 		no_parameters_t const& a)
@@ -592,13 +606,25 @@ class directory_iterator
 	using facade_type = basic_facade<handle_type, Traits>;
 
 	facade_type m_handle;
+	std::error_code m_status;
 
+	static bool _is_valid(facade_type const& handle)
+	{
+		native_handle<directory_iterator_t> const& h = handle.native();
+		return h.stream_position != directory_stream_position::end_of_directory;
+	}
 
-	static auto next(facade_type const& handle)
+	static auto _next(facade_type const& handle)
 	{
 		return Traits::template observe<directory_iterator_t::next_t>(
 			handle,
 			no_parameters_t());
+	}
+
+	static directory_entry_view _get(facade_type const& handle)
+	{
+		native_handle<directory_iterator_t> const& h = handle.native();
+		return directory_entry_view(h.storage.data() + h.stream_position);
 	}
 
 
@@ -609,37 +635,42 @@ class directory_iterator
 		directory_iterator const* m_directory_iterator;
 
 	public:
-		using value_type = decltype(next(vsm_declval(facade_type)));
+		using value_type = directory_entry_view;
 		using difference_type = ptrdiff_t;
 
 		iterator() = default;
 
-		// Intentionally takes a mutable reference, because while the next operation is declared
+		// Intentionally takes a mutable reference, because while the _next operation is declared
 		// const, the native handle actually contains mutable members mutated by the operation.
 		explicit iterator(directory_iterator& directory_iterator)
 			: m_directory_iterator(&directory_iterator)
 		{
+			++*this;
 		}
 
 		[[nodiscard]] value_type operator*() const
 		{
-			return next(m_directory_iterator->m_handle);
+			return _get(m_directory_iterator->m_handle);
 		}
 
 		iterator& operator++() &
 		{
+			[[maybe_unused]] std::same_as<bool> auto result =
+				_next(m_directory_iterator->m_handle);
+
 			return *this;
 		}
 
 		[[nodiscard]] iterator operator++(int) &
 		{
-			return *this;
+			auto it = *this;
+			++*this;
+			return it;
 		}
 
 		[[nodiscard]] bool operator==(sentinel) const
 		{
-			return m_directory_iterator->m_handle.native().stream_position ==
-				directory_stream_position::end_of_directory;
+			return !_is_valid(m_directory_iterator->m_handle);
 		}
 	};
 	static_assert(std::input_iterator<iterator>);
@@ -651,6 +682,23 @@ public:
 	{
 	}
 
+
+	[[nodiscard]] auto next()
+	{
+		return _next(m_handle);
+	}
+
+	[[nodiscard]] directory_entry_view get() const
+	{
+		return _get(m_handle);
+	}
+
+	[[nodiscard]] explicit operator bool() const
+	{
+		return _is_valid(m_handle);
+	}
+
+
 	[[nodiscard]] iterator begin()
 	{
 		return iterator(*this);
@@ -661,16 +709,6 @@ public:
 		return {};
 	}
 };
-
-#if 0
-template<handle_for<directory_t> Handle, typename Traits>
-[[nodiscard]] auto directory_iterator<Handle, Traits>::iterator::operator*() const
-{
-	return Traits::template observe<directory_iterator_t::next_t>(
-		m_directory_iterator->m_handle,
-		no_parameters_t());
-}
-#endif
 
 template<typename Handle, typename Traits>
 [[nodiscard]] auto directory_t::facade<Handle, Traits>::iterate() const

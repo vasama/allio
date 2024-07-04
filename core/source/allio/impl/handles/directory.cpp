@@ -13,7 +13,7 @@ vsm::result<void> directory_t::open(
 	return open_fs_object(h, a, open_kind::directory);
 }
 
-vsm::result<directory_entry_view> directory_iterator_t::next(
+vsm::result<bool> directory_iterator_t::next(
 	native_handle<directory_iterator_t> const& h,
 	io_parameters_t<directory_iterator_t, next_t> const& a)
 {

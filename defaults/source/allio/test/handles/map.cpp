@@ -14,11 +14,11 @@ using namespace allio;
 static constexpr size_t KiB = 1024;
 static constexpr size_t MiB = 1024 * KiB;
 static constexpr size_t GiB = 1024 * MiB;
-static constexpr size_t TiB = 1024 * GiB;
 
 #if vsm_word_32
 static constexpr size_t large_reservation_size = GiB;
 #else
+static constexpr size_t TiB = 1024 * GiB;
 static constexpr size_t large_reservation_size = TiB;
 #endif
 
@@ -59,16 +59,24 @@ TEST_CASE("The protection of anonymous mappings can be changed", "[map][hardware
 	map.commit(base, size, protection::read);
 	REQUIRE(test::test_memory_protection(base, size) == protection::read);
 
-	try
+	auto const set_write_only = [&]() -> bool
 	{
-		map.commit(base, size, protection::write);
+		try
+		{
+			map.commit(base, size, protection::write);
+			return true;
+		}
+		catch (std::system_error const&)
+		{
+			return false;
+		}
+	};
 
+	if (set_write_only())
+	{
 		// Write-only mappings are most likely not supported,
 		// but if it happens that they are, test that they work correctly.
 		REQUIRE(test::test_memory_protection(base, size) == protection::write);
-	}
-	catch (std::exception const&)
-	{
 	}
 
 	map.commit(base, size, protection::read_write);

@@ -31,6 +31,9 @@ static fs_entry_type get_entry_type(directory_stream_entry const& entry)
 		{
 			return fs_entry_type::ntfs_junction;
 		}
+
+		//TODO: Check if this is correct.
+		return fs_entry_type::unknown;
 	}
 
 	if (entry.FileAttributes & FILE_ATTRIBUTE_DIRECTORY)
