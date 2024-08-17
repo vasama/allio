@@ -176,31 +176,84 @@ TEST_CASE("Auto reset event signals are only observed by one wait", "[event][blo
 
 /* Asynchronous events */
 
-static auto wait_detached(exec::async_scope& scope, auto const& event)
+template<typename T>
+class shared_value
 {
-	class shared_bool
-	{
-		std::shared_ptr<bool> m_ptr;
+	using variant_type = std::variant<T, std::exception_ptr>;
 
-	public:
-		explicit shared_bool(std::shared_ptr<bool> ptr)
-			: m_ptr(vsm_move(ptr))
+	std::shared_ptr<variant_type> m_ptr;
+
+public:
+	shared_value()
+		: m_ptr(
+			std::make_shared<variant_type>(
+				std::in_place_type<std::exception_ptr>,
+				std::make_exception_ptr(std::runtime_error("Uninitialized shared_value"))))
+	{
+	}
+
+	template<vsm::no_cvref_of<shared_value> U = T>
+		requires std::convertible_to<U, T>
+	shared_value(U const& value)
+		: m_ptr(std::make_shared<variant_type>(std::in_place_type<T>, vsm_forward(value)))
+	{
+	}
+
+	template<vsm::cv_convertible_to<T> U>
+	shared_value(shared_value<U> const& value)
+		: m_ptr(value.m_ptr)
+	{
+	}
+
+	shared_value(shared_value const&) = default;
+	shared_value& operator=(shared_value const&) = default;
+
+	template<vsm::no_cvref_of<shared_value> U = T>
+		requires std::convertible_to<U, T>
+	shared_value const& operator=(U const& value) const
+	{
+		m_ptr->template emplace<T>(vsm_forward(value));
+		return *this;
+	}
+
+	[[nodiscard]] operator T() const
+	{
+		if (auto const exception = std::get_if<std::exception_ptr>(m_ptr.get()))
 		{
+			std::rethrow_exception(*exception);
 		}
 
-		operator bool() const
-		{
-			return *m_ptr;
-		}
-	};
+		return *std::get_if<T>(m_ptr.get());
+	}
 
-	std::shared_ptr<bool> ptr = std::make_shared<bool>(false);
-	(void)scope.spawn_future(event.wait() | ex::then([ptr]()
+	void set_exception(std::exception_ptr ptr) const
 	{
-		*ptr = true;
-	}));
+		m_ptr->template emplace<std::exception_ptr>(vsm_move(ptr));
+	}
 
-	return shared_bool(vsm_move(ptr));
+private:
+	template<typename U>
+	friend class shared_value;
+};
+
+static shared_value<bool> wait_detached(exec::async_scope& scope, auto const& event)
+{
+	shared_value<bool> boolean = false;
+
+	scope.spawn(
+		event.wait()
+		| ex::then([boolean]()
+		{
+			boolean = true;
+		})
+		| ex::upon_error([](auto const&...) {})
+		//| ex::upon_error([boolean](std::error_code const error)
+		//{
+		//	boolean.set_exception(std::make_exception_ptr(std::system_error(error)));
+		//})
+	);
+
+	return boolean;
 }
 
 TEST_CASE("Asynchronous wait on signaled event may complete immediately", "[event][async]")

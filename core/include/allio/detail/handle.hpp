@@ -62,9 +62,9 @@ public:
 	using handle_concept = void;
 	using object_type = Object;
 	using multiplexer_handle_type = void;
+	using native_type = native_handle<Object>;
 
 private:
-	using native_type = native_handle<Object>;
 	static_assert(std::is_default_constructible_v<native_type>);
 
 	native_type m_native = {};

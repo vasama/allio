@@ -10,7 +10,7 @@ class package(ConanFile):
 	requires = (
 		"allio_core/0.1",
 		"vsm_intrusive/0.1",
-		"p2300/0a3e4dcacacbe9f821eb9fc9c9db107ce9272f14",
+		"p2300/0.1@vasama",
 	)
 
 	vsm_libs = ["allio_defaults"]

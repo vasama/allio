@@ -79,6 +79,8 @@ std::string detail::error_category::message(int const code) const
 		return "The specified page level is not supported";
 	case error::virtual_address_not_available:
 		return "The requested virtual address range is not available.";
+	case error::not_enough_address_space:
+		return "The required virtual address space could not be allocated.";
 
 	// Process
 	case error::process_is_current_process:
@@ -156,6 +158,8 @@ std::error_condition detail::error_category::default_error_condition(int const c
 	case error::unsupported_page_level:
 		break;
 	case error::virtual_address_not_available:
+		break;
+	case error::not_enough_address_space:
 		break;
 
 	// Process

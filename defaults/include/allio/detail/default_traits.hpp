@@ -6,6 +6,8 @@
 
 namespace allio::detail {
 
+//TODO: Try to separate this out into different headers to avoid execution dependency for blocking.
+
 class default_traits
 {
 public:

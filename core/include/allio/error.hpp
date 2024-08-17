@@ -94,6 +94,7 @@ enum class error
 	invalid_address,
 	unsupported_page_level,
 	virtual_address_not_available,
+	not_enough_address_space,
 
 	// Process
 	process_is_current_process,

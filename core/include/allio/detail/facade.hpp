@@ -12,10 +12,14 @@ class basic_facade<Handle, Traits>
 	: public Handle
 	, public Handle::object_type::template facade<basic_facade<Handle, Traits>, Traits>
 {
+	static_assert(!requires { typename Handle::facade_concept; });
+
 	template<typename OtherHandle>
 	using rebind = basic_facade<OtherHandle, Traits>;
 
 public:
+	using facade_concept = void;
+
 	template<object OtherObject>
 	using rebind_object = basic_facade<typename Handle::template rebind_object<OtherObject>, Traits>;
 
@@ -126,10 +130,14 @@ class basic_facade<Handle, Traits>
 	: public Handle
 	, public Handle::object_type::template facade<basic_facade<Handle, Traits>, Traits>
 {
+	static_assert(!requires { typename Handle::facade_concept; });
+
 	template<typename OtherHandle>
 	using rebind = basic_facade<OtherHandle, Traits>;
 
 public:
+	using facade_concept = void;
+
 	template<object OtherObject>
 	using rebind_object = basic_facade<typename Handle::template rebind_object<OtherObject>, Traits>;
 

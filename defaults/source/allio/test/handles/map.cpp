@@ -105,3 +105,46 @@ TEST_CASE("Sections using backing files can be created and mapped", "[section_ha
 	}
 	test::check_file_content(file_path, expected_content);
 }
+
+TEST_CASE("Entire files can be mapped directly by handle", "[map]")
+{
+	path const file_path = test::get_temp_path();
+	auto const mode = GENERATE(file_mode::read, file_mode::write);
+
+	test::write_file_content(file_path, "check");
+	std::string expected_content = "check";
+	{
+		auto const file = open_file(file_path, mode);
+		auto const map = map_file(file);
+
+		REQUIRE(memcmp(map.base(), "check", 5) == 0);
+
+		if (vsm::any_flags(mode, file_mode::write_data))
+		{
+			memcpy(map.base(), "write", 5);
+			expected_content = "write";
+		}
+	}
+	test::check_file_content(file_path, expected_content);
+}
+
+TEST_CASE("Entire files can be mapped directly by path", "[map]")
+{
+	path const file_path = test::get_temp_path();
+	auto const mode = GENERATE(file_mode::read, file_mode::write);
+
+	test::write_file_content(file_path, "check");
+	std::string expected_content = "check";
+	{
+		auto const map = map_path(file_path);
+
+		REQUIRE(memcmp(map.base(), "check", 5) == 0);
+
+		if (vsm::any_flags(mode, file_mode::write_data))
+		{
+			memcpy(map.base(), "write", 5);
+			expected_content = "write";
+		}
+	}
+	test::check_file_content(file_path, expected_content);
+}

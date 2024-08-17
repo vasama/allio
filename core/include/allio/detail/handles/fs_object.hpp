@@ -36,6 +36,20 @@ enum class file_opening : uint8_t
 	replace_existing,
 };
 
+//TODO: Replace file_opening
+enum class file_opening2 : uint8_t
+{
+	open                        = 1 << 0,
+	create                      = 1 << 1,
+	truncate                    = 1 << 2,
+
+	open_existing               = open,
+	create_only                 = create,
+	open_or_create              = open | create,
+	open_and_truncate           = open | truncate,
+	create_or_truncate          = create | truncate,
+};
+
 /// @brief Controls sharing of the file by other handles.
 /// @note File sharing restrictions may not be available on all platforms.
 ///       For maximum portability, do not specify file sharing restrictions.

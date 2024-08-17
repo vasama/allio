@@ -9,28 +9,30 @@ namespace allio::detail {
 
 struct get_multiplexer_t : ex::__query<get_multiplexer_t>
 {
-	friend constexpr bool tag_invoke(ex::forwarding_query_t, get_multiplexer_t const&) noexcept
+	static constexpr bool query(ex::forwarding_query_t) noexcept
 	{
 		return true;
 	}
-	
+
 	template<typename Env>
-		requires vsm::tag_invocable<get_multiplexer_t, Env const&>
-	vsm_static_operator auto operator()(Env const& env) vsm_static_operator_const noexcept
-		-> vsm::tag_invoke_result_t<get_multiplexer_t, Env const&>
+		requires ex::tag_invocable<get_multiplexer_t, Env const&>
+	[[nodiscard]] vsm_static_operator auto operator()(
+		Env const& env) vsm_static_operator_const noexcept
+		-> ex::tag_invoke_result_t<get_multiplexer_t, Env const&>
 	{
-		static_assert(vsm::nothrow_tag_invocable<get_multiplexer_t, Env const&>);
-		return vsm::tag_invoke(get_multiplexer_t(), env);
+		static_assert(ex::nothrow_tag_invocable<get_multiplexer_t, Env const&>);
+		return ex::tag_invoke(get_multiplexer_t(), env);
 	}
 
-	auto operator()() const noexcept
+	template<typename = get_multiplexer_t>
+	[[nodiscard]] vsm_static_operator auto operator()() vsm_static_operator_const noexcept
 	{
-		return ex::read(*this);
+		return ex::read_env(get_multiplexer_t());
 	}
 };
 inline constexpr get_multiplexer_t get_multiplexer = {};
 
-template<typename Receiver>
-using current_multiplexer_t = std::decay_t<std::invoke_result_t<get_multiplexer_t, ex::env_of_t<Receiver>>>;
+template<typename Env>
+using env_multiplexer_handle_t = std::remove_cvref_t<std::invoke_result_t<get_multiplexer_t, Env>>;
 
 } // namespace allio::detail

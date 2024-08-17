@@ -1,5 +1,6 @@
 #pragma once
 
+#include <allio/detail/handles/file.hpp>
 #include <allio/detail/handles/section.hpp>
 #include <allio/detail/new.hpp>
 
@@ -106,6 +107,78 @@ struct map_memory_t
 		requires requires { Object::map_memory(h, a); }
 	{
 		return Object::map_memory(h, a);
+	}
+};
+
+struct map_file_t
+{
+	using operation_concept = producer_t;
+
+	struct params_type : io_flags_t
+	{
+		detail::protection protection = {};
+		native_handle<file_t> const* file = nullptr;
+
+		using io_flags_t::set_argument;
+
+		void set_argument(detail::protection const value)
+		{
+			protection = value;
+		}
+	};
+
+	using result_type = void;
+	using runtime_concept = bounded_runtime_t;
+
+	template<object Object>
+	static vsm::result<void> blocking_io(
+		native_handle<Object>& h,
+		io_parameters_t<Object, map_file_t> const& a)
+		requires requires { Object::map_file(h, a); }
+	{
+		return Object::map_file(h, a);
+	}
+
+	template<object Object>
+	[[deprecated]] friend vsm::result<void> tag_invoke(
+		blocking_io_t<map_file_t>,
+		native_handle<Object>& h,
+		io_parameters_t<Object, map_file_t> const& a)
+		requires requires { Object::map_file(h, a); }
+	{
+		return Object::map_file(h, a);
+	}
+};
+
+struct map_path_t
+{
+	using operation_concept = producer_t;
+
+	struct params_type : fs_io::open_t::params_type
+	{
+		using fs_io::open_t::params_type::set_argument;
+	};
+
+	using result_type = void;
+	using runtime_concept = bounded_runtime_t;
+
+	template<object Object>
+	static vsm::result<void> blocking_io(
+		native_handle<Object>& h,
+		io_parameters_t<Object, map_path_t> const& a)
+		requires requires { Object::map_path(h, a); }
+	{
+		return Object::map_path(h, a);
+	}
+
+	template<object Object>
+	[[deprecated]] friend vsm::result<void> tag_invoke(
+		blocking_io_t<map_path_t>,
+		native_handle<Object>& h,
+		io_parameters_t<Object, map_path_t> const& a)
+		requires requires { Object::map_path(h, a); }
+	{
+		return Object::map_path(h, a);
 	}
 };
 
@@ -246,6 +319,14 @@ struct map_t : object_t
 		native_handle<map_t>& h,
 		io_parameters_t<map_t, map_memory_t> const& a);
 
+	static vsm::result<void> map_file(
+		native_handle<map_t>& h,
+		io_parameters_t<map_t, map_io::map_file_t> const& a);
+
+	static vsm::result<void> map_path(
+		native_handle<map_t>& h,
+		io_parameters_t<map_t, map_io::map_path_t> const& a);
+
 	static vsm::result<void> commit(
 		native_handle<map_t> const& h,
 		io_parameters_t<map_t, commit_t> const& a);
@@ -273,6 +354,12 @@ struct map_t : object_t
 		{
 			using native_handle_type = native_handle<map_t>;
 			return static_cast<Handle const&>(*this).native().native_handle_type::size;
+		}
+
+		[[nodiscard]] size_t allocated_size() const
+		{
+			size_t const page_mask = page_size() - 1;
+			return size() + page_mask & ~page_mask;
 		}
 
 		[[nodiscard]] detail::page_level page_level() const
@@ -340,6 +427,24 @@ template<typename Traits>
 	a.size = size;
 	(set_argument(a, vsm_forward(args)), ...);
 	return Traits::template produce<map_t, map_io::map_memory_t>(a);
+}
+
+template<typename Traits>
+[[nodiscard]] auto map_file(handle_for<file_t> auto const& file, auto&&... args)
+{
+	auto a = io_parameters_t<map_t, map_io::map_file_t>{};
+	a.file = &file.native();
+	(set_argument(a, vsm_forward(args)), ...);
+	return Traits::template produce<map_t, map_io::map_file_t>(a);
+}
+
+template<typename Traits>
+[[nodiscard]] auto map_path(fs_path const& path, auto&&... args)
+{
+	auto a = io_parameters_t<map_t, map_io::map_path_t>{};
+	a.path = path;
+	(set_argument(a, vsm_forward(args)), ...);
+	return Traits::template produce<map_t, map_io::map_path_t>(a);
 }
 
 } // namespace allio::detail

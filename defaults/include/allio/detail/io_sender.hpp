@@ -12,8 +12,8 @@
 
 namespace allio::detail {
 
-template<typename E>
-using environment_multiplexer_handle_t = std::remove_cvref_t<decltype(get_multiplexer(std::declval<E>()))>;
+template<typename Receiver>
+using receiver_multiplexer_t = env_multiplexer_handle_t<ex::env_of_t<Receiver>>;
 
 template<bool>
 struct _set_value_signature;
@@ -35,10 +35,12 @@ struct _set_value_signature<1>
 template<typename R>
 using set_value_signature = typename _set_value_signature<std::is_void_v<R>>::template type<R>;
 
-
 template<handle Handle, operation_c Operation>
 class io_sender
 {
+	// Temporary workaround for STDEXEC_MEMFN_DECL.
+	using connect_t = ex::connect_t;
+
 	using object_type = typename Handle::object_type;
 	using handle_type = handle_const_t<Operation, Handle>;
 
@@ -54,10 +56,15 @@ class io_sender
 	template<typename Receiver>
 	class operation
 		: io_handler_base<multiplexer_type, operation<Receiver>>
-		, ex::__inplace_stoppable_base<operation<Receiver>>
+		, ex::__stoppable_base_for_t<
+			ex::stop_token_of_t<ex::env_of_t<Receiver>>,
+			operation<Receiver>>
 	{
 		using io_handler_type = io_handler<multiplexer_type>;
-		using stoppable_base = ex::__inplace_stoppable_base<operation<Receiver>>;
+
+		using stoppable_base = ex::__stoppable_base_for_t<
+			ex::stop_token_of_t<ex::env_of_t<Receiver>>,
+			operation<Receiver>>;
 
 		handle_type& m_handle;
 		vsm_no_unique_address params_type m_args;
@@ -67,35 +74,35 @@ class io_sender
 	public:
 		explicit operation(auto&& sender, auto&& receiver)
 			noexcept(noexcept(Receiver(vsm_forward(receiver))))
-			: m_handle(*sender.m_handle)
+			: stoppable_base(ex::get_stop_token(ex::get_env(m_receiver)))
+			, m_handle(*sender.m_handle)
 			, m_args(vsm_forward(sender).m_args)
 			, m_receiver(vsm_forward(receiver))
 		{
 		}
 
-	private:
-		friend void tag_invoke(ex::start_t, operation& self) noexcept
+		void start() & noexcept
 		{
 			auto r = submit_io(
-				self.m_handle,
-				self.m_operation,
-				vsm_as_const(self.m_args),
-				static_cast<io_handler_type&>(self));
+				m_handle,
+				m_operation,
+				vsm_as_const(m_args),
+				static_cast<io_handler_type&>(*this));
 
 			if (r.is_pending())
 			{
 				// This is not a stream sender.
 				vsm_assert(!r.has_value());
 
-				self.stoppable_base::register_stoppable(
-					ex::get_stop_token(ex::get_env(self.m_receiver)));
+				stoppable_base::register_stoppable();
 			}
 			else
 			{
-				self.handle_result(vsm_move(r));
+				handle_result(vsm_move(r));
 			}
 		}
 
+	private:
 		void notify(io_status_type&& status) noexcept
 		{
 			auto r = notify_io(
@@ -168,8 +175,7 @@ public:
 	using completion_signatures = ex::completion_signatures<
 		set_value_signature<result_type>,
 		ex::set_error_t(std::error_code),
-		ex::set_stopped_t()
-	>;
+		ex::set_stopped_t()>;
 
 	template<std::convertible_to<params_type> Args>
 	explicit io_sender(handle_type& handle, Args&& args)
@@ -178,20 +184,21 @@ public:
 	{
 	}
 
-	template<ex::receiver Receiver>
-	friend operation<std::decay_t<Receiver>> tag_invoke(
-		ex::connect_t,
-		vsm::any_cvref_of<io_sender> auto&& sender,
-		Receiver&& receiver)
+	template<vsm::any_cvref_of<io_sender> Sender, ex::receiver Receiver>
+	[[nodiscard]] STDEXEC_MEMFN_DECL(auto connect)(this Sender&& sender, Receiver&& receiver)
+		-> operation<std::decay_t<Receiver>>
 	{
 		return operation<std::decay_t<Receiver>>(vsm_forward(sender), vsm_forward(receiver));
 	}
 };
 
-
 template<object Object, producer Operation, template<typename> typename HandleTemplate>
 class io_handle_sender
 {
+	// Temporary workaround for STDEXEC_MEMFN_DECL.
+	using get_completion_signatures_t = ex::get_completion_signatures_t;
+	using connect_t = ex::connect_t;
+
 	using params_type = io_parameters_t<Object, Operation>;
 
 	template<multiplexer_handle_for<Object> MultiplexerHandle, ex::receiver Receiver>
@@ -199,9 +206,13 @@ class io_handle_sender
 		: io_handler_base<
 			typename MultiplexerHandle::multiplexer_type,
 			operation<MultiplexerHandle, Receiver>>
-		, ex::__inplace_stoppable_base<operation<MultiplexerHandle, Receiver>>
+		, ex::__stoppable_base_for_t<
+			ex::stop_token_of_t<ex::env_of_t<Receiver>>,
+			operation<MultiplexerHandle, Receiver>>
 	{
-		using stoppable_base = ex::__inplace_stoppable_base<operation<MultiplexerHandle, Receiver>>;
+		using stoppable_base = ex::__stoppable_base_for_t<
+			ex::stop_token_of_t<ex::env_of_t<Receiver>>,
+			operation<MultiplexerHandle, Receiver>>;
 
 		using handle_type = HandleTemplate<MultiplexerHandle>;
 		using multiplexer_type = typename MultiplexerHandle::multiplexer_type;
@@ -216,35 +227,35 @@ class io_handle_sender
 
 	public:
 		explicit operation(auto&& sender, auto&& receiver)
-			: m_handle(get_multiplexer(ex::get_env(receiver)))
+			: stoppable_base(ex::get_stop_token(ex::get_env(m_receiver)))
+			, m_handle(get_multiplexer(ex::get_env(receiver)))
 			, m_args(vsm_forward(sender).m_args)
 			, m_receiver(vsm_forward(receiver))
 		{
 		}
 
-	private:
-		friend void tag_invoke(ex::start_t, operation& self) noexcept
+		void start() & noexcept
 		{
 			auto r = submit_io(
-				self.m_handle,
-				self.m_operation,
-				vsm_as_const(self.m_args),
-				static_cast<io_handler_type&>(self));
+				m_handle,
+				m_operation,
+				vsm_as_const(m_args),
+				static_cast<io_handler_type&>(*this));
 
 			if (r.is_pending())
 			{
 				// This is not a stream sender.
 				vsm_assert(!r.has_value());
 
-				self.stoppable_base::register_stoppable(
-					ex::get_stop_token(ex::get_env(self.m_receiver)));
+				stoppable_base::register_stoppable();
 			}
 			else
 			{
-				self.handle_result(vsm_move(r));
+				handle_result(vsm_move(r));
 			}
 		}
 
+	private:
 		void notify(io_status_type&& status) noexcept
 		{
 			auto r = notify_io(
@@ -291,30 +302,68 @@ class io_handle_sender
 public:
 	using is_sender = void;
 
-	template<typename E>
-	friend auto tag_invoke(ex::get_completion_signatures_t, io_handle_sender const&, E&&)
-		-> ex::completion_signatures<
-			ex::set_value_t(HandleTemplate<environment_multiplexer_handle_t<E>>),
-			ex::set_error_t(std::error_code),
-			ex::set_stopped_t()
-		>;
-
 	template<std::convertible_to<params_type> Args>
 	explicit io_handle_sender(Args&& args)
 		: m_args(vsm_forward(args))
 	{
 	}
 
+	template<vsm::any_cvref_of<io_handle_sender> Sender, typename Env>
+	STDEXEC_MEMFN_DECL(auto get_completion_signatures)(this Sender&& sender, Env&& env)
+		-> ex::completion_signatures<
+			ex::set_value_t(HandleTemplate<env_multiplexer_handle_t<Env>>),
+			ex::set_error_t(std::error_code),
+			ex::set_stopped_t()>
+	{
+		return {};
+	}
+
+	template<vsm::any_cvref_of<io_handle_sender> Sender, ex::receiver Receiver>
+	[[nodiscard]] STDEXEC_MEMFN_DECL(auto connect)(this Sender&& sender, Receiver&& receiver)
+		-> operation<receiver_multiplexer_t<Receiver>, std::decay_t<Receiver>>
+	{
+		return operation<receiver_multiplexer_t<Receiver>, std::decay_t<Receiver>>(
+			vsm_forward(sender),
+			vsm_forward(receiver));
+	}
+
+#if 0
+	template<typename E>
+	friend auto tag_invoke(ex::get_completion_signatures_t, io_handle_sender const&, E&&)
+		-> ex::completion_signatures<
+			ex::set_value_t(HandleTemplate<env_multiplexer_handle_t<E>>),
+			ex::set_error_t(std::error_code),
+			ex::set_stopped_t()>;
+
+	template<typename E>
+	static auto get_completion_signatures(E&&)
+		-> ex::completion_signatures<
+			ex::set_value_t(HandleTemplate<env_multiplexer_handle_t<E>>),
+			ex::set_error_t(std::error_code),
+			ex::set_stopped_t()>;
+
 	template<ex::receiver Receiver>
-	friend operation<current_multiplexer_t<Receiver>, std::decay_t<Receiver>> tag_invoke(
+	friend operation<receiver_multiplexer_t<Receiver>, std::decay_t<Receiver>> tag_invoke(
 		ex::connect_t,
 		vsm::any_cvref_of<io_handle_sender> auto&& sender,
 		Receiver&& receiver)
 	{
-		return operation<current_multiplexer_t<Receiver>, std::decay_t<Receiver>>(
+		return operation<receiver_multiplexer_t<Receiver>, std::decay_t<Receiver>>(
 			vsm_forward(sender),
 			vsm_forward(receiver));
 	}
+
+	template<ex::receiver Receiver>
+	operation<receiver_multiplexer_t<Receiver>, std::decay_t<Receiver>> connect(
+		this vsm::any_cvref_of<io_handle_sender> auto&& sender,
+		ex::connect_t,
+		Receiver&& receiver)
+	{
+		return operation<receiver_multiplexer_t<Receiver>, std::decay_t<Receiver>>(
+			vsm_forward(sender),
+			vsm_forward(receiver));
+	}
+#endif
 };
 
 } // namespace allio::detail

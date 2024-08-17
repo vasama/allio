@@ -78,6 +78,25 @@ struct get_maximum_extent_t
 	}
 };
 
+struct set_maximum_extent_t
+{
+	using operation_concept = void;
+	struct params_type
+	{
+		fs_size size;
+	};
+	using result_type = void;
+
+	template<object Object>
+	static vsm::result<void> blocking_io(
+		native_handle<Object> const& h,
+		io_parameters_t<Object, set_maximum_extent_t> const& a)
+		requires requires { Object::set_maximum_extent(h, a); }
+	{
+		return Object::set_maximum_extent(h, a);
+	}
+};
+
 } // namespace file_io
 
 struct file_t : fs_object_t
@@ -87,6 +106,7 @@ struct file_t : fs_object_t
 	using tell_t = file_io::tell_t;
 	using seek_t = file_io::seek_t;
 	using get_maximum_extent_t = file_io::get_maximum_extent_t;
+	using set_maximum_extent_t = file_io::set_maximum_extent_t;
 	using stream_read_t = byte_io::stream_read_t;
 	using stream_write_t = byte_io::stream_write_t;
 	using random_read_t = byte_io::random_read_t;
@@ -97,6 +117,8 @@ struct file_t : fs_object_t
 		base_type::operations
 		, tell_t
 		, seek_t
+		, get_maximum_extent_t
+		, set_maximum_extent_t
 		, stream_read_t
 		, stream_write_t
 		, random_read_t
@@ -118,6 +140,10 @@ struct file_t : fs_object_t
 	static vsm::result<fs_size> get_maximum_extent(
 		native_handle<file_t> const& h,
 		io_parameters_t<file_t, get_maximum_extent_t> const& args);
+
+	static vsm::result<void> set_maximum_extent(
+		native_handle<file_t> const& h,
+		io_parameters_t<file_t, set_maximum_extent_t> const& args);
 
 	static vsm::result<size_t> stream_read(
 		native_handle<file_t> const& h,

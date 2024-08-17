@@ -89,6 +89,55 @@ vsm::result<fs_size> file_t::get_maximum_extent(
 	return information.EndOfFile.QuadPart;
 }
 
+vsm::result<void> file_t::set_maximum_extent(
+	native_handle<file_t> const& h,
+	io_parameters_t<file_t, set_maximum_extent_t> const& a)
+{
+	vsm_try(size, vsm::try_truncate<LONGLONG>(
+		a.size,
+		error::invalid_argument));
+
+	// Set FileEndOfFileInformation
+	{
+		FILE_END_OF_FILE_INFORMATION information;
+		information.EndOfFile.QuadPart = size;
+
+		IO_STATUS_BLOCK io_status_block;
+		NTSTATUS const status = NtSetInformationFile(
+			unwrap_handle(h.platform_handle),
+			&io_status_block,
+			&information,
+			sizeof(information),
+			FileEndOfFileInformation);
+
+		if (!NT_SUCCESS(status))
+		{
+			return vsm::unexpected(static_cast<kernel_error>(status));
+		}
+	}
+
+	// Set FileAllocationInformation
+	{
+		FILE_ALLOCATION_INFORMATION information;
+		information.AllocationSize.QuadPart = size;
+
+		IO_STATUS_BLOCK io_status_block;
+		NTSTATUS const status = NtSetInformationFile(
+			unwrap_handle(h.platform_handle),
+			&io_status_block,
+			&information,
+			sizeof(information),
+			FileAllocationInformation);
+
+		if (!NT_SUCCESS(status))
+		{
+			return vsm::unexpected(static_cast<kernel_error>(status));
+		}
+	}
+
+	return {};
+}
+
 vsm::result<size_t> file_t::stream_read(
 	native_handle<file_t> const& h,
 	io_parameters_t<file_t, stream_read_t> const& a)

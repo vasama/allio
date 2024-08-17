@@ -24,5 +24,19 @@ using map_handle = traits_type::handle<map_t>;
 	return detail::map_section<traits_type>(section, offset, size, vsm_forward(args)...);
 }
 
+[[nodiscard]] vsm::result<map_handle> map_file(
+	detail::handle_for<file_t> auto const& file,
+	auto&&... args)
+{
+	return detail::map_file<traits_type>(file, vsm_forward(args)...);
+}
+
+[[nodiscard]] vsm::result<map_handle> map_path(
+	detail::fs_path const& path,
+	auto&&... args)
+{
+	return detail::map_path<traits_type>(path, vsm_forward(args)...);
+}
+
 } // inline namespace mapping
 } // namespace allio::nothrow::blocking

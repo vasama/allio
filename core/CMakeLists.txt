@@ -22,6 +22,7 @@ vsm_add_library(
 		include/allio/deadline.hpp
 		include/allio/filesystem.hpp
 		include/allio/handle.hpp
+		include/allio/mapped.hpp
 		include/allio/network.hpp
 		include/allio/path_literals.hpp
 		include/allio/path_view.hpp
@@ -77,6 +78,7 @@ vsm_add_library(
 		source/allio/impl/handles/directory.cpp
 		source/allio/impl/handles/fs_object.cpp
 		source/allio/impl/handles/fs_object.hpp
+		source/allio/impl/handles/map.cpp
 
 	HEADER_DEPENDENCIES
 		vsm::box

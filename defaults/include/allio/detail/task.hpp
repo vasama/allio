@@ -7,7 +7,9 @@ namespace allio::detail {
 template<typename MultiplexerHandle>
 class task_context : public exec::default_task_context<void>
 {
-	MultiplexerHandle m_multiplexer_handle;
+	using default_context = exec::default_task_context<void>;
+
+	vsm_no_unique_address MultiplexerHandle m_multiplexer_handle;
 
 public:
 	template<typename ParentPromise>
@@ -24,16 +26,18 @@ public:
 	{
 	}
 
-	friend MultiplexerHandle const& tag_invoke(get_multiplexer_t, task_context const& self) noexcept
+	using default_context::query;
+
+	[[nodiscard]] MultiplexerHandle const& query(get_multiplexer_t) const noexcept
 	{
-		return self.m_multiplexer_handle;
+		return m_multiplexer_handle;
 	}
 
 	template<typename ThisPromise>
 	using promise_context_t = task_context;
 
-	template<typename ThisPromise, typename ParentPromise>
-	using awaiter_context_t = exec::__task::__default_awaiter_context<ParentPromise>;
+	//template<typename ThisPromise, typename ParentPromise>
+	//using awaiter_context_t = exec::__task::__default_awaiter_context<ParentPromise>;
 };
 
 template<typename T, typename MultiplexerHandle>

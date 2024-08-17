@@ -24,6 +24,8 @@
 namespace allio::detail {
 namespace _sync_wait {
 
+
+
 template<typename MultiplexerHandle>
 class event_queue
 {
@@ -175,6 +177,9 @@ struct context
 	{
 		class sender
 		{
+			// Temporary workaround for STDEXEC_MEMFN_DECL.
+			using connect_t = ex::connect_t;
+
 			class env
 			{
 				context* m_context;
@@ -186,9 +191,9 @@ struct context
 				}
 
 				template<typename CPO>
-				friend scheduler tag_invoke(ex::get_completion_scheduler_t<CPO>, env const& self) noexcept
+				[[nodiscard]] auto query(ex::get_completion_scheduler_t<CPO>) const noexcept
 				{
-					return scheduler(*self.m_context);
+					return scheduler(*m_context);
 				}
 			};
 
@@ -208,15 +213,15 @@ struct context
 				{
 				}
 
-				friend void tag_invoke(ex::start_t, operation& self) noexcept
+				void start() & noexcept
 				{
-					if (std::this_thread::get_id() == self.m_context->thread_id)
+					if (std::this_thread::get_id() == m_context->thread_id)
 					{
-						self.m_context->event_queue.schedule_relaxed(self);
+						m_context->event_queue.schedule_relaxed(*this);
 					}
 					else
 					{
-						self.m_context->event_queue.schedule(self);
+						m_context->event_queue.schedule(*this);
 					}
 				}
 
@@ -249,15 +254,17 @@ struct context
 			{
 			}
 
-			template<typename R>
-			friend operation<std::decay_t<R>> tag_invoke(ex::connect_t, sender const& self, R&& receiver)
+			template<typename Receiver>
+			[[nodiscard]] STDEXEC_MEMFN_DECL(auto connect)(
+				this sender const& self,
+				Receiver&& receiver) ->operation<std::decay_t<Receiver>>
 			{
-				return operation<std::decay_t<R>>(*self.m_context, vsm_forward(receiver));
+				return operation<std::decay_t<Receiver>>(*self.m_context, vsm_forward(receiver));
 			}
 
-			friend env tag_invoke(ex::get_env_t, sender const& self) noexcept
+			[[nodiscard]] env get_env() const noexcept
 			{
-				return env(*self.m_context);
+				return env(*m_context);
 			}
 		};
 
@@ -269,12 +276,22 @@ struct context
 		{
 		}
 
-		friend sender tag_invoke(ex::schedule_t, scheduler const& self) noexcept
+		[[nodiscard]] sender schedule() const noexcept
 		{
-			return sender(*self.m_context);
+			return sender(*m_context);
 		}
 
-		friend bool operator==(scheduler const&, scheduler const&) = default;
+		[[nodiscard]] auto query(ex::get_forward_progress_guarantee_t) const noexcept
+		{
+			return stdexec::forward_progress_guarantee::parallel;
+		}
+
+		[[nodiscard]] auto query(ex::execute_may_block_caller_t) const noexcept
+		{
+			return false;
+		}
+
+		[[nodiscard]] friend bool operator==(scheduler const&, scheduler const&) = default;
 	};
 
 	class env
@@ -287,19 +304,19 @@ struct context
 		{
 		}
 
-		friend auto tag_invoke(ex::get_scheduler_t, env const& self) noexcept
+		[[nodiscard]] auto query(ex::get_scheduler_t) const noexcept
 		{
-			return scheduler(*self.m_context);
+			return scheduler(*m_context);
 		}
 
-		friend auto tag_invoke(ex::get_delegatee_scheduler_t, env const& self) noexcept
+		[[nodiscard]] auto query(ex::get_delegatee_scheduler_t) const noexcept
 		{
-			return scheduler(*self.m_context);
+			return scheduler(*m_context);
 		}
 
-		friend MultiplexerHandle const& tag_invoke(get_multiplexer_t, env const& self) noexcept
+		[[nodiscard]] auto query(get_multiplexer_t) const noexcept
 		{
-			return self.m_context->event_queue.multiplexer();
+			return m_context->event_queue.multiplexer();
 		}
 	};
 };
@@ -312,10 +329,10 @@ struct context_and_variant : context<MultiplexerHandle>
 
 template<typename MultiplexerHandle, typename Sender, typename Continuation>
 using _result =
-	ex::__try_value_types_of_t<
+	ex::__value_types_of_t<
 		Sender,
 		typename context<MultiplexerHandle>::env,
-		ex::__transform<ex::__q<ex::__decay_t>, Continuation>,
+		ex::__mtransform<ex::__q<ex::__decay_t>, Continuation>,
 		ex::__q<ex::__msingle>>;
 
 template<typename MultiplexerHandle, typename Sender>
@@ -348,38 +365,38 @@ struct receiver
 		{
 		}
 
-		friend void tag_invoke(ex::set_value_t, type&& self, auto&&... values) noexcept
+		void set_value(auto&&... values) noexcept
 		{
-			vsm_assert(self.m_context_and_variant->variant.index() == 0);
+			vsm_assert(m_context_and_variant->variant.index() == 0);
 			try
 			{
-				self.m_context_and_variant->variant.template emplace<1>(vsm_forward(values)...);
+				m_context_and_variant->variant.template emplace<1>(vsm_forward(values)...);
 			}
 			catch (...)
 			{
-				self.set_error(std::current_exception());
+				_set_error(std::current_exception());
 			}
 		}
 
-		friend void tag_invoke(ex::set_error_t, type&& self, auto&& error) noexcept
+		void set_error(auto&& error) noexcept
 		{
-			vsm_assert(self.m_context_and_variant->variant.index() == 0);
-			self.set_error(vsm_forward(error));
+			vsm_assert(m_context_and_variant->variant.index() == 0);
+			_set_error(vsm_forward(error));
 		}
 
-		friend void tag_invoke(ex::set_stopped_t, type&& self) noexcept
+		void set_stopped() noexcept
 		{
-			vsm_assert(self.m_context_and_variant->variant.index() == 0);
-			self.m_context_and_variant->variant.template emplace<2>();
+			vsm_assert(m_context_and_variant->variant.index() == 0);
+			m_context_and_variant->variant.template emplace<2>();
 		}
 
-		friend typename context<MultiplexerHandle>::env tag_invoke(ex::get_env_t, type const& self) noexcept
+		[[nodiscard]] typename context<MultiplexerHandle>::env get_env() const noexcept
 		{
-			return typename context<MultiplexerHandle>::env(*self.m_context_and_variant);
+			return typename context<MultiplexerHandle>::env(*m_context_and_variant);
 		}
 
 	private:
-		void set_error(auto&& error) noexcept
+		void _set_error(auto&& error) noexcept
 		{
 			using error_type = std::decay_t<decltype(error)&&>;
 			if constexpr (std::is_same_v<error_type, std::exception_ptr>)
@@ -388,11 +405,13 @@ struct receiver
 			}
 			else if constexpr (std::is_same_v<error_type, std::error_code>)
 			{
-				m_context_and_variant->variant.template emplace<3>(std::make_exception_ptr(std::system_error(error)));
+				m_context_and_variant->variant.template emplace<3>(
+					std::make_exception_ptr(std::system_error(error)));
 			}
 			else
 			{
-				m_context_and_variant->variant.template emplace<3>(std::make_exception_ptr(vsm_forward(error)));
+				m_context_and_variant->variant.template emplace<3>(
+					std::make_exception_ptr(vsm_forward(error)));
 			}
 		}
 	};
@@ -403,7 +422,9 @@ auto sync_wait(event_queue<MultiplexerHandle>& event_queue, Sender&& sender)
 	-> std::optional<result<MultiplexerHandle, Sender&&>>
 {
 	using multiplexer_type = typename MultiplexerHandle::multiplexer_type;
-	scoped_synchronization synchronization(static_cast<multiplexer_type&>(event_queue.multiplexer()));
+
+	scoped_synchronization synchronization(
+		static_cast<multiplexer_type&>(event_queue.multiplexer()));
 
 	using variant_type = variant<result<MultiplexerHandle, Sender&&>>;
 
@@ -452,11 +473,15 @@ struct sync_wait_t
 {
 	//TODO: Constrain using ex::sender_in
 	template<typename Multiplexer, ex::sender Sender>
-	vsm_static_operator auto operator()(Multiplexer&& multiplexer, Sender&& sender) vsm_static_operator_const
-		-> std::optional<_sync_wait::result<multiplexer_handle_t<std::remove_cvref_t<Multiplexer>>, Sender&&>>
+	/* discardable */ vsm_static_operator auto operator()(
+		Multiplexer&& multiplexer,
+		Sender&& sender) vsm_static_operator_const
+		-> std::optional<
+			_sync_wait::result<multiplexer_handle_t<std::remove_cvref_t<Multiplexer>>, Sender&&>>
 	{
 		using multiplexer_handle_type = multiplexer_handle_t<std::remove_cvref_t<Multiplexer>>;
-		auto queue = _sync_wait::event_queue<multiplexer_handle_type>::create(vsm_forward(multiplexer));
+		auto queue = _sync_wait::event_queue<multiplexer_handle_type>::create(
+			vsm_forward(multiplexer));
 		return _sync_wait::sync_wait(queue.value(), vsm_forward(sender));
 	}
 };

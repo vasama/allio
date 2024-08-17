@@ -322,7 +322,7 @@ static vsm::result<void> _map_section(
 	h.flags = object_t::flags::not_null;
 	h.section = shared_section.release();
 	h.base = map.get().base;
-	h.size = map.get().size;
+	h.size = a.size;
 	(void)map.release();
 
 	return {};

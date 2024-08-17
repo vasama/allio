@@ -53,9 +53,6 @@ enum class page_level : uint8_t
 	return static_cast<size_t>(1) << static_cast<uint8_t>(level);
 }
 
-/// @return The default paging level for the platform.
-/// @note No additional privileges are required for mapping memory at this page level.
-[[nodiscard]] page_level get_default_page_level();
 
 /// @return Array of paging levels supported by the platform.
 ///         The array is non-empty and sorted in ascending order.
@@ -64,6 +61,28 @@ enum class page_level : uint8_t
 [[nodiscard]] std::span<page_level const> get_supported_page_levels();
 
 
+/// @return The default paging level for the platform.
+/// @note No additional privileges are required for mapping memory at this page level.
+[[nodiscard]] page_level get_default_page_level();
+
+/// @return The default paging size for the platform.
+/// @note No additional privileges are required for mapping memory at this page size.
+[[nodiscard]] inline size_t get_default_page_size()
+{
+	return get_page_size(get_default_page_level());
+}
+
+
+/// @return The allocation granularity at the specified page level.
+/// @note The allocation granularity represents the alignment and minimum size of virtual address
+///       space allocations. Note that memory may be committed at a lower granularity depending on
+///       the selected page size.
 [[nodiscard]] size_t get_allocation_granularity(page_level level);
+
+/// @return The allocation granularity at the default page level.
+[[nodiscard]] inline size_t get_default_allocation_granularity()
+{
+	return get_allocation_granularity(get_default_page_level());
+}
 
 } // namespace allio::detail
