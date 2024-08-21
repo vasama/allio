@@ -6,6 +6,11 @@
 #include <concepts>
 
 namespace allio {
+namespace detail {
+
+struct directory_t;
+
+} // namespace detail
 
 using detail::fs_size;
 using detail::fs_clock;
@@ -18,12 +23,26 @@ using detail::fs_entry_info;
 using detail::fs_path;
 using detail::get_fs_entry_info;
 
-template<detail::handle Handle, std::convertible_to<any_path_view> Path>
-[[nodiscard]] fs_path at(Handle const& location, Path const& path)
-	requires std::derived_from<typename Handle::object_type, detail::fs_object_t>
+template<detail::handle_for<fs_object_t> Handle>
+[[nodiscard]] fs_path at(Handle const& location)
 {
 	vsm_assert(location); //PRECONDITION
-	return fs_path(location.native().platform_handle, path);
+
+	fs_path path;
+	path.base = &location.native();
+	path.path = {};
+	return path;
+}
+
+template<detail::handle_for<directory_t> Handle, std::convertible_to<any_path_view> Path>
+[[nodiscard]] fs_path at(Handle const& location, Path const& relative_path)
+{
+	vsm_assert(location); //PRECONDITION
+
+	fs_path path;
+	path.base = &location.native();
+	path.path = relative_path;
+	return path;
 }
 
 } // namespace allio

@@ -241,7 +241,7 @@ vsm::result<void> process_t::create(
 	native_handle<process_t>& h,
 	io_parameters_t<process_t, create_t> const& a)
 {
-	if (a.executable_path.base != native_platform_handle::null)
+	if (a.executable_path.base != nullptr)
 	{
 		return vsm::unexpected(error::unsupported_operation);
 	}
@@ -267,7 +267,7 @@ vsm::result<void> process_t::create(
 	}
 
 	//TODO: Only error if the path is relative.
-	if (a.working_directory.base != native_platform_handle::null)
+	if (a.working_directory.base != nullptr)
 	{
 		return vsm::unexpected(error::unsupported_operation);
 	}

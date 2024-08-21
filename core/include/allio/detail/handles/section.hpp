@@ -49,22 +49,6 @@ struct create_t
 			options |= section_options::backing_directory;
 			backing_storage = value.backing_directory;
 		}
-
-		[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, section_options const value)
-		{
-			args.options = value;
-		}
-
-		[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, detail::protection const value)
-		{
-			args.protection = value;
-		}
-
-		[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, backing_directory_t const value)
-		{
-			args.options |= section_options::backing_directory;
-			args.backing_storage = value.backing_directory;
-		}
 	};
 
 	using result_type = void;

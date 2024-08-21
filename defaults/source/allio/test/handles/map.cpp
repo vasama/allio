@@ -136,7 +136,7 @@ TEST_CASE("Entire files can be mapped directly by path", "[map]")
 	test::write_file_content(file_path, "check");
 	std::string expected_content = "check";
 	{
-		auto const map = map_path(file_path);
+		auto const map = map_file(file_path);
 
 		REQUIRE(memcmp(map.base(), "check", 5) == 0);
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <allio/any_path.hpp>
-#include <allio/detail/platform.hpp>
+#include <allio/detail/object_concepts.hpp>
 
 #include <vsm/flags.hpp>
 #include <vsm/result.hpp>
@@ -14,6 +14,9 @@
 #include <cstdint>
 
 namespace allio::detail {
+
+struct fs_object_t;
+
 
 using fs_size = int64_t;
 
@@ -77,21 +80,14 @@ struct fs_entry_info
 
 struct fs_path
 {
-	native_platform_handle base;
+	native_handle<fs_object_t> const* base;
 	any_path_view path;
 
 	fs_path() = default;
 
 	template<std::convertible_to<any_path_view> Path>
 	fs_path(Path const& path)
-		: base(native_platform_handle::null)
-		, path(path)
-	{
-	}
-	
-	template<std::convertible_to<any_path_view> Path>
-	explicit fs_path(native_platform_handle const base, Path const& path)
-		: base(base)
+		: base(nullptr)
 		, path(path)
 	{
 	}

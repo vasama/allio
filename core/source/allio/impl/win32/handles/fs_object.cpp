@@ -300,9 +300,9 @@ static vsm::result<handle_with_flags> open_named_file(open_parameters const& a)
 {
 	vsm_try(info, open_info::make(a));
 
-	auto const base = a.path.base == native_platform_handle::null
+	auto const base = a.path.base == nullptr
 		? NULL
-		: unwrap_handle(a.path.base);
+		: unwrap_handle(a.path.base->platform_handle);
 
 	return win32::create_file(base, a.path.path, info);
 }

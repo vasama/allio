@@ -33,12 +33,6 @@ struct pipe_t : platform_object_t
 				detail::set_argument(read_pipe, value);
 				detail::set_argument(write_pipe, value);
 			}
-
-			[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, auto&& value)
-			{
-				detail::set_argument(read_pipe, value);
-				detail::set_argument(write_pipe, value);
-			}
 		};
 
 		template<handle Handle>

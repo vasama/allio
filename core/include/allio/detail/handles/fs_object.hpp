@@ -132,11 +132,6 @@ struct path_kind_t
 	{
 		kind = value;
 	}
-
-	[[deprecated]] friend void tag_invoke(set_argument_t, path_kind_t& args, path_kind const kind)
-	{
-		args.kind = kind;
-	}
 };
 
 namespace fs_io {
@@ -191,41 +186,6 @@ struct open_t
 		{
 			path = value;
 		}
-
-		[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, file_mode const value)
-		{
-			args.mode = value;
-		}
-
-		[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, file_opening const value)
-		{
-			args.opening = value;
-		}
-
-		[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, file_sharing const value)
-		{
-			args.sharing = value;
-		}
-
-		[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, file_caching const value)
-		{
-			args.caching = value;
-		}
-
-		[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, file_options const value)
-		{
-			args.options = value;
-		}
-
-		[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, open_options const value)
-		{
-			args.special = value;
-		}
-
-		[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, fs_path const& value)
-		{
-			args.path = value;
-		}
 	};
 
 	using result_type = void;
@@ -262,11 +222,6 @@ struct get_current_path_t
 		void set_argument(path_kind const value)
 		{
 			kind = value;
-		}
-
-		[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, path_kind const value)
-		{
-			args.kind = value;
 		}
 	};
 

@@ -154,14 +154,6 @@ struct deadline_t
 	{
 		deadline = value;
 	}
-
-	[[deprecated]] friend void tag_invoke(
-		set_argument_t,
-		deadline_t& args,
-		detail::deadline const deadline)
-	{
-		args.deadline = deadline;
-	}
 };
 
 } // namespace allio::detail

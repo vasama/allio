@@ -161,38 +161,6 @@ struct security_context_parameters
 	{
 		private_key = value.value;
 	}
-
-	[[deprecated]] friend void tag_invoke(
-		set_argument_t,
-		security_context_parameters& args,
-		tls_min_version_t const value)
-	{
-		args.min_version = value.value;
-	}
-
-	[[deprecated]] friend void tag_invoke(
-		set_argument_t,
-		security_context_parameters& args,
-		tls_certificate_t const value)
-	{
-		args.certificate = value.value;
-	}
-
-	[[deprecated]] friend void tag_invoke(
-		set_argument_t,
-		security_context_parameters& args,
-		tls_private_key_t const value)
-	{
-		args.private_key = value.value;
-	}
-
-	[[deprecated]] friend void tag_invoke(
-		set_argument_t,
-		security_context_parameters& args,
-		detail::tls_verification const value)
-	{
-		args.verification = value;
-	}
 };
 
 

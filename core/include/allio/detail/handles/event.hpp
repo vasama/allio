@@ -47,25 +47,6 @@ struct event_t : platform_object_t
 					options |= event_options::initially_signaled;
 				}
 			}
-
-			[[deprecated]] friend void tag_invoke(
-				set_argument_t,
-				params_type& args,
-				initially_signaled_t const value)
-			{
-				if (value.value)
-				{
-					args.options |= event_options::initially_signaled;
-				}
-			}
-
-			[[deprecated]] friend void tag_invoke(
-				set_argument_t,
-				params_type& args,
-				explicit_parameter<initially_signaled_t>)
-			{
-				args.options |= event_options::initially_signaled;
-			}
 		};
 
 		using result_type = void;

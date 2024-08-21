@@ -27,7 +27,7 @@ vsm::result<void> file_t::open(
 	vsm_try(path, make_api_c_string(path_storage, a.path.path.string()));
 
 	vsm_try(fd, linux::open_file(
-		unwrap_handle(a.path.base),
+		unwrap_handle(a.path.base->platform_handle),
 		path,
 		flags,
 		mode));

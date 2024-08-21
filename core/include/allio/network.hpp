@@ -308,14 +308,6 @@ struct network_endpoint_t
 	{
 		endpoint = value;
 	}
-
-	[[deprecated]] friend void tag_invoke(
-		detail::set_argument_t,
-		network_endpoint_t& args,
-		network_endpoint const& endpoint)
-	{
-		args.endpoint = endpoint;
-	}
 };
 
 } // namespace allio

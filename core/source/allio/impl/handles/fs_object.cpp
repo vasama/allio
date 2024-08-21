@@ -140,7 +140,7 @@ vsm::result<void> detail::open_fs_object(
 
 	if (vsm::any_flags(a.special, open_options::temporary))
 	{
-		if (a.path.base == native_platform_handle::null)
+		if (a.path.base == nullptr)
 		{
 			//TODO: Set the default temp directory handle
 			//a.path.base = get_default_temp_directory_handle();

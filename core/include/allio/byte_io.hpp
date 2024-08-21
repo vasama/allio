@@ -38,11 +38,6 @@ struct stream_parameters_t
 	{
 		buffers = value;
 	}
-
-	[[deprecated]] friend void tag_invoke(set_argument_t, stream_parameters_t& args, basic_buffers_t<T> const value)
-	{
-		args.buffers = value.buffers;
-	}
 };
 
 template<vsm::any_cv_of<std::byte> T>
@@ -56,11 +51,6 @@ struct random_parameters_t
 	void set_argument(file_offset_t const value)
 	{
 		offset = value;
-	}
-
-	[[deprecated]] friend void tag_invoke(set_argument_t, random_parameters_t& args, file_offset_t const value)
-	{
-		args.offset = value.offset;
 	}
 };
 

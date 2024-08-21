@@ -238,7 +238,7 @@ template<typename Traits>
 {
 	auto a = io_parameters_t<file_t, fs_io::open_t>{};
 	a.special = open_options::unique_name;
-	a.path.base = base.native().fs_object_t::native_type::platform_handle;
+	a.path.base = &base.native();
 	(set_argument(a, vsm_forward(args)), ...);
 	return Traits::template produce<file_t, fs_io::open_t>(a);
 }
@@ -250,7 +250,7 @@ template<typename Traits>
 {
 	auto a = io_parameters_t<file_t, fs_io::open_t>{};
 	a.special = open_options::anonymous;
-	a.path.base = base.native().fs_object_t::native_type::platform_handle;
+	a.path.base = &base.native();
 	(set_argument(a, vsm_forward(args)), ...);
 	return Traits::template produce<file_t, fs_io::open_t>(a);
 }

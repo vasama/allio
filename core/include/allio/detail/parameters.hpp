@@ -15,24 +15,6 @@ template<typename... Parameters>
 using no_parameters_t = parameters_t<>;
 
 
-#if 0
-struct set_argument_t
-{
-	template<typename Parameter>
-	friend constexpr void tag_invoke(set_argument_t, Parameter& args, Parameter const& value)
-	{
-		args = value;
-	}
-
-	template<typename Parameters, typename Argument>
-	vsm_static_operator constexpr void
-	operator()(Parameters& arguments, Argument&& argument) vsm_static_operator_const
-		requires vsm::tag_invocable<set_argument_t, Parameters&, Argument&&>
-	{
-		vsm::tag_invoke(set_argument_t(), arguments, vsm_forward(argument));
-	}
-};
-#else
 struct set_argument_t
 {
 	template<typename Parameters, typename Argument>
@@ -50,7 +32,6 @@ struct set_argument_t
 		}
 	}
 };
-#endif
 inline constexpr set_argument_t set_argument = {};
 
 

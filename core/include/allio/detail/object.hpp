@@ -54,32 +54,6 @@ struct io_flags_t
 			flags |= io_flags::create_non_blocking;
 		}
 	}
-
-	[[deprecated]] friend void tag_invoke(set_argument_t, io_flags_t& args, explicit_parameter<inheritable_t>)
-	{
-		args.flags |= io_flags::create_inheritable;
-	}
-
-	[[deprecated]] friend void tag_invoke(set_argument_t, io_flags_t& args, inheritable_t const value)
-	{
-		if (value.value)
-		{
-			args.flags |= io_flags::create_inheritable;
-		}
-	}
-
-	[[deprecated]] friend void tag_invoke(set_argument_t, io_flags_t& args, explicit_parameter<non_blocking_t>)
-	{
-		args.flags |= io_flags::create_non_blocking;
-	}
-
-	[[deprecated]] friend void tag_invoke(set_argument_t, io_flags_t& args, non_blocking_t const value)
-	{
-		if (value.value)
-		{
-			args.flags |= io_flags::create_non_blocking;
-		}
-	}
 };
 
 

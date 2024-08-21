@@ -109,9 +109,9 @@ vsm::result<void> process_t::launch(
 	{
 		fork_exec_data data =
 		{
-			.exec_base = a.path.base == native_platform_handle::null
+			.exec_base = a.path.base == nullptr
 				? AT_FDCWD
-				: unwrap_handle(a.path.base),
+				: unwrap_handle(a.path.base->platform_handle),
 
 			.inheritable_fd = a.inheritable,
 		};
@@ -148,8 +148,7 @@ vsm::result<void> process_t::launch(
 
 			// If the executable path is relative, its meaning
 			// would change with the change of working directory.
-			if (a.path.base == native_platform_handle::null &&
-				path_view(exec_path).is_relative())
+			if (a.path.base == nullptr && path_view(exec_path).is_relative())
 			{
 				// Open the executable file to deal with the change of working directory.
 				vsm_try_assign(exec_fd, linux::open_file(

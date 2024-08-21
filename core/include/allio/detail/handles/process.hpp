@@ -184,11 +184,6 @@ struct process_t : platform_object_t
 			{
 				id = value;
 			}
-
-			[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, process_id const value)
-			{
-				args.id = value;
-			}
 		};
 
 		using result_type = void;
@@ -288,63 +283,6 @@ struct process_t : platform_object_t
 			{
 				redirect_stderr = value.value;
 			}
-
-			[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, inherit_handles_t const value)
-			{
-				if (value.value)
-				{
-					args.options |= process_options::inherit_handles;
-				}
-			}
-
-			[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, explicit_parameter<inherit_handles_t>)
-			{
-				args.options |= process_options::inherit_handles;
-			}
-
-			[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, wait_on_close_t const value)
-			{
-				if (value.value)
-				{
-					args.options |= process_options::wait_on_close;
-				}
-			}
-
-			[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, explicit_parameter<wait_on_close_t>)
-			{
-				args.options |= process_options::wait_on_close;
-			}
-
-			[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, process_arguments_t const value)
-			{
-				args.arguments = value.value;
-			}
-
-			[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, process_environment_t const value)
-			{
-				args.options |= process_options::set_environment;
-				args.environment = value.value;
-			}
-
-			[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, working_directory_t const value)
-			{
-				args.working_directory = value.value;
-			}
-
-			[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, redirect_stream_t<0> const value)
-			{
-				args.redirect_stdin = value.value;
-			}
-
-			[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, redirect_stream_t<1> const value)
-			{
-				args.redirect_stdout = value.value;
-			}
-
-			[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, redirect_stream_t<2> const value)
-			{
-				args.redirect_stderr = value.value;
-			}
 		};
 
 		using result_type = void;
@@ -382,12 +320,6 @@ struct process_t : platform_object_t
 			{
 				set_exit_code = true;
 				exit_code = value.value;
-			}
-
-			[[deprecated]] friend void tag_invoke(set_argument_t, params_type& args, with_exit_code_t const value)
-			{
-				args.set_exit_code = true;
-				args.exit_code = value.value;
 			}
 		};
 

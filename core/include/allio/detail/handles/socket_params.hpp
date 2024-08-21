@@ -19,14 +19,6 @@ struct _socket_params<0>
 		{
 			security_context = &value;
 		}
-
-		[[deprecated]] friend void tag_invoke(
-			set_argument_t,
-			type& args,
-			SecurityContext const& security_context)
-		{
-			args.security_context = &security_context;
-		}
 	};
 };
 

@@ -218,7 +218,7 @@ vsm::result<void> directory_t::open(
 	vsm_try(path, make_api_c_string(path_storage, a.path.path.string()));
 
 	vsm_try(fd, linux::open_file(
-		unwrap_handle(a.path.base),
+		unwrap_handle(a.path.base->platform_handle),
 		path,
 		flags,
 		mode));
@@ -297,7 +297,7 @@ vsm::result<void> this_process::set_current_directory(fs_path const path)
 	api_string_storage storage;
 	vsm_try(path_string, make_api_string(storage, path.path.string()));
 
-	if (path.base == native_platform_handle::null)
+	if (path.base == nullptr)
 	{
 		if (chdir(path_string.data()) == -1)
 		{
@@ -306,7 +306,7 @@ vsm::result<void> this_process::set_current_directory(fs_path const path)
 	}
 	else
 	{
-		int fd = unwrap_handle(path.base);
+		int fd = unwrap_handle(path.base->platform_handle);
 		unique_handle new_fd;
 
 		//TODO: Use lexically_equivalent(path, ".")?
