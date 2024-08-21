@@ -60,33 +60,6 @@ struct openssl_listen_socket_t : listen_socket_base_t<object_t>
 			return uniplexer_handle::blocking_io<openssl_listen_socket_t, Operation>(h, a);
 		}
 	}
-
-#if 0
-	template<operation_c Operation>
-	[[deprecated]] friend vsm::result<io_result_t<openssl_listen_socket_t, Operation>> tag_invoke(
-		blocking_io_t<Operation>,
-		handle_const_t<Operation, native_handle<openssl_listen_socket_t>>& h,
-		io_parameters_t<openssl_listen_socket_t, Operation> const& a)
-	{
-		return uniplexer_handle::blocking_io<openssl_listen_socket_t, Operation>(h, a);
-	}
-
-	[[deprecated]] friend vsm::result<accept_result<basic_detached_handle<openssl_socket_t>>> tag_invoke(
-		blocking_io_t<accept_t>,
-		native_handle<openssl_listen_socket_t> const& h,
-		io_parameters_t<openssl_listen_socket_t, accept_t> const& a)
-	{
-		vsm_try(r, uniplexer_handle::blocking_io<openssl_listen_socket_t, accept_t>(
-			h,
-			a));
-
-		return vsm::result<accept_result<basic_detached_handle<openssl_socket_t>>>(
-			vsm::result_value,
-			*rebind_handle<basic_detached_handle<openssl_socket_t>>(vsm_move(r.socket)),
-			r.endpoint);
-		//return vsm_lazy(accept_result<basic_detached_handle<openssl_socket_t>>{ vsm_move(r.socket), r.endpoint, });
-	}
-#endif
 };
 
 template<multiplexer M>

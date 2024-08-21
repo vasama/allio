@@ -69,16 +69,6 @@ struct stream_read_t
 	{
 		return Object::stream_read(h, a);
 	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<size_t> tag_invoke(
-		blocking_io_t<stream_read_t>,
-		native_handle<Object> const& h,
-		io_parameters_t<Object, stream_read_t> const& a)
-		requires requires { Object::stream_read(h, a); }
-	{
-		return Object::stream_read(h, a);
-	}
 };
 
 struct stream_write_t
@@ -89,16 +79,6 @@ struct stream_write_t
 
 	template<object Object>
 	static vsm::result<size_t> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, stream_write_t> const& a)
-		requires requires { Object::stream_write(h, a); }
-	{
-		return Object::stream_write(h, a);
-	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<size_t> tag_invoke(
-		blocking_io_t<stream_write_t>,
 		native_handle<Object> const& h,
 		io_parameters_t<Object, stream_write_t> const& a)
 		requires requires { Object::stream_write(h, a); }
@@ -121,16 +101,6 @@ struct random_read_t
 	{
 		return Object::random_read(h, a);
 	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<size_t> tag_invoke(
-		blocking_io_t<random_read_t>,
-		native_handle<Object> const& h,
-		io_parameters_t<Object, random_read_t> const& a)
-		requires requires { Object::random_read(h, a); }
-	{
-		return Object::random_read(h, a);
-	}
 };
 
 struct random_write_t
@@ -141,16 +111,6 @@ struct random_write_t
 
 	template<object Object>
 	static vsm::result<size_t> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, random_write_t> const& a)
-		requires requires { Object::random_write(h, a); }
-	{
-		return Object::random_write(h, a);
-	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<size_t> tag_invoke(
-		blocking_io_t<random_write_t>,
 		native_handle<Object> const& h,
 		io_parameters_t<Object, random_write_t> const& a)
 		requires requires { Object::random_write(h, a); }

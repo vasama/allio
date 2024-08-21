@@ -45,15 +45,6 @@ struct openssl_socket_t : socket_base_t<object_t>
 	{
 		return uniplexer_handle::blocking_io<openssl_socket_t, Operation>(h, a);
 	}
-
-	template<operation_c Operation>
-	[[deprecated]] friend vsm::result<io_result_t<openssl_socket_t, Operation>> tag_invoke(
-		blocking_io_t<Operation>,
-		handle_const_t<Operation, native_handle<openssl_socket_t>>& h,
-		io_parameters_t<openssl_socket_t, Operation> const& a)
-	{
-		return uniplexer_handle::blocking_io<openssl_socket_t, Operation>(h, a);
-	}
 };
 
 template<multiplexer M>

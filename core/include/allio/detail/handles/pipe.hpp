@@ -48,16 +48,6 @@ struct pipe_t : platform_object_t
 		{
 			return Object::create_pair(h, a);
 		}
-
-		template<object Object>
-		[[deprecated]] friend vsm::result<basic_detached_handle<pipe_t>> tag_invoke(
-			blocking_io_t<create_pair_t>,
-			native_handle<Object>& h,
-			io_parameters_t<Object, create_pair_t> const& a)
-			requires requires { Object::create_pair(h, a); }
-		{
-			return Object::create_pair(h, a);
-		}
 	};
 
 	using stream_read_t = byte_io::stream_read_t;

@@ -198,16 +198,6 @@ struct open_t
 	{
 		return Object::open(h, a);
 	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<open_t>,
-		native_handle<Object>& h,
-		io_parameters_t<Object, open_t> const& a)
-		requires requires { Object::open(h, a); }
-	{
-		return Object::open(h, a);
-	}
 };
 
 struct get_current_path_t
@@ -229,16 +219,6 @@ struct get_current_path_t
 
 	template<object Object>
 	static vsm::result<size_t> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, get_current_path_t> const& a)
-		requires requires { Object::get_current_path(h, a); }
-	{
-		return Object::get_current_path(h, a);
-	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<size_t> tag_invoke(
-		blocking_io_t<get_current_path_t>,
 		native_handle<Object> const& h,
 		io_parameters_t<Object, get_current_path_t> const& a)
 		requires requires { Object::get_current_path(h, a); }

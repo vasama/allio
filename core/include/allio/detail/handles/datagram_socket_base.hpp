@@ -38,16 +38,6 @@ struct bind_t
 	{
 		return Object::bind(h, a);
 	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<bind_t>,
-		native_handle<Object>& h,
-		io_parameters_t<Object, bind_t> const& a)
-		requires requires { Object::bind(h, a); }
-	{
-		return Object::bind(h, a);
-	}
 };
 
 struct receive_from_t
@@ -63,16 +53,6 @@ struct receive_from_t
 
 	template<object Object>
 	static vsm::result<receive_result> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, receive_from_t> const& a)
-		requires requires { Object::receive_from(h, a); }
-	{
-		return Object::receive_from(h, a);
-	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<receive_result> tag_invoke(
-		blocking_io_t<receive_from_t>,
 		native_handle<Object> const& h,
 		io_parameters_t<Object, receive_from_t> const& a)
 		requires requires { Object::receive_from(h, a); }
@@ -95,16 +75,6 @@ struct send_to_t
 
 	template<object Object>
 	static vsm::result<void> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, send_to_t> const& a)
-		requires requires { Object::send_to(h, a); }
-	{
-		return Object::send_to(h, a);
-	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<send_to_t>,
 		native_handle<Object> const& h,
 		io_parameters_t<Object, send_to_t> const& a)
 		requires requires { Object::send_to(h, a); }

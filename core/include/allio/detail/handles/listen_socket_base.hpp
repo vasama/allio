@@ -83,16 +83,6 @@ struct listen_t
 	{
 		return Object::listen(h, args);
 	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<listen_t>,
-		native_handle<Object>& h,
-		io_parameters_t<Object, listen_t> const& args)
-		requires requires { Object::listen(h, args); }
-	{
-		return Object::listen(h, args);
-	}
 };
 
 struct accept_t
@@ -113,16 +103,6 @@ struct accept_t
 
 	template<object Object>
 	static vsm::result<accept_result<basic_detached_handle<typename Object::socket_object_type>>> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, accept_t> const& args)
-		requires requires { Object::accept(h, args); }
-	{
-		return Object::accept(h, args);
-	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<accept_result<basic_detached_handle<typename Object::socket_object_type>>> tag_invoke(
-		blocking_io_t<accept_t>,
 		native_handle<Object> const& h,
 		io_parameters_t<Object, accept_t> const& args)
 		requires requires { Object::accept(h, args); }

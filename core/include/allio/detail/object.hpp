@@ -100,16 +100,6 @@ struct close_t
 	{
 		return Object::close(h, a);
 	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<close_t>,
-		native_handle<Object>& h,
-		io_parameters_t<Object, close_t> const& a)
-		requires requires { Object::close(h, a); }
-	{
-		return Object::close(h, a);
-	}
 };
 
 struct object_t : _object

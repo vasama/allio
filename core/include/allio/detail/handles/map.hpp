@@ -74,16 +74,6 @@ struct map_memory_t
 	{
 		return Object::map_memory(h, a);
 	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<map_memory_t>,
-		native_handle<Object>& h,
-		io_parameters_t<Object, map_memory_t> const& a)
-		requires requires { Object::map_memory(h, a); }
-	{
-		return Object::map_memory(h, a);
-	}
 };
 
 struct map_path_t
@@ -100,16 +90,6 @@ struct map_path_t
 
 	template<object Object>
 	static vsm::result<void> blocking_io(
-		native_handle<Object>& h,
-		io_parameters_t<Object, map_path_t> const& a)
-		requires requires { Object::map_path(h, a); }
-	{
-		return Object::map_path(h, a);
-	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<map_path_t>,
 		native_handle<Object>& h,
 		io_parameters_t<Object, map_path_t> const& a)
 		requires requires { Object::map_path(h, a); }
@@ -146,16 +126,6 @@ struct map_file_t
 	{
 		return Object::map_file(h, a);
 	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<map_file_t>,
-		native_handle<Object>& h,
-		io_parameters_t<Object, map_file_t> const& a)
-		requires requires { Object::map_file(h, a); }
-	{
-		return Object::map_file(h, a);
-	}
 };
 
 struct commit_t
@@ -185,16 +155,6 @@ struct commit_t
 	{
 		return Object::commit(h, a);
 	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<commit_t>,
-		native_handle<Object> const& h,
-		io_parameters_t<Object, commit_t> const& a)
-		requires requires { Object::commit(h, a); }
-	{
-		return Object::commit(h, a);
-	}
 };
 
 struct decommit_t
@@ -212,16 +172,6 @@ struct decommit_t
 
 	template<object Object>
 	static vsm::result<void> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, decommit_t> const& a)
-		requires requires { Object::decommit(h, a); }
-	{
-		return Object::decommit(h, a);
-	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<decommit_t>,
 		native_handle<Object> const& h,
 		io_parameters_t<Object, decommit_t> const& a)
 		requires requires { Object::decommit(h, a); }

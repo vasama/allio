@@ -60,16 +60,6 @@ struct event_t : platform_object_t
 		{
 			return Object::create(h, args);
 		}
-
-		template<object Object>
-		[[deprecated]] friend vsm::result<void> tag_invoke(
-			blocking_io_t<create_t>,
-			native_handle<Object>& h,
-			io_parameters_t<Object, create_t> const& args)
-			requires requires { Object::create(h, args); }
-		{
-			return Object::create(h, args);
-		}
 	};
 
 	struct signal_t
@@ -81,16 +71,6 @@ struct event_t : platform_object_t
 
 		template<object Object>
 		static vsm::result<void> blocking_io(
-			native_handle<Object> const& h,
-			io_parameters_t<Object, signal_t> const& args)
-			requires requires { Object::signal(h, args); }
-		{
-			return Object::signal(h, args);
-		}
-
-		template<object Object>
-		[[deprecated]] friend vsm::result<void> tag_invoke(
-			blocking_io_t<signal_t>,
 			native_handle<Object> const& h,
 			io_parameters_t<Object, signal_t> const& args)
 			requires requires { Object::signal(h, args); }
@@ -114,16 +94,6 @@ struct event_t : platform_object_t
 		{
 			return Object::reset(h, args);
 		}
-
-		template<object Object>
-		[[deprecated]] friend vsm::result<void> tag_invoke(
-			blocking_io_t<reset_t>,
-			native_handle<Object> const& h,
-			io_parameters_t<Object, reset_t> const& args)
-			requires requires { Object::reset(h, args); }
-		{
-			return Object::reset(h, args);
-		}
 	};
 
 	struct wait_t
@@ -134,16 +104,6 @@ struct event_t : platform_object_t
 
 		template<object Object>
 		static vsm::result<void> blocking_io(
-			native_handle<Object> const& h,
-			io_parameters_t<Object, wait_t> const& args)
-			requires requires { Object::wait(h, args); }
-		{
-			return Object::wait(h, args);
-		}
-
-		template<object Object>
-		[[deprecated]] friend vsm::result<void> tag_invoke(
-			blocking_io_t<wait_t>,
 			native_handle<Object> const& h,
 			io_parameters_t<Object, wait_t> const& args)
 			requires requires { Object::wait(h, args); }

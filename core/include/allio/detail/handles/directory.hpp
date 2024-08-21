@@ -193,16 +193,6 @@ struct read_t
 	{
 		return Object::read(h, a);
 	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<directory_stream_view> tag_invoke(
-		blocking_io_t<read_t>,
-		native_handle<Object> const& h,
-		io_parameters_t<Object, read_t> const& a)
-		requires requires { Object::read(h, a); }
-	{
-		return Object::read(h, a);
-	}
 };
 
 struct restart_t
@@ -213,16 +203,6 @@ struct restart_t
 
 	template<object Object>
 	static vsm::result<directory_stream_view> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, restart_t> const& a)
-		requires requires { Object::restart(h, a); }
-	{
-		return Object::restart(h, a);
-	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<directory_stream_view> tag_invoke(
-		blocking_io_t<restart_t>,
 		native_handle<Object> const& h,
 		io_parameters_t<Object, restart_t> const& a)
 		requires requires { Object::restart(h, a); }

@@ -21,16 +21,6 @@ struct tell_t
 	{
 		return Object::tell(h, a);
 	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<fs_size> tag_invoke(
-		blocking_io_t<tell_t>,
-		native_handle<Object> const& h,
-		io_parameters_t<Object, tell_t> const& a)
-		requires requires { Object::tell(h, a); }
-	{
-		return Object::tell(h, a);
-	}
 };
 
 struct seek_t
@@ -44,16 +34,6 @@ struct seek_t
 
 	template<object Object>
 	static vsm::result<void> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, seek_t> const& a)
-		requires requires { Object::seek(h, a); }
-	{
-		return Object::seek(h, a);
-	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<seek_t>,
 		native_handle<Object> const& h,
 		io_parameters_t<Object, seek_t> const& a)
 		requires requires { Object::seek(h, a); }

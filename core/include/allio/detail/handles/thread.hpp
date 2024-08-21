@@ -37,16 +37,6 @@ struct open_t
 	{
 		return Object::open(h, a);
 	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<open_t>,
-		native_handle<Object>& h,
-		io_parameters_t<Object, open_t> const& a)
-		requires requires { Object::open(h, a); }
-	{
-		return Object::open(h, a);
-	}
 };
 
 struct terminate_t
@@ -68,16 +58,6 @@ struct terminate_t
 	{
 		return Object::terminate(h, a);
 	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<terminate_t>,
-		native_handle<Object> const& h,
-		io_parameters_t<Object, terminate_t> const& a)
-		requires requires { Object::terminate(h, a); }
-	{
-		return Object::terminate(h, a);
-	}
 };
 
 struct wait_t
@@ -89,16 +69,6 @@ struct wait_t
 
 	template<object Object>
 	static vsm::result<void> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, wait_t> const& a)
-		requires requires { Object::wait(h, a); }
-	{
-		return Object::wait(h, a);
-	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<wait_t>,
 		native_handle<Object> const& h,
 		io_parameters_t<Object, wait_t> const& a)
 		requires requires { Object::wait(h, a); }
