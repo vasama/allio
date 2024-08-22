@@ -101,23 +101,6 @@ private:
 			vsm::result_value,
 			vsm_move(new_h));
 	}
-
-#if 0
-	template<handle OtherHandle>
-	friend vsm::result<basic_facade<OtherHandle, Traits>> tag_invoke(
-		rebind_handle_t<basic_facade<OtherHandle, Traits>>,
-		basic_facade&& h,
-		auto&&... args)
-	{
-		vsm_try(new_h, rebind_handle<OtherHandle>(
-			static_cast<Handle&&>(h),
-			vsm_forward(args)...));
-
-		return vsm::result<basic_facade<OtherHandle, Traits>>(
-			vsm::result_value,
-			vsm_move(new_h));
-	}
-#endif
 };
 
 template<detached_handle Handle, typename Traits>

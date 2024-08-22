@@ -32,16 +32,6 @@ struct connect_t
 	{
 		return Object::connect(h, args);
 	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<connect_t>,
-		native_handle<Object>& h,
-		io_parameters_t<Object, connect_t> const& args)
-		requires requires { Object::connect(h, args); }
-	{
-		return Object::connect(h, args);
-	}
 };
 
 struct disconnect_t
@@ -52,16 +42,6 @@ struct disconnect_t
 
 	template<object Object>
 	static vsm::result<void> blocking_io(
-		native_handle<Object>& h,
-		io_parameters_t<Object, disconnect_t> const& args)
-		requires requires { Object::disconnect(h, args); }
-	{
-		return Object::disconnect(h, args);
-	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<disconnect_t>,
 		native_handle<Object>& h,
 		io_parameters_t<Object, disconnect_t> const& args)
 		requires requires { Object::disconnect(h, args); }

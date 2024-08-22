@@ -129,7 +129,7 @@ public:
 	void close()
 	{
 		unrecoverable(blocking_io<close_t>(
-			*this,
+			m_native,
 			no_parameters_t()));
 	}
 
@@ -225,10 +225,14 @@ public:
 	using multiplexer_handle_type = MultiplexerHandle;
 
 	using native_type = native_handle<Object>;
-	static_assert(std::is_default_constructible_v<native_type>);
+	static_assert(std::is_nothrow_default_constructible_v<native_type>);
+	static_assert(std::is_nothrow_move_constructible_v<native_type>);
+	static_assert(std::is_nothrow_move_assignable_v<native_type>);
 
 	using connector_type = async_connector_t<multiplexer_type, Object>;
-	static_assert(std::is_default_constructible_v<connector_type>);
+	static_assert(std::is_nothrow_default_constructible_v<connector_type>);
+	static_assert(std::is_nothrow_move_constructible_v<connector_type>);
+	static_assert(std::is_nothrow_move_assignable_v<connector_type>);
 
 private:
 	native_type m_native = {};
@@ -362,69 +366,6 @@ private:
 		return r;
 	}
 
-	[[deprecated]] friend vsm::result<detached_handle_type> tag_invoke(
-		rebind_handle_t<detached_handle_type>,
-		basic_attached_handle&& h)
-	{
-		return _rebind(h);
-	}
-
-	template<observer Operation>
-	[[deprecated]] friend vsm::result<io_result_t<basic_attached_handle, Operation>> tag_invoke(
-		blocking_io_t<Operation>,
-		basic_attached_handle const& h,
-		io_parameters_t<Object, Operation> const& args)
-	{
-		return blocking_io<Operation>(h.m_native, args);
-	}
-
-	template<operation_c Operation>
-	[[deprecated]] friend io_result<io_result_t<basic_attached_handle, Operation>> tag_invoke(
-		submit_io_t,
-		handle_const_t<Operation, basic_attached_handle>& h,
-		async_operation_t<multiplexer_type, Object, Operation>& s,
-		io_parameters_t<Object, Operation> const& a,
-		io_handler<multiplexer_type>& handler)
-	{
-		return submit_io(
-			vsm_as_const(h.m_multiplexer_handle),
-			h.m_native,
-			h.m_connector,
-			s,
-			a,
-			handler);
-	}
-
-	template<operation_c Operation>
-	[[deprecated]] friend io_result<io_result_t<basic_attached_handle, Operation>> tag_invoke(
-		notify_io_t,
-		handle_const_t<Operation, basic_attached_handle>& h,
-		async_operation_t<multiplexer_type, Object, Operation>& s,
-		io_parameters_t<Object, Operation> const& a,
-		typename multiplexer_type::io_status_type&& status)
-	{
-		return notify_io(
-			vsm_as_const(h.m_multiplexer_handle),
-			h.m_native,
-			h.m_connector,
-			s,
-			a,
-			vsm_move(status));
-	}
-
-	template<operation_c Operation>
-	[[deprecated]] friend void tag_invoke(
-		cancel_io_t,
-		basic_attached_handle const& h,
-		async_operation_t<multiplexer_type, Object, Operation>& s)
-	{
-		return cancel_io(
-			h.m_multiplexer_handle,
-			h.m_native,
-			h.m_connector,
-			s);
-	}
-
 
 	template<object OtherObject>
 	friend class basic_detached_handle;
@@ -442,7 +383,7 @@ struct handle_traits<basic_attached_handle<Object, MultiplexerHandle>>
 	using _multiplexer_type = typename MultiplexerHandle::multiplexer_type;
 
 	template<observer Operation>
-	static io_result_t<_handle_type, Operation> blocking_io(
+	static vsm::result<io_result_t<_handle_type, Operation>> blocking_io(
 		_handle_type const& h,
 		io_parameters_t<Object, Operation> const& a)
 	{

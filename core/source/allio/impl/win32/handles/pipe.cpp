@@ -171,6 +171,30 @@ static vsm::result<handle_with_flags> create_pipe(
 	return vsm_lazy(handle_with_flags{ vsm_move(handle), h_flags });
 }
 
+#if allio_detail_pipe_pair
+vsm::result<void> pipe_pair_t::create_pair(
+	native_handle<pipe_pair_t>& h,
+	io_parameters_t<pipe_pair_t, create_pair_t> const& a)
+{
+	vsm_try_bind(
+		(server_handle, server_flags),
+		::create_named_pipe_file(a.read_pipe.flags));
+
+	vsm_try_bind(
+		(client_handle, client_flags),
+		::create_pipe(server_handle.get(), a.write_pipe.flags));
+
+	h.flags = flags::not_null;
+
+	h.r_h.flags = flags::not_null;
+	h.r_h.platform_handle = wrap_handle(server_handle.release());
+
+	h.w_h.flags = flags::not_null;
+	h.w_h.platform_handle = wrap_handle(client_handle.release());
+
+	return {};
+}
+#else
 vsm::result<basic_detached_handle<pipe_t>> pipe_t::create_pair(
 	native_handle<pipe_t>& h,
 	io_parameters_t<pipe_t, create_pair_t> const& a)
@@ -211,6 +235,7 @@ vsm::result<basic_detached_handle<pipe_t>> pipe_t::create_pair(
 		adopt_handle,
 		w_h);
 }
+#endif
 
 vsm::result<size_t> pipe_t::stream_read(
 	native_handle<pipe_t> const& h,

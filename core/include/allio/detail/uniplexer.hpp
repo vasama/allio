@@ -12,8 +12,8 @@ public:
 	using multiplexer_concept = void;
 	using handle_type = uniplexer_handle;
 
-	using connector_type = async_connector_base;
-	using operation_type = async_operation_base;
+	struct connector_type {};
+	struct operation_type {};
 	struct io_status_type {};
 };
 

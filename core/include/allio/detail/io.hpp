@@ -92,6 +92,9 @@ template<operation_c Operation, typename T>
 using handle_const_t = typename _handle_const<mutation<Operation>>::template type<T>;
 
 
+template<typename Handle>
+struct blocking_io_traits;
+
 template<operation_c Operation>
 struct blocking_io_t
 {
@@ -111,16 +114,46 @@ struct blocking_io_t
 	}
 
 	template<handle Handle>
+		requires observer<Operation>
+	[[nodiscard]] vsm_static_operator vsm::result<io_result_t<Handle, Operation>> operator()(
+		Handle const& h,
+		io_parameters_t<typename Handle::object_type, Operation> const& a) vsm_static_operator_const
+	{
+		using result_type = io_result_t<Handle, Operation>;
+
+		auto r = blocking_io_t()(h.native(), a);
+
+		if constexpr (std::is_same_v<typename decltype(r)::value_type, result_type>)
+		{
+			return r;
+		}
+		else
+		{
+			return rebind_handle<result_type>(vsm_move(*r));
+		}
+	}
+
+	template<handle Handle>
+	[[nodiscard]] vsm_static_operator vsm::result<io_result_t<Handle, Operation>> operator()(
+		Handle& h,
+		io_parameters_t<typename Handle::object_type, Operation> const& a) vsm_static_operator_const
+	{
+		return handle_traits<Handle>::template blocking_io<Operation>(h, a);
+	}
+
+#if 0
+	template<handle Handle>
 		requires vsm::tag_invocable<
 			blocking_io_t,
 			Handle&,
 			io_parameters_t<typename Handle::object_type, Operation> const&>
-	[[nodiscard]] vsm_static_operator auto operator()(
+	[[deprecated]] [[nodiscard]] vsm_static_operator auto operator()(
 		Handle& h,
 		io_parameters_t<typename Handle::object_type, Operation> const& a) vsm_static_operator_const
 	{
 		return vsm::tag_invoke(blocking_io_t(), h, a);
 	}
+#endif
 };
 
 template<operation_c Operation>
@@ -182,8 +215,9 @@ template<handle Handle, producer Operation>
 inline constexpr produce_t<Handle, Operation> produce = {};
 #endif
 
+#if 0
 template<observer Operation>
-struct observe_t
+struct blocking_observe_t
 {
 	template<object Object>
 	[[nodiscard]] vsm_static_operator auto operator()(
@@ -204,7 +238,8 @@ struct observe_t
 };
 
 template<observer Operation>
-inline constexpr observe_t<Operation> observe = {};
+inline constexpr blocking_observe_t<Operation> blocking_observe = {};
+#endif
 
 
 template<typename Handler, typename Status>
@@ -252,6 +287,7 @@ protected:
 private:
 	static void _notify(io_handler_type& self, Status&& status) noexcept
 	{
+		//TODO: Give this a more descriptive name. Maybe notify_io or on_notify_io?
 		static_cast<Handler&>(static_cast<io_handler_type&>(self)).notify(vsm_move(status));
 	}
 };
@@ -392,96 +428,12 @@ struct cancel_io_t
 inline constexpr cancel_io_t cancel_io = {};
 
 
-struct async_connector_base
-{
-	template<std::derived_from<async_connector_base> Connector>
-	friend vsm::result<void> tag_invoke(
-		attach_handle_t,
-		auto const& multiplexer,
-		auto const& handle,
-		Connector& connector)
-		requires requires { Connector::attach(multiplexer, handle, connector); }
-	{
-		return Connector::attach(multiplexer, handle, connector);
-	}
-
-	template<std::derived_from<async_connector_base> Connector>
-	friend vsm::result<void> tag_invoke(
-		detach_handle_t,
-		auto const& multiplexer,
-		auto const& handle,
-		Connector& connector)
-		requires requires { Connector::detach(multiplexer, handle, connector); }
-	{
-		return Connector::detach(multiplexer, handle, connector);
-	}
-};
-
 template<typename M, typename H>
 struct async_connector;
 
 template<multiplexer Multiplexer, object Object>
 using async_connector_t = async_connector<Multiplexer, Object>;
 
-
-struct async_operation_base
-{
-	template<std::derived_from<async_operation_base> S, typename IoStatus>
-	[[deprecated]] friend auto tag_invoke(
-		submit_io_t,
-		auto& m,
-		auto& h,
-		std::derived_from<async_connector_base> auto& c,
-		S& s,
-		auto const& a,
-		basic_io_handler<IoStatus>& handler)
-		//requires requires { impl_type::submit(m, h, c, s); }
-	{
-		return S::submit(
-			m,
-			h,
-			c,
-			s,
-			a,
-			handler);
-	}
-
-	template<std::derived_from<async_operation_base> S>
-	[[deprecated]] friend auto tag_invoke(
-		notify_io_t,
-		auto& m,
-		auto& h,
-		std::derived_from<async_connector_base> auto& c,
-		S& s,
-		auto const& a,
-		auto&& status)
-		//requires requires { impl_type::notify(m, h, c, s, status); }
-	{
-		return S::notify(
-			m,
-			h,
-			c,
-			s,
-			a,
-			vsm_forward(status));
-	}
-
-	template<std::derived_from<async_operation_base> S>
-	[[deprecated]] friend void tag_invoke(
-		cancel_io_t,
-		auto& m,
-		auto const& h,
-		std::derived_from<async_connector_base> auto const& c,
-		S& s)
-		//requires requires { impl_type::cancel(m, h, c, s); }
-	{
-		return S::cancel(
-			m,
-			h,
-			c,
-			s);
-	}
-};
 
 template<typename M, typename H, typename O>
 struct async_operation;

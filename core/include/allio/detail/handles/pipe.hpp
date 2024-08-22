@@ -8,6 +8,8 @@
 
 namespace allio::detail {
 
+#define allio_detail_pipe_pair 1
+
 template<typename PipeHandle>
 struct basic_pipe_pair
 {
@@ -19,6 +21,7 @@ struct pipe_t : platform_object_t
 {
 	using base_type = platform_object_t;
 
+#if !allio_detail_pipe_pair
 	struct create_pair_t
 	{
 		using operation_concept = producer_t;
@@ -49,6 +52,7 @@ struct pipe_t : platform_object_t
 			return Object::create_pair(h, a);
 		}
 	};
+#endif
 
 	using stream_read_t = byte_io::stream_read_t;
 	using stream_write_t = byte_io::stream_write_t;
@@ -56,14 +60,18 @@ struct pipe_t : platform_object_t
 	using operations = type_list_append
 	<
 		base_type::operations
+#if !allio_detail_pipe_pair
 		, create_pair_t
+#endif
 		, stream_read_t
 		, stream_write_t
 	>;
 
+#if !allio_detail_pipe_pair
 	static vsm::result<basic_detached_handle<pipe_t>> create_pair(
 		native_handle<pipe_t>& h,
 		io_parameters_t<pipe_t, create_pair_t> const& a);
+#endif
 
 	static vsm::result<size_t> stream_read(
 		native_handle<pipe_t> const& h,
@@ -81,7 +89,7 @@ struct pipe_t : platform_object_t
 	};
 };
 
-#if 0
+#if allio_detail_pipe_pair
 struct pipe_pair_t : object_t
 {
 	using base_type = object_t;
@@ -89,13 +97,24 @@ struct pipe_pair_t : object_t
 	struct create_pair_t
 	{
 		using operation_concept = producer_t;
-		using params_type = io_flags_t;
+
+		struct params_type
+		{
+			io_flags_t read_pipe;
+			io_flags_t write_pipe;
+
+			void set_argument(auto const& value)
+			{
+				detail::set_argument(read_pipe, value);
+				detail::set_argument(write_pipe, value);
+			}
+		};
+
 		using result_type = void;
 		using runtime_concept = bounded_runtime_t;
 
 		template<object Object>
-		friend vsm::result<void> tag_invoke(
-			blocking_io_t<create_pair_t>,
+		static vsm::result<void> blocking_io(
 			native_handle<Object>& h,
 			io_parameters_t<Object, create_pair_t> const& a)
 			requires requires { Object::create_pair(h, a); }
@@ -112,7 +131,7 @@ struct pipe_pair_t : object_t
 
 	static vsm::result<void> create_pair(
 		native_handle<pipe_pair_t>& h,
-		io_parameters_t<pipe_t, create_pair_t> const& a);
+		io_parameters_t<pipe_pair_t, create_pair_t> const& a);
 
 	static vsm::result<void> close(
 		native_handle<pipe_pair_t>& h,
@@ -127,6 +146,26 @@ struct native_handle<pipe_pair_t> : native_handle<pipe_pair_t::base_type>
 };
 #endif
 
+#if allio_detail_pipe_pair
+template<typename Traits>
+[[nodiscard]] vsm::result<basic_pipe_pair<typename Traits::template handle<pipe_t>>> _create_pipe(
+	io_parameters_t<pipe_pair_t, pipe_pair_t::create_pair_t> const& a)
+{
+	using handle_type = typename Traits::template handle<pipe_t>;
+	vsm::result<basic_pipe_pair<handle_type>> r(vsm::result_value);
+
+	native_handle<pipe_pair_t> h = {};
+	vsm_try_void(blocking_io<pipe_pair_t::create_pair_t>(h, a));
+
+	basic_detached_handle<pipe_t> r_h(adopt_handle, h.r_h);
+	basic_detached_handle<pipe_t> w_h(adopt_handle, h.w_h);
+
+	vsm_try_assign(r->read_pipe, rebind_handle<handle_type>(vsm_move(r_h)));
+	vsm_try_assign(r->write_pipe, rebind_handle<handle_type>(vsm_move(w_h)));
+
+	return r;
+}
+#else
 template<typename Traits>
 [[nodiscard]] vsm::result<basic_pipe_pair<typename Traits::template handle<pipe_t>>> _create_pipe(
 	io_parameters_t<pipe_t, pipe_t::create_pair_t> const& a)
@@ -156,12 +195,18 @@ template<typename Traits>
 
 	return r;
 }
+#endif
 
 template<typename Traits>
 [[nodiscard]] auto create_pipe(auto&&... args)
 {
+#if allio_detail_pipe_pair
+	auto a = io_parameters_t<pipe_pair_t, pipe_pair_t::create_pair_t>{};
+#else
 	auto a = io_parameters_t<pipe_t, pipe_t::create_pair_t>{};
+#endif
 	(set_argument(a, vsm_forward(args)), ...);
+
 	auto r = _create_pipe<Traits>(a);
 
 	if constexpr (Traits::has_transform_result)

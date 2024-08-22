@@ -119,14 +119,14 @@ public:
 
 	struct io_status_type;
 
-	class connector_type : public async_connector_base
+	class connector_type
 	{
 		int32_t file_index = -1;
 
 		friend io_uring_multiplexer;
 	};
 
-	class operation_type : public async_operation_base
+	class operation_type
 	{
 		friend io_uring_multiplexer;
 	};

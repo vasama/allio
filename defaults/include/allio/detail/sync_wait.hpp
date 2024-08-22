@@ -130,7 +130,7 @@ public:
 	{
 		if (m_mpsc_queue.push_back(&event))
 		{
-			vsm_verify(blocking_io<event_t::signal_t>(
+			vsm_verify(detail::blocking_io<event_t::signal_t>(
 				m_event,
 				no_parameters_t()));
 		}

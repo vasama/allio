@@ -28,15 +28,9 @@ class iocp_multiplexer final
 public:
 	using multiplexer_concept = void;
 
+	struct connector_type {};
+	struct operation_type {};
 	struct io_status_type;
-
-	class connector_type : public async_connector_base
-	{
-	};
-
-	class operation_type : public async_operation_base
-	{
-	};
 
 	class io_slot
 	{

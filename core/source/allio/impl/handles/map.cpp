@@ -70,7 +70,7 @@ vsm::result<void> map_t::map_file(
 	// Map the section:
 	{
 		map_io::map_memory_t::params_type args = {};
-		args.options = map_options::backing_section;
+		args.options = map_options::backing_section | map_options::initial_commit;
 		args.protection = a.protection;
 		args.section = &section.native();
 		args.size = mmap_size;

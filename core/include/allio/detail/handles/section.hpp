@@ -61,16 +61,6 @@ struct create_t
 	{
 		return Object::create(h, a);
 	}
-
-	template<object Object>
-	[[deprecated]] friend vsm::result<void> tag_invoke(
-		blocking_io_t<create_t>,
-		native_handle<Object>& h,
-		io_parameters_t<Object, create_t> const& a)
-		requires requires { Object::create(h, a); }
-	{
-		return Object::create(h, a);
-	}
 };
 
 } // namespace section_io

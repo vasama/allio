@@ -23,7 +23,7 @@ using detail::fs_entry_info;
 using detail::fs_path;
 using detail::get_fs_entry_info;
 
-template<detail::handle_for<fs_object_t> Handle>
+template<detail::handle_for<detail::fs_object_t> Handle>
 [[nodiscard]] fs_path at(Handle const& location)
 {
 	vsm_assert(location); //PRECONDITION
@@ -34,7 +34,7 @@ template<detail::handle_for<fs_object_t> Handle>
 	return path;
 }
 
-template<detail::handle_for<directory_t> Handle, std::convertible_to<any_path_view> Path>
+template<detail::handle_for<detail::directory_t> Handle, std::convertible_to<any_path_view> Path>
 [[nodiscard]] fs_path at(Handle const& location, Path const& relative_path)
 {
 	vsm_assert(location); //PRECONDITION
