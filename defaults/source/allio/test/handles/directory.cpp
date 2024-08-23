@@ -49,26 +49,27 @@ static std::unordered_set<std::string> fill_directory(path_view const base_path,
 
 using stream_buffer = std::array<std::byte, 4096>;
 
-#if 0 //TODO: Not implemented properly yet
 TEST_CASE("Directory current path can be read", "[directory][blocking]")
 {
 	using namespace blocking;
 
 	path_kind const kind = GENERATE(
 		path_kind::any
-		, path_kind::windows_dos
-		, path_kind::windows_volume_guid
 		, path_kind::windows_nt
+		, path_kind::windows_volume_guid
+		, path_kind::windows_dos
 	);
 
-	auto const path = test::get_temp_path();
-	REQUIRE(std::filesystem::create_directory(path.string()));
-	auto const directory = open_directory(path);
+	auto const temp_path = test::get_temp_path();
+	REQUIRE(std::filesystem::create_directory(temp_path.string()));
 
+	auto const directory = open_directory(temp_path);
 	auto const current_path = directory.get_current_path(kind);
-	REQUIRE(std::filesystem::equivalent(path.string(), current_path.string()));
+
+	REQUIRE(std::filesystem::equivalent(
+		temp_path.string(),
+		current_path.string()));
 }
-#endif
 
 TEST_CASE("Directory entries can be read", "[directory][blocking]")
 {
@@ -157,8 +158,6 @@ TEST_CASE("Directory entries can be read asynchronously", "[directory][async]")
 #endif
 
 
-//TODO: directory_handle / path -> directory_handle
-
 TEST_CASE("Current directory", "[directory][this_process][blocking]")
 {
 	using namespace blocking;
@@ -172,27 +171,26 @@ TEST_CASE("Current directory", "[directory][this_process][blocking]")
 			REQUIRE(path.string() == std::filesystem::current_path());
 		}
 
-#if 0
 		SECTION("Current directory can be assigned")
 		{
 			auto const temp_path = test::get_temp_path();
+			std::filesystem::create_directory(temp_path.string());
+
 			this_process::set_current_directory(temp_path);
 
-			auto const path = this_process::get_current_directory();
-			REQUIRE(path == temp_path);
-			REQUIRE(path.string() == std::filesystem::current_path());
+			REQUIRE(std::filesystem::equivalent(
+				temp_path.string(),
+				std::filesystem::current_path()));
+
 		}
-#endif
 
 		SECTION("Current directory can be opened")
 		{
 			auto const directory = this_process::open_current_directory();
 
-#if 0
 			REQUIRE(std::filesystem::equivalent(
 				current_path.string(),
 				directory.get_current_path().string()));
-#endif
 		}
 	}
 

@@ -262,6 +262,9 @@ struct directory_t : fs_object_t
 
 		[[nodiscard]] auto iterate() const;
 		[[nodiscard]] auto recurse() const;
+
+		[[nodiscard]] auto relative(any_path_view const relative_path) const;
+		[[nodiscard]] auto operator/(any_path_view const relative_path) const;
 	};
 };
 

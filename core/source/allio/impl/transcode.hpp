@@ -21,6 +21,7 @@ vsm::result<size_t> transcode_string(
 	string_buffer<TargetChar> const encode_buffer)
 {
 	vsm_try(out_buffer_1, encode_buffer.resize(
+		//TODO: Should this pass 1 instead?
 		0,
 		static_cast<size_t>(-1)));
 
@@ -74,6 +75,26 @@ vsm::result<size_t> transcode_string(
 	return encode_buffer.visit([&](auto const encode_buffer)
 	{
 		return transcode_string(decode_buffer, encode_buffer);
+	});
+}
+
+template<detail::character TargetChar>
+vsm::result<size_t> transcode_string(
+	any_string_view const decode_buffer,
+	string_buffer<TargetChar> const encode_buffer)
+{
+	return decode_buffer.visit([&](auto const decode_buffer) -> vsm::result<size_t>
+	{
+		using decode_buffer_type = std::remove_cv_t<decltype(decode_buffer)>;
+
+		if constexpr (std::is_same_v<decode_buffer_type, detail::string_length_out_of_range_t>)
+		{
+			return vsm::unexpected(error::argument_too_long);
+		}
+		else
+		{
+			return transcode_string(decode_buffer, encode_buffer);
+		}
 	});
 }
 

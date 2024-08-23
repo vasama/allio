@@ -144,6 +144,13 @@ public:
 	{
 	}
 
+	template<std::contiguous_iterator Iterator, std::sized_sentinel_for<Iterator> Sentinel>
+	string_buffer(Iterator const begin, Sentinel const end)
+		//TODO: This static_cast could theoretically truncate.
+		: _string_buffer(std::to_address(begin), static_cast<size_t>(end - begin))
+	{
+	}
+
 	template<size_t Size>
 	string_buffer(Char(&array)[Size])
 		: _string_buffer(array, Size)

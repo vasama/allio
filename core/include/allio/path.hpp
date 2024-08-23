@@ -237,8 +237,8 @@ public:
 
 
 	[[nodiscard]] friend constexpr basic_path_adaptor operator/(
-		basic_path_adaptor const& lhs,
-		basic_path_adaptor const& rhs)
+		std::same_as<basic_path_adaptor> auto const& lhs,
+		std::same_as<basic_path_adaptor> auto const& rhs)
 	{
 		return combine(lhs.view(), rhs.view());
 	}
@@ -389,7 +389,7 @@ private:
 
 		basic_path_adaptor path;
 		path.resize(combine_result.size());
-		combine_result.copy(path.data());
+		combine_result.copy(path.string());
 		return path;
 	}
 

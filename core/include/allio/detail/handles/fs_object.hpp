@@ -96,6 +96,8 @@ enum class file_options : uint16_t
 };
 vsm_flag_enum(file_options);
 
+//TODO: Implement ordered path_kind to allow user to specify preference?
+
 enum class path_kind : uint8_t
 {
 #if vsm_os_win32
@@ -105,9 +107,8 @@ enum class path_kind : uint8_t
 #endif
 
 	windows_nt                          = allio_detail_windows_flag(0),
-	windows_device                      = allio_detail_windows_flag(1),
-	windows_volume_guid                 = allio_detail_windows_flag(2),
-	windows_dos                         = allio_detail_windows_flag(3),
+	windows_volume_guid                 = allio_detail_windows_flag(1),
+	windows_dos                         = allio_detail_windows_flag(2),
 
 #undef allio_detail_windows_flag
 
@@ -307,5 +308,27 @@ struct fs_object_t : platform_object_t
 		}
 	};
 };
+
+
+[[nodiscard]] vsm::result<bool> _equivalent(
+	native_handle<fs_object_t> const* lhs,
+	native_handle<fs_object_t> const* rhs);
+
+template<typename Traits>
+[[nodiscard]] vsm::result<bool> equivalent(
+	handle_for<fs_object_t> auto const& lhs,
+	handle_for<fs_object_t> auto const& rhs)
+{
+	auto r = _equivalent(&lhs.native(), &rhs.native());
+
+	if constexpr (Traits::has_transform_result)
+	{
+		return Traits::transform_result(vsm_move(r));
+	}
+	else
+	{
+		return r;
+	}
+}
 
 } // namespace allio::detail

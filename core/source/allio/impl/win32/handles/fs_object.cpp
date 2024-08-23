@@ -1,12 +1,15 @@
 #include <allio/impl/win32/handles/fs_object.hpp>
 
+#include <allio/detail/config.hpp>
 #include <allio/impl/new.hpp>
 #include <allio/impl/transcode.hpp>
+#include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/kernel_path.hpp>
 #include <allio/win32/kernel_error.hpp>
 
 #include <vsm/lazy.hpp>
+#include <vsm/numeric.hpp>
 #include <vsm/out_resource.hpp>
 #include <vsm/standard.hpp>
 
@@ -215,15 +218,17 @@ vsm::result<handle_with_flags> win32::reopen_file(
 
 namespace {
 
-static constexpr size_t file_name_information_buffer_size = 0x7FFF;
+// 0x7FFF for the maximum NT path length +1 for the Win32 null terminator.
+static constexpr uint32_t file_name_information_buffer_size = 0x8000;
 
 static constexpr size_t file_name_information_size =
-	sizeof(FILE_NAME_INFORMATION) +
+	offsetof(FILE_NAME_INFORMATION, FileName) +
 	file_name_information_buffer_size;
 
 struct file_name_information_deleter
 {
-	vsm_static_operator void operator()(FILE_NAME_INFORMATION* const information) vsm_static_operator_const
+	vsm_static_operator void operator()(
+		FILE_NAME_INFORMATION* const information) vsm_static_operator_const
 	{
 		release_storage(
 			static_cast<void*>(information),
@@ -232,7 +237,10 @@ struct file_name_information_deleter
 			/* automatic: */ false);
 	}
 };
-using file_name_information_ptr = std::unique_ptr<FILE_NAME_INFORMATION, file_name_information_deleter>;
+
+using file_name_information_ptr = std::unique_ptr<
+	FILE_NAME_INFORMATION,
+	file_name_information_deleter>;
 
 } // namespace
 
@@ -245,22 +253,45 @@ static vsm::result<file_name_information_ptr> allocate_file_name_information()
 		::new (buffer.release()) FILE_NAME_INFORMATION);
 }
 
-static vsm::result<file_name_information_ptr> query_file_name_information(
-	HANDLE const handle,
-	path_kind const kind)
+namespace {
+
+template<typename Info>
+struct error_code_with_info : std::error_code
 {
-	DWORD flags = FILE_NAME_OPENED;
+	Info info;
+
+	using std::error_code::error_code;
+
+	explicit error_code_with_info(std::error_code const code, Info const& info)
+		: std::error_code(code)
+		, info(info)
+	{
+	}
+
+	[[nodiscard]] std::error_code const& discard_info() const
+	{
+		return static_cast<std::error_code const&>(*this);
+	}
+};
+
+} // namespace
+
+static vsm::result<void, error_code_with_info<bool>> query_file_name_information(
+	HANDLE const handle,
+	path_kind const kind,
+	FILE_NAME_INFORMATION* const information)
+{
+	vsm_assert(std::popcount(std::to_underlying(kind)) == 1); //PRECONDITION
+
+
+	DWORD flags = FILE_NAME_NORMALIZED;
 
 	switch (kind)
 	{
 	case path_kind::windows_nt:
-		return vsm::unexpected(error::unsupported_operation);
-
-	case path_kind::windows_device:
 		flags |= VOLUME_NAME_NT;
 		break;
 
-	case path_kind::any:
 	case path_kind::windows_volume_guid:
 		flags |= VOLUME_NAME_GUID;
 		break;
@@ -268,21 +299,21 @@ static vsm::result<file_name_information_ptr> query_file_name_information(
 	case path_kind::windows_dos:
 		flags |= VOLUME_NAME_DOS;
 		break;
+
+	default:
+	case path_kind::any:
+		vsm_unreachable();
 	}
 
-	auto r = allocate_file_name_information();
-
-	if (!r)
-	{
-		return vsm::unexpected(r.error());
-	}
+#if allio_config_ntapi == allio_ntapi_always
+	//TODO: Implement this properly:
 
 	IO_STATUS_BLOCK io_status_block;
 
 	NTSTATUS const status = NtQueryInformationFile(
 		handle,
 		&io_status_block,
-		r->get(),
+		information,
 		file_name_information_size,
 		FileNormalizedNameInformation);
 
@@ -290,8 +321,99 @@ static vsm::result<file_name_information_ptr> query_file_name_information(
 	{
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
+#else
+	DWORD const name_size = GetFinalPathNameByHandleW(
+		handle,
+		information->FileName,
+		file_name_information_buffer_size,
+		flags);
 
-	return r;
+	if (name_size == 0 || name_size > file_name_information_buffer_size)
+	{
+		system_error const e = get_last_error();
+		return vsm::unexpected(error_code_with_info<bool>(
+			e,
+			e == static_cast<system_error>(ERROR_PATH_NOT_FOUND)));
+	}
+
+	information->FileNameLength = name_size * sizeof(wchar_t);
+#endif
+
+	if (kind == path_kind::windows_nt)
+	{
+		static constexpr std::wstring_view root = L"\\??\\GLOBALROOT";
+		static constexpr size_t root_size = root.size() * sizeof(wchar_t);
+
+		size_t const required_size = root_size + information->FileNameLength;
+
+		if (required_size > file_name_information_buffer_size)
+		{
+			return vsm::unexpected(error_code_with_info<bool>(error::filename_too_long));
+		}
+
+		std::memmove(
+			information->FileName + root_size / sizeof(wchar_t),
+			information->FileName,
+			information->FileNameLength);
+
+		std::memcpy(information->FileName, root.data(), root_size);
+
+		information->FileNameLength = vsm::truncating(required_size);
+	}
+
+	return {};
+}
+
+static vsm::result<file_name_information_ptr> query_file_name_information(
+	HANDLE const handle,
+	path_kind const kind)
+{
+	using path_kind_type = std::underlying_type_t<path_kind>;
+
+	// The path_kind flags must start at 1.
+	static_assert(std::to_underlying(path_kind::any) & 1);
+
+	static constexpr path_kind_type flag_bound = std::bit_ceil(std::to_underlying(path_kind::any));
+
+
+	if (kind == static_cast<path_kind>(0))
+	{
+		return vsm::unexpected(error::invalid_argument);
+	}
+
+	vsm_try(name_information, allocate_file_name_information());
+
+	// Iterate over each set flag and attempt to get such a path for the file.
+	for (path_kind_type flag_value = 1; flag_value < flag_bound; flag_value <<= 1)
+	{
+		auto const flag = vsm::to_enum<path_kind>(flag_value);
+
+		if (vsm::no_flags(kind, flag))
+		{
+			continue;
+		}
+
+		auto const r = query_file_name_information(
+			handle,
+			flag,
+			name_information.get());
+
+		if (r)
+		{
+			return name_information;
+		}
+
+		if (!r.error().info)
+		{
+			// Propagate any error except those caused by the file having a non-representable path.
+			// That could be because a DOS path was requested, but the file is on a volume that is
+			// not currently mounted with a drive letter, or because a GUID path was requested, but
+			// the file is on a network volume with no associated GUID.
+			return vsm::unexpected(r.error());
+		}
+	}
+
+	return vsm::unexpected(error::unrepresentable_path);
 }
 
 
@@ -373,4 +495,43 @@ vsm::result<size_t> fs_object_t::get_current_path(
 		information->FileNameLength / sizeof(wchar_t));
 
 	return transcode_string(wide_path, a.buffer);
+}
+
+
+
+namespace allio::win32 {
+
+static vsm::result<FILE_ID_INFO> get_file_id_info(HANDLE const handle)
+{
+	FILE_ID_INFO information;
+
+	IO_STATUS_BLOCK io_status_block;
+
+	NTSTATUS const status = NtQueryInformationFile(
+		handle,
+		&io_status_block,
+		&information,
+		sizeof(information),
+		FileIdInformation);
+
+	if (!NT_SUCCESS(status))
+	{
+		return vsm::unexpected(static_cast<kernel_error>(status));
+	}
+
+	return information;
+}
+
+} // namespace allio::win32
+
+vsm::result<bool> detail::_equivalent(
+	native_handle<fs_object_t> const* const lhs,
+	native_handle<fs_object_t> const* const rhs)
+{
+	vsm_try(lhs_id, win32::get_file_id_info(unwrap_handle(lhs->platform_handle)));
+	vsm_try(rhs_id, win32::get_file_id_info(unwrap_handle(rhs->platform_handle)));
+
+	return
+		lhs_id.VolumeSerialNumber == rhs_id.VolumeSerialNumber &&
+		std::memcmp(&lhs_id.FileId, &rhs_id.FileId, sizeof(FILE_ID_128)) == 0;
 }

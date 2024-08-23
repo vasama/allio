@@ -89,6 +89,7 @@ enum class error
 	filename_too_long,
 	invalid_path,
 	invalid_current_directory,
+	unrepresentable_path,
 
 	// Memory
 	invalid_address,

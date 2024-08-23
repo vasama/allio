@@ -2,6 +2,7 @@
 #include <allio/impl/win32/handles/directory.hpp>
 
 #include <allio/impl/transcode.hpp>
+#include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/peb.hpp>
 #include <allio/impl/win32/thread_event.hpp>
@@ -346,8 +347,55 @@ vsm::result<size_t> detail::_get_current_directory(any_path_buffer const buffer)
 
 vsm::result<void> detail::_set_current_directory(fs_path const& path)
 {
-	//TODO: Implement set_current_directory
-	return vsm::unexpected(error::unsupported_operation);
+	static constexpr size_t path_storage_size =
+		MAX_PATH // SetCurrentDirectoryW only accepts paths of at most MAX_PATH characters.
+		+ 4 // UNC prefix ( "\\?\" ) written by get_current_path.
+		+ 1 // Null terminator required by SetCurrentDirectoryW.
+		;
+
+	wchar_t path_storage[path_storage_size];
+
+	wchar_t* path_beg = path_storage;
+	wchar_t* base_path_end = path_storage;
+
+	if (path.base != nullptr)
+	{
+		vsm_try(base_path_size, fs_object_t::get_current_path(
+			*path.base,
+			fs_io::get_current_path_t::params_type
+			{
+				.buffer = path_storage,
+				.kind = path_kind::windows_dos,
+			}));
+
+		base_path_end = path_storage + base_path_size;
+	}
+
+	wchar_t* path_end = base_path_end;
+
+	if (!path.path.empty())
+	{
+		vsm_try(relative_path_size, transcode_string(
+			path.path.string(),
+			string_buffer<wchar_t>(base_path_end, std::end(path_storage))));
+
+		path_end = base_path_end + relative_path_size;
+	}
+
+	vsm_assert(path_end < std::end(path_storage));
+	*path_end++ = L'\0';
+
+	if (std::wstring_view(path_beg, path_end).starts_with(L"\\\\?\\"))
+	{
+		path_beg += 4;
+	}
+
+	if (!SetCurrentDirectoryW(path_beg))
+	{
+		return vsm::unexpected(get_last_error());
+	}
+
+	return {};
 }
 
 static vsm::result<handle_with_flags> open_current_directory_from_peb()

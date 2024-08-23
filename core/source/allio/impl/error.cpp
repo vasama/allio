@@ -71,6 +71,8 @@ std::string detail::error_category::message(int const code) const
 		return "The specified path was invalid.";
 	case error::invalid_current_directory:
 		return "The current working directory is not valid.";
+	case error::unrepresentable_path:
+		return "The path is not representable in the requested format.";
 
 	// Memory
 	case error::invalid_address:
@@ -150,6 +152,8 @@ std::error_condition detail::error_category::default_error_condition(int const c
 	case error::invalid_path:
 		break;
 	case error::invalid_current_directory:
+		break;
+	case error::unrepresentable_path:
 		break;
 
 	// Memory
