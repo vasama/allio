@@ -421,6 +421,12 @@ template<typename Traits>
 	return Traits::template produce<process_t, process_t::create_t>(a);
 }
 
+
+namespace _this_process {
+
+[[nodiscard]] process_id get_id() noexcept;
+
+} // namespace _this_process
 } // namespace allio::detail
 
 #if vsm_os_win32

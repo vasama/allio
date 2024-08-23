@@ -19,4 +19,15 @@ using process_handle = traits_type::handle<process_t>;
 }
 
 } // inline namespace processes
+
+namespace this_process {
+
+using namespace detail::_this_process;
+
+[[nodiscard]] process_handle open(auto&&... args)
+{
+	return detail::open_process<traits_type>(get_id(), vsm_forward(args)...);
+}
+
+} // namespace this_process
 } // namespace allio::blocking

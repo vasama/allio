@@ -463,6 +463,34 @@ vsm::result<void> process_t::close(
 }
 
 
+process_id _this_process::get_id() noexcept
+{
+	return process_id(GetCurrentProcessId());
+}
+
+#if 0
+basic_detached_handle<process_t> detail::_get_current_process_pseudo_handle()
+{
+	return basic_detached_handle<process_t>(
+		adopt_handle,
+		native_handle<process_t>
+		{
+			native_handle<platform_object_t>
+			{
+				native_handle<object_t>
+				{
+					handle_flags(object_t::flags::not_null)
+						| process_t::impl_type::flags::pseudo_handle,
+				},
+				wrap_handle(GetCurrentProcess()),
+			},
+			process_id(GetCurrentProcessId()),
+		}
+	);
+}
+#endif
+
+
 #if 0 //TODO: this_process
 blocking::process_handle const& this_process::get_handle()
 {
