@@ -82,7 +82,7 @@ TEST_CASE("Asynchronous directory read with IOCP", "[windows][directory]")
 {
 	detail::unique_handle const h = open_directory();
 
-#if 0
+#if 0 //TODO: Determine if IOCP completions are possible at all.
 	auto const completion_port = create_completion_port(1).value();
 
 	set_completion_information(

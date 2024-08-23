@@ -22,7 +22,10 @@ struct directory_entry
 	vsm::result<String> get_name() const
 	{
 		vsm::result<String> r(vsm::result_value);
-		vsm_try_discard(get_name(*r));
+		if (auto const r2 = get_name(*r); !r2)
+		{
+			r = vsm::unexpected(r2.error());
+		}
 		return r;
 	}
 };
@@ -731,6 +734,109 @@ template<typename Traits>
 	a.path = path;
 	(set_argument(a, vsm_forward(args)), ...);
 	return Traits::template produce<directory_t, fs_io::open_t>(a);
+}
+
+
+[[nodiscard]] vsm::result<size_t> _get_current_directory(any_path_buffer buffer);
+
+template<typename Path>
+[[nodiscard]] vsm::result<Path> _get_current_directory()
+{
+	vsm::result<Path> r(vsm::result_value);
+	if (auto const r2 = _get_current_directory(*r); !r2)
+	{
+		r = vsm::unexpected(r2.error());
+	}
+	return r;
+}
+
+[[nodiscard]] vsm::result<void> _set_current_directory(fs_path const& path);
+
+[[nodiscard]] vsm::result<basic_detached_handle<directory_t>> _open_current_directory();
+
+
+template<typename Traits>
+[[nodiscard]] auto get_current_directory(any_path_buffer const buffer)
+{
+	auto r = _get_current_directory(buffer);
+
+	if constexpr (Traits::has_transform_result)
+	{
+		return Traits::transform_result(vsm_move(r));
+	}
+	else
+	{
+		return r;
+	}
+}
+
+template<typename Traits, typename Path>
+[[nodiscard]] auto get_current_directory()
+{
+	auto r = _get_current_directory<Path>();
+
+	if constexpr (Traits::has_transform_result)
+	{
+		return Traits::transform_result(vsm_move(r));
+	}
+	else
+	{
+		return r;
+	}
+}
+
+template<typename Traits>
+[[nodiscard]] auto set_current_directory(fs_path const& path)
+{
+	auto r = _set_current_directory(path);
+
+	if constexpr (Traits::has_transform_result)
+	{
+		return Traits::transform_result(vsm_move(r));
+	}
+	else
+	{
+		return r;
+	}
+}
+
+template<typename Handle>
+[[nodiscard]] vsm::result<Handle> open_current_directory_h()
+{
+	auto r = _open_current_directory();
+
+	if constexpr (std::is_same_v<typename decltype(r)::value_type, Handle>)
+	{
+		return r;
+	}
+	else
+	{
+		if (r)
+		{
+			return rebind_handle<Handle>(*vsm_move(r));
+		}
+		else
+		{
+			return vsm::unexpected(r.error());
+		}
+	}
+}
+
+template<typename Traits>
+[[nodiscard]] auto open_current_directory()
+{
+	using handle_type = typename Traits::template handle<directory_t>;
+
+	auto r = open_current_directory_h<handle_type>();
+
+	if constexpr (Traits::has_transform_result)
+	{
+		return Traits::transform_result(vsm_move(r));
+	}
+	else
+	{
+		return r;
+	}
 }
 
 } // namespace allio::detail

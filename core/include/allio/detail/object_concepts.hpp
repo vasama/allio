@@ -87,15 +87,4 @@ struct rebind_traits;
 template<typename Handle>
 struct handle_traits;
 
-
-#if 0
-template<typename Handle>
-concept detached_adoptable_handle =
-	detached_handle<Handle> &&
-	requires (native_handle<typename Handle::object_type> const& h)
-	{
-		requires noexcept(Handle(adopt_handle, h));
-	};
-#endif
-
 } // namespace allio::detail

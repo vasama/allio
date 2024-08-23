@@ -140,20 +140,6 @@ struct blocking_io_t
 	{
 		return handle_traits<Handle>::template blocking_io<Operation>(h, a);
 	}
-
-#if 0
-	template<handle Handle>
-		requires vsm::tag_invocable<
-			blocking_io_t,
-			Handle&,
-			io_parameters_t<typename Handle::object_type, Operation> const&>
-	[[deprecated]] [[nodiscard]] vsm_static_operator auto operator()(
-		Handle& h,
-		io_parameters_t<typename Handle::object_type, Operation> const& a) vsm_static_operator_const
-	{
-		return vsm::tag_invoke(blocking_io_t(), h, a);
-	}
-#endif
 };
 
 template<operation_c Operation>

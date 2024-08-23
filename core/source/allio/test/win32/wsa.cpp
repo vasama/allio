@@ -137,50 +137,6 @@ TEST_CASE("WSA asynchronous connect and accept", "[windows][wsa][socket][async]"
 		auto const& completion = completions.get(connect_overlapped);
 		REQUIRE(NT_SUCCESS(completion.IoStatusBlock.Status));
 	}
-
-#if 0
-	SECTION("Asynchronous polling")
-	{
-		struct AFD_HANDLE
-		{
-			SOCKET Handle;
-			ULONG Events;
-			NTSTATUS Status;
-		};
-	
-		struct AFD_POLL_INFO
-		{
-			LARGE_INTEGER Timeout;
-			ULONG HandleCount;
-			ULONG_PTR Exclusive;
-			AFD_HANDLE Handles[1];
-		};
-
-		AFD_POLL_INFO poll_info;
-		poll_info.Timeout.QuadPart = std::numeric_limits<int64_t>::max();
-		poll_info.HandleCount = 1;
-		poll_info.Exclusive = FALSE;
-		poll_info.Handles[0].Handle = server_socket.get();
-		poll_info.Handles[0].Events = 1 /*AFD_EVENT_RECEIVE*/;
-
-		auto const event = create_event();
-
-		IO_STATUS_BLOCK io_status_block = make_io_status_block();
-		NTSTATUS const status = win32::NtDeviceIoControlFile(
-			(HANDLE)server_socket.get(),
-			event.get(),
-			/* ApcRoutine: */ nullptr,
-			/* ApcContext: */ nullptr,
-			&io_status_block,
-			0x12024 /*IOCTL_AFD_SELECT*/,
-			&poll_info,
-			sizeof(poll_info),
-			&poll_info,
-			sizeof(poll_info));
-
-		int x = 0;
-	}
-#endif
 }
 
 

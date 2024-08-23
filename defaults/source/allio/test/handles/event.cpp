@@ -354,9 +354,9 @@ TEST_CASE("blocking opaque signaling", "[event][opaque_handle][blocking]")
 	opaque_handle const opaque = make_opaque_handle(get_opaque_handle(event));
 
 	auto const poll = [&]() -> bool
-		{
-			return check_timeout(opaque.poll({ .deadline = deadline::instant() }));
-		};
+	{
+		return check_timeout(opaque.poll({ .deadline = deadline::instant() }));
+	};
 
 	REQUIRE(!poll());
 

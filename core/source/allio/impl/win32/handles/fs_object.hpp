@@ -4,6 +4,8 @@
 
 #include <allio/impl/win32/handles/platform_object.hpp>
 
+#include <allio/impl/win32/kernel.hpp>
+
 namespace allio::win32 {
 
 struct open_info
@@ -23,6 +25,11 @@ vsm::result<handle_with_flags> create_file(
 	file_id_128 const& id,
 	open_info const& info);
 #endif
+
+vsm::result<detail::handle_with_flags> create_file(
+	HANDLE base_handle,
+	UNICODE_STRING path,
+	open_info const& info);
 
 vsm::result<detail::handle_with_flags> create_file(
 	HANDLE base_handle,

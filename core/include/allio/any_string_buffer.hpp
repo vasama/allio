@@ -17,12 +17,18 @@ namespace detail {
 template<typename String>
 concept _any_mutable_string =
 	mutable_buffer<String> &&
-	character<typename String::value_type>;
+	character<typename std::remove_cvref_t<String>::value_type>;
+
+template<typename String>
+concept any_mutable_string = _any_mutable_string<mutable_buffer_from_t<String>>;
 
 template<typename String, typename Char>
 concept _mutable_string_of =
 	_any_mutable_string<String> &&
-	std::is_same_v<typename String::value_type, Char>;
+	std::is_same_v<typename std::remove_cvref_t<String>::value_type, Char>;
+
+template<typename String, typename Char>
+concept mutable_string_of = _mutable_string_of<mutable_buffer_from_t<String>, Char>;
 
 
 struct _string_buffer
@@ -36,7 +42,8 @@ struct _string_buffer
 	static constexpr uint32_t size_mask = (static_cast<uint32_t>(1) << size_bits) - 1;
 
 	template<detail::character Char>
-	static constexpr uint32_t type_mask_for = static_cast<uint32_t>(detail::encoding_of<Char>) << size_bits;
+	static constexpr uint32_t type_mask_for =
+		static_cast<uint32_t>(detail::encoding_of<Char>) << size_bits;
 
 	struct buffer
 	{
@@ -44,7 +51,10 @@ struct _string_buffer
 		size_t size;
 	};
 
-	using resize_type = vsm::result<buffer>(_string_buffer const& self, size_t min_size, size_t max_size);
+	using resize_type = vsm::result<buffer>(
+		_string_buffer const& self,
+		size_t min_size,
+		size_t max_size);
 
 	void* m_data;
 	uint32_t m_ctrl;
@@ -57,11 +67,17 @@ struct _string_buffer
 		, m_resize(_resize_span<Char>)
 	{
 	}
-	
+
+	template<mutable_buffer Container>
+	explicit _string_buffer(Container&& container)
+		: _string_buffer(container.data(), container.size())
+	{
+	}
+
 	template<resizable_buffer Container>
-	explicit _string_buffer(Container& container)
+	explicit _string_buffer(Container&& container)
 		: m_data(&container)
-		, m_ctrl(type_mask_for<typename Container::value_type>)
+		, m_ctrl(type_mask_for<typename std::remove_cvref_t<Container>::value_type>)
 		, m_resize(_resize_container<Container>)
 	{
 	}
@@ -100,11 +116,10 @@ struct _string_buffer
 		size_t const min_size,
 		size_t const max_size)
 	{
-		auto& container = *static_cast<Container*>(self.m_data);
+		auto& container = *static_cast<vsm::remove_ref_t<Container>*>(self.m_data);
 		vsm_try_discard(resize_buffer(container, min_size, max_size));
 		return buffer{ container.data(), container.size() };
 	}
-
 };
 
 } // namespace detail
@@ -135,23 +150,15 @@ public:
 	{
 	}
 
-	template<detail::_mutable_string_of<Char> String>
+	template<detail::mutable_string_of<Char> String>
 	string_buffer(String& string)
-		: _string_buffer(string.data(), string.size())
+		: _string_buffer(detail::get_mutable_buffer(string))
 	{
 	}
 
-	template<detail::_mutable_string_of<Char> String>
-		requires detail::_mutable_string_of<String const, Char>
+	template<detail::mutable_string_of<Char> String>
 	string_buffer(String const& string)
-		: _string_buffer(string.data(), string.size())
-	{
-	}
-
-	template<detail::_mutable_string_of<Char> String>
-		requires detail::resizable_buffer<String>
-	string_buffer(String& string)
-		: _string_buffer(string)
+		: _string_buffer(detail::get_mutable_buffer(string))
 	{
 	}
 
@@ -188,23 +195,16 @@ public:
 	{
 	}
 
-	template<detail::_any_mutable_string String>
+	template<detail::any_mutable_string String>
 	any_string_buffer(String& string)
-		: _string_buffer(string.data(), string.size())
+		: _string_buffer(detail::get_mutable_buffer(string))
 	{
 	}
 
-	template<detail::_any_mutable_string String>
-		requires detail::_any_mutable_string<String const>
+	template<typename String>
+		requires detail::any_mutable_string<String const>
 	any_string_buffer(String const& string)
-		: _string_buffer(string.data(), string.size())
-	{
-	}
-
-	template<detail::_any_mutable_string String>
-		requires detail::resizable_buffer<String>
-	any_string_buffer(String& string)
-		: _string_buffer(string)
+		: _string_buffer(detail::get_mutable_buffer(string))
 	{
 	}
 

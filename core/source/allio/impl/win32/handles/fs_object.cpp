@@ -119,14 +119,34 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 	return info;
 }
 
-static vsm::result<handle_with_flags> _create_file(
-	HANDLE const root_handle,
+#if 0
+vsm::result<handle_with_flags> win32::create_file(
+	HANDLE const hint_handle,
+	file_id_128 const& id,
+	open_kind const kind,
+	open_args const& args)
+{
+	vsm_try(info, make_open_info(kind, args));
+
+	info.create_options |= FILE_OPEN_BY_FILE_ID;
+
+	UNICODE_STRING unicode_string;
+	unicode_string.Buffer = reinterpret_cast<wchar_t*>(&const_cast<file_id_128&>(id));
+	unicode_string.Length = sizeof(id);
+	unicode_string.MaximumLength = unicode_string.Length;
+
+	return create_file(hint_handle, unicode_string, info);
+}
+#endif
+
+vsm::result<handle_with_flags> win32::create_file(
+	HANDLE const base_handle,
 	UNICODE_STRING path,
 	open_info const& info)
 {
 	OBJECT_ATTRIBUTES object_attributes = {};
 	object_attributes.Length = sizeof(object_attributes);
-	object_attributes.RootDirectory = root_handle;
+	object_attributes.RootDirectory = base_handle;
 	object_attributes.ObjectName = &path;
 
 	LARGE_INTEGER allocation_size;
@@ -168,27 +188,6 @@ static vsm::result<handle_with_flags> _create_file(
 	});
 }
 
-
-#if 0
-vsm::result<handle_with_flags> win32::create_file(
-	HANDLE const hint_handle,
-	file_id_128 const& id,
-	open_kind const kind,
-	open_args const& args)
-{
-	vsm_try(info, make_open_info(kind, args));
-
-	info.create_options |= FILE_OPEN_BY_FILE_ID;
-
-	UNICODE_STRING unicode_string;
-	unicode_string.Buffer = reinterpret_cast<wchar_t*>(&const_cast<file_id_128&>(id));
-	unicode_string.Length = sizeof(id);
-	unicode_string.MaximumLength = unicode_string.Length;
-
-	return create_file(hint_handle, unicode_string, info);
-}
-#endif
-
 vsm::result<handle_with_flags> win32::create_file(
 	HANDLE const base_handle,
 	any_path_view const path,
@@ -201,7 +200,7 @@ vsm::result<handle_with_flags> win32::create_file(
 		.path = path,
 	}));
 
-	return _create_file(kernel_path.handle, make_unicode_string(kernel_path.path), info);
+	return create_file(kernel_path.handle, make_unicode_string(kernel_path.path), info);
 }
 
 vsm::result<handle_with_flags> win32::reopen_file(
@@ -210,7 +209,7 @@ vsm::result<handle_with_flags> win32::reopen_file(
 {
 	vsm_assert(handle != NULL); //PRECONDITION
 
-	return _create_file(handle, make_unicode_string(), info);
+	return create_file(handle, make_unicode_string(), info);
 }
 
 

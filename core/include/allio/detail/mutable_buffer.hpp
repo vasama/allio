@@ -15,10 +15,10 @@ void _mutable_buffer_ptr(auto*);
 void _mutable_buffer_ptr(auto const*) = delete;
 
 template<typename Container>
-concept mutable_buffer = requires (Container& container)
+concept mutable_buffer = requires (Container container)
 {
-	requires vsm::non_cvref<typename Container::value_type>;
-	{ container.data() } -> std::same_as<typename Container::value_type*>;
+	requires vsm::non_cvref<typename std::remove_cvref_t<Container>::value_type>;
+	{ container.data() } -> std::same_as<typename std::remove_cvref_t<Container>::value_type*>;
 	{ container.size() } -> std::convertible_to<size_t>;
 };
 
@@ -36,10 +36,19 @@ struct get_mutable_buffer_t
 	[[nodiscard]] vsm_static_operator auto& operator()(
 		Container& container) vsm_static_operator_const
 	{
+		static_assert(mutable_buffer<vsm::tag_invoke_result_t<get_mutable_buffer_t, Container&>>);
 		return vsm::tag_invoke(get_mutable_buffer_t(), container);
 	}
 };
 inline constexpr get_mutable_buffer_t get_mutable_buffer = {};
+
+template<typename Container>
+using mutable_buffer_from_t = decltype(get_mutable_buffer(std::declval<Container&>()));
+
+template<typename Container>
+concept indirectly_mutable_buffer = mutable_buffer<mutable_buffer_from_t<Container>>;
+
+
 
 struct resize_buffer_t
 {
@@ -111,9 +120,12 @@ inline constexpr resize_buffer_t resize_buffer = {};
 template<typename Container>
 concept resizable_buffer =
 	mutable_buffer<Container> &&
-	requires (Container& container, size_t const size)
+	requires (Container container, size_t const size)
 	{
 		detail::resize_buffer(container, size);
 	};
+
+template<typename Container>
+concept indirectly_resizable_buffer = resizable_buffer<mutable_buffer_from_t<Container>>;
 
 } // namespace allio::detail

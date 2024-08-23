@@ -381,6 +381,8 @@ template<typename Char>
 
 
 using path_view = basic_path_view<char>;
+using wpath_view = basic_path_view<wchar_t>;
+
 using path_combine_result = basic_path_combine_result<char>;
 
 } // namespace allio

@@ -104,7 +104,7 @@ struct wsa_function<R(WINAPI*)(Ps...)>
 	template<Pointer const& Function>
 	static R WINAPI function(Ps const... args)
 	{
-		(void)wsa_init_lazy();
+		wsa_init_lazy();
 		return Function(args...);
 	}
 };
@@ -163,49 +163,6 @@ static void rio_init(SOCKET const socket)
 }
 
 
-#if 0
-class wsa_startup_t
-{
-	socket_error m_error;
-
-public:
-	wsa_startup_t()
-	{
-		WSADATA data;
-		int const e = WSAStartup(MAKEWORD(2, 2), &data);
-		m_error = e == 0
-			? socket_error::none
-			: static_cast<socket_error>(e);
-	}
-
-	wsa_startup_t(wsa_startup_t&& other)
-		: m_error(other.m_error)
-	{
-		other.m_error = static_cast<socket_error>(-1);
-	}
-
-	wsa_startup_t& operator=(wsa_startup_t&& other) = delete;
-
-	~wsa_startup_t()
-	{
-		if (m_error == socket_error::none)
-		{
-			vsm_verify(WSACleanup() == 0);
-		}
-	}
-
-	explicit operator bool() const
-	{
-		return m_error == socket_error::none;
-	}
-
-	socket_error get_error() const
-	{
-		return m_error;
-	}
-};
-#endif
-
 struct wsa_deleter
 {
 	vsm_static_operator void operator()(bool) vsm_static_operator_const
@@ -215,7 +172,7 @@ struct wsa_deleter
 };
 using unique_wsa_startup = vsm::unique_resource<bool, wsa_deleter, false>;
 
-static unique_wsa_startup wsa_startup()
+[[nodiscard]] static unique_wsa_startup wsa_startup()
 {
 	WSADATA data;
 	if (WSAStartup(MAKEWORD(2, 2), &data) == ERROR_SUCCESS)
@@ -225,7 +182,7 @@ static unique_wsa_startup wsa_startup()
 	return {};
 }
 
-static unique_wsa_startup wsa_init()
+[[nodiscard]] static unique_wsa_startup wsa_init()
 {
 	unique_wsa_startup startup = wsa_startup();
 

@@ -410,6 +410,7 @@ using basic_path = basic_path_adaptor<Char, std::basic_string<Char, std::char_tr
 
 
 using path = basic_path<char>;
+using wpath = basic_path<wchar_t>;
 
 } // namespace allio
 

@@ -326,3 +326,65 @@ vsm::result<blocking::directory_handle> this_process::open_current_directory()
 	}
 }
 #endif
+
+
+vsm::result<size_t> detail::_get_current_directory(any_path_buffer const buffer)
+{
+	unique_peb_lock peb_lock;
+
+	auto const& process_parameters = *NtCurrentPeb()->ProcessParameters;
+
+	auto const wide_string = std::wstring_view(
+		process_parameters.CurrentDirectoryPath.Buffer,
+		process_parameters.CurrentDirectoryPath.Length / sizeof(wchar_t));
+
+	auto const wide_path = wpath_view(wide_string).without_trailing_separators();
+
+	return transcode_string(wide_path.string(), buffer);
+}
+
+
+vsm::result<void> detail::_set_current_directory(fs_path const& path)
+{
+	//TODO: Implement set_current_directory
+	return vsm::unexpected(error::unsupported_operation);
+}
+
+static vsm::result<handle_with_flags> open_current_directory_from_peb()
+{
+	unique_peb_lock peb_lock;
+
+	auto const& process_parameters = *NtCurrentPeb()->ProcessParameters;
+
+	open_info const info =
+	{
+		//TODO: Is SYNCHRONIZE needed?
+		.desired_access = SYNCHRONIZE,
+		.create_disposition = FILE_OPEN,
+		.create_options = FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+	};
+
+	if (process_parameters.CurrentDirectoryHandle != NULL)
+	{
+		return reopen_file(process_parameters.CurrentDirectoryHandle, info);
+	}
+	else
+	{
+		return create_file(NULL, process_parameters.CurrentDirectoryPath, info);;
+	}
+}
+
+vsm::result<basic_detached_handle<directory_t>> detail::_open_current_directory()
+{
+	vsm_try_bind((handle, flags), open_current_directory_from_peb());
+
+	native_handle<directory_t> h = {};
+
+	h.flags = object_t::flags::not_null | flags;
+	h.platform_handle = wrap_handle(handle.release());
+
+	return vsm::result<basic_detached_handle<directory_t>>(
+		vsm::result_value,
+		adopt_handle,
+		h);
+}

@@ -199,7 +199,7 @@ vsm::result<basic_detached_handle<pipe_t>> pipe_t::create_pair(
 	native_handle<pipe_t>& h,
 	io_parameters_t<pipe_t, create_pair_t> const& a)
 {
-#if 0
+#if 0 //TODO: Implement inheritable pipes
 	SECURITY_ATTRIBUTES security_attributes = {};
 	security_attributes.nLength = sizeof(security_attributes);
 

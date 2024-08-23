@@ -52,22 +52,6 @@ template<typename Char>
 constexpr std::strong_ordering compare_chars(Char const* l_beg, Char const* const l_end, Char const* r_beg, Char const* const r_end)
 {
 	return std::lexicographical_compare_three_way(l_beg, l_end, r_beg, r_end);
-
-#if 0
-	size_t const size1 = l_end - l_beg;
-	size_t const size2 = r_end - r_beg;
-
-	for (size_t i = 0, c = std::min(size1, size2); i < c; ++i)
-	{
-		//TODO: how valid is this in the presence of unsigned character types?
-		if (int const cmp = l_beg[i] - r_beg[i])
-		{
-			return cmp;
-		}
-	}
-
-	return size1 - size2;
-#endif
 }
 
 

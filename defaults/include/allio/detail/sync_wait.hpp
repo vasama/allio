@@ -142,7 +142,7 @@ public:
 	}
 
 
-	auto receive_events()
+	[[nodiscard]] auto receive_events()
 	{
 		return m_event.wait() | ex::then([&]()
 		{
@@ -150,7 +150,7 @@ public:
 		});
 	}
 
-	bool process_events()
+	[[nodiscard]] bool process_events()
 	{
 		if (m_forward_list.empty())
 		{

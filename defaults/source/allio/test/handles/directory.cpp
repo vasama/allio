@@ -6,6 +6,8 @@
 #include <allio/task.hpp>
 #include <allio/test/filesystem.hpp>
 
+#include <vsm/defer.hpp>
+
 #include <catch2/catch_all.hpp>
 
 #include <filesystem>
@@ -154,90 +156,48 @@ TEST_CASE("Directory entries can be read asynchronously", "[directory][async]")
 }
 #endif
 
-#if 0
 
-//#include <allio/directory_handle_async.hpp>
-#include <allio/directory.hpp>
+//TODO: directory_handle / path -> directory_handle
 
-#include <allio/default_multiplexer.hpp>
-#include <allio/sync_wait.hpp>
-
-#include <unifex/task.hpp>
-
-#include <catch2/catch_all.hpp>
-
-#include <filesystem>
-#include <unordered_set>
-
-using namespace allio;
-
-static path get_temp_path(std::string_view const name)
+TEST_CASE("Current directory", "[directory][this_process][blocking]")
 {
-	return path((std::filesystem::temp_directory_path() / name).string());
-}
+	using namespace blocking;
 
-TEST_CASE("directory::read", "[directory]")
-{
-	static constexpr size_t file_count = 400;
-
-	path const directory_path = get_temp_path("allio-test-directory");
-	write_directory_content(directory_path, file_count);
-
-	std::unordered_set<std::string> files;
-	for (auto const& entry : std::filesystem::directory_iterator(directory_path.string()))
+	auto const current_path = std::filesystem::current_path();
 	{
-		REQUIRE(files.insert(entry.path().filename().string()).second);
-	}
-	REQUIRE(files.size() == file_count);
-
-	directory directory = open_directory(directory_path);
-
-	std::byte stream_buffer[4096];
-	directory_stream stream(stream_buffer);
-
-	while (stream.read(directory))
-	{
-		for (directory_entry const& entry : stream)
+		SECTION("Current directory path can be read")
 		{
-			CHECK(files.erase(entry.get_name()));
+			auto const path = this_process::get_current_directory();
+			[[maybe_unused]] auto const p = std::filesystem::current_path();
+			REQUIRE(path.string() == std::filesystem::current_path());
+		}
+
+#if 0
+		SECTION("Current directory can be assigned")
+		{
+			auto const temp_path = test::get_temp_path();
+			this_process::set_current_directory(temp_path);
+
+			auto const path = this_process::get_current_directory();
+			REQUIRE(path == temp_path);
+			REQUIRE(path.string() == std::filesystem::current_path());
+		}
+#endif
+
+		SECTION("Current directory can be opened")
+		{
+			auto const directory = this_process::open_current_directory();
+
+#if 0
+			REQUIRE(std::filesystem::equivalent(
+				current_path.string(),
+				directory.get_current_path().string()));
+#endif
 		}
 	}
 
-	CHECK(files.empty());
-}
-
-#if 0
-TEST_CASE("directory_stream_handle async", "[directory_stream_handle]")
-{
-	static constexpr size_t file_count = 400;
-
-	path const directory_path = get_temp_path("allio-test-directory");
-	write_directory_content(directory_path, file_count);
-
-	unique_multiplexer_ptr const multiplexer = create_default_multiplexer();
-
-	std::unordered_set<std::string> files;
-	for (auto const& entry : std::filesystem::directory_iterator(directory_path.string()))
+	if (std::error_code e; std::filesystem::current_path(current_path, e), e)
 	{
-		REQUIRE(files.insert(entry.path().filename().string()).second);
+		std::abort();
 	}
-	REQUIRE(files.size() == file_count);
-
-	sync_wait(*multiplexer, [&]() -> unifex::task<void>
-	{
-		directory_stream_handle stream = co_await open_directory_stream_async(*multiplexer, directory_path);
-
-		while (co_await stream.fetch_async())
-		{
-			for (auto const& entry : stream.entries())
-			{
-				REQUIRE(files.erase(stream.get_name(entry)));
-			}
-		}
-	}());
-
-	REQUIRE(files.empty());
 }
-#endif
-
-#endif
