@@ -117,7 +117,7 @@ using read_a = io_parameters_t<raw_socket_t, read_t>;
 
 io_result<size_t> read_s::submit(M& m, H const& h, C const&, read_s& s, read_a const& a, io_handler<M>& handler)
 {
-	vsm_try(wsa_buffers, make_wsa_buffers(s.buffers, a.buffers.buffers()));
+	vsm_try(wsa_buffers, get_wsa_buffers(s.buffers, a.buffers));
 
 	DWORD transferred;
 	DWORD flags = 0;
@@ -134,8 +134,8 @@ io_result<size_t> read_s::submit(M& m, H const& h, C const&, read_s& s, read_a c
 	{
 		if (win32::WSARecv(
 			posix::unwrap_socket(h.platform_handle),
-			wsa_buffers.data,
-			wsa_buffers.size,
+			static_cast<WSABUF*>(const_cast<void*>(wsa_buffers.buffers_data)),
+			vsm::saturating(wsa_buffers.buffers_size),
 			&transferred,
 			&flags,
 			&overlapped,
@@ -179,7 +179,7 @@ using write_a = io_parameters_t<raw_socket_t, write_t>;
 
 io_result<size_t> write_s::submit(M& m, H const& h, C const&, write_s& s, write_a const& a, io_handler<M>& handler)
 {
-	vsm_try(wsa_buffers, make_wsa_buffers(s.buffers, a.buffers.buffers()));
+	vsm_try(wsa_buffers, get_wsa_buffers(s.buffers, a.buffers));
 
 	DWORD transferred;
 
@@ -195,8 +195,8 @@ io_result<size_t> write_s::submit(M& m, H const& h, C const&, write_s& s, write_
 	{
 		if (win32::WSASend(
 			posix::unwrap_socket(h.platform_handle),
-			wsa_buffers.data,
-			wsa_buffers.size,
+			static_cast<WSABUF*>(const_cast<void*>(wsa_buffers.buffers_data)),
+			vsm::saturating(wsa_buffers.buffers_size),
 			&transferred,
 			/* dwFlags: */ 0,
 			&overlapped,

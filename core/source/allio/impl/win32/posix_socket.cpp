@@ -203,18 +203,18 @@ vsm::result<void> posix::socket_set_non_blocking(
 
 vsm::result<size_t> posix::socket_scatter_read(
 	socket_type const socket,
-	read_buffers const buffers)
+	new_read_buffers const buffers)
 {
-	wsa_buffers_storage<64> buffers_storage;
-	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
+	wsa_buffers_storage<16> buffers_storage;
+	vsm_try(wsa_buffers, get_wsa_buffers(buffers_storage, buffers));
 
 	DWORD flags = 0;
 
 	DWORD transferred;
 	int const r = win32::WSARecv(
 		socket,
-		wsa_buffers.data,
-		wsa_buffers.size,
+		static_cast<WSABUF*>(const_cast<void*>(wsa_buffers.buffers_data)),
+		vsm::saturating(wsa_buffers.buffers_size),
 		&transferred,
 		&flags,
 		/* lpOverlapped: */ nullptr,
@@ -230,16 +230,16 @@ vsm::result<size_t> posix::socket_scatter_read(
 
 vsm::result<size_t> posix::socket_gather_write(
 	socket_type const socket,
-	write_buffers const buffers)
+	new_write_buffers const buffers)
 {
-	wsa_buffers_storage<64> buffers_storage;
-	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
+	wsa_buffers_storage<16> buffers_storage;
+	vsm_try(wsa_buffers, get_wsa_buffers(buffers_storage, buffers));
 
 	DWORD transferred;
 	int const r = win32::WSASend(
 		socket,
-		wsa_buffers.data,
-		wsa_buffers.size,
+		static_cast<WSABUF*>(const_cast<void*>(wsa_buffers.buffers_data)),
+		vsm::saturating(wsa_buffers.buffers_size),
 		&transferred,
 		/* dwFlags: */ 0,
 		/* lpOverlapped: */ nullptr,
@@ -256,10 +256,12 @@ vsm::result<size_t> posix::socket_gather_write(
 vsm::result<size_t> posix::socket_receive_from(
 	socket_type const socket,
 	socket_address& addr,
-	read_buffers const buffers)
+	new_read_buffers const buffers)
 {
-	wsa_buffers_storage<64> buffers_storage;
-	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
+	vsm_try_void(check_wsa_buffers_size<DWORD>(buffers));
+
+	wsa_buffers_storage<16> buffers_storage;
+	vsm_try(wsa_buffers, get_wsa_buffers(buffers_storage, buffers));
 
 	DWORD transferred;
 	DWORD flags = 0;
@@ -268,8 +270,8 @@ vsm::result<size_t> posix::socket_receive_from(
 
 	if (win32::WSARecvFrom(
 		socket,
-		wsa_buffers.data,
-		wsa_buffers.size,
+		static_cast<WSABUF*>(const_cast<void*>(wsa_buffers.buffers_data)),
+		vsm::truncating(wsa_buffers.buffers_size),
 		&transferred,
 		&flags,
 		&addr.addr,
@@ -279,7 +281,7 @@ vsm::result<size_t> posix::socket_receive_from(
 	{
 		return vsm::unexpected(get_last_socket_error());
 	}
-	vsm_assert(transferred == get_buffers_size(buffers));
+	vsm_assert(transferred == get_io_buffers_size(buffers));
 
 	return transferred;
 }
@@ -287,16 +289,18 @@ vsm::result<size_t> posix::socket_receive_from(
 vsm::result<void> posix::socket_send_to(
 	socket_type const socket,
 	socket_address const& addr,
-	write_buffers const buffers)
+	new_write_buffers const buffers)
 {
-	wsa_buffers_storage<64> buffers_storage;
-	vsm_try(wsa_buffers, make_wsa_buffers(buffers_storage, buffers));
+	vsm_try_void(check_wsa_buffers_size<DWORD>(buffers));
+
+	wsa_buffers_storage<16> buffers_storage;
+	vsm_try(wsa_buffers, get_wsa_buffers(buffers_storage, buffers));
 
 	DWORD transferred;
 	if (win32::WSASendTo(
 		socket,
-		wsa_buffers.data,
-		wsa_buffers.size,
+		static_cast<WSABUF*>(const_cast<void*>(wsa_buffers.buffers_data)),
+		vsm::truncating(wsa_buffers.buffers_size),
 		&transferred,
 		/* dwFlags: */ 0,
 		&addr.addr,
@@ -306,7 +310,7 @@ vsm::result<void> posix::socket_send_to(
 	{
 		return vsm::unexpected(get_last_socket_error());
 	}
-	vsm_assert(transferred == get_buffers_size(buffers));
+	vsm_assert(transferred == get_io_buffers_size(buffers));
 
 	return {};
 }

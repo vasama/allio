@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/byte_io.hpp>
+#include <allio/byte_io_buffers.hpp>
 
 namespace allio {
 

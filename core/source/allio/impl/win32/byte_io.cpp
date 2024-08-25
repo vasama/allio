@@ -1,5 +1,6 @@
 #include <allio/impl/win32/byte_io.hpp>
 
+#include <allio/detail/byte_io_buffer_range.hpp>
 #include <allio/detail/unique_handle.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/thread_event.hpp>
@@ -13,11 +14,9 @@ using namespace allio::detail;
 using namespace allio::win32;
 
 template<auto const& Syscall>
-static vsm::result<size_t> do_byte_io(
-	native_handle<platform_object_t> const& h,
-	auto const& a)
+static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h, auto const& a)
 {
-	static constexpr bool is_random = requires { a.offset; };
+	static constexpr bool is_random_access = requires { a.offset; };
 
 	//TODO: Apply event based overlapped I/O to other synchronous I/O operations.
 	vsm_try(event, thread_event::get_for(h));
@@ -29,14 +28,14 @@ static vsm::result<size_t> do_byte_io(
 	LARGE_INTEGER offset_integer;
 	LARGE_INTEGER* p_offset_integer = nullptr;
 
-	if constexpr (is_random)
+	if constexpr (is_random_access)
 	{
 		offset_integer.QuadPart = a.offset;
 		p_offset_integer = &offset_integer;
 	}
 
 	auto const transfer_some = [&](
-		auto const data,
+		void const* const data,
 		ULONG const max_transfer_size) -> vsm::result<size_t>
 	{
 		vsm_try(relative_deadline, absolute_deadline.step());
@@ -49,7 +48,7 @@ static vsm::result<size_t> do_byte_io(
 			/* ApcContext: */ nullptr,
 			&io_status_block,
 			// NtWriteFile takes void* which requires casting away the const.
-			const_cast<std::byte*>(data),
+			const_cast<void*>(data),
 			max_transfer_size,
 			p_offset_integer,
 			/* Key: */ 0);
@@ -70,9 +69,13 @@ static vsm::result<size_t> do_byte_io(
 		return io_status_block.Information;
 	};
 
+	new_io_buffer_layout const layout = a.buffers.get_layout();
+
 	size_t transferred = 0;
-	for (auto buffer : a.buffers.buffers())
+	for (new_io_buffer const io_buffer : read_io_buffers(a.buffers.get_buffers()))
 	{
+		auto buffer = get_io_buffer_span<std::byte const>(io_buffer, layout);
+
 		while (!buffer.empty())
 		{
 			// The maximum transfer size is limited by the range of size_t transferred.
@@ -101,7 +104,7 @@ static vsm::result<size_t> do_byte_io(
 			size_t const transfer_size = *r;
 			transferred += transfer_size;
 
-			if constexpr (is_random)
+			if constexpr (is_random_access)
 			{
 				//TODO: Handle integer overflow of the offset?
 				offset_integer.QuadPart += transfer_size;

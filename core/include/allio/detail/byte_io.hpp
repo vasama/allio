@@ -8,18 +8,15 @@
 
 namespace allio::detail {
 
-template<vsm::any_cv_of<std::byte> T>
-struct basic_buffers_t
-{
-	basic_buffers_storage<T> buffers;
-};
-
-using read_buffers_t = basic_buffers_t<std::byte>;
-using write_buffers_t = basic_buffers_t<std::byte const>;
-
 struct file_offset_t
 {
 	fs_size offset;
+};
+
+template<vsm::any_cv_of<std::byte> T>
+struct basic_buffers_t
+{
+	new_io_buffers_view<T> buffers;
 };
 
 namespace byte_io {
@@ -29,7 +26,7 @@ struct stream_parameters_t
 	: io_flags_t
 	, deadline_t
 {
-	basic_buffers_storage<T> buffers;
+	new_io_buffers_view<T> buffers;
 
 	using io_flags_t::set_argument;
 	using deadline_t::set_argument;

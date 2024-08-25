@@ -175,20 +175,20 @@ vsm::result<void> socket_set_non_blocking(
 
 vsm::result<size_t> socket_scatter_read(
 	socket_type socket,
-	read_buffers buffers);
+	detail::new_read_buffers buffers);
 
 vsm::result<size_t> socket_gather_write(
 	socket_type socket,
-	write_buffers buffers);
+	detail::new_write_buffers buffers);
 
 vsm::result<size_t> socket_receive_from(
 	socket_type socket,
 	socket_address& address,
-	read_buffers buffers);
+	detail::new_read_buffers buffers);
 
 vsm::result<void> socket_send_to(
 	socket_type socket,
 	socket_address const& address,
-	write_buffers buffers);
+	detail::new_write_buffers buffers);
 
 } // namespace allio::posix

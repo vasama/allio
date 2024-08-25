@@ -41,7 +41,7 @@ vsm::result<size_t> raw_socket_t::stream_read(
 		vsm_try_void(socket_poll_or_timeout(socket, socket_poll_r, a.deadline));
 	}
 
-	return socket_scatter_read(socket, a.buffers.buffers());
+	return socket_scatter_read(socket, a.buffers);
 }
 
 vsm::result<size_t> raw_socket_t::stream_write(
@@ -55,7 +55,7 @@ vsm::result<size_t> raw_socket_t::stream_write(
 		vsm_try_void(socket_poll_or_timeout(socket, socket_poll_w, a.deadline));
 	}
 
-	return socket_gather_write(socket, a.buffers.buffers());
+	return socket_gather_write(socket, a.buffers);
 }
 
 vsm::result<void> raw_socket_t::close(

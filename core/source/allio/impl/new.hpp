@@ -52,6 +52,11 @@ template<vsm::non_cvref T = void>
 
 	if constexpr (std::is_object_v<T>)
 	{
+		if (size > std::numeric_limits<size_t>::max() / sizeof(T))
+		{
+			return vsm::unexpected(error::not_enough_memory);
+		}
+
 		size = size * sizeof(T);
 	}
 

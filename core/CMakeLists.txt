@@ -19,6 +19,7 @@ vsm_add_library(
 
 	HEADERS
 		include/allio/byte_io.hpp
+		include/allio/byte_io_buffers.hpp
 		include/allio/deadline.hpp
 		include/allio/filesystem.hpp
 		include/allio/handle.hpp
@@ -30,6 +31,8 @@ vsm_add_library(
 		include/allio/step_deadline.hpp
 
 		include/allio/detail/api.hpp
+		include/allio/detail/byte_io.hpp
+		include/allio/detail/byte_io_buffers.hpp
 		include/allio/detail/dynamic_buffer.hpp
 		include/allio/detail/platform.h
 		include/allio/detail/type_list.hpp
@@ -66,6 +69,7 @@ vsm_add_library(
 		include/allio/detail/handles/section.hpp
 
 	SOURCES
+		source/allio/impl/byte_io_buffers.cpp
 		source/allio/impl/error.cpp
 		source/allio/impl/network.cpp
 		source/allio/impl/new.cpp
@@ -97,6 +101,7 @@ vsm_add_library(
 	TEST_SOURCES
 		source/allio/test/reverse_iterator.hpp
 
+		source/allio/test/byte_io_buffers.cpp
 		source/allio/test/network.cpp
 		source/allio/test/path_view.cpp
 )

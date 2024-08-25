@@ -43,7 +43,7 @@ vsm::result<receive_result> raw_datagram_socket_t::receive_from(
 	vsm_try(transferred, socket_receive_from(
 		socket,
 		addr,
-		a.buffers.buffers()));
+		a.buffers));
 
 	return vsm::result<receive_result>(
 		vsm::result_value,
@@ -68,7 +68,7 @@ vsm::result<void> raw_datagram_socket_t::send_to(
 	return socket_send_to(
 		socket,
 		addr,
-		a.buffers.buffers());
+		a.buffers);
 }
 
 vsm::result<void> raw_datagram_socket_t::close(

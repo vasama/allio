@@ -7,6 +7,8 @@
 #include <allio/impl/win32/wsa.hpp>
 #include <allio/win32/kernel_error.hpp>
 
+#include <vsm/numeric.hpp>
+
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
@@ -76,9 +78,9 @@ using send_a = io_parameters_t<raw_datagram_socket_t, send_t>;
 
 io_result<void> send_s::submit(M& m, H const& h, C const&, send_s& s, send_a const& a, io_handler<M>& handler)
 {
+	vsm_try_void(check_wsa_buffers_size<DWORD>(a.buffers));
 	vsm_try(addr, posix::socket_address::make(a.endpoint));
-	vsm_try(wsa_buffers, make_wsa_buffers(s.buffers, a.buffers.buffers()));
-	//TODO: Datagram send cannot truncate the buffers.
+	vsm_try(wsa_buffers, get_wsa_buffers(s.buffers, a.buffers));
 
 	DWORD transferred;
 
@@ -92,8 +94,8 @@ io_result<void> send_s::submit(M& m, H const& h, C const&, send_s& s, send_a con
 	{
 		if (win32::WSASendTo(
 			posix::unwrap_socket(h.platform_handle),
-			wsa_buffers.data,
-			wsa_buffers.size,
+			static_cast<WSABUF*>(const_cast<void*>(wsa_buffers.buffers_data)),
+			vsm::truncating(wsa_buffers.buffers_size),
 			&transferred,
 			/* dwFlags: */ 0,
 			&addr.addr,
@@ -108,7 +110,7 @@ io_result<void> send_s::submit(M& m, H const& h, C const&, send_s& s, send_a con
 
 	if (already_completed)
 	{
-		vsm_assert(transferred == get_buffers_size(a.buffers.buffers()));
+		vsm_assert(transferred == get_io_buffers_size(a.buffers));
 		return {};
 	}
 
@@ -125,7 +127,7 @@ io_result<void> send_s::notify(M&, H const& h, C const&, send_s& s, send_a const
 	}
 
 	size_t const transferred = get_transfer_result(h, s.overlapped);
-	vsm_assert(transferred == get_buffers_size(a.buffers.buffers()));
+	vsm_assert(transferred == get_io_buffers_size(a.buffers));
 
 	return {};
 }
@@ -142,7 +144,8 @@ using recv_a = io_parameters_t<raw_datagram_socket_t, recv_t>;
 
 io_result<receive_result> recv_s::submit(M& m, H const& h, C const&, recv_s& s, recv_a const& a, io_handler<M>& handler)
 {
-	vsm_try(wsa_buffers, make_wsa_buffers(s.buffers, a.buffers.buffers()));
+	vsm_try_void(check_wsa_buffers_size<DWORD>(a.buffers));
+	vsm_try(wsa_buffers, get_wsa_buffers(s.buffers, a.buffers));
 
 	DWORD transferred;
 	DWORD flags = 0;
@@ -160,8 +163,8 @@ io_result<receive_result> recv_s::submit(M& m, H const& h, C const&, recv_s& s, 
 	{
 		if (win32::WSARecvFrom(
 			posix::unwrap_socket(h.platform_handle),
-			wsa_buffers.data,
-			wsa_buffers.size,
+			static_cast<WSABUF*>(const_cast<void*>(wsa_buffers.buffers_data)),
+			vsm::truncating(wsa_buffers.buffers_size),
 			&transferred,
 			&flags,
 			&addr_buffer.addr,

@@ -46,7 +46,7 @@ struct receive_from_t
 
 	struct params_type : deadline_t
 	{
-		read_buffers_storage buffers;
+		new_read_buffers buffers;
 	};
 
 	using result_type = receive_result;
@@ -68,7 +68,7 @@ struct send_to_t
 	struct params_type
 	{
 		network_endpoint endpoint;
-		write_buffers_storage buffers;
+		new_write_buffers buffers;
 	};
 
 	using result_type = void;

@@ -490,7 +490,6 @@ basic_detached_handle<process_t> detail::_get_current_process_pseudo_handle()
 }
 #endif
 
-
 #if 0 //TODO: this_process
 blocking::process_handle const& this_process::get_handle()
 {

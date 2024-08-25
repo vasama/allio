@@ -2,6 +2,7 @@
 
 #include <allio/win32/detail/wsa.hpp>
 
+#include <allio/detail/byte_io_buffers.hpp>
 #include <allio/impl/posix/socket.hpp>
 
 #include <vsm/lazy.hpp>
@@ -67,6 +68,8 @@ AddressBuffer& get_wsa_address_buffer(wsa_address_storage<Size>& storage)
 	return *std::launder(reinterpret_cast<AddressBuffer*>(storage.storage));
 }
 
+
+#if 0
 template<vsm::any_cv_of<std::byte> T>
 inline ULONG transform_wsa_buffers(basic_buffers<T> const buffers, WSABUF* const wsa_buffers)
 {
@@ -121,6 +124,31 @@ vsm::result<wsa_buffer_span> make_wsa_buffers(
 	vsm_try(wsa_buffers, storage.reserve(buffers.size()));
 	auto const count = transform_wsa_buffers(buffers, wsa_buffers);
 	return wsa_buffer_span{ wsa_buffers, count };
+}
+#endif
+
+template<std::unsigned_integral SizeT>
+vsm::result<void> check_wsa_buffers_size(detail::new_io_buffers_view_base const& buffers)
+{
+	if (buffers.was_truncated() ||
+		buffers.get_buffers_size() > std::numeric_limits<SizeT>::max())
+	{
+		//TODO: Return a more specific error code.
+		return vsm::unexpected(error::invalid_argument);
+	}
+
+	return {};
+}
+
+template<vsm::any_cv_of<std::byte> T, size_t StorageSize = /*TODO:*/ 0>
+vsm::result<detail::new_io_buffers> get_wsa_buffers(
+	detail::_wsa_buffers_storage<StorageSize>& storage,
+	detail::new_io_buffers_view<T> const buffers)
+{
+	return get_io_buffers(
+		storage,
+		buffers,
+		detail::new_io_buffer_layout::size_data | detail::new_io_buffer_layout::size_le32);
 }
 
 
