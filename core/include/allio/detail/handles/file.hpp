@@ -152,16 +152,10 @@ struct file_t : fs_object_t
 				no_parameters_t());
 		}
 
-		[[nodiscard]] auto read_some(fs_size const offset, read_buffer const buffer, auto&&... args) const
-		{
-			auto a = io_parameters_t<typename Handle::object_type, random_read_t>{};
-			a.buffers = buffer;
-			a.offset = offset;
-			(set_argument(a, vsm_forward(args)), ...);
-			return Traits::template observe<random_read_t>(static_cast<Handle const&>(*this), a);
-		}
-
-		[[nodiscard]] auto read_some(fs_size const offset, read_buffers const buffers, auto&&... args) const
+		[[nodiscard]] auto read_some(
+			fs_size const offset,
+			new_read_buffers const buffers,
+			auto&&... args) const
 		{
 			auto a = io_parameters_t<typename Handle::object_type, random_read_t>{};
 			a.buffers = buffers;
@@ -170,16 +164,10 @@ struct file_t : fs_object_t
 			return Traits::template observe<random_read_t>(static_cast<Handle const&>(*this), a);
 		}
 
-		[[nodiscard]] auto write_some(fs_size const offset, write_buffer const buffer, auto&&... args) const
-		{
-			auto a = io_parameters_t<typename Handle::object_type, random_write_t>{};
-			a.buffers = buffer;
-			a.offset = offset;
-			(set_argument(a, vsm_forward(args)), ...);
-			return Traits::template observe<random_write_t>(static_cast<Handle const&>(*this), a);
-		}
-
-		[[nodiscard]] auto write_some(fs_size const offset, write_buffers const buffers, auto&&... args) const
+		[[nodiscard]] auto write_some(
+			fs_size const offset,
+			new_write_buffers const buffers,
+			auto&&... args) const
 		{
 			auto a = io_parameters_t<typename Handle::object_type, random_write_t>{};
 			a.buffers = buffers;

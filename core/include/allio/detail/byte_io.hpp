@@ -119,15 +119,7 @@ struct random_write_t
 template<typename Handle, typename Traits>
 struct stream_facade
 {
-	[[nodiscard]] auto read_some(read_buffer const buffer, auto&&... args) const
-	{
-		io_parameters_t<typename Handle::object_type, stream_read_t> a = {};
-		a.buffers = buffer;
-		(set_argument(a, vsm_forward(args)), ...);
-		return Traits::template observe<stream_read_t>(static_cast<Handle const&>(*this), a);
-	}
-
-	[[nodiscard]] auto read_some(read_buffers const buffers, auto&&... args) const
+	[[nodiscard]] auto read_some(new_read_buffers const buffers, auto&&... args) const
 	{
 		io_parameters_t<typename Handle::object_type, stream_read_t> a = {};
 		a.buffers = buffers;
@@ -135,15 +127,7 @@ struct stream_facade
 		return Traits::template observe<stream_read_t>(static_cast<Handle const&>(*this), a);
 	}
 
-	[[nodiscard]] auto write_some(write_buffer const buffer, auto&&... args) const
-	{
-		io_parameters_t<typename Handle::object_type, stream_write_t> a = {};
-		a.buffers = buffer;
-		(set_argument(a, vsm_forward(args)), ...);
-		return Traits::template observe<stream_write_t>(static_cast<Handle const&>(*this), a);
-	}
-
-	[[nodiscard]] auto write_some(write_buffers const buffers, auto&&... args) const
+	[[nodiscard]] auto write_some(new_write_buffers const buffers, auto&&... args) const
 	{
 		io_parameters_t<typename Handle::object_type, stream_write_t> a = {};
 		a.buffers = buffers;

@@ -1,6 +1,5 @@
 #include <allio/win32/detail/iocp/raw_datagram_socket.hpp>
 
-#include <allio/impl/byte_io.hpp>
 #include <allio/impl/posix/socket.hpp>
 #include <allio/impl/win32/iocp/raw_socket.hpp>
 #include <allio/impl/win32/kernel.hpp>

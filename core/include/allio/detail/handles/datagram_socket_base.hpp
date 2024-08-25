@@ -103,15 +103,7 @@ struct datagram_socket_base_t : BaseObject
 	template<typename Handle, typename Traits>
 	struct facade : base_type::template facade<Handle, Traits>
 	{
-		[[nodiscard]] auto receive_from(read_buffer const buffer, auto&&... args) const
-		{
-			auto a = io_parameters_t<typename Handle::object_type, receive_from_t>{};
-			a.buffers = buffer;
-			(set_argument(a, vsm_forward(args)), ...);
-			return Traits::template observe<receive_from_t>(static_cast<Handle const&>(*this), a);
-		}
-
-		[[nodiscard]] auto receive_from(read_buffers const buffers, auto&&... args) const
+		[[nodiscard]] auto receive_from(new_read_buffers const buffers, auto&&... args) const
 		{
 			auto a = io_parameters_t<typename Handle::object_type, receive_from_t>{};
 			a.buffers = buffers;
@@ -119,15 +111,7 @@ struct datagram_socket_base_t : BaseObject
 			return Traits::template observe<receive_from_t>(static_cast<Handle const&>(*this), a);
 		}
 
-		[[nodiscard]] auto send(write_buffer const buffer, auto&&... args) const
-		{
-			auto a = io_parameters_t<typename Handle::object_type, send_to_t>{};
-			a.buffers = buffer;
-			(set_argument(a, vsm_forward(args)), ...);
-			return Traits::template observe<send_to_t>(static_cast<Handle const&>(*this), a);
-		}
-
-		[[nodiscard]] auto send(write_buffers const buffers, auto&&... args) const
+		[[nodiscard]] auto send(new_write_buffers const buffers, auto&&... args) const
 		{
 			auto a = io_parameters_t<typename Handle::object_type, send_to_t>{};
 			a.buffers = buffers;
@@ -135,16 +119,10 @@ struct datagram_socket_base_t : BaseObject
 			return Traits::template observe<send_to_t>(static_cast<Handle const&>(*this), a);
 		}
 
-		[[nodiscard]] auto send_to(network_endpoint const& endpoint, write_buffer const buffer, auto&&... args) const
-		{
-			auto a = io_parameters_t<typename Handle::object_type, send_to_t>{};
-			a.endpoint = endpoint;
-			a.buffers = buffer;
-			(set_argument(a, vsm_forward(args)), ...);
-			return Traits::template observe<send_to_t>(static_cast<Handle const&>(*this), a);
-		}
-
-		[[nodiscard]] auto send_to(network_endpoint const& endpoint, write_buffers const buffers, auto&&... args) const
+		[[nodiscard]] auto send_to(
+			network_endpoint const& endpoint,
+			new_write_buffers const buffers,
+			auto&&... args) const
 		{
 			auto a = io_parameters_t<typename Handle::object_type, send_to_t>{};
 			a.endpoint = endpoint;

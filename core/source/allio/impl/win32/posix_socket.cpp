@@ -1,7 +1,6 @@
 #include <allio/impl/posix/socket.hpp>
 
 #include <allio/detail/dynamic_buffer.hpp>
-#include <allio/impl/byte_io.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
 #include <allio/impl/win32/wsa.hpp>
