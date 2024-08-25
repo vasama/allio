@@ -6,13 +6,17 @@
 #include <allio/detail/object.hpp>
 #include <allio/network.hpp>
 
+#include <vsm/platform.h>
+
 namespace allio::detail {
 
 struct connect_t
 {
 	using operation_concept = producer_t;
 
-	struct params_base : io_flags_t, deadline_t
+	struct params_base
+		: io_flags_t
+		, deadline_t
 	{
 		network_endpoint endpoint;
 	};
@@ -70,9 +74,8 @@ struct socket_base_t : BaseObject
 	>;
 
 	template<typename Handle, typename Traits>
-	struct facade
+	struct vsm_empty_bases facade
 		: base_type::template facade<Handle, Traits>
-		//TODO: This introduces padding on MSVC.
 		, byte_io::stream_facade<Handle, Traits>
 	{
 	};
