@@ -128,7 +128,7 @@ static_assert(std::random_access_iterator<new_io_buffer_iterator>);
 
 using new_io_buffer_range = std::ranges::subrange<new_io_buffer_iterator>;
 
-inline new_io_buffer_range read_io_buffers(new_io_buffers const& buffers)
+inline new_io_buffer_range read_io_buffers(new_io_buffers_view const& buffers)
 {
 	auto const data = static_cast<unsigned char const*>(buffers.buffers_data);
 

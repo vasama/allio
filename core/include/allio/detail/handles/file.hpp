@@ -178,6 +178,7 @@ struct file_t : fs_object_t
 	};
 };
 
+
 fs_path get_null_device_path();
 
 template<typename Traits>

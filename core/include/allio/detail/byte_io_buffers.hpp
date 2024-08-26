@@ -5,6 +5,7 @@
 #include <vsm/flags.hpp>
 #include <vsm/result.hpp>
 #include <vsm/standard.hpp>
+#include <vsm/tag_invoke.hpp>
 
 #include <span>
 
@@ -68,39 +69,58 @@ struct new_io_buffer
 	union_type m1;
 };
 
-struct new_io_buffers
+struct new_io_buffers_view
 {
 	void const* buffers_data;
 	size_t buffers_size;
 };
 
 
-template<typename Range>
-concept _new_io_buffer_range =
-	std::ranges::contiguous_range<Range> &&
-	vsm::any_cv_of<std::ranges::range_value_t<Range>, new_io_buffer> &&
-	requires (Range const& range)
-	{
-		{ range.get_layout() } -> std::same_as<new_io_buffer_layout>;
-	};
+template<typename T, typename U>
+void _new_io_buffer_span_concept(std::span<U> const&)
+	requires std::convertible_to<U*, T*>;
 
+template<typename Span, typename Byte>
+concept new_io_buffer_span_concept = requires (Span const& span)
+{
+	_new_io_buffer_span_concept<Byte>(span);
+};
 
-#if 0
+template<vsm::any_cv_of<std::byte> T>
 struct get_new_io_buffer_layout_t
 {
+	template<std::ranges::contiguous_range Range>
+		requires new_io_buffer_span_concept<std::ranges::range_value_t<Range>, T>
+	[[nodiscard]] friend new_io_buffer_layout tag_invoke(
+		get_new_io_buffer_layout_t,
+		Range const& range)
+	{
+		return span_layout;
+	}
+
 	template<typename Buffer>
 	[[nodiscard]] vsm_static_operator new_io_buffer_layout operator()(
 		Buffer const& buffer) vsm_static_operator_const
+		requires vsm::tag_invocable<get_new_io_buffer_layout_t, Buffer const&>
 	{
+		return vsm::tag_invoke(get_new_io_buffer_layout_t(), buffer);
 	}
 };
-inline constexpr get_new_io_buffer_layout_t get_new_io_buffer_layout = {};
-#endif
+
+template<vsm::any_cv_of<std::byte> T>
+inline constexpr get_new_io_buffer_layout_t<T> get_new_io_buffer_layout = {};
+
+template<typename Range, typename T>
+concept new_io_buffers_range_concept = requires (Range const& range)
+{
+	get_new_io_buffer_layout<T>(range);
+};
 
 
-struct new_io_buffers_view_base : protected new_io_buffer
+struct new_io_buffers_base : protected new_io_buffer
 {
 protected:
+#if 0
 	static constexpr size_t layout_shift = sizeof(size_t) * CHAR_BIT - 2;
 
 	static constexpr size_t size_data_flag =
@@ -109,38 +129,40 @@ protected:
 	static constexpr size_t size_mask = static_cast<size_t>(-1) >> 4;
 	static constexpr size_t view_flag = static_cast<size_t>(1) << (layout_shift - 1);
 	static constexpr size_t size_flag = static_cast<size_t>(1) << (layout_shift - 2);
+#endif
 
-	constexpr new_io_buffers_view_base()
-		: new_io_buffer{}
-	{
-	}
+	static constexpr size_t byte_size_mask          = static_cast<size_t>(-1) >> 1;
+	static constexpr size_t view_flag               = ~byte_size_mask;
 
-	explicit constexpr new_io_buffers_view_base(
-		new_io_buffer::union_type const m0,
-		new_io_buffer::union_type const m1)
-		: new_io_buffer{ m0, m1 }
-	{
-	}
+	static constexpr size_t view_size_mask          = static_cast<size_t>(-1) >> 4;
+	static constexpr size_t truncated_flag          = view_flag >> 1;
+
+	static constexpr size_t layout_shift            = sizeof(size_t) * CHAR_BIT - 4;
+	static constexpr size_t layout_mask             = 0b11;
+
+	static constexpr size_t truncated_size          = view_flag | truncated_flag;
 
 public:
 	[[nodiscard]] constexpr new_io_buffer_layout get_layout() const noexcept
 	{
-		return static_cast<new_io_buffer_layout>(m1.size >> layout_shift);
+		return m1.size & view_flag
+			? static_cast<new_io_buffer_layout>(m1.size >> layout_shift & layout_mask)
+			: new_io_buffer_layout::data_size;
 	}
 
 	[[nodiscard]] constexpr bool was_truncated() const noexcept
 	{
-		return m1.size & size_flag;
+		return (m1.size & truncated_size) == truncated_size;
 	}
 
-	[[nodiscard]] new_io_buffers get_buffers() const noexcept
+	[[nodiscard]] new_io_buffers_view get_buffers() const noexcept
 	{
 		if (m1.size & view_flag)
 		{
 			return
 			{
 				.buffers_data = m0.data,
-				.buffers_size = m1.size & size_mask,
+				.buffers_size = m1.size & view_size_mask,
 			};
 		}
 		else
@@ -157,7 +179,7 @@ public:
 	{
 		if (m1.size & view_flag)
 		{
-			return m1.size & size_mask;
+			return m1.size & view_size_mask;
 		}
 		else
 		{
@@ -167,80 +189,66 @@ public:
 };
 
 template<vsm::any_cv_of<std::byte> T>
-class new_io_buffers_view : public new_io_buffers_view_base
+class new_io_buffers : public new_io_buffers_base
 {
 public:
-	new_io_buffers_view() = default;
-
-	explicit constexpr new_io_buffers_view(
-		T* const data,
-		size_t const size)
-		: new_io_buffers_view_base(
-			new_io_buffer::union_type{ .data = data },
-			new_io_buffer::union_type{ .size = make_size(size, new_io_buffer_layout::data_size) })
+	constexpr new_io_buffers()
+		: new_io_buffers_base{}
 	{
 	}
 
-	explicit constexpr new_io_buffers_view(
+	explicit constexpr new_io_buffers(T* const data, size_t const size)
+	{
+		m0.data = data;
+		m1.size = size > byte_size_mask ? truncated_size : size;
+	}
+
+	explicit constexpr new_io_buffers(
 		new_io_buffer const* const buffers_data,
 		size_t const buffers_size,
 		new_io_buffer_layout const layout)
-		: new_io_buffers_view(static_cast<void const*>(buffers_data), buffers_size, layout)
+		: new_io_buffers(static_cast<void const*>(buffers_data), buffers_size, layout)
 	{
 	}
 
 	template<std::ranges::contiguous_range Range>
 		requires std::convertible_to<std::ranges::range_value_t<Range>*, T*>
-	constexpr new_io_buffers_view(Range const& range)
-		: new_io_buffers_view(std::ranges::data(range), std::ranges::size(range))
+	constexpr new_io_buffers(Range const& range)
+		: new_io_buffers(std::ranges::data(range), std::ranges::size(range))
 	{
 	}
 
-	template<vsm::no_cvref_of<new_io_buffers_view> Range>
-		requires _new_io_buffer_range<Range>
-	constexpr new_io_buffers_view(Range const& range)
-		: new_io_buffers_view(
+	template<vsm::no_cvref_of<new_io_buffers> Range>
+		requires new_io_buffers_range_concept<Range, T>
+	constexpr new_io_buffers(Range const& range)
+		: new_io_buffers(
 			static_cast<void const*>(std::ranges::data(range)),
 			std::ranges::size(range),
-			range.get_layout())
+			get_new_io_buffer_layout<T>(range))
 	{
 	}
 
-	template<std::ranges::contiguous_range Range>
-		requires std::same_as<std::ranges::range_value_t<Range>, std::span<T>>
-	constexpr new_io_buffers_view(Range const& range)
-		: new_io_buffers_view(
-			static_cast<void const*>(std::ranges::data(range)),
-			std::ranges::size(range),
-			span_layout)
-	{
-	}
-
-	using new_io_buffers_view_base::get_layout;
-	using new_io_buffers_view_base::was_truncated;
-	using new_io_buffers_view_base::get_buffers;
+	using new_io_buffers_base::get_layout;
+	using new_io_buffers_base::was_truncated;
+	using new_io_buffers_base::get_buffers;
 
 private:
-	explicit constexpr new_io_buffers_view(
+	explicit constexpr new_io_buffers(
 		void const* const buffers_data,
 		size_t const buffers_size,
 		new_io_buffer_layout const layout)
-		: new_io_buffers_view_base(
-			new_io_buffer::union_type{ .data = buffers_data },
-			new_io_buffer::union_type{ .size = make_size(buffers_size, layout) | view_flag })
 	{
-	}
+		size_t const size = buffers_size <= view_size_mask
+			? buffers_size
+			: view_size_mask | truncated_flag;
 
-	[[nodiscard]] static constexpr size_t make_size(
-		size_t const size,
-		new_io_buffer_layout const layout) noexcept
-	{
-		return size > size_mask ? size_flag : size | static_cast<size_t>(layout) << layout_shift;
+		m0.data = buffers_data;
+		m1.size = size | view_flag | static_cast<size_t>(layout) << layout_shift;
 	}
 };
 
-using new_read_buffers = new_io_buffers_view<std::byte>;
-using new_write_buffers = new_io_buffers_view<std::byte const>;
+using new_read_buffers = new_io_buffers<std::byte>;
+using new_write_buffers = new_io_buffers<std::byte const>;
 
 
 class new_io_buffers_storage
@@ -274,13 +282,11 @@ public:
 };
 
 
-//TODO: Move these to a separate implementation header:
-
-[[nodiscard]] vsm::result<new_io_buffers> get_io_buffers(
+[[nodiscard]] vsm::result<new_io_buffers_view> get_io_buffers(
 	new_io_buffers_storage& storage,
-	new_io_buffers_view_base const& view,
+	new_io_buffers_base const& view,
 	new_io_buffer_layout required_layout);
 
-[[nodiscard]] size_t get_io_buffers_size(new_io_buffers_view_base buffers);
+[[nodiscard]] size_t get_io_buffers_size(new_io_buffers_base buffers);
 
 } // namespace allio::detail

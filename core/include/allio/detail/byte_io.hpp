@@ -16,7 +16,7 @@ struct file_offset_t
 template<vsm::any_cv_of<std::byte> T>
 struct basic_buffers_t
 {
-	new_io_buffers_view<T> buffers;
+	new_io_buffers<T> buffers;
 };
 
 namespace byte_io {
@@ -26,7 +26,7 @@ struct stream_parameters_t
 	: io_flags_t
 	, deadline_t
 {
-	new_io_buffers_view<T> buffers;
+	new_io_buffers<T> buffers;
 
 	using io_flags_t::set_argument;
 	using deadline_t::set_argument;

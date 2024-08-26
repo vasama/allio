@@ -87,7 +87,7 @@ template<new_io_buffer_layout SrcLayout, new_io_buffer_layout DstLayout>
 	requires (SrcLayout == DstLayout)
 static vsm::result<void const*> swizzle_buffers_1(
 	new_io_buffers_storage& storage,
-	new_io_buffers const src_buffers)
+	new_io_buffers_view const src_buffers)
 {
 	vsm_unreachable();
 }
@@ -95,7 +95,7 @@ static vsm::result<void const*> swizzle_buffers_1(
 template<new_io_buffer_layout SrcLayout, new_io_buffer_layout DstLayout>
 static vsm::result<void const*> swizzle_buffers_1(
 	new_io_buffers_storage& storage,
-	new_io_buffers const src_buffers)
+	new_io_buffers_view const src_buffers)
 {
 	static constexpr bool swizzle = is_size_data(SrcLayout) != is_size_data(DstLayout);
 	static constexpr bool truncate = is_size_le32(DstLayout) && !is_size_le32(SrcLayout);
@@ -149,7 +149,7 @@ static vsm::result<void const*> swizzle_buffers_1(
 
 static vsm::result<void const*> swizzle_buffers(
 	new_io_buffers_storage& storage,
-	new_io_buffers const src_buffers,
+	new_io_buffers_view const src_buffers,
 	new_io_buffer_layout const src_layout,
 	new_io_buffer_layout const dst_layout)
 {
@@ -207,33 +207,33 @@ vsm::result<new_io_buffer*> detail::new_io_buffers_storage::resize(size_t const 
 	return m_storage->data;
 }
 
-vsm::result<new_io_buffers> detail::get_io_buffers(
+vsm::result<new_io_buffers_view> detail::get_io_buffers(
 	new_io_buffers_storage& storage,
-	new_io_buffers_view_base const& view,
+	new_io_buffers_base const& buffers,
 	new_io_buffer_layout const required_layout)
 {
-	auto const view_layout = view.get_layout();
-	auto const view_buffers = view.get_buffers();
+	auto const buffers_layout = buffers.get_layout();
+	auto const buffers_view = buffers.get_buffers();
 
-	if (view_layout == required_layout)
+	if (buffers_layout == required_layout)
 	{
-		return view_buffers;
+		return buffers_view;
 	}
 
 	vsm_try(swizzled_buffers, swizzle_buffers(
 		storage,
-		view_buffers,
-		view_layout,
+		buffers_view,
+		buffers_layout,
 		required_layout));
 
-	return new_io_buffers
+	return new_io_buffers_view
 	{
 		.buffers_data = swizzled_buffers,
-		.buffers_size = view_buffers.buffers_size,
+		.buffers_size = buffers_view.buffers_size,
 	};
 }
 
-size_t detail::get_io_buffers_size(new_io_buffers_view_base const buffers)
+size_t detail::get_io_buffers_size(new_io_buffers_base const buffers)
 {
 	auto const lambda = [&]<new_io_buffer_layout Layout>(layout_constant<Layout>)
 	{
