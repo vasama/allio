@@ -92,6 +92,56 @@ template<operation_c Operation, typename T>
 using handle_const_t = typename _handle_const<mutation<Operation>>::template type<T>;
 
 
+struct attach_handle_t
+{
+	template<typename M, typename H, typename C>
+	[[nodiscard]] vsm_static_operator vsm::result<void> operator()(
+		M& m,
+		H const& h,
+		C& c) vsm_static_operator_const
+	{
+		return C::attach(m, h, c);
+	}
+};
+inline constexpr attach_handle_t attach_handle = {};
+
+struct detach_handle_t
+{
+	template<typename M, typename H, typename C>
+	[[nodiscard]] vsm_static_operator vsm::result<void> operator()(
+		M& m,
+		H const& h,
+		C& c) vsm_static_operator_const
+	{
+		return C::detach(m, h, c);
+	}
+};
+inline constexpr detach_handle_t detach_handle = {};
+
+template<typename To>
+struct rebind_handle_t
+{
+	template<typename From, typename... Args>
+	[[nodiscard]] vsm_static_operator vsm::result<To> operator()(
+		From&& from,
+		Args&&... args) vsm_static_operator_const
+	{
+		if constexpr (vsm::any_cvref_of<From, To>)
+		{
+			return vsm_forward(from);
+		}
+		else
+		{
+			return rebind_traits<std::remove_cvref_t<From>, To>::rebind(
+				vsm_forward(from),
+				vsm_forward(args)...);
+		}
+	}
+};
+template<typename To>
+inline constexpr rebind_handle_t<To> rebind_handle = {};
+
+
 template<typename Handle>
 struct blocking_io_traits;
 
@@ -285,56 +335,6 @@ template<multiplexer Multiplexer, typename Handler>
 using io_handler_base = basic_io_handler_base<typename Multiplexer::io_status_type, Handler>;
 
 
-struct attach_handle_t
-{
-	template<typename M, typename H, typename C>
-	[[nodiscard]] vsm_static_operator vsm::result<void> operator()(
-		M& m,
-		H const& h,
-		C& c) vsm_static_operator_const
-	{
-		return C::attach(m, h, c);
-	}
-};
-inline constexpr attach_handle_t attach_handle = {};
-
-struct detach_handle_t
-{
-	template<typename M, typename H, typename C>
-	[[nodiscard]] vsm_static_operator vsm::result<void> operator()(
-		M& m,
-		H const& h,
-		C& c) vsm_static_operator_const
-	{
-		return C::detach(m, h, c);
-	}
-};
-inline constexpr detach_handle_t detach_handle = {};
-
-template<typename To>
-struct rebind_handle_t
-{
-	template<typename From, typename... Args>
-	[[nodiscard]] vsm_static_operator vsm::result<To> operator()(
-		From&& from,
-		Args&&... args) vsm_static_operator_const
-	{
-		if constexpr (vsm::any_cvref_of<From, To>)
-		{
-			return vsm_forward(from);
-		}
-		else
-		{
-			return rebind_traits<std::remove_cvref_t<From>, To>::rebind(
-				vsm_forward(from),
-				vsm_forward(args)...);
-		}
-	}
-};
-template<typename To>
-inline constexpr rebind_handle_t<To> rebind_handle = {};
-
-
 struct submit_io_t
 {
 	template<typename H, typename S, typename A, typename Handler>
@@ -394,7 +394,7 @@ inline constexpr notify_io_t notify_io = {};
 struct cancel_io_t
 {
 	template<typename H, typename S>
-	[[nodiscard]] vsm_static_operator void operator()(
+	vsm_static_operator void operator()(
 		H& h,
 		S& s) vsm_static_operator_const
 	{
@@ -402,7 +402,7 @@ struct cancel_io_t
 	}
 
 	template<typename M, typename H, typename C, typename S>
-	[[nodiscard]] vsm_static_operator void operator()(
+	vsm_static_operator void operator()(
 		M& m,
 		H& h,
 		C& c,

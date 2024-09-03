@@ -10,7 +10,8 @@
 namespace allio::detail {
 
 template<typename... Parameters>
-[[deprecated]] struct parameters_t : Parameters... {};
+//TODO: Get rid of this
+struct /*[[deprecated]]*/ parameters_t : Parameters... {};
 
 using no_parameters_t = parameters_t<>;
 

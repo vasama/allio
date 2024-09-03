@@ -77,7 +77,7 @@ struct wsa_unsupported<R(WINAPI*)(Ps...)>
 	static R WINAPI function(Ps...)
 	{
 		WSASetLastError(WSAEOPNOTSUPP);
-		return ReturnValue;
+		return ReturnValue();
 	}
 };
 
@@ -127,7 +127,7 @@ static void msw_init_function(SOCKET const socket, R(WINAPI*& function)(Ps...), 
 		extension,
 		new_function))
 	{
-		new_function = wsa_unsupported<R(WINAPI*)(Ps...)>::template function<ReturnValue>;
+		new_function = wsa_unsupported<R(WINAPI*)(Ps...)>::template function<[] { return ReturnValue; }>;
 	}
 
 	set_function(function, new_function);
@@ -156,7 +156,7 @@ static void rio_init(SOCKET const socket)
 	#define allio_x_entry(f, default_value) \
 		set_function(win32::f, r \
 			? table.f \
-			: wsa_unsupported<decltype(win32::f)>::function<default_value>); \
+			: wsa_unsupported<decltype(win32::f)>::function<[] { return default_value; }>); \
 
 	allio_rio_functions(allio_x_entry)
 	#undef allio_x_entry
@@ -272,7 +272,7 @@ DWORD win32::wsa_accept_ex(
 		&transferred,
 		&overlapped))
 	{
-		return WSAGetLastError();
+		return static_cast<DWORD>(WSAGetLastError());
 	}
 	vsm_assert(transferred == 0);
 	return 0;
@@ -293,7 +293,7 @@ DWORD win32::wsa_connect_ex(
 		&transferred,
 		&overlapped))
 	{
-		return WSAGetLastError();
+		return static_cast<DWORD>(WSAGetLastError());
 	}
 	vsm_assert(transferred == 0);
 	return 0;
@@ -314,7 +314,7 @@ static DWORD wsa_send_msg(
 		overlapped,
 		/* lpCompletionRoutine: */ nullptr) == socket_error_value)
 	{
-		return WSAGetLastError();
+		return static_cast<DWORD>(WSAGetLastError());
 	}
 	return 0;
 }
@@ -332,7 +332,7 @@ static DWORD wsa_recv_msg(
 		overlapped,
 		/* lpCompletionRoutine: */ nullptr) == socket_error_value)
 	{
-		return WSAGetLastError();
+		return static_cast<DWORD>(WSAGetLastError());
 	}
 	return 0;
 }

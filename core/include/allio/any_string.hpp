@@ -2,8 +2,8 @@
 
 #include <allio/encoding.hpp>
 
+#include <vsm/arrow.hpp>
 #include <vsm/assert.h>
-#include <vsm/box.hpp>
 #include <vsm/result.hpp>
 #include <vsm/utility.hpp>
 
@@ -209,7 +209,7 @@ public:
 			return m_get(m_data, m_index);
 		}
 
-		[[nodiscard]] vsm::box<any_string_view> operator->() const
+		[[nodiscard]] vsm::arrow<any_string_view> operator->() const
 		{
 			return m_get(m_data, m_index);
 		}

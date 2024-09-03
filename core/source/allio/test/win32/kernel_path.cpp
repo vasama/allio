@@ -114,14 +114,12 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path", "[win32][kernel_path]", char, wcha
 
 	std::basic_string_view<char_type> path;
 
-	int handle_expectation = 0;
 	std::optional<std::wstring_view> path_expectation;
 
 	#define TEST_ARGS(p, he, pe) \
 		SECTION(p) \
 		{ \
 			path = S(p); \
-			handle_expectation = he; \
 			path_expectation = pe; \
 		}
 

@@ -10,7 +10,9 @@ using namespace allio;
 using namespace allio::posix;
 using namespace allio::win32;
 
-static constexpr DWORD SIO_POLL = _WSAIORW(IOC_WS2, 31);
+vsm_clang_diagnostic(ignored "-Wold-style-cast")
+
+//static constexpr DWORD SIO_POLL = _WSAIORW(IOC_WS2, 31);
 
 
 //TODO: Add using in a public header.

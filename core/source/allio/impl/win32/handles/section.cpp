@@ -2,9 +2,11 @@
 
 #include <allio/detail/unique_handle.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
+#include <allio/impl/win32/memory.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/win32/kernel_error.hpp>
 
+#include <vsm/numeric.hpp>
 #include <vsm/out_resource.hpp>
 
 using namespace allio;
@@ -41,41 +43,6 @@ static ACCESS_MASK get_section_access(protection const protection)
 		section_access |= SECTION_MAP_EXECUTE_EXPLICIT;
 	}
 	return section_access;
-}
-
-//TODO: Deduplicate with map.cpp
-static vsm::result<ULONG> get_page_protection(protection const protection)
-{
-	switch (protection)
-	{
-		vsm_msvc_warning(push)
-
-		// Disable C4063: Case is not a valid value for switch of enum.
-		vsm_msvc_warning(disable: 4063)
-
-	case protection::none:
-		return PAGE_NOACCESS;
-
-	case protection::read:
-		return PAGE_READONLY;
-
-	case protection::read | protection::write:
-		return PAGE_READWRITE;
-
-	case protection::execute:
-		return PAGE_EXECUTE;
-
-	case protection::execute | protection::read:
-		return PAGE_EXECUTE_READ;
-
-	case protection::execute | protection::read | protection::write:
-		return PAGE_EXECUTE_READWRITE;
-
-	default:
-		return vsm::unexpected(error::unsupported_operation);
-
-		vsm_msvc_warning(pop)
-	}
 }
 
 vsm::result<void> section_t::create(
@@ -149,7 +116,9 @@ vsm::result<void> section_t::create(
 	}
 
 	LARGE_INTEGER max_size_integer;
-	max_size_integer.QuadPart = a.max_size;
+	vsm_try_assign(max_size_integer.QuadPart, vsm::try_truncate<LONGLONG>(
+		a.max_size,
+		error::invalid_argument));
 
 	unique_handle handle;
 	NTSTATUS const status = NtCreateSection(

@@ -80,7 +80,7 @@ struct ipv6_parse_result : ipv6_endpoint
 
 constexpr bool _parse_ipv6_integer(vsm::literal_parser& p, uint16_t& value)
 {
-	size_t size = p.end - p.beg;
+	size_t size = static_cast<size_t>(p.end - p.beg);
 	if (size > 4)
 	{
 		size = 4;

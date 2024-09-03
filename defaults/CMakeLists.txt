@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 project(allio-defaults)
 
+find_package(vsm-cmake REQUIRED)
+
 vsm_find_sibling(allio-core)
+
 find_package(vsm-intrusive REQUIRED)
 find_package(P2300 REQUIRED)
 

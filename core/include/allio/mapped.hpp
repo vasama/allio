@@ -12,7 +12,7 @@ namespace detail {
 
 struct map_t;
 
-template<detail::handle_for<map_t> Handle>
+template<handle_for<map_t> Handle>
 struct mapped_base
 {
 	Handle m_handle;
@@ -20,7 +20,7 @@ struct mapped_base
 
 } // namespace detail
 
-template<vsm::non_ref T, detail::handle_for<map_t> Handle>
+template<vsm::non_ref T, detail::handle_for<detail::map_t> Handle>
 class basic_mapped
 	: detail::mapped_base<Handle>
 	, std::span<T>

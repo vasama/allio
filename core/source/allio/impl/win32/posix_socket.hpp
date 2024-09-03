@@ -75,19 +75,27 @@ namespace allio::posix {
 
 inline detail::native_platform_handle wrap_socket(SOCKET const socket)
 {
-	return (detail::native_platform_handle)(detail::platform_handle_uint_type)socket;
+	return vsm_detail_c_cast(
+		detail::native_platform_handle,
+		vsm_detail_c_cast(detail::platform_handle_uint_type, socket));
+
+	//return (detail::native_platform_handle)(detail::platform_handle_uint_type)socket;
 }
 
 inline SOCKET unwrap_socket(detail::native_platform_handle const socket)
 {
-	return (SOCKET)(detail::platform_handle_uint_type)socket;
+	return vsm_detail_c_cast(
+		SOCKET,
+		vsm_detail_c_cast(detail::platform_handle_uint_type, socket));
+
+	//return (SOCKET)(detail::platform_handle_uint_type)socket;
 }
 
 inline void close_socket(socket_type const socket)
 {
 	if (closesocket(socket) == socket_error_value)
 	{
-		detail::unrecoverable_error(get_last_socket_error());
+		unrecoverable_error(get_last_socket_error());
 	}
 }
 

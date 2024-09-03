@@ -6,11 +6,6 @@
 
 using namespace allio;
 
-void detail::unrecoverable_error_default(std::error_code)
-{
-	std::abort();
-}
-
 char const* detail::error_category::name() const noexcept
 {
 	return error_category_name;
@@ -73,6 +68,8 @@ std::string detail::error_category::message(int const code) const
 		return "The current working directory is not valid.";
 	case error::unrepresentable_path:
 		return "The path is not representable in the requested format.";
+	case error::file_offset_out_of_range:
+		return "The specified file offset is beyond the maximum extent of the file.";
 
 	// Memory
 	case error::invalid_address:
@@ -155,6 +152,8 @@ std::error_condition detail::error_category::default_error_condition(int const c
 		break;
 	case error::unrepresentable_path:
 		break;
+	case error::file_offset_out_of_range:
+		break;
 
 	// Memory
 	case error::invalid_address:
@@ -186,7 +185,7 @@ detail::error_category const detail::error_category_instance;
 
 namespace {
 
-struct default_error_handler : error_handler
+struct default_error_handler final : error_handler
 {
 	void handle_error(error_information const& information) override
 	{

@@ -109,12 +109,11 @@ vsm::result<void> detail::open_fs_object(
 	if (a.mode == file_mode(0))
 	{
 		vsm_msvc_warning(push)
+		vsm_msvc_warning(disable: 4063) // Disable C4063: Case is not a valid value for switch of enum.
+		vsm_msvc_warning(disable: 4062) // TODO: Move the open kinds into its own enum and re-enable this warning.
 
-		// Disable C4063: Case is not a valid value for switch of enum.
-		vsm_msvc_warning(disable: 4063)
-
-		// TODO: Move the open kinds into its own enum and re-enable this warning.
-		vsm_msvc_warning(disable: 4062)
+		vsm_clang_diagnostic(push)
+		vsm_clang_diagnostic(ignored "-Wswitch")
 
 		switch (kind)
 		{
@@ -131,6 +130,7 @@ vsm::result<void> detail::open_fs_object(
 			break;
 		}
 		vsm_msvc_warning(pop)
+		vsm_clang_diagnostic(pop)
 	}
 
 	if (a.sharing == file_sharing(0))

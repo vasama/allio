@@ -5,7 +5,7 @@
 #include <allio/detail/facade.hpp>
 #include <allio/detail/handles/fs_object.hpp>
 
-#include <vsm/box.hpp>
+#include <vsm/arrow.hpp>
 
 namespace allio::detail {
 
@@ -110,7 +110,7 @@ public:
 		return directory_entry_view(m_pointer);
 	}
 
-	[[nodiscard]] vsm::box<directory_entry_view> operator->() const
+	[[nodiscard]] vsm::arrow<directory_entry_view> operator->() const
 	{
 		return directory_entry_view(m_pointer);
 	}
@@ -562,7 +562,9 @@ public:
 	explicit directory_iterator_handle(DirectoryHandle const& directory_handle)
 		: m_native
 		{
-			object_t::flags::not_null,
+			{
+				object_t::flags::not_null,
+			},
 			&directory_handle.native(),
 			directory_stream_position::end_of_stream,
 		}
@@ -724,7 +726,6 @@ template<typename Traits>
 {
 	auto a = io_parameters_t<directory_t, fs_io::open_t>{};
 	a.special = open_options::temporary;
-	a.path = path;
 	(set_argument(a, vsm_forward(args)), ...);
 	return Traits::template produce<directory_t, fs_io::open_t>(a);
 }
@@ -734,7 +735,6 @@ template<typename Traits>
 {
 	auto a = io_parameters_t<directory_t, fs_io::open_t>{};
 	a.special = open_options::unique_name;
-	a.path = path;
 	(set_argument(a, vsm_forward(args)), ...);
 	return Traits::template produce<directory_t, fs_io::open_t>(a);
 }

@@ -4,8 +4,8 @@
 #include <allio/detail/platform.h>
 #include <allio/path_literals.hpp>
 
+#include <vsm/arrow.hpp>
 #include <vsm/assert.h>
-#include <vsm/box.hpp>
 #include <vsm/preprocessor.h>
 
 #include <compare>
@@ -60,17 +60,21 @@ public:
 		using iterator_category = std::bidirectional_iterator_tag;
 		using value_type = basic_path_view;
 		using difference_type = ptrdiff_t;
-		using pointer = vsm::box<basic_path_view>;
+		using pointer = vsm::arrow<basic_path_view>;
 		using reference = basic_path_view;
 
 		[[nodiscard]] constexpr basic_path_view operator*() const
 		{
-			return basic_path_view(string_view_type(m_sbeg, m_send - m_sbeg));
+			return basic_path_view(string_view_type(
+				m_sbeg,
+				static_cast<size_t>(m_send - m_sbeg)));
 		}
 
 		[[nodiscard]] constexpr pointer operator->() const
 		{
-			return basic_path_view(string_view_type(m_sbeg, m_send - m_sbeg));
+			return basic_path_view(string_view_type(
+				m_sbeg,
+				static_cast<size_t>(m_send - m_sbeg)));
 		}
 
 		constexpr iterator& operator++() &
@@ -311,7 +315,9 @@ public:
 
 
 	//TODO: Implement lexically_equivalent
-	[[nodiscard]] friend constexpr bool lexically_equivalent(basic_path_view lhs, basic_path_view rhs);
+	/*[[nodiscard]]*/ friend constexpr bool lexically_equivalent(
+		basic_path_view const lhs,
+		basic_path_view const rhs);
 
 private:
 	static constexpr bool equal(basic_path_view lhs, basic_path_view rhs);

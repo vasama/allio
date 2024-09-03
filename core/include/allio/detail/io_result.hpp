@@ -91,7 +91,7 @@ class io_result : vsm::result<T, E>
 	unsigned char m_status = 0;
 
 public:
-	using base::value_type;
+	using typename base::value_type;
 
 	using base::base;
 

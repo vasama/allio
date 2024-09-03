@@ -1,5 +1,7 @@
 #include <allio/path_discovery.hpp>
 
+#include <vsm/arrow.hpp>
+
 #include <Windows.h>
 
 using namespace allio;
@@ -35,7 +37,7 @@ class environment_block
 			};
 		}
 		
-		[[nodiscard]] vsm::box<value_type> operator->() const
+		[[nodiscard]] vsm::arrow<value_type> operator->() const
 		{
 			return value_type
 			{

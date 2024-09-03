@@ -19,7 +19,7 @@ io_result<process_exit_code> wait_s::submit(M& m, H const& h, C const&, wait_s& 
 
 io_result<process_exit_code> wait_s::notify(M& m, H const& h, C const&, wait_s& s, wait_a const&, M::io_status_type const status)
 {
-	vsm_try_void(h, s.wait_state.notify(m, h, s, status));
+	vsm_try_void(s.wait_state.notify(m, h, s, status));
 	return get_process_exit_code(unwrap_handle(h.platform_handle));
 }
 

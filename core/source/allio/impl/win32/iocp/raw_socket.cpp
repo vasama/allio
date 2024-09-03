@@ -130,7 +130,7 @@ io_result<size_t> read_s::submit(M& m, H const& h, C const&, read_s& s, read_a c
 
 	// If using a multithreaded completion port, after this call
 	// another thread will race to complete this operation.
-	vsm_try(already_completed, submit_socket_io(m, h, [&]()
+	vsm_try(already_completed, submit_socket_io(m, h, [&]() -> DWORD
 	{
 		if (win32::WSARecv(
 			posix::unwrap_socket(h.platform_handle),
@@ -141,9 +141,9 @@ io_result<size_t> read_s::submit(M& m, H const& h, C const&, read_s& s, read_a c
 			&overlapped,
 			/* lpCompletionRoutine: */ nullptr) == SOCKET_ERROR)
 		{
-			return WSAGetLastError();
+			return static_cast<DWORD>(WSAGetLastError());
 		}
-		return 0;
+		return ERROR_SUCCESS;
 	}));
 
 	if (already_completed)
@@ -191,7 +191,7 @@ io_result<size_t> write_s::submit(M& m, H const& h, C const&, write_s& s, write_
 
 	// If using a multithreaded completion port, after this call
 	// another thread will race to complete this operation.
-	vsm_try(already_completed, submit_socket_io(m, h, [&]()
+	vsm_try(already_completed, submit_socket_io(m, h, [&]() -> DWORD
 	{
 		if (win32::WSASend(
 			posix::unwrap_socket(h.platform_handle),
@@ -202,9 +202,9 @@ io_result<size_t> write_s::submit(M& m, H const& h, C const&, write_s& s, write_
 			&overlapped,
 			/* lpCompletionRoutine: */ nullptr) == SOCKET_ERROR)
 		{
-			return WSAGetLastError();
+			return static_cast<DWORD>(WSAGetLastError());
 		}
-		return 0;
+		return ERROR_SUCCESS;
 	}));
 
 	if (already_completed)

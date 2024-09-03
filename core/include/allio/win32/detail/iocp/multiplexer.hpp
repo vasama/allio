@@ -195,7 +195,7 @@ public:
 		{
 			iocp_multiplexer* m_multiplexer;
 
-			vsm_static_operator void operator()(unique_wait_packet* const wait_packet) vsm_static_operator_const
+			void operator()(unique_wait_packet* const wait_packet) const
 			{
 				m_multiplexer->release_wait_packet(vsm_move(*wait_packet));
 			}

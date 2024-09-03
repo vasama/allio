@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
 project(allio-core)
 
-find_package(vsm-box REQUIRED)
+find_package(vsm-cmake REQUIRED)
 find_package(vsm-core REQUIRED)
-find_package(vsm-flags REQUIRED)
 find_package(vsm-intrusive REQUIRED)
 find_package(vsm-intrusive_ptr REQUIRED)
 find_package(vsm-linear REQUIRED)
@@ -70,6 +69,7 @@ vsm_add_library(
 
 	SOURCES
 		source/allio/impl/byte_io_buffers.cpp
+		source/allio/impl/error_default.cpp
 		source/allio/impl/error.cpp
 		source/allio/impl/network.cpp
 		source/allio/impl/new.cpp
@@ -85,9 +85,7 @@ vsm_add_library(
 		source/allio/impl/handles/map.cpp
 
 	HEADER_DEPENDENCIES
-		vsm::box
 		vsm::core
-		vsm::flags
 		vsm::linear
 		vsm::literals
 		vsm::math
@@ -136,7 +134,6 @@ vsm_configure(
 		source/allio/impl/win32/completion_port.hpp
 		source/allio/impl/win32/environment_block.cpp
 		source/allio/impl/win32/environment_block.hpp
-		source/allio/impl/win32/error.cpp
 		source/allio/impl/win32/error.hpp
 		source/allio/impl/win32/event.cpp
 		source/allio/impl/win32/event.hpp

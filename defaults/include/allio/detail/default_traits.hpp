@@ -77,7 +77,8 @@ class default_sender_traits : public default_traits
 	template<object Object>
 	struct handle_template
 	{
-		template<multiplexer_handle_for<Object> MultiplexerHandle>
+		//template<multiplexer_handle_for<Object> MultiplexerHandle>
+		template<typename MultiplexerHandle>
 		using type = handle<Object, MultiplexerHandle>;
 	};
 
@@ -85,7 +86,7 @@ public:
 	template<object Object, producer Operation>
 	static ex::sender auto produce(io_parameters_t<Object, Operation> const& a)
 	{
-		return io_handle_sender<Object, Operation, typename handle_template<Object>::type>(a);
+		return io_handle_sender<Object, Operation, handle_template<Object>::template type>(a);
 	}
 };
 

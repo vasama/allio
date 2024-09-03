@@ -47,7 +47,7 @@ struct random_parameters_t
 
 	void set_argument(file_offset_t const value)
 	{
-		offset = value;
+		offset = value.offset;
 	}
 };
 

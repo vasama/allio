@@ -7,11 +7,15 @@
 #include <allio/step_deadline.hpp>
 #include <allio/win32/handles/platform_object.hpp>
 
+#include <vsm/numeric.hpp>
 #include <vsm/out_resource.hpp>
 
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
+
+static constexpr fs_size max_file_extent =
+	static_cast<fs_size>(std::numeric_limits<LONGLONG>::max());
 
 template<auto const& Syscall>
 static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h, auto const& a)
@@ -30,7 +34,10 @@ static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h,
 
 	if constexpr (is_random_access)
 	{
-		offset_integer.QuadPart = a.offset;
+		vsm_try_assign(offset_integer.QuadPart, vsm::try_truncate<LONGLONG>(
+			a.offset,
+			error::file_offset_out_of_range));
+
 		p_offset_integer = &offset_integer;
 	}
 
@@ -106,8 +113,12 @@ static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h,
 
 			if constexpr (is_random_access)
 			{
-				//TODO: Handle integer overflow of the offset?
-				offset_integer.QuadPart += transfer_size;
+				if (max_file_extent - transfer_size > static_cast<fs_size>(offset_integer.QuadPart))
+				{
+					goto outer_break;
+				}
+
+				offset_integer.QuadPart += static_cast<LONGLONG>(transfer_size);
 			}
 
 			buffer = buffer.subspan(transfer_size);

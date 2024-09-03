@@ -195,7 +195,6 @@ template<typename Traits>
 {
 	auto a = io_parameters_t<file_t, fs_io::open_t>{};
 	a.special = open_options::temporary;
-	a.path = path;
 	(set_argument(a, vsm_forward(args)), ...);
 	return Traits::template produce<file_t, fs_io::open_t>(a);
 }

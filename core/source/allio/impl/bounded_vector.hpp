@@ -53,13 +53,13 @@ public:
 
 	T& operator[](size_t const index)
 	{
-		vsm_assert(index < MaxSize);
+		vsm_assert(index < m_size);
 		return reinterpret_cast<T*>(m_storage)[index];
 	}
 
 	T const& operator[](size_t const index) const
 	{
-		vsm_assert(index < MaxSize);
+		vsm_assert(index < m_size);
 		return reinterpret_cast<T const*>(m_storage)[index];
 	}
 

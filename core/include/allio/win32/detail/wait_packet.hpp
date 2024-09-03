@@ -13,12 +13,20 @@ enum class wait_packet : platform_handle_uint_type
 
 inline wait_packet wrap_wait_packet(platform_handle_type const handle)
 {
-	return (wait_packet)(platform_handle_uint_type)handle;
+	return vsm_detail_c_cast(
+		wait_packet,
+		vsm_detail_c_cast(platform_handle_uint_type, handle));
+
+	//return (wait_packet)(platform_handle_uint_type)handle;
 }
 
 inline platform_handle_type unwrap_wait_packet(wait_packet const handle)
 {
-	return (platform_handle_type)(platform_handle_uint_type)handle;
+	return vsm_detail_c_cast(
+		platform_handle_type,
+		vsm_detail_c_cast(platform_handle_uint_type, handle));
+
+	//return (platform_handle_type)(platform_handle_uint_type)handle;
 }
 
 

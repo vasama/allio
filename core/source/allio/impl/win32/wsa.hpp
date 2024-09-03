@@ -157,7 +157,7 @@ struct wsa_accept_address_buffer
 	class socket_address_buffer : public posix::socket_address_union
 	{
 		// AcceptEx requires an extra 16 bytes.
-		std::byte m_dummy_buffer[16];
+		[[maybe_unused]] std::byte m_dummy_buffer[16];
 	};
 
 	socket_address_buffer local;

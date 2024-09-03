@@ -117,7 +117,7 @@ public:
 		new_io_buffer_iterator const& lhs,
 		new_io_buffer_iterator const& rhs)
 	{
-		return (rhs.m_ptr - lhs.m_ptr) / sizeof(new_io_buffer);
+		return static_cast<size_t>(rhs.m_ptr - lhs.m_ptr) / sizeof(new_io_buffer);
 	}
 
 	[[nodiscard]] friend auto operator<=>(

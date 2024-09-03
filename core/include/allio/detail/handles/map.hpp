@@ -192,7 +192,7 @@ struct shared_native_handle
 
 	void acquire()
 	{
-		ref_count.fetch_add(1, std::memory_order_relaxed);
+		(void)ref_count.fetch_add(1, std::memory_order_relaxed);
 	}
 
 	void release()
@@ -267,13 +267,13 @@ struct map_t : object_t
 	{
 		[[nodiscard]] void* base() const
 		{
-			using native_handle_type = native_handle<map_t>;
+			using native_handle_type allio_detail_clang_106971 = native_handle<map_t>;
 			return static_cast<Handle const&>(*this).native().native_handle_type::base;
 		}
 
 		[[nodiscard]] size_t size() const
 		{
-			using native_handle_type = native_handle<map_t>;
+			using native_handle_type allio_detail_clang_106971 = native_handle<map_t>;
 			return static_cast<Handle const&>(*this).native().native_handle_type::size;
 		}
 

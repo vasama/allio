@@ -1,6 +1,1 @@
-.vs
-.vscode
-
-**/build*/
-
-CMakeUserPresets.json
+build/

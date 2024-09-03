@@ -31,7 +31,7 @@ public:
 	}
 
 	template<typename T>
-	vsm_static_operator void operator()(T* const storage) vsm_static_operator_const
+	void operator()(T* const storage) const
 	{
 		detail::release_storage(
 			static_cast<void*>(storage),

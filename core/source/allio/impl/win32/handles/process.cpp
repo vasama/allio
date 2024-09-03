@@ -228,8 +228,6 @@ vsm::result<void> process_t::open(
 {
 	vsm_try(handle, win32::open_process(a.id.integer()));
 
-	handle_flags flags = flags::none;
-
 	h.flags = flags::not_null;
 	h.platform_handle = wrap_handle(handle.release());
 	h.id = a.id;

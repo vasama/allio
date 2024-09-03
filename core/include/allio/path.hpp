@@ -189,7 +189,7 @@ public:
 		return view().has_trailing_separators();
 	}
 
-	[[nodiscard]] constexpr void remove_trailing_separators()
+	constexpr void remove_trailing_separators()
 	{
 		string_type::resize(without_trailing_separators().string().size());
 	}

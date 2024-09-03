@@ -1,10 +1,10 @@
-#include <allio/detail/memory.hpp>
+#include <allio/impl/win32/memory.hpp>
 
+#include <allio/error.hpp>
 #include <allio/impl/bounded_vector.hpp>
 
-#include <Windows.h>
-
 using namespace allio;
+using namespace allio::win32;
 using namespace allio::detail;
 
 namespace {
@@ -63,4 +63,41 @@ std::span<page_level const> detail::get_supported_page_levels()
 size_t detail::get_allocation_granularity(page_level const level)
 {
 	return std::max(get_system_info().allocation_granularity, get_page_size(level));
+}
+
+
+vsm::result<ULONG> win32::get_page_protection(protection const protection)
+{
+	switch (protection)
+	{
+		vsm_msvc_warning(push)
+		vsm_msvc_warning(disable: 4063) // Disable C4063: Case is not a valid value for switch of enum.
+
+		vsm_clang_diagnostic(push)
+		vsm_clang_diagnostic(ignored "-Wswitch")
+
+	case protection::none:
+		return PAGE_NOACCESS;
+
+	case protection::read:
+		return PAGE_READONLY;
+
+	case protection::read | protection::write:
+		return PAGE_READWRITE;
+
+	case protection::execute:
+		return PAGE_EXECUTE;
+
+	case protection::execute | protection::read:
+		return PAGE_EXECUTE_READ;
+
+	case protection::execute | protection::read | protection::write:
+		return PAGE_EXECUTE_READWRITE;
+
+	default:
+		return vsm::unexpected(error::unsupported_operation);
+
+		vsm_msvc_warning(pop)
+		vsm_clang_diagnostic(pop)
+	}
 }

@@ -117,7 +117,7 @@ public:
 		m_storage.m_dynamic.reset(new_beg);
 		m_storage.m_index = 0;
 
-		size_t const old_size = m_pos - m_beg;
+		size_t const old_size = static_cast<size_t>(m_pos - m_beg);
 		memcpy(new_beg, m_beg, old_size * sizeof(wchar_t));
 
 		m_beg = new_beg;

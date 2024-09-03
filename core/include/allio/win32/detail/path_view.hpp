@@ -59,8 +59,8 @@ template<typename Char>
 constexpr bool is_drive_letter(Char const letter)
 {
 	return
-		static_cast<Char>('a') <= letter && letter <= static_cast<Char>('z') ||
-		static_cast<Char>('A') <= letter && letter <= static_cast<Char>('Z');
+		(static_cast<Char>('a') <= letter && letter <= static_cast<Char>('z')) ||
+		(static_cast<Char>('A') <= letter && letter <= static_cast<Char>('Z'));
 }
 
 template<typename Char>

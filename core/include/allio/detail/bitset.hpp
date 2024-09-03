@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vsm/box.hpp>
+#include <vsm/arrow.hpp>
 
 #include <bitset>
 #include <optional>
@@ -44,9 +44,9 @@ public:
 		return m_index;
 	}
 
-	[[nodiscard]] constexpr vsm::box<size_t> operator->() const noexcept
+	[[nodiscard]] constexpr vsm::arrow<size_t> operator->() const noexcept
 	{
-		return vsm::box<size_t>(m_index);
+		return vsm::arrow<size_t>(m_index);
 	}
 
 	constexpr index_iterator& operator++() & noexcept

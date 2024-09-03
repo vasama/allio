@@ -5,14 +5,11 @@
 #include <vsm/concepts.hpp>
 #include <vsm/result.hpp>
 
-extern "C"
-void allio_unrecoverable_error(std::error_code error);
-
 namespace allio {
-namespace detail {
 
-void unrecoverable_error_default(std::error_code error);
 void unrecoverable_error(std::error_code error);
+
+namespace detail {
 
 inline void unrecoverable(vsm::result<void> const& e)
 {
@@ -90,6 +87,7 @@ enum class error
 	invalid_path,
 	invalid_current_directory,
 	unrepresentable_path,
+	file_offset_out_of_range,
 
 	// Memory
 	invalid_address,
@@ -140,6 +138,9 @@ void set_error_handler(error_handler* const handler) noexcept;
 {
 	return handler != nullptr ? *handler : get_error_handler();
 }
+
+
+
 
 } // namespace allio
 

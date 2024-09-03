@@ -85,7 +85,8 @@ vsm::result<posix::socket_with_flags> posix::create_socket(
 
 	if (vsm::any_flags(flags, io_flags::create_non_blocking))
 	{
-		h_flags |= set_file_completion_notification_modes((HANDLE)socket.get());
+		h_flags |= set_file_completion_notification_modes(vsm_detail_c_cast(HANDLE, socket.get()));
+		//h_flags |= set_file_completion_notification_modes((HANDLE)socket.get());
 	}
 
 	return vsm_lazy(socket_with_flags
@@ -108,7 +109,7 @@ static vsm::result<posix::unique_socket> wsa_accept(
 		/* lpfnCondition: */ nullptr,
 		/* dwCallbackData: */ 0);
 
-	if (socket == SOCKET_ERROR)
+	if (socket == static_cast<SOCKET>(SOCKET_ERROR))
 	{
 		return vsm::unexpected(posix::get_last_socket_error());
 	}
@@ -136,7 +137,7 @@ vsm::result<posix::socket_with_flags> posix::socket_accept(
 
 	if (vsm::any_flags(flags, io_flags::create_inheritable))
 	{
-		HANDLE const handle = (HANDLE)socket.get();
+		HANDLE const handle = vsm_detail_c_cast(HANDLE, socket.get());
 
 		//TODO: Does WSAAccept set inheritable by default?
 		if (!SetHandleInformation(
@@ -193,7 +194,7 @@ vsm::result<void> posix::socket_set_non_blocking(
 	bool const non_blocking)
 {
 	unsigned long mode = non_blocking ? 1 : 0;
-	if (ioctlsocket(socket, FIONBIO, &mode) == socket_error_value)
+	if (ioctlsocket(socket, static_cast<long>(FIONBIO), &mode) == socket_error_value)
 	{
 		return vsm::unexpected(get_last_socket_error());
 	}

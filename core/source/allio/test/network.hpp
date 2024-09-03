@@ -17,13 +17,20 @@ namespace allio::test {
 // the storage used for the local_address endpoint path.
 using endpoint_type = shared_object<network_endpoint>;
 
-struct endpoint_factory
+class endpoint_factory
 {
+public:
 	virtual network_address_kind address_kind() const = 0;
 	virtual endpoint_type create_endpoint() = 0;
+
+protected:
+	endpoint_factory() = default;
+	endpoint_factory(endpoint_factory const&) = default;
+	endpoint_factory& operator=(endpoint_factory const&) = default;
+	~endpoint_factory() = default;
 };
 
-struct local_endpoint_factory : endpoint_factory
+struct local_endpoint_factory final : endpoint_factory
 {
 	size_t next_id = 0;
 
@@ -55,7 +62,7 @@ struct local_endpoint_factory : endpoint_factory
 	}
 };
 
-struct ipv4_endpoint_factory : endpoint_factory
+struct ipv4_endpoint_factory final : endpoint_factory
 {
 	uint16_t next_port = 50000;
 
@@ -72,7 +79,7 @@ struct ipv4_endpoint_factory : endpoint_factory
 	}
 };
 
-struct ipv6_endpoint_factory : endpoint_factory
+struct ipv6_endpoint_factory final : endpoint_factory
 {
 	uint16_t next_port = 50000;
 

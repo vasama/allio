@@ -39,7 +39,7 @@ public:
 	template<typename Visitor>
 	[[nodiscard]] decltype(auto) visit(Visitor&& visitor) const
 	{
-		return any_string_view::visit(vsm_bind_borrow(_visitor, vsm_forward(visitor)));
+		return any_string_view::visit(vsm_bind_front_borrow(_visitor, vsm_forward(visitor)));
 	}
 
 private:

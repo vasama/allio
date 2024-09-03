@@ -18,7 +18,7 @@ namespace allio::detail {
 struct fs_object_t;
 
 
-using fs_size = int64_t;
+using fs_size = uint64_t;
 
 using fs_clock = std::chrono::file_clock;
 using fs_time_point = fs_clock::time_point;

@@ -2,10 +2,12 @@
 
 #include <allio/impl/new.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
+#include <allio/impl/win32/memory.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/win32/kernel_error.hpp>
 
 #include <vsm/lazy.hpp>
+#include <vsm/numeric.hpp>
 
 #include <Windows.h>
 
@@ -33,6 +35,12 @@ struct mmap_deleter
 	vsm_static_operator void operator()(mmap_view const view) vsm_static_operator_const;
 };
 
+template<>
+void mmap_deleter<mmap_type::section>::operator()(mmap_view const view) vsm_static_operator_const;
+
+template<>
+void mmap_deleter<mmap_type::anonymous>::operator()(mmap_view const view) vsm_static_operator_const;
+
 template<mmap_type Type>
 using unique_mmap = vsm::unique_resource<mmap_view, mmap_deleter<Type>>;
 
@@ -41,40 +49,6 @@ using unique_anonymous_mmap = unique_mmap<mmap_type::anonymous>;
 
 } // namespace
 
-
-static vsm::result<ULONG> get_page_protection(protection const protection)
-{
-	switch (protection)
-	{
-		vsm_msvc_warning(push)
-
-		// Disable C4063: Case is not a valid value for switch of enum.
-		vsm_msvc_warning(disable: 4063)
-
-	case protection::none:
-		return PAGE_NOACCESS;
-
-	case protection::read:
-		return PAGE_READONLY;
-
-	case protection::read | protection::write:
-		return PAGE_READWRITE;
-
-	case protection::execute:
-		return PAGE_EXECUTE;
-
-	case protection::execute | protection::read:
-		return PAGE_EXECUTE_READ;
-
-	case protection::execute | protection::read | protection::write:
-		return PAGE_EXECUTE_READWRITE;
-
-	default:
-		return vsm::unexpected(error::unsupported_operation);
-
-		vsm_msvc_warning(pop)
-	}
-}
 
 static vsm::result<ULONG> get_page_level_allocation_type(page_level const level)
 {
@@ -182,7 +156,9 @@ static vsm::result<unique_section_mmap> map_view_of_section(
 	ULONG const page_protection)
 {
 	LARGE_INTEGER offset_integer;
-	offset_integer.QuadPart = offset;
+	vsm_try_assign(offset_integer.QuadPart, vsm::try_truncate<LONGLONG>(
+		offset,
+		error::file_offset_out_of_range));
 
 	NTSTATUS const status = NtMapViewOfSection(
 		section,
@@ -221,6 +197,7 @@ static vsm::result<void> unmap_view_of_section(
 }
 
 
+template<>
 void mmap_deleter<mmap_type::section>::operator()(mmap_view const view) vsm_static_operator_const
 {
 	unrecoverable(free_virtual_memory(
@@ -230,6 +207,7 @@ void mmap_deleter<mmap_type::section>::operator()(mmap_view const view) vsm_stat
 		MEM_RELEASE));
 }
 
+template<>
 void mmap_deleter<mmap_type::anonymous>::operator()(mmap_view const view) vsm_static_operator_const
 {
 	unrecoverable(unmap_view_of_section(

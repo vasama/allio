@@ -310,4 +310,90 @@ struct network_endpoint_t
 	}
 };
 
+
+#if 1 // NEW
+
+namespace detail {
+
+class network_endpoint_buffer
+{
+};
+
+class network_endpoint_format_functions
+{
+public:
+	virtual vsm::result<void> generic_to_raw(
+		network_endpoint const& endpoint,
+		network_endpoint_buffer const& buffer) = 0;
+
+	virtual vsm::result<void> raw_to_generic(
+		std::span<std::byte const> endpoint,
+		network_endpoint& out_endpoint) = 0;
+
+protected:
+	network_endpoint_format_functions() = default;
+	network_endpoint_format_functions(network_endpoint_format_functions const&) = default;
+	network_endpoint_format_functions& operator=(network_endpoint_format_functions const&) = default;
+	~network_endpoint_format_functions() = default;
+};
+
+class network_endpoint_format
+{
+	[[maybe_unused]] //TODO: Temporary workaround
+	network_endpoint_format_functions const* m_functions;
+
+public:
+	explicit constexpr network_endpoint_format(
+		network_endpoint_format_functions const* const functions)
+		: m_functions(functions)
+	{
+	}
+
+	[[nodiscard]] static constexpr network_endpoint_format generic()
+	{
+		return network_endpoint_format(nullptr);
+	}
+};
+
+class network_endpoint_view
+{
+	static constexpr size_t generic_endpoint_value = static_cast<size_t>(-1);
+
+	void const* m_data;
+	size_t m_size;
+
+public:
+	explicit network_endpoint_view(network_endpoint const& endpoint)
+		: m_data(&endpoint)
+		, m_size(generic_endpoint_value)
+	{
+	}
+
+	[[nodiscard]] bool is_generic_endpoint() const
+	{
+		return m_size == generic_endpoint_value;
+	}
+
+	[[nodiscard]] bool is_raw_endpoint() const
+	{
+		return m_size != generic_endpoint_value;
+	}
+
+	[[nodiscard]] network_endpoint const& get_generic_endpoint() const
+	{
+		vsm_assert(is_generic_endpoint());
+		return *static_cast<network_endpoint const*>(m_data);
+	}
+
+	[[nodiscard]] std::span<std::byte const> get_raw_endpoint() const
+	{
+		vsm_assert(is_raw_endpoint());
+		return std::span<std::byte const>(static_cast<std::byte const*>(m_data), m_size);
+	}
+};
+
+} // namespace detail
+
+#endif // NEW
+
 } // namespace allio

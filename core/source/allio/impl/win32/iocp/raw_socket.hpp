@@ -12,11 +12,11 @@ namespace allio::win32 {
 
 inline void cancel_socket_io(SOCKET const socket, OVERLAPPED& overlapped)
 {
-	if (!CancelIoEx((HANDLE)socket, &overlapped))
+	if (!CancelIoEx(vsm_detail_c_cast(HANDLE, socket), &overlapped))
 	{
 		if (DWORD const error = GetLastError(); error != ERROR_NOT_FOUND)
 		{
-			detail::unrecoverable_error(static_cast<system_error>(error));
+			unrecoverable_error(static_cast<system_error>(error));
 		}
 	}
 }

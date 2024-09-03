@@ -61,7 +61,10 @@ public:
 	basic_kernel_path_converter(basic_kernel_path_converter const&) = delete;
 	basic_kernel_path_converter& operator=(basic_kernel_path_converter const&) = delete;
 
-	static vsm::result<path_type> make_path(Context& context, storage_type& storage, parameters_type const& args)
+	static vsm::result<path_type> make_path(
+		Context& context,
+		storage_type& storage,
+		parameters_type const& args)
 	{
 		// Win32 API form does not allow a directory handle.
 		vsm_assert(!(args.win32_api_form && args.handle));
@@ -79,7 +82,10 @@ public:
 	}
 
 private:
-	explicit basic_kernel_path_converter(Context& context, storage_type& storage, parameters_type const& args)
+	explicit basic_kernel_path_converter(
+		Context& context,
+		storage_type& storage,
+		parameters_type const& args)
 		: m_context(context)
 		, m_storage(storage)
 		, m_handle(args.handle)
@@ -97,7 +103,7 @@ private:
 
 		wchar_t const* const old_beg = m_buffer_pos;
 		wchar_t const* const old_end = m_buffer_end;
-		size_t const old_data_size = old_end - old_beg;
+		size_t const old_data_size = static_cast<size_t>(old_end - old_beg);
 
 		wchar_t* new_buffer_beg;
 		wchar_t* new_buffer_end;
@@ -173,7 +179,7 @@ private:
 
 			auto const r2 = transcode_size<wchar_t>(
 				std::basic_string_view(beg, end).substr(r1.decoded),
-				max_path_size - r1.encoded - (m_buffer_end - m_buffer_pos));
+				max_path_size - r1.encoded - static_cast<size_t>(m_buffer_end - m_buffer_pos));
 
 			if (r2.ec != transcode_error{})
 			{
@@ -207,7 +213,7 @@ private:
 			return {};
 		}
 
-		size_t const size = end - beg;
+		size_t const size = static_cast<size_t>(end - beg);
 
 		wchar_t* const buffer_beg = m_buffer_beg;
 		wchar_t* const buffer_pos = m_buffer_pos;
@@ -255,6 +261,11 @@ private:
 	template<typename Char>
 	bool is_device_name(Char const* beg, Char const* const end)
 	{
+		static constexpr auto is_digit = [](Char const x) -> bool
+		{
+			return static_cast<Char>('0') <= x && x <= static_cast<Char>('9');
+		};
+
 		auto const consume = [&](std::string_view const string) -> bool
 		{
 			Char const* pos = beg;
@@ -265,8 +276,15 @@ private:
 					return false;
 				}
 
-				Char const lower = upper != '$' ? upper + 0x20 : upper;
-				if (Char const input = *pos++; input != upper && input != lower)
+				static_assert('a' > 'A');
+				static constexpr unsigned char lower_offset = 'a' - 'A';
+
+				char const lower = upper == '$'
+					? upper
+					: static_cast<char>(static_cast<unsigned char>(upper) + lower_offset);
+
+				Char const input = *pos++;
+				if (input != static_cast<Char>(upper) && input != static_cast<Char>(lower))
 				{
 					return false;
 				}
@@ -277,7 +295,7 @@ private:
 
 		auto const consume_device = [&]() -> bool
 		{
-			if (size_t const size = end - beg; size >= 3)
+			if (size_t const size = static_cast<size_t>(end - beg); size >= 3)
 			{
 				if (consume("AUX") || consume("PRN") || consume("NUL"))
 				{
@@ -287,7 +305,7 @@ private:
 				if (consume("LPT") || consume("COM"))
 				{
 					// Match "LPT[0-9]" or "COM[0-9]".
-					if (std::iswdigit(*beg))
+					if (is_digit(*beg))
 					{
 						++beg;
 						return true;
@@ -346,7 +364,9 @@ private:
 		vsm_assert(m_buffer_pos == m_buffer_end || *m_buffer_pos != Char('\\'));
 
 		Char const* flush_end = end;
-		auto const flush = [&](Char const* const flush_beg, Char const* const new_flush_end) -> vsm::result<void>
+		auto const flush = [&](
+			Char const* const flush_beg,
+			Char const* const new_flush_end) -> vsm::result<void>
 		{
 			Char const* const literal_beg = flush_beg;
 			Char const* literal_end = flush_end;
@@ -400,7 +420,7 @@ private:
 
 			if (segment_beg[0] == '.')
 			{
-				size_t const segment_size = segment_end - segment_beg;
+				size_t const segment_size = static_cast<size_t>(segment_end - segment_beg);
 
 				if (segment_size == 1)
 				{
@@ -460,7 +480,7 @@ private:
 			context,
 			[this]<typename C>(C const* const beg, C const* const end) -> vsm::result<void>
 			{
-				return push_literal(beg, end);
+				return this->push_literal(beg, end);
 			}
 		);
 	}
@@ -477,7 +497,7 @@ private:
 	template<typename Char>
 	vsm::result<void> push_canonical_literal(Char const* const beg, Char const* const end)
 	{
-		size_t const old_path_size = m_buffer_end - m_buffer_pos;
+		size_t const old_path_size = static_cast<size_t>(m_buffer_end - m_buffer_pos);
 
 		bool first_segment = true;
 		canonicalization_context context(beg, end);
@@ -496,7 +516,7 @@ private:
 			}
 		));
 
-		size_t const new_path_size = m_buffer_end - m_buffer_pos;
+		size_t const new_path_size = static_cast<size_t>(m_buffer_end - m_buffer_pos);
 
 		// The size of the resulting path must match the input.
 		// This catches any skipped components at the front and back.
@@ -649,7 +669,10 @@ private:
 	// X:/*
 	//    ^
 	template<typename Char>
-	vsm::result<void> set_drive_absolute_path(Char const* const beg, Char const* const end, wchar_t const drive)
+	vsm::result<void> set_drive_absolute_path(
+		Char const* const beg,
+		Char const* const end,
+		wchar_t const drive)
 	{
 		vsm_try_void(push_canonical(beg, end));
 		vsm_try_void(push_drive_root(drive));
@@ -662,7 +685,10 @@ private:
 	// //./* or //?/*
 	//     ^        ^
 	template<typename Char>
-	vsm::result<void> set_local_device_path(Char const* const beg, Char const* const end, bool const canonicalize)
+	vsm::result<void> set_local_device_path(
+		Char const* const beg,
+		Char const* const end,
+		bool const canonicalize)
 	{
 		if (canonicalize)
 		{
@@ -753,7 +779,10 @@ private:
 	// X:*
 	//   ^
 	template<typename Char>
-	vsm::result<void> set_drive_relative_path(Char const* const beg, Char const* const end, wchar_t const drive)
+	vsm::result<void> set_drive_relative_path(
+		Char const* const beg,
+		Char const* const end,
+		wchar_t const drive)
 	{
 		if (m_handle)
 		{
@@ -771,32 +800,38 @@ private:
 		bool const is_current_drive = drive == classification.drive;
 		handle_type const current_handle = is_current_drive ? current.handle : handle_type{};
 
-		return set_relative_from_current(beg, end, current_handle, [&]() -> vsm::result<current_path>
-		{
-			if (is_current_drive)
+		return set_relative_from_current(
+			beg,
+			end,
+			current_handle,
+			[&]() -> vsm::result<current_path>
 			{
-				return classification;
-			}
-
-			auto const current_on_drive = m_context.get_current_directory_on_drive(m_lock, drive);
-
-			if (!current_on_drive)
-			{
-				return current_path
+				if (is_current_drive)
 				{
-					.root = store_drive_root(drive),
-				};
-			}
-
-			vsm_try(classification_on_drive, classify_current_path(*current_on_drive));
-
-			if (classification_on_drive.drive != drive)
-			{
-				return vsm::unexpected(error::invalid_current_directory);
-			}
-
-			return classification_on_drive;
-		});
+					return classification;
+				}
+	
+				auto const current_on_drive = m_context.get_current_directory_on_drive(
+					m_lock,
+					drive);
+	
+				if (!current_on_drive)
+				{
+					return current_path
+					{
+						.root = store_drive_root(drive),
+					};
+				}
+	
+				vsm_try(classification_on_drive, classify_current_path(*current_on_drive));
+	
+				if (classification_on_drive.drive != drive)
+				{
+					return vsm::unexpected(error::invalid_current_directory);
+				}
+	
+				return classification_on_drive;
+			});
 	}
 
 	// *
@@ -829,10 +864,15 @@ private:
 	{
 		m_lock = m_context.lock();
 		auto const current = m_context.get_current_directory(m_lock);
-		return set_relative_from_current(beg, end, current.handle, [&]() -> vsm::result<current_path>
-		{
-			return classify_current_path(current.path);
-		});
+
+		return set_relative_from_current(
+			beg,
+			end,
+			current.handle,
+			[&]() -> vsm::result<current_path>
+			{
+				return classify_current_path(current.path);
+			});
 	}
 
 	template<typename Char>
@@ -874,12 +914,15 @@ private:
 		Char const* const end = beg + string.size();
 		vsm_assert(beg != end);
 
-		size_t const size = end - beg;
+		size_t const size = static_cast<size_t>(end - beg);
 		switch (*beg)
 		{
 		case '\\':
 			// Match "\??" and "\??\*".
-			if (size >= 3 && beg[1] == '?' && beg[2] == '?' && (size == 3 || size >= 4 && beg[3] == '\\'))
+			if (size >= 3 &&
+				beg[1] == '?' &&
+				beg[2] == '?' &&
+				(size == 3 || (size >= 4 && beg[3] == '\\')))
 			{
 				if (size <= 4)
 				{
@@ -890,6 +933,7 @@ private:
 
 				return push_literal(beg, end);
 			}
+			[[fallthrough]];
 
 		case '/':
 			if (size >= 2 && is_separator(beg[1]))
@@ -914,7 +958,7 @@ private:
 		default:
 			if (has_drive_letter(beg, end))
 			{
-				wchar_t const drive = *beg; //TODO: convert to upper?
+				wchar_t const drive = static_cast<wchar_t>(*beg); //TODO: convert to upper?
 
 				if (size >= 3 && is_separator(beg[2]))
 				{
@@ -939,7 +983,9 @@ private:
 	}
 
 	template<typename Char>
-	vsm::result<void> _make_path_select(std::basic_string_view<Char> string, std::same_as<null_terminated_t> auto...)
+	vsm::result<void> _make_path_select(
+		std::basic_string_view<Char> string,
+		std::same_as<null_terminated_t> auto...)
 	{
 		if (m_win32_api_form)
 		{
@@ -949,7 +995,9 @@ private:
 		return _make_path(string);
 	}
 
-	vsm::result<void> _make_path_select(std::basic_string_view<char8_t> const string, std::same_as<null_terminated_t> auto... tag)
+	vsm::result<void> _make_path_select(
+		std::basic_string_view<char8_t> const string,
+		std::same_as<null_terminated_t> auto... tag)
 	{
 		return _make_path_select(
 			std::basic_string_view<char>(
@@ -958,7 +1006,9 @@ private:
 			tag...);
 	}
 
-	vsm::result<void> _make_path_select(std::basic_string_view<char16_t> const string, std::same_as<null_terminated_t> auto... tag)
+	vsm::result<void> _make_path_select(
+		std::basic_string_view<char16_t> const string,
+		std::same_as<null_terminated_t> auto... tag)
 	{
 		//TODO: This is technically UB.
 		return _make_path_select(
@@ -968,7 +1018,9 @@ private:
 			tag...);
 	}
 
-	vsm::result<void> _make_path_select(std::basic_string_view<char32_t>, std::same_as<null_terminated_t> auto...)
+	vsm::result<void> _make_path_select(
+		std::basic_string_view<char32_t>,
+		std::same_as<null_terminated_t> auto...)
 	{
 		return vsm::unexpected(error::unsupported_encoding);
 	}

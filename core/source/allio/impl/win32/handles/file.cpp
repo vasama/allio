@@ -41,7 +41,7 @@ vsm::result<fs_size> file_t::tell(
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
-	return information.CurrentByteOffset.QuadPart;
+	return static_cast<fs_size>(information.CurrentByteOffset.QuadPart);
 }
 
 vsm::result<void> file_t::seek(
@@ -49,7 +49,10 @@ vsm::result<void> file_t::seek(
 	io_parameters_t<file_t, seek_t> const& a)
 {
 	FILE_POSITION_INFORMATION information = {};
-	information.CurrentByteOffset.QuadPart = a.offset;
+
+	vsm_try_assign(information.CurrentByteOffset.QuadPart, vsm::try_truncate<LONGLONG>(
+		a.offset,
+		error::file_offset_out_of_range));
 
 	IO_STATUS_BLOCK io_status_block;
 	NTSTATUS const status = NtSetInformationFile(

@@ -145,7 +145,7 @@ private:
 
 		for (size_t i = 0; i < size; ++i)
 		{
-			T const& object = data[data_offset + i];
+			T const& object = static_cast<T const*>(data)[data_offset + i];
 
 			if constexpr (std::is_convertible_v<T const&, native_handle_type const&>)
 			{
@@ -366,7 +366,7 @@ struct process_t : platform_object_t
 	{
 		[[nodiscard]] process_id get_id() const
 		{
-			using native_handle_type = native_handle<process_t>;
+			using native_handle_type allio_detail_clang_106971 = native_handle<process_t>;
 			return static_cast<Handle const&>(*this).native().native_handle_type::id;
 		}
 

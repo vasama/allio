@@ -1,3 +1,5 @@
+#include <vsm/platform.h>
+
 #include <algorithm>
 #include <charconv>
 #include <chrono>
@@ -54,8 +56,11 @@ int main(int const argc, char const* const* const argv)
 
 	if (out.is_open())
 	{
-		for (string_view const command : span(argv, argc).subspan(1))
+		for (string_view const command : span(argv, static_cast<size_t>(argc)).subspan(1))
 		{
+			vsm_msvc_warning(push)
+			vsm_msvc_warning(disable: 4456)
+
 			/**/ if (auto const value = parse(command, "program"))
 			{
 				out << argv[0] << endl;
@@ -108,6 +113,8 @@ int main(int const argc, char const* const* const argv)
 
 				exit_code = EXIT_FAILURE;
 			}
+
+			vsm_msvc_warning(pop)
 		}
 	}
 	else

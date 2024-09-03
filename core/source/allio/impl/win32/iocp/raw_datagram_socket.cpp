@@ -89,7 +89,7 @@ io_result<void> send_s::submit(M& m, H const& h, C const&, send_s& s, send_a con
 
 	s.overlapped.bind(handler);
 
-	vsm_try(already_completed, submit_socket_io(m, h, [&]()
+	vsm_try(already_completed, submit_socket_io(m, h, [&]() -> DWORD
 	{
 		if (win32::WSASendTo(
 			posix::unwrap_socket(h.platform_handle),
@@ -102,9 +102,9 @@ io_result<void> send_s::submit(M& m, H const& h, C const&, send_s& s, send_a con
 			&overlapped,
 			/* lpCompletionRoutine: */ nullptr) == SOCKET_ERROR)
 		{
-			return WSAGetLastError();
+			return static_cast<DWORD>(WSAGetLastError());
 		}
-		return 0;
+		return ERROR_SUCCESS;
 	}));
 
 	if (already_completed)
@@ -158,7 +158,7 @@ io_result<receive_result> recv_s::submit(M& m, H const& h, C const&, recv_s& s, 
 
 	s.overlapped.bind(handler);
 
-	vsm_try(already_completed, submit_socket_io(m, h, [&]()
+	vsm_try(already_completed, submit_socket_io(m, h, [&]() -> DWORD
 	{
 		if (win32::WSARecvFrom(
 			posix::unwrap_socket(h.platform_handle),
@@ -171,9 +171,9 @@ io_result<receive_result> recv_s::submit(M& m, H const& h, C const&, recv_s& s, 
 			&overlapped,
 			/* lpCompletionRoutine: */ nullptr) == SOCKET_ERROR)
 		{
-			return WSAGetLastError();
+			return static_cast<DWORD>(WSAGetLastError());
 		}
-		return 0;
+		return ERROR_SUCCESS;
 	}));
 
 	if (already_completed)

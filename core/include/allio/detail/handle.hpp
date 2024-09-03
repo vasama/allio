@@ -70,8 +70,8 @@ private:
 	native_type m_native = {};
 
 public:
-	template<object Object>
-	using rebind_object = basic_detached_handle<Object>;
+	template<object OtherObject>
+	using rebind_object = basic_detached_handle<OtherObject>;
 
 	template<optional_multiplexer_handle_for<Object> OtherMultiplexerHandle>
 	using rebind_multiplexer = basic_handle<Object, OtherMultiplexerHandle>;
@@ -121,7 +121,7 @@ public:
 
 	[[nodiscard]] explicit operator bool() const
 	{
-		using object_native_handle_type = native_handle<object_t>;
+		using object_native_handle_type allio_detail_clang_106971 = native_handle<object_t>;
 		return m_native.object_native_handle_type::flags[object_t::flags::not_null];
 	}
 
@@ -193,7 +193,7 @@ private:
 	template<object OtherObject, multiplexer_handle_for<OtherObject> OtherMultiplexerHandle>
 	friend class basic_attached_handle;
 
-	template<object Object, multiplexer_handle_for<Object> MultiplexerHandle>
+	template<object OtherObject, multiplexer_handle_for<OtherObject> OtherMultiplexerHandle>
 	friend struct basic_handle_rebind_traits;
 
 	friend handle_traits<basic_detached_handle<Object>>;
@@ -240,9 +240,9 @@ private:
 	vsm_no_unique_address connector_type m_connector;
 
 public:
-	template<object Object>
-		requires multiplexer_handle_for<MultiplexerHandle, Object>
-	using rebind_object = basic_attached_handle<Object, MultiplexerHandle>;
+	template<object OtherObject>
+		requires multiplexer_handle_for<MultiplexerHandle, OtherObject>
+	using rebind_object = basic_attached_handle<OtherObject, MultiplexerHandle>;
 
 	template<optional_multiplexer_handle_for<Object> OtherMultiplexerHandle>
 	using rebind_multiplexer = basic_handle<Object, OtherMultiplexerHandle>;
@@ -310,7 +310,7 @@ public:
 
 	[[nodiscard]] explicit operator bool() const
 	{
-		using object_native_handle_type = native_handle<object_t>;
+		using object_native_handle_type allio_detail_clang_106971 = native_handle<object_t>;
 		return m_native.object_native_handle_type::flags[object_t::flags::not_null];
 	}
 
@@ -346,7 +346,7 @@ private:
 	{
 		vsm::result<detached_handle_type> r(vsm::result_value);
 
-		if (h.object_t::native_type::flags[object_t::flags::not_null])
+		if (h.native_type::flags[object_t::flags::not_null])
 		{
 			auto const r_detach = detach_handle(
 				vsm_as_const(h.m_multiplexer_handle),
@@ -370,7 +370,7 @@ private:
 	template<object OtherObject>
 	friend class basic_detached_handle;
 
-	template<object Object, multiplexer_handle_for<Object> MultiplexerHandle>
+	template<object OtherObject, multiplexer_handle_for<OtherObject> OtherMultiplexerHandle>
 	friend struct basic_handle_rebind_traits;
 
 	friend handle_traits<basic_attached_handle<Object, MultiplexerHandle>>;

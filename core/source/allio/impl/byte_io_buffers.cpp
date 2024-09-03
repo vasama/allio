@@ -31,8 +31,11 @@ static auto with_constant_layouts(
 
 	switch (layout)
 	{
-		vsm_msvc_warning(push);
-		vsm_msvc_warning(disable: 4063); // C4063: case x is not a valid value for switch of enum
+		vsm_msvc_warning(push)
+		vsm_msvc_warning(disable: 4063) // C4063: case x is not a valid value for switch of enum
+
+		vsm_clang_diagnostic(push)
+		vsm_clang_diagnostic(ignored "-Wswitch")
 
 	case data_size:
 		return with_constant_layouts<Layouts..., data_size>(lambda, rest...);
@@ -46,7 +49,8 @@ static auto with_constant_layouts(
 	case size_data | size_le32:
 		return with_constant_layouts<Layouts..., size_data | size_le32>(lambda, rest...);
 
-		vsm_msvc_warning(pop);
+		vsm_msvc_warning(pop)
+		vsm_clang_diagnostic(pop)
 	}
 
 	vsm_unreachable();

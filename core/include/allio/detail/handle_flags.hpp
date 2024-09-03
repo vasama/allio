@@ -26,7 +26,9 @@ public:
 	{
 	}
 
-	constexpr handle_flags& operator=(handle_flags const&) & = default;
+
+	handle_flags(handle_flags const&) = default;
+	handle_flags& operator=(handle_flags const&) & = default;
 
 
 	[[nodiscard]] constexpr bool operator[](detail::handle_flags_enum auto const index) const

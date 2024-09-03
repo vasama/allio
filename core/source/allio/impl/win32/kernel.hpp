@@ -15,18 +15,18 @@
 namespace allio::win32 {
 
 inline constexpr NTSTATUS STATUS_SUCCESS                        = 0;
-inline constexpr NTSTATUS STATUS_NO_MORE_FILES                  = 0x80000006;
-inline constexpr NTSTATUS STATUS_INFO_LENGTH_MISMATCH           = 0xC0000004;
-inline constexpr NTSTATUS STATUS_ACCESS_DENIED                  = 0xC0000022;
-inline constexpr NTSTATUS STATUS_BUFFER_TOO_SMALL               = 0xC0000023;
-inline constexpr NTSTATUS STATUS_OBJECT_TYPE_MISMATCH           = 0xC0000024;
-inline constexpr NTSTATUS STATUS_OBJECT_NAME_INVALID            = 0xC0000033;
-inline constexpr NTSTATUS STATUS_NOT_SUPPORTED                  = 0xC00000BB;
-inline constexpr NTSTATUS STATUS_PROCESS_IS_TERMINATING         = 0xC000010A;
-inline constexpr NTSTATUS status_canceled                       = 0xC0000120;
-inline constexpr NTSTATUS STATUS_INVALID_ADDRESS                = 0xC0000141;
-inline constexpr NTSTATUS STATUS_NOT_FOUND                      = 0xC0000225;
-inline constexpr NTSTATUS STATUS_HANDLE_NOT_CLOSABLE            = 0xC0000325;
+inline constexpr NTSTATUS STATUS_NO_MORE_FILES                  = static_cast<NTSTATUS>(0x80000006);
+inline constexpr NTSTATUS STATUS_INFO_LENGTH_MISMATCH           = static_cast<NTSTATUS>(0xC0000004);
+inline constexpr NTSTATUS STATUS_ACCESS_DENIED                  = static_cast<NTSTATUS>(0xC0000022);
+inline constexpr NTSTATUS STATUS_BUFFER_TOO_SMALL               = static_cast<NTSTATUS>(0xC0000023);
+inline constexpr NTSTATUS STATUS_OBJECT_TYPE_MISMATCH           = static_cast<NTSTATUS>(0xC0000024);
+inline constexpr NTSTATUS STATUS_OBJECT_NAME_INVALID            = static_cast<NTSTATUS>(0xC0000033);
+inline constexpr NTSTATUS STATUS_NOT_SUPPORTED                  = static_cast<NTSTATUS>(0xC00000BB);
+inline constexpr NTSTATUS STATUS_PROCESS_IS_TERMINATING         = static_cast<NTSTATUS>(0xC000010A);
+inline constexpr NTSTATUS status_canceled                       = static_cast<NTSTATUS>(0xC0000120);
+inline constexpr NTSTATUS STATUS_INVALID_ADDRESS                = static_cast<NTSTATUS>(0xC0000141);
+inline constexpr NTSTATUS STATUS_NOT_FOUND                      = static_cast<NTSTATUS>(0xC0000225);
+inline constexpr NTSTATUS STATUS_HANDLE_NOT_CLOSABLE            = static_cast<NTSTATUS>(0xC0000325);
 
 inline std::error_code get_kernel_error_code(NTSTATUS const status)
 {
@@ -36,12 +36,12 @@ inline std::error_code get_kernel_error_code(NTSTATUS const status)
 }
 
 
-inline constexpr ULONG SL_RESTART_SCAN                          = 0x00000001;
+inline constexpr ULONG SL_RESTART_SCAN                          = 0x00000001u;
 
 
-inline constexpr ULONG FILE_DISPOSITION_DO_NOT_DELETE           = 0x00000000;
-inline constexpr ULONG FILE_DISPOSITION_DELETE                  = 0x00000001;
-inline constexpr ULONG FILE_DISPOSITION_POSIX_SEMANTICS         = 0x00000002;
+inline constexpr ULONG FILE_DISPOSITION_DO_NOT_DELETE           = 0x00000000u;
+inline constexpr ULONG FILE_DISPOSITION_DELETE                  = 0x00000001u;
+inline constexpr ULONG FILE_DISPOSITION_POSIX_SEMANTICS         = 0x00000002u;
 
 
 typedef void(NTAPI* PIO_APC_ROUTINE)(

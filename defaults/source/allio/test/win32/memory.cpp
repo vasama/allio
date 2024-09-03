@@ -1,4 +1,8 @@
+#include <vsm/platform.h>
+
 #include <Windows.h>
+
+vsm_clang_diagnostic(ignored "-Wlanguage-extension-token")
 
 namespace allio::test {
 

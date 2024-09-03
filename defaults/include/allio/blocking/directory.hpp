@@ -27,7 +27,7 @@ using directory_handle = traits_type::handle<directory_t>;
 
 namespace this_process {
 
-size_t get_current_directory(any_path_buffer const buffer)
+inline size_t get_current_directory(any_path_buffer const buffer)
 {
 	return detail::get_current_directory<traits_type>(buffer);
 }
@@ -43,7 +43,7 @@ inline void set_current_directory(detail::fs_path const& path)
 	detail::set_current_directory<traits_type>(path);
 }
 
-[[nodiscard]] directory_handle open_current_directory()
+[[nodiscard]] inline directory_handle open_current_directory()
 {
 	return detail::open_current_directory<traits_type>();
 }

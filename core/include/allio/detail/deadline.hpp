@@ -48,7 +48,9 @@ public:
 	}
 
 	constexpr deadline(duration const relative)
-		: deadline(0, relative.count())
+		// A negative duration would cause the relative value to become greater than max_units, and
+		// the long deadline would then be initialized to truncated to never.
+		: deadline(0, static_cast<repr_type>(relative.count()))
 	{
 	}
 
@@ -135,14 +137,15 @@ private:
 	}
 
 	explicit constexpr deadline(repr_type const flag, repr_type const units)
-		: m_bits(units <= max_units ? flag | units : never_bits)
+		: m_bits(units > max_units ? never_bits : flag | units)
 	{
 	}
 
 
 	static constexpr repr_type units_since_epoch(clock::time_point const& time_point)
 	{
-		return std::chrono::duration_cast<duration>(time_point.time_since_epoch()).count();
+		return static_cast<repr_type>(
+			std::chrono::duration_cast<duration>(time_point.time_since_epoch()).count());
 	}
 };
 

@@ -2,6 +2,8 @@
 
 #include <allio/detail/io.hpp>
 
+#include <vsm/platform.h>
+
 namespace allio::detail {
 
 class uniplexer_handle;
@@ -68,11 +70,21 @@ private:
 		vsm_unreachable();
 	}
 
+	struct io_handler_type : io_handler<uniplexer>
+	{
+		using io_handler<uniplexer>::io_handler;
+
+		static void notify(uniplexer::io_status_type&&) noexcept
+		{
+			vsm_unreachable();
+		}
+	};
+
 	static uniplexer multiplexer;
-	static io_handler<uniplexer> handler;
+	static io_handler_type handler;
 };
 inline uniplexer uniplexer_handle::multiplexer;
-inline io_handler<uniplexer> uniplexer_handle::handler(io_callback);
+inline uniplexer_handle::io_handler_type uniplexer_handle::handler(io_callback);
 
 template<std::same_as<uniplexer> Multiplexer, object Object>
 struct async_connector<Multiplexer, Object> : uniplexer::connector_type

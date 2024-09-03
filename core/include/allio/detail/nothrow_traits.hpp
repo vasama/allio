@@ -6,6 +6,8 @@ namespace allio::detail {
 
 struct nothrow_traits
 {
+	static constexpr bool has_transform_result = false;
+
 	template<typename T>
 	using result = vsm::result<T>;
 

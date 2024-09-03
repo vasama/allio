@@ -78,7 +78,7 @@ struct builder : api_string_builder
 			// the input string. Use memmove to shift the string after transcoding.
 			if (beg != end && beg != out_beg)
 			{
-				memmove(out_beg, beg, (end - beg) * sizeof(wchar_t));
+				memmove(out_beg, beg, static_cast<size_t>(end - beg) * sizeof(wchar_t));
 			}
 		}
 		else
