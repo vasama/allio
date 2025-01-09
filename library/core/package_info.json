@@ -1,0 +1,35 @@
+{
+	"package": "allio.core",
+	"version": "0.1",
+	"package_type": "static-library",
+	"requirements": [
+		{
+			"package": "vsm.core",
+			"version": "0.1"
+		},
+		{
+			"package": "vsm.intrusive",
+			"version": "0.1"
+		},
+		{
+			"package": "vsm.intrusive_ptr",
+			"version": "0.1"
+		},
+		{
+			"package": "vsm.offset_ptr",
+			"version": "0.1"
+		},
+		{
+			"package": "vsm.result",
+			"version": "0.1"
+		},
+		{
+			"package": "vsm.tag_ptr",
+			"version": "0.1"
+		},
+		{
+			"package": "vsm.unique_resource",
+			"version": "0.1"
+		}
+	]
+}

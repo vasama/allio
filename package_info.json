@@ -1,0 +1,15 @@
+{
+	"is_root": true,
+
+	"authors": "Lauri Vasama",
+	"license": "MIT",
+	"website": "https://github.com/vasama/allio",
+
+	"requirements": [
+		{
+			"package": "vsm.cmake",
+			"version": "0.1",
+			"visible": false
+		}
+	]
+}

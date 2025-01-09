@@ -9,7 +9,7 @@ class library_object
 	allio::opaque_handle m_handle;
 
 public:
-	
+
 };
 
 } // namespace example::library
