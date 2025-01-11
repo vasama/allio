@@ -2,6 +2,8 @@
 
 #include <allio/error.hpp>
 
+#include <cstring>
+
 using namespace allio;
 using namespace allio::detail;
 
@@ -9,7 +11,7 @@ static bool is_allio_category(std::error_category const& category)
 {
 	return
 		&category == &error_category_instance ||
-		strcmp(category.name(), error_category_name) == 0;
+		std::strcmp(category.name(), error_category_name) == 0;
 }
 
 static bool is_not_enough_memory(std::error_code const e)

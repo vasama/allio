@@ -24,8 +24,6 @@
 namespace allio::detail {
 namespace _sync_wait {
 
-
-
 template<typename MultiplexerHandle>
 class event_queue
 {

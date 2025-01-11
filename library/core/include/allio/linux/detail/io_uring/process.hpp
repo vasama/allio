@@ -10,21 +10,21 @@ struct async_connector<io_uring_multiplexer, process_t>
 	: io_uring_multiplexer::connector_type
 {
 	using M = io_uring_multiplexer;
-	using H = process_t::native_type;
+	using H = native_handle<process_t>;
 	using C = async_connector_t<M, process_t>;
 
 
 };
 
 template<>
-struct async_operation<io_uring_multiplexer, process_t, process_io::wait_t>
+struct async_operation<io_uring_multiplexer, process_t, process_t::wait_t>
 	: io_uring_multiplexer::operation_type
 {
 	using M = io_uring_multiplexer;
-	using H = process_t::native_type const;
+	using H = native_handle<process_t> const;
 	using C = async_connector_t<M, process_t> const;
-	using S = async_operation_t<M, process_t, process_io::wait_t>;
-	using A = io_parameters_t<process_t, process_io::wait_t>;
+	using S = async_operation_t<M, process_t, process_t::wait_t>;
+	using A = io_parameters_t<process_t, process_t::wait_t>;
 
 	/// @brief Timeout passed by reference in a linked timeout SQE.
 	M::timeout timeout;

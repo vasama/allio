@@ -97,7 +97,7 @@ TEST_CASE("Sections using backing files can be created and mapped", "[section_ha
 
 		REQUIRE(memcmp(map.base(), "check", 5) == 0);
 
-		if (vsm::any_flags(mode, file_mode::write_data))
+		if (vsm::all_flags(mode, file_mode::write_data))
 		{
 			memcpy(map.base(), "write", 5);
 			expected_content = "write";
@@ -109,7 +109,7 @@ TEST_CASE("Sections using backing files can be created and mapped", "[section_ha
 TEST_CASE("Entire files can be mapped directly by handle", "[map]")
 {
 	path const file_path = test::get_temp_path();
-	auto const mode = GENERATE(file_mode::read, file_mode::write);
+	auto const mode = GENERATE(file_mode::read, file_mode::read_write);
 
 	test::write_file_content(file_path, "check");
 	std::string expected_content = "check";
@@ -119,7 +119,7 @@ TEST_CASE("Entire files can be mapped directly by handle", "[map]")
 
 		REQUIRE(memcmp(map.base(), "check", 5) == 0);
 
-		if (vsm::any_flags(mode, file_mode::write_data))
+		if (vsm::all_flags(mode, file_mode::write_data))
 		{
 			memcpy(map.base(), "write", 5);
 			expected_content = "write";
@@ -131,7 +131,7 @@ TEST_CASE("Entire files can be mapped directly by handle", "[map]")
 TEST_CASE("Entire files can be mapped directly by path", "[map]")
 {
 	path const file_path = test::get_temp_path();
-	auto const mode = GENERATE(file_mode::read, file_mode::write);
+	auto const mode = GENERATE(file_mode::read, file_mode::read_write);
 
 	test::write_file_content(file_path, "check");
 	std::string expected_content = "check";
@@ -140,7 +140,7 @@ TEST_CASE("Entire files can be mapped directly by path", "[map]")
 
 		REQUIRE(memcmp(map.base(), "check", 5) == 0);
 
-		if (vsm::any_flags(mode, file_mode::write_data))
+		if (vsm::all_flags(mode, file_mode::write_data))
 		{
 			memcpy(map.base(), "write", 5);
 			expected_content = "write";

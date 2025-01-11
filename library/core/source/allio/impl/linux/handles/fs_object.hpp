@@ -15,19 +15,40 @@ struct open_info
 	int flags;
 	mode_t mode;
 
-	static vsm::result<open_info> make(open_parameters const& args);
+	static vsm::result<open_info> make(detail::open_parameters const& args);
 };
 
 vsm::result<detail::unique_handle> open_file(
 	int dir_fd,
 	char const* path,
-	int flags,
-	mode_t mode = 0);
+	open_info const& info);
+
+vsm::result<detail::unique_handle> open_file(
+	int dir_fd,
+	any_path_view path,
+	open_info const& info);
 
 vsm::result<detail::unique_handle> reopen_file(
 	int fd,
+	open_info const& info);
+
+
+inline vsm::result<detail::unique_handle> open_file(
+	int dir_fd,
+	char const* path,
 	int flags,
-	mode_t mode = 0);
+	mode_t mode = 0)
+{
+	return open_file(dir_fd, path, { flags, mode });
+}
+
+inline vsm::result<detail::unique_handle> reopen_file(
+	int fd,
+	int flags,
+	mode_t mode = 0)
+{
+	return reopen_file(fd, { flags, mode });
+}
 
 } // namespace allio::linux
 

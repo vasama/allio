@@ -31,7 +31,7 @@ io_result<void> connect_s::submit(M& m, H& h, C& c, connect_s& s, connect_a cons
 		protocol,
 		a.flags | io_flags::create_non_blocking));
 
-	vsm_try_void(m.attach_handle(posix::wrap_socket(socket.get()), c));
+	vsm_try_void(m.attach_platform_handle(posix::wrap_socket(socket.get()), c));
 
 	// The socket must be bound before calling ConnectEx.
 	{

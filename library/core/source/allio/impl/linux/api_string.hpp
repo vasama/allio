@@ -186,7 +186,9 @@ private:
 	}
 };
 
-inline vsm::result<std::string_view> make_api_string(api_string_storage& storage, any_string_view const string)
+inline vsm::result<std::string_view> make_api_string(
+	api_string_storage& storage,
+	any_string_view const string)
 {
 	std::string_view result;
 	vsm_try_void(api_string_builder::make(storage, [&](auto&& context)
@@ -196,7 +198,9 @@ inline vsm::result<std::string_view> make_api_string(api_string_storage& storage
 	return result;
 }
 
-inline vsm::result<char const*> make_api_c_string(api_string_storage& storage, any_string_view const string)
+inline vsm::result<char const*> make_api_c_string(
+	api_string_storage& storage,
+	any_string_view const string)
 {
 	return make_api_string(storage, string).transform([](auto const& s) { return s.data(); });
 }

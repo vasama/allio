@@ -42,8 +42,9 @@ public:
 
 vsm::result<handle_with_flags> detail::open_unique_file(open_parameters const& a_ref)
 {
-	auto a = a_ref;
+	open_parameters a = a_ref;
 
+	//TODO: Should a non-empty path specify the directory in this case?
 	if (!a.path.path.empty())
 	{
 		return vsm::unexpected(error::invalid_argument);
@@ -67,7 +68,7 @@ vsm::result<handle_with_flags> detail::open_unique_file(open_parameters const& a
 		vsm_try_discard(absolute_deadline.step());
 		vsm_try_assign(a.path.path, name.generate());
 
-		if (auto r = open_file(a))
+		if (auto r = detail::open_file(a))
 		{
 			return r;
 		}
@@ -83,7 +84,7 @@ static vsm::result<handle_with_flags> _open(open_parameters& a)
 
 	if (a.opening == file_opening(0))
 	{
-		if (vsm::any_flags(a.mode, file_mode::write_data))
+		if (vsm::all_flags(a.mode, file_mode::write_data))
 		{
 			a.opening = file_opening::open_or_create;
 		}
@@ -112,8 +113,8 @@ vsm::result<void> detail::open_fs_object(
 		vsm_msvc_warning(disable: 4063) // Disable C4063: Case is not a valid value for switch of enum.
 		vsm_msvc_warning(disable: 4062) // TODO: Move the open kinds into its own enum and re-enable this warning.
 
-		vsm_clang_diagnostic(push)
-		vsm_clang_diagnostic(ignored "-Wswitch")
+		vsm_gnu_diagnostic(push)
+		vsm_gnu_diagnostic(ignored "-Wswitch")
 
 		switch (kind)
 		{
@@ -130,7 +131,7 @@ vsm::result<void> detail::open_fs_object(
 			break;
 		}
 		vsm_msvc_warning(pop)
-		vsm_clang_diagnostic(pop)
+		vsm_gnu_diagnostic(pop)
 	}
 
 	if (a.sharing == file_sharing(0))
@@ -149,11 +150,11 @@ vsm::result<void> detail::open_fs_object(
 
 	vsm_try_bind((handle, flags), _open(a));
 
-	if (vsm::any_flags(a.mode, file_mode::read_data))
+	if (vsm::all_flags(a.mode, file_mode::read_data))
 	{
 		flags |= fs_object_t::flags::readable;
 	}
-	if (vsm::any_flags(a.mode, file_mode::write_data))
+	if (vsm::all_flags(a.mode, file_mode::write_data))
 	{
 		flags |= fs_object_t::flags::writable;
 	}

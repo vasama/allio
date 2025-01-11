@@ -36,7 +36,7 @@ inline vsm::result<void> eventfd_write(int const fd, eventfd_t const value)
 
 inline vsm::result<detail::unique_handle> eventfd(
 	int const flags,
-	int const initial_value)
+	unsigned const initial_value)
 {
 	vsm_assert((flags & ~(EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE)) == 0); //PRECONDITION
 
@@ -54,14 +54,15 @@ inline vsm::result<detail::unique_handle> eventfd(
 	int const flags,
 	eventfd_t const initial_value = 0)
 {
+	static_assert(std::is_unsigned_v<eventfd_t>);
 	vsm_assert(initial_value <= std::numeric_limits<eventfd_t>::max() - 1); //PRECONDITION
 
-	if (initial_value < static_cast<eventfd_t>(std::numeric_limits<int>::max()))
+	if (initial_value < static_cast<eventfd_t>(std::numeric_limits<unsigned>::max()))
 	{
-		return eventfd(flags, static_cast<int>(initial_value));
+		return eventfd(flags, static_cast<unsigned>(initial_value));
 	}
 
-	vsm_try(fd, eventfd(flags, 0));
+	vsm_try(fd, eventfd(flags, static_cast<unsigned>(0)));
 	vsm_try_void(eventfd_write(fd.get(), initial_value));
 	return fd;
 }

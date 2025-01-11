@@ -23,28 +23,25 @@ namespace allio::detail {
 
 class io_uring_multiplexer;
 
+enum class io_uring_options : uint8_t
+{
+	kernel_thread                       = 1 << 0,
+};
+vsm_flag_enum(io_uring_options);
+
 namespace io_uring {
 
 /// @brief Detect kernel support for io_uring.
 /// @return Returns true if the kernel provides some level of support for io_uring.
 bool is_supported();
 
-struct kernel_thread_t
-{
-	std::optional<io_uring_multiplexer const*> kernel_thread;
-};
-inline constexpr explicit_ref_parameter<kernel_thread_t, io_uring_multiplexer const> kernel_thread = {};
+struct kernel_thread_t : explicit_argument<kernel_thread_t, io_uring_multiplexer const*> {};
+inline constexpr explicit_reference_parameter<kernel_thread_t> kernel_thread = {};
 
-struct submission_queue_size_t
-{
-	size_t submission_queue_size = 0;
-};
+struct submission_queue_size_t : explicit_argument<submission_queue_size_t, size_t> {};
 inline constexpr explicit_parameter<submission_queue_size_t> submission_queue_size = {};
 
-struct completion_queue_size_t
-{
-	size_t completion_queue_size = 0;
-};
+struct completion_queue_size_t : explicit_argument<completion_queue_size_t, size_t> {};
 inline constexpr explicit_parameter<completion_queue_size_t> completion_queue_size = {};
 
 } // namespace io_uring
@@ -166,7 +163,7 @@ public:
 	};
 
 private:
-	/// @brief Unique owner of the io uring kernel object.
+	/// @brief Unique owner of the io_uring kernel object.
 	unique_handle m_io_uring;
 
 	/// @brief Unique owner of the mmapped region containing the submission queue indices.
@@ -181,7 +178,7 @@ private:
 
 	/// @brief Ring of completion queue entries.
 	/// @note Written by the kernel, read by user space.
-	void* m_cqes;
+	void const* m_cqes;
 
 
 	flags m_flags;
@@ -208,7 +205,7 @@ private:
 	/// @brief One past the newest submission queue entry consumed by the kernel.
 	/// @note The value always trails @ref m_k_sq_produce.
 	/// @note Written by the kernel, read by user space.
-	vsm::atomic_ref<uint32_t> m_k_sq_consume;
+	vsm::atomic_ref<uint32_t const> m_k_sq_consume;
 
 	/// @brief Maps logical SQE index to physical index in @ref m_sqes.
 	/// @note Written by user space, read by user space and the kernel.
@@ -216,16 +213,16 @@ private:
 
 	/// @brief One past the newest completion queue entry produced by the kernel.
 	/// @note Written by the kernel, read by user space.
-	vsm::atomic_ref<uint32_t> m_k_cq_produce;
+	vsm::atomic_ref<uint32_t const> m_k_cq_produce;
 
 	/// @brief One past the newest completion queue entry consumed by user space.
 	/// @note The value always trails @ref m_k_cq_produce.
 	/// @note Written by user space, read by the kernel.
 	vsm::atomic_ref<uint32_t> m_k_cq_consume;
 
-	/// @brief Describes the io uring dynamic state.
+	/// @brief Describes the io_uring dynamic state.
 	/// @note Written by the kernel, read by user space.
-	vsm::atomic_ref<uint32_t> m_k_flags;
+	vsm::atomic_ref<uint32_t const> m_k_flags;
 
 
 	/// @brief Size of the submission queue buffer.
@@ -258,19 +255,52 @@ private:
 	uint32_t m_cq_consume;
 
 
+#if 0
 	using create_parameters = parameters_t
 	<
 		io_uring::kernel_thread_t,
 		io_uring::submission_queue_size_t,
 		io_uring::completion_queue_size_t
 	>;
+#endif
+
+	struct create_parameters
+	{
+		io_uring_options options;
+		io_uring_multiplexer const* kernel_thread;
+		size_t submission_queue_size;
+		size_t completion_queue_size;
+
+		void set_argument(explicit_reference_parameter<io_uring::kernel_thread_t>)
+		{
+			options |= io_uring_options::kernel_thread;
+		}
+
+		void set_argument(io_uring::kernel_thread_t const value)
+		{
+			options |= io_uring_options::kernel_thread;
+			kernel_thread = value.value;
+		}
+
+		void set_argument(io_uring::submission_queue_size_t const value)
+		{
+			submission_queue_size = value.value;
+		}
+
+		void set_argument(io_uring::completion_queue_size_t const value)
+		{
+			completion_queue_size = value.value;
+		}
+	};
 
 	using poll_parameters = deadline_t;
 
 public:
 	[[nodiscard]] static vsm::result<io_uring_multiplexer> create(auto&&... args)
 	{
-		return _create(make_args<create_parameters>(vsm_forward(args)...));
+		auto a = create_parameters{};
+		(set_argument(a, vsm_forward(args)), ...);
+		return _create(a);
 	}
 
 
@@ -281,8 +311,29 @@ public:
 	}
 
 
-	[[nodiscard]] vsm::result<void> attach_handle(native_platform_handle handle, connector_type& c);
-	[[nodiscard]] vsm::result<void> detach_handle(native_platform_handle handle, connector_type& c);
+	[[nodiscard]] vsm::result<void> attach_platform_handle(
+		native_platform_handle handle,
+		connector_type& c);
+
+	[[nodiscard]] vsm::result<void> detach_platform_handle(
+		native_platform_handle handle,
+		connector_type& c);
+
+	template<typename Object>
+	[[nodiscard]] vsm::result<void> attach_handle(
+		native_handle<Object> const& h,
+		async_connector<io_uring_multiplexer, Object>& c)
+	{
+		return attach_platform_handle(h.platform_handle, c);
+	}
+
+	template<typename Object>
+	[[nodiscard]] vsm::result<void> detach_handle(
+		native_handle<Object> const& h,
+		async_connector<io_uring_multiplexer, Object>& c)
+	{
+		return detach_platform_handle(h.platform_handle, c);
+	}
 
 
 	//void cancel_io(io_handler_type& handler);
@@ -338,25 +389,6 @@ private:
 	[[nodiscard]] static vsm::result<io_uring_multiplexer> _create(create_parameters const& args);
 
 
-	friend vsm::result<void> tag_invoke(
-		attach_handle_t,
-		io_uring_multiplexer& m,
-		platform_object_t::native_type const& h,
-		connector_type& c)
-	{
-		return m.attach_handle(h.platform_handle, c);
-	}
-
-	friend vsm::result<void> tag_invoke(
-		detach_handle_t,
-		io_uring_multiplexer& m,
-		platform_object_t::native_type const& h,
-		connector_type& c)
-	{
-		return m.detach_handle(h.platform_handle, c);
-	}
-
-
 	[[nodiscard]] bool acquire_record_lock()
 	{
 		return vsm::no_flags(
@@ -375,13 +407,19 @@ private:
 	template<typename T>
 	class ring_view
 	{
-		std::byte* m_ring;
+		using void_type = vsm::copy_cv_t<T, void>;
+		using byte_type = vsm::copy_cv_t<T, std::byte>;
+
+		byte_type* m_ring;
 		uint32_t m_mask;
 		uint32_t m_multiply_shift;
 
 	public:
-		explicit ring_view(void* const ring, uint32_t const mask, uint32_t const multiply_shift)
-			: m_ring(static_cast<std::byte*>(ring))
+		explicit ring_view(
+			void_type* const ring,
+			uint32_t const mask,
+			uint32_t const multiply_shift)
+			: m_ring(static_cast<byte_type*>(ring))
 			, m_mask(mask)
 			, m_multiply_shift(multiply_shift)
 		{
@@ -398,9 +436,9 @@ private:
 		return ring_view<io_uring_sqe>(m_sqes.get(), m_sq_size - 1, m_sqe_multiply_shift);
 	}
 
-	[[nodiscard]] ring_view<io_uring_cqe> get_cqes()
+	[[nodiscard]] ring_view<io_uring_cqe const> get_cqes()
 	{
-		return ring_view<io_uring_cqe>(m_cqes, m_cq_size - 1, m_cqe_multiply_shift);
+		return ring_view<io_uring_cqe const>(m_cqes, m_cq_size - 1, m_cqe_multiply_shift);
 	}
 
 	[[nodiscard]] vsm::result<void> commit();

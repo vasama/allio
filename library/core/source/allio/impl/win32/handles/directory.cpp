@@ -100,9 +100,9 @@ directory_entry detail::get_directory_entry(directory_stream_pointer const point
 	};
 }
 
-directory_stream_pointer detail::next_directory_entry(directory_stream_pointer const handle)
+directory_stream_pointer detail::next_directory_entry(directory_stream_pointer const pointer)
 {
-	return wrap_stream(next_entry(unwrap_stream(handle)));
+	return wrap_stream(next_entry(unwrap_stream(pointer)));
 }
 
 

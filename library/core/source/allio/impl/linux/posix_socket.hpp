@@ -1,5 +1,6 @@
-#pragma once
 //TODO: Move to posix/
+
+#pragma once
 
 #ifndef allio_detail_socket_api
 #	error Include <allio/impl/posix/socket.hpp> instead.
@@ -33,30 +34,31 @@ inline constexpr socket_poll_mask socket_poll_w = POLLOUT;
 
 using socket_error = linux::system_error;
 
-inline socket_error get_last_socket_error()
+[[nodiscard]] inline socket_error get_last_socket_error()
 {
 	return linux::get_last_error();
 }
 
 
-inline native_platform_handle wrap_socket(socket_type const socket)
+[[nodiscard]] inline detail::native_platform_handle wrap_socket(socket_type const socket)
 {
-	return linux::wrap_handle(socket);
+	return detail::wrap_handle(socket);
 }
 
-inline socket_type unwrap_socket(native_platform_handle const socket)
+[[nodiscard]] inline socket_type unwrap_socket(detail::native_platform_handle const socket)
 {
-	return linux::unwrap_handle(socket);
+	return detail::unwrap_handle(socket);
 }
 
 
-inline vsm::result<void> close_socket(socket_type const socket)
+inline void close_socket(socket_type const socket)
 {
-	if (close(socket))
+	static_assert(vsm_os_linux, "Check close behaviour on EINTR");
+
+	if (::close(socket) == -1)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		unrecoverable_error(get_last_socket_error());
 	}
-	return {};
 }
 
 } // namespace allio::posix

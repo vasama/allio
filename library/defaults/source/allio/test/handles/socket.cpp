@@ -5,40 +5,14 @@
 
 #include <allio/sync_wait.hpp>
 #include <allio/task.hpp>
+#include <allio/test/match_error.hpp>
 #include <allio/test/network.hpp>
 #include <allio/test/spawn.hpp>
 
 #include <catch2/catch_all.hpp>
 
-#include <format>
-
 using namespace allio;
 namespace ex = stdexec;
-
-namespace {
-
-class match_error
-{
-	std::error_condition m_error_condition;
-
-public:
-	explicit match_error(std::error_condition const error_condition)
-		: m_error_condition(error_condition)
-	{
-	}
-
-	bool match(std::system_error const& e) const
-	{
-		return e.code().default_error_condition() == m_error_condition;
-	}
-
-	std::string toString() const
-	{
-		return std::format("Equals: '{}'", m_error_condition.message());
-	}
-};
-
-} // namespace
 
 TEST_CASE("a stream socket can connect to a listening socket and exchange data", "[socket][blocking]")
 {
@@ -113,29 +87,32 @@ TEST_CASE("a stream socket can asynchronously connect to a listening socket and 
 			// Server
 			[&]() -> task<void>
 			{
-				// Accept client connection
+				// Accept client connection:
 				auto const& [socket, _] = co_await listen_socket.accept();
 
-				// Wait for a request from the client
+				// Wait for a request from the client:
 				signed char request_data;
 				REQUIRE(co_await socket.read_some(as_read_buffer(&request_data, 1)) == 1);
 
-				// Send a reply to the client
+				// Send a reply to the client:
 				signed char const reply_data = -request_data;
 				REQUIRE(co_await socket.write_some(as_write_buffer(&reply_data, 1)) == 1);
+
+				// Wait for orderly shutdown:
+				REQUIRE(co_await socket.read_some(as_read_buffer(&request_data, 1)) == 0);
 			}(),
 
 			// Client
 			[&]() -> task<void>
 			{
-				// Connect to the server
+				// Connect to the server:
 				auto const socket = co_await raw_connect(endpoint);
 
-				// Send a request to the server
+				// Send a request to the server:
 				signed char const request_data = 42;
 				REQUIRE(co_await socket.write_some(as_write_buffer(&request_data, 1)) == 1);
 
-				// Wait for a reply from the server
+				// Wait for a reply from the server:
 				signed char reply_data;
 				REQUIRE(co_await socket.read_some(as_read_buffer(&reply_data, 1)) == 1);
 

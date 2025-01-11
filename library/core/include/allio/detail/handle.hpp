@@ -121,7 +121,7 @@ public:
 
 	[[nodiscard]] explicit operator bool() const
 	{
-		using object_native_handle_type allio_detail_clang_106971 = native_handle<object_t>;
+		using object_native_handle_type [[maybe_unused]] = native_handle<object_t>;
 		return m_native.object_native_handle_type::flags[object_t::flags::not_null];
 	}
 
@@ -310,7 +310,7 @@ public:
 
 	[[nodiscard]] explicit operator bool() const
 	{
-		using object_native_handle_type allio_detail_clang_106971 = native_handle<object_t>;
+		using object_native_handle_type [[maybe_unused]] = native_handle<object_t>;
 		return m_native.object_native_handle_type::flags[object_t::flags::not_null];
 	}
 

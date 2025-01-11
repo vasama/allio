@@ -12,12 +12,12 @@ using namespace allio::detail;
 using namespace allio::linux;
 
 vsm::result<void> platform_object_t::close(
-	native_type& h,
+	native_handle<platform_object_t>& h,
 	io_parameters_t<platform_object_t, close_t> const&)
 {
 	if (h.platform_handle != native_platform_handle::null)
 	{
-		unrecoverable(close_handle(h.platform_handle));
+		close_platform_handle(unwrap_handle(h.platform_handle));
 	}
 	h = {};
 	return {};

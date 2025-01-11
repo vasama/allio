@@ -59,6 +59,7 @@ enum class error
 	unknown_failure,
 	unsupported_operation,
 	unsupported_input_format,
+	device_or_resource_busy,
 
 	// Arguments
 	invalid_argument,

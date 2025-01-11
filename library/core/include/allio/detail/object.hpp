@@ -8,14 +8,6 @@
 
 namespace allio::detail {
 
-#if vsm_compiler_clang
-	// https://github.com/llvm/llvm-project/issues/106971
-#	define allio_detail_clang_106971 [[maybe_unused]]
-#else
-#	define allio_detail_clang_106971
-#endif
-
-
 enum class io_flags : uint8_t
 {
 	none                                = 0,

@@ -25,19 +25,40 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 	}
 
 	auto maximum_mode = file_mode::read_write;
-	switch (args.kind)
+
+	vsm_gnu_diagnostic(push)
+	vsm_gnu_diagnostic(ignored "-Wswitch")
+	switch (args.special & open_kind::mask)
 	{
+	case open_kind::path:
+		info.flags |= O_PATH;
+		maximum_mode = file_mode::none;
+		break;
+
+	case open_kind::file:
+		break;
+
 	case open_kind::directory:
 		info.flags |= O_DIRECTORY;
 		maximum_mode = file_mode::read;
 		break;
 	}
+	vsm_gnu_diagnostic(pop)
+
+	if (info.flags & (O_PATH | O_DIRECTORY))
+	{
+		if (args.opening != file_opening::open_existing)
+		{
+			return vsm::unexpected(error::invalid_argument);
+		}
+	}
+
 	if (!vsm::all_flags(maximum_mode, args.mode))
 	{
 		return vsm::unexpected(error::invalid_argument);
 	}
 
-	if (!args.inheritable)
+	if (vsm::no_flags(args.flags, io_flags::create_inheritable))
 	{
 		info.flags |= O_CLOEXEC;
 	}
@@ -60,28 +81,34 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 		break;
 
 	default:
-		vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(error::unsupported_operation);
 	}
 
-	switch (args.creation)
+	switch (args.opening)
 	{
-	case file_creation::open_existing:
+	case file_opening::open_existing:
 		break;
 
-	case file_creation::create_only:
+	case file_opening::create_only:
 		info.flags |= O_CREAT | O_EXCL;
 		break;
 
-	case file_creation::open_or_create:
+	case file_opening::open_or_create:
 		info.flags |= O_CREAT;
 		break;
 
-	case file_creation::truncate_existing:
+	case file_opening::truncate_existing:
 		info.flags |= O_CREAT | O_TRUNC;
 		break;
 
 	default:
-		vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(error::unsupported_operation);
+	}
+
+	if (info.flags & O_CREAT)
+	{
+		// Apply read/write permissions for owner, group and other by default.
+		info.mode = 0666;
 	}
 
 	return info;
@@ -90,8 +117,7 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 vsm::result<unique_handle> linux::open_file(
 	int dir_fd,
 	char const* const path,
-	int const flags,
-	mode_t const mode)
+	open_info const& info)
 {
 	if (dir_fd == -1)
 	{
@@ -101,8 +127,8 @@ vsm::result<unique_handle> linux::open_file(
 	int const fd = openat(
 		dir_fd,
 		path,
-		flags,
-		mode);
+		info.flags,
+		info.mode);
 
 	if (fd == -1)
 	{
@@ -112,31 +138,36 @@ vsm::result<unique_handle> linux::open_file(
 	return vsm_lazy(unique_handle(fd));
 }
 
+vsm::result<unique_handle> linux::open_file(
+	int const dir_fd,
+	any_path_view const path,
+	open_info const& info)
+{
+	api_string_storage storage;
+	vsm_try(path_c_str, make_api_c_string(storage, path.string()));
+	return open_file(dir_fd, path_c_str, info);
+}
+
 vsm::result<unique_handle> linux::reopen_file(
 	int const fd,
-	int const flags,
-	mode_t const mode)
+	open_info const& info)
 {
-	if (flags & O_DIRECTORY)
+	if (info.flags & O_DIRECTORY)
 	{
-		return open_file(
+		return linux::open_file(
 			fd,
 			".",
-			flags,
-			mode);
+			info.flags,
+			info.mode);
 	}
 
 	char link_path[32];
-	vsm_verify(snprintf(
-		link_path,
-		sizeof(link_path),
-		"/proc/self/fd/%d",
-		fd) > 0);
+	vsm_verify(snprintf(link_path, sizeof(link_path), "/proc/self/fd/%d", fd) > 0);
 
 	int const new_fd = open(
 		link_path,
-		flags,
-		mode);
+		info.flags,
+		info.mode);
 
 	if (new_fd == -1)
 	{
@@ -144,6 +175,75 @@ vsm::result<unique_handle> linux::reopen_file(
 	}
 
 	return vsm_lazy(unique_handle(new_fd));
+}
+
+
+static vsm::result<open_info> make_anonymous_open_info(open_parameters const& args)
+{
+	//TODO: Should a non-zero mode be assigned?
+
+	open_info info =
+	{
+		.flags = O_TMPFILE,
+	};
+
+	// Linux does not provide file sharing restrictions.
+	if (!vsm::all_flags(args.sharing, file_sharing::all))
+	{
+		return vsm::unexpected(error::unsupported_operation);
+	}
+
+	if (vsm::no_flags(args.flags, io_flags::create_inheritable))
+	{
+		info.flags |= O_CLOEXEC;
+	}
+
+	vsm_gnu_diagnostic(push)
+	vsm_gnu_diagnostic(ignored "-Wswitch")
+	switch (args.mode)
+	{
+	case file_mode::write:
+		info.mode = O_WRONLY;
+		break;
+
+	case file_mode(0):
+	case file_mode::read_write:
+		info.mode = O_RDWR;
+		break;
+
+	default:
+		return vsm::unexpected(error::invalid_argument);
+	}
+	vsm_gnu_diagnostic(pop)
+
+	if (args.opening != file_opening(0))
+	{
+		return vsm::unexpected(error::invalid_argument);
+	}
+
+	return info;
+}
+
+vsm::result<handle_with_flags> detail::open_file(open_parameters const& a)
+{
+	open_info info;
+
+	if (vsm::any_flags(a.special, open_options::anonymous))
+	{
+		vsm_try_assign(info, make_anonymous_open_info(a));
+	}
+	else
+	{
+		vsm_try_assign(info, open_info::make(a));
+	}
+
+	auto const base = a.path.base == nullptr
+		? -1
+		: unwrap_handle(a.path.base->platform_handle);
+
+	vsm_try(fd, linux::open_file(base, a.path.path, info));
+
+	return vsm::result<handle_with_flags>(vsm::result_value, vsm_move(fd), handle_flags::none);
 }
 
 
@@ -174,11 +274,11 @@ static vsm::result<std::string_view> read_current_path(char const* const link_pa
 			return vsm::unexpected(error::unknown_failure);
 		}
 
-		// This is surely never true, and could not be handled anyway.
-		vsm_assert(stat.st_size < std::numeric_limits<ssize_t>::max());
+		// This is surely never the case, and could not be handled anyway.
+		vsm_assert(stat.st_size <= std::numeric_limits<ssize_t>::max());
 
 		// Reserve one extra character to correctly interpret the readlink result.
-		if (size_t const min_size = stat.st_size + 1; min_size > buffer.size())
+		if (size_t const min_size = static_cast<size_t>(stat.st_size) + 1; min_size > buffer.size())
 		{
 			// Reserve whatever extra space is available, up to max.
 			vsm_try_assign(buffer, storage.resize(min_size, static_cast<size_t>(-1)));
@@ -198,7 +298,7 @@ static vsm::result<std::string_view> read_current_path(char const* const link_pa
 }
 
 vsm::result<size_t> fs_object_t::get_current_path(
-	native_type const& h,
+	native_handle<fs_object_t> const& h,
 	io_parameters_t<fs_object_t, get_current_path_t> const& a)
 {
 	char link_path[32];

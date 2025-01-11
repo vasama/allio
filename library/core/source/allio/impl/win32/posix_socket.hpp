@@ -53,12 +53,12 @@ private:
 	static socket_error_category const instance;
 };
 
-inline std::error_code make_error_code(socket_error const error)
+[[nodiscard]] inline std::error_code make_error_code(socket_error const error)
 {
 	return std::error_code(static_cast<int>(error), socket_error_category::get());
 }
 
-inline socket_error get_last_socket_error()
+[[nodiscard]] inline socket_error get_last_socket_error()
 {
 	return static_cast<socket_error>(WSAGetLastError());
 }
@@ -73,27 +73,20 @@ struct std::is_error_code_enum<allio::posix::socket_error>
 
 namespace allio::posix {
 
-inline detail::native_platform_handle wrap_socket(SOCKET const socket)
+[[nodiscard]] inline detail::native_platform_handle wrap_socket(SOCKET const socket)
 {
-	return vsm_detail_c_cast(
-		detail::native_platform_handle,
-		vsm_detail_c_cast(detail::platform_handle_uint_type, socket));
-
-	//return (detail::native_platform_handle)(detail::platform_handle_uint_type)socket;
+	return static_cast<detail::native_platform_handle>(
+		static_cast<detail::platform_handle_uint_type>(socket));
 }
 
-inline SOCKET unwrap_socket(detail::native_platform_handle const socket)
+[[nodiscard]] inline SOCKET unwrap_socket(detail::native_platform_handle const socket)
 {
-	return vsm_detail_c_cast(
-		SOCKET,
-		vsm_detail_c_cast(detail::platform_handle_uint_type, socket));
-
-	//return (SOCKET)(detail::platform_handle_uint_type)socket;
+	return static_cast<SOCKET>(static_cast<detail::platform_handle_uint_type>(socket));
 }
 
-inline void close_socket(socket_type const socket)
+[[nodiscard]] inline void close_socket(socket_type const socket)
 {
-	if (closesocket(socket) == socket_error_value)
+	if (::closesocket(socket) == socket_error_value)
 	{
 		unrecoverable_error(get_last_socket_error());
 	}

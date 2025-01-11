@@ -2,6 +2,8 @@
 
 #include <vsm/concepts.hpp>
 
+#include <cstring>
+
 using namespace allio;
 using namespace allio::detail;
 
@@ -24,7 +26,7 @@ static transcode_result _transcode(
 
 	if (encode_data != nullptr)
 	{
-		memmove(encode_data, decode_data, size);
+		std::memmove(encode_data, decode_data, size);
 	}
 
 	if (decode_size > encode_size)
@@ -60,7 +62,7 @@ static transcode_result _transcode(
 }
 
 template<character TargetChar, character SourceChar>
-transcode_result allio::transcode_size(
+transcode_result detail::transcode_size(
 	std::basic_string_view<SourceChar> const decode_buffer,
 	size_t const max_encoded_size)
 {
@@ -72,7 +74,7 @@ transcode_result allio::transcode_size(
 }
 
 template<character TargetChar, character SourceChar>
-transcode_result allio::transcode(
+transcode_result detail::transcode(
 	std::basic_string_view<SourceChar> const decode_buffer,
 	std::span<TargetChar> const encode_buffer)
 {
@@ -83,9 +85,22 @@ transcode_result allio::transcode(
 		encode_buffer.size());
 }
 
+template<character TargetChar, character SourceChar>
+transcode_result detail::transcode_unchecked(
+	std::basic_string_view<SourceChar> const decode_buffer,
+	std::span<TargetChar> const encode_buffer)
+{
+	transcode_result const r = transcode(
+		decode_buffer,
+		encode_buffer);
+	vsm_assert(r.ec == transcode_error{});
+	return r;
+}
+
 #define allio_detail_transcode_instance(S, T) \
-	template transcode_result allio::transcode_size<T, S>(std::basic_string_view<S>, size_t); \
-	template transcode_result allio::transcode<T, S>(std::basic_string_view<S>, std::span<T>); \
+	template transcode_result detail::transcode_size<T, S>(std::basic_string_view<S>, size_t); \
+	template transcode_result detail::transcode<T, S>(std::basic_string_view<S>, std::span<T>); \
+	template transcode_result detail::transcode_unchecked<T, S>(std::basic_string_view<S>, std::span<T>); \
 
 allio_detail_transcode_instance(char, char);
 allio_detail_transcode_instance(char, wchar_t);

@@ -50,6 +50,20 @@ inline vsm::result<detail::unique_handle> duplicate_fd(int const old_fd, int new
 	return vsm_lazy(detail::unique_handle(new_fd));
 }
 
+inline vsm::result<void> set_inheritable(int const fd, bool const inheritable)
+{
+	vsm_try(fd_flags, linux::fcntl(fd, F_GETFD));
+
+	int const fd_cloexec_flag = inheritable ? 0 : FD_CLOEXEC;
+	if ((fd_flags & fd_cloexec_flag) != fd_cloexec_flag)
+	{
+		fd_flags = (fd_flags & ~FD_CLOEXEC) | fd_cloexec_flag;
+		vsm_try_discard(linux::fcntl(fd, F_SETFD, fd_flags));
+	}
+
+	return {};
+}
+
 } // namespace allio::linux
 
 #include <allio/linux/detail/undef.i>

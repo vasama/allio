@@ -8,6 +8,7 @@
 #include <vsm/assert.h>
 #include <vsm/flags.hpp>
 #include <vsm/lazy.hpp>
+#include <vsm/numeric.hpp>
 #include <vsm/tag_ptr.hpp>
 #include <vsm/utility.hpp>
 
@@ -63,7 +64,7 @@ static vsm::result<unique_mmap<T>> mmap(int const fd, uint64_t const offset, siz
 		PROT_READ | PROT_WRITE,
 		MAP_SHARED | MAP_POPULATE,
 		fd,
-		offset);
+		vsm::truncating(offset));
 
 	if (addr == MAP_FAILED)
 	{
@@ -77,7 +78,8 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(create_parameter
 {
 	static constexpr uint32_t min_queue_entries = 32;
 
-	auto const truncate_to_uint32 = [](std::unsigned_integral auto const value) -> vsm::result<uint32_t>
+	auto const truncate_to_uint32 = [](std::unsigned_integral auto const value)
+		-> vsm::result<uint32_t>
 	{
 		if (value > std::numeric_limits<uint32_t>::max())
 		{
@@ -87,11 +89,11 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(create_parameter
 		return static_cast<uint32_t>(value);
 	};
 
+	//TODO: Use the existing vsm/numeric.hpp functions?
 	// Round up to the next power of two no larger than 2^31.
-	// If the
 	auto const round_up_to_power_of_two = [](uint32_t const value) -> vsm::result<uint32_t>
 	{
-		uint32_t const lz = std::countl_zero(value);
+		auto const lz = std::countl_zero(value);
 		if (lz == 0 && (value & value - 1) != 0)
 		{
 			return vsm::unexpected(error::invalid_argument);
@@ -108,13 +110,13 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(create_parameter
 
 	io_uring_params setup = {};
 
-	if (args.kernel_thread)
+	if (vsm::any_flags(args.options, io_uring_options::kernel_thread))
 	{
 		setup.flags |= IORING_SETUP_SQPOLL;
 
-		if (*args.kernel_thread != nullptr)
+		if (args.kernel_thread != nullptr)
 		{
-			setup.wq_fd = (*args.kernel_thread)->m_io_uring.get();
+			setup.wq_fd = static_cast<uint32_t>(args.kernel_thread->m_io_uring.get());
 		}
 	}
 
@@ -190,8 +192,8 @@ io_uring_multiplexer::io_uring_multiplexer(
 	, m_flags{}
 	, m_sqe_size(get_sqe_size(setup))
 	, m_cqe_size(get_cqe_size(setup))
-	, m_sqe_multiply_shift(std::countr_zero(m_sqe_size))
-	, m_cqe_multiply_shift(std::countr_zero(m_cqe_size))
+	, m_sqe_multiply_shift(vsm::truncating(std::countr_zero(m_sqe_size)))
+	, m_cqe_multiply_shift(vsm::truncating(std::countr_zero(m_cqe_size)))
 	, m_cqe_skip_success(0)
 
 	, m_k_sq_produce(*get_shared_uint32(m_sq_mmap, setup.sq_off.tail))
@@ -226,14 +228,16 @@ io_uring_multiplexer::io_uring_multiplexer(
 		m_cqe_skip_success = IOSQE_CQE_SKIP_SUCCESS;
 	}
 
-	for (size_t i = 0; i < m_sq_size; ++i)
+	for (uint32_t i = 0; i < m_sq_size; ++i)
 	{
 		m_k_sq_array[m_sq_acquire + i & m_sq_size - 1] = i;
 	}
 }
 
 
-vsm::result<void> io_uring_multiplexer::attach_handle(native_platform_handle const handle, connector_type& c)
+vsm::result<void> io_uring_multiplexer::attach_platform_handle(
+	native_platform_handle const handle,
+	connector_type& c)
 {
 	//TODO: Implement registered files.
 	c.file_index = -1;
@@ -241,7 +245,9 @@ vsm::result<void> io_uring_multiplexer::attach_handle(native_platform_handle con
 	return {};
 }
 
-vsm::result<void> io_uring_multiplexer::detach_handle(native_platform_handle const handle, connector_type& c)
+vsm::result<void> io_uring_multiplexer::detach_platform_handle(
+	native_platform_handle const handle,
+	connector_type& c)
 {
 	return {};
 }
@@ -312,14 +318,14 @@ bool io_uring_multiplexer::reap_all_cqes()
 		return false;
 	}
 
-	ring_view<io_uring_cqe> const cqes = get_cqes();
+	ring_view<io_uring_cqe const> const cqes = get_cqes();
 
 	for (uint32_t cq_offset = cq_consume; cq_offset != cq_produce; ++cq_offset)
 	{
 		reap_cqe(cqes[cq_offset]);
 
 		// Release this CQE back to the kernel as early as possible.
-		m_k_cq_consume.store(cq_offset, std::memory_order_release);
+		m_k_cq_consume.store(cq_offset + 1, std::memory_order_release);
 	}
 
 	m_cq_consume = cq_produce;
@@ -342,9 +348,9 @@ void io_uring_multiplexer::reap_cqe(io_uring_cqe const& cqe)
 
 	auto const tag = user_data.tag();
 
-	// Emulate IOSQE_CQE_SKIP_SUCCESS for CQEs canceled via links, if requested.
-	// This avoids needing to delay completion of the operation until all
-	// linked CQEs still referencing their associated io_data have been reaped.
+	// Emulate IOSQE_CQE_SKIP_SUCCESS for CQEs canceled via links, if requested. This avoids needing
+	// to delay completion of the operation until all linked CQEs still referencing their associated
+	// io_slot have been reaped.
 	if (cqe.res == -ECANCELED && vsm::any_flags(tag, user_data_tag::cqe_skip_cancel))
 	{
 		return;
@@ -499,8 +505,8 @@ vsm::result<bool> io_uring_multiplexer::_poll(poll_parameters const& args)
 				// polling the io_uring object.
 				need_poll = true;
 
-				// Since we're polling the io_uring, we no longer need to
-				// enter the kernel in order to wait for CQEs.
+				// Since we're polling the io_uring, we no longer need to enter the kernel in order
+				// to wait for CQEs.
 				enter_reason &= ~reason::wait_for_cqes;
 			}
 		}
@@ -515,15 +521,16 @@ vsm::result<bool> io_uring_multiplexer::_poll(poll_parameters const& args)
 				p_enter_arg));
 
 			//TODO: Do we need to handle consumed if kernel thread is not being used?
+			(void)consumed;
 
 			// Check for new CQEs produced by the kernel.
 			acquire_cqes();
 
 			if (has_pending_cqes())
 			{
-				// If we entered for some reason other than waiting for CQEs and
-				// new CQEs did unexpectedly become available, there is no longer
-				// any need to fall back to polling the io_uring.
+				// If we entered for some reason other than waiting for CQEs and new CQEs did
+				// unexpectedly become available, there is no longer any need to fall back to
+				// polling the io_uring.
 				need_poll = false;
 			}
 		}
@@ -548,13 +555,15 @@ vsm::result<bool> io_uring_multiplexer::_poll(poll_parameters const& args)
 				return vsm::unexpected(get_last_error());
 			}
 
+			//TODO: Do we still need to enter in non-kernel-poll mode for the io_uring to make the
+			//      new CQEs available?
+
 			if (r != 0)
 			{
 				// Check for new CQEs produced by the kernel.
 				acquire_cqes();
 
-				// The poll just completed successfully,
-				// so there better be some pending CQEs.
+				// The poll just completed successfully, so there better be some pending CQEs.
 				vsm_assert(has_pending_cqes());
 			}
 		}

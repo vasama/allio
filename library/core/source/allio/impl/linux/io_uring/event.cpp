@@ -15,10 +15,10 @@ using namespace allio::detail;
 using namespace allio::linux;
 
 using M = io_uring_multiplexer;
-using H = event_t::native_type;
+using H = native_handle<event_t>;
 using C = async_connector_t<M, event_t>;
 
-using wait_t = event_io::wait_t;
+using wait_t = event_t::wait_t;
 using wait_s = async_operation_t<M, event_t, wait_t>;
 using wait_a = io_parameters_t<event_t, wait_t>;
 
@@ -35,8 +35,7 @@ static io_result<void> _submit(M& m, H const& h, C const& c, wait_s& s, io_handl
 
 	auto const [fd, fd_flags] = ctx.get_fd(c, h.platform_handle);
 
-	// Polling is required even in auto reset mode
-	// because the event is opened in non-blocking mode.
+	// Polling is required even in auto reset mode because the event is opened in non-blocking mode.
 	vsm_try(poll_sqe, ctx.push(
 	{
 		.opcode = IORING_OP_POLL_ADD,
@@ -57,8 +56,8 @@ static io_result<void> _submit(M& m, H const& h, C const& c, wait_s& s, io_handl
 		// Link the previous SQE to this one.
 		ctx.link_last(IOSQE_IO_LINK);
 
-		// The read value is not actually needed for anything.
-		// Just write the value into a global dummy buffer.
+		// The read value is not actually needed for anything. Just read the value into a global
+		// dummy buffer.
 		vsm_try(read_sqe, ctx.push(
 		{
 			.opcode = IORING_OP_READ,
@@ -87,9 +86,7 @@ io_result<void> wait_s::submit(M& m, H const& h, C const& c, wait_s& s, wait_a c
 	// If the deadline is instant just check the event synchronously.
 	if (a.deadline == deadline::instant())
 	{
-		return linux::test_event(
-			unwrap_handle(h.platform_handle),
-			is_auto_reset(h));
+		return linux::test_event(unwrap_handle(h.platform_handle), is_auto_reset(h));
 	}
 
 	s.handler = &handler;
@@ -106,15 +103,15 @@ io_result<void> wait_s::notify(M& m, H const& h, C const& c, wait_s& s, wait_a c
 		switch (status.result)
 		{
 		case -EAGAIN:
-			// Only the read operation should ever return EAGAIN,
-			// through retrying the operation is fine in either case.
+			// Only the read operation should ever return EAGAIN, through retrying the operation is
+			// fine in either case.
 			vsm_assert(status.slot == nullptr);
 
 			// The read operation is only submitted in auto reset mode.
 			vsm_assert(is_auto_reset(h));
 
-			// Someone else won the race to reset the event.
-			// Retry by submitting both operations again.
+			// Someone else won the race to reset the event. Retry by submitting both operations
+			// again.
 			return _submit(m, h, c, s, *s.handler);
 
 		case -ECANCELED:

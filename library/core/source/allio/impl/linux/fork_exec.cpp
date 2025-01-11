@@ -1,8 +1,13 @@
+// This translation unit is intentionally compiled with the smallest possible set of external
+// dependencies in order to avoid accidentally executing any external code during the fork
+// procedure, as doing so in the forked processes would be unsafe.
+
 #include <allio/impl/linux/fork_exec.hpp>
 
 #include <allio/linux/detail/undef.i>
 
 #include <cerrno>
+#include <climits>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -152,8 +157,8 @@ static int close_other(int const* const array, size_t const count)
 		if (lower_bound + 1 <= upper_bound - 1)
 		{
 			if (close_range(
-				lower_bound + 1,
-				upper_bound - 1,
+				static_cast<unsigned>(lower_bound + 1),
+				static_cast<unsigned>(upper_bound - 1),
 				CLOSE_RANGE_CLOEXEC) == -1)
 			{
 				return errno;
@@ -166,8 +171,8 @@ static int close_other(int const* const array, size_t const count)
 	if (lower_bound != INT_MAX)
 	{
 		if (close_range(
-			lower_bound + 1,
-			INT_MAX,
+			static_cast<unsigned>(lower_bound + 1),
+			static_cast<unsigned>(INT_MAX),
 			CLOSE_RANGE_CLOEXEC) == -1)
 		{
 			return errno;
@@ -232,7 +237,12 @@ static int exec_target(fork_exec_data& data)
 	return errno;
 }
 
-[[noreturn]] void target_entry_point(fork_exec_data& data, int const r_pipe, int const w_pipe)
+// Attempts to exec the target executable. If the exec fails, writes the error code to the output
+// pipe and exits.
+[[noreturn]] static void target_entry_point(
+	fork_exec_data& data,
+	int const r_pipe,
+	int const w_pipe)
 {
 	bool do_exec = true;
 
@@ -388,7 +398,7 @@ static int send_result(int const socket, int const error, result_storage& result
 	if (error == 0)
 	{
 		int pid_fd_array[2];
-		int pid_fd_count = 0;
+		size_t pid_fd_count = 0;
 
 		pid_fd_array[pid_fd_count++] = result.pid_fd.get();
 		if (result.dup_fd.get() != -1)
@@ -536,7 +546,7 @@ static int fork_helper(fork_exec_data& data, result_storage& result)
 	}
 
 	int wait_status;
-	if (waitpid(helper_pid, &wait_status, __WCLONE) != helper_pid)
+	if (waitpid(helper_pid, &wait_status, static_cast<int>(__WCLONE)) != helper_pid)
 	{
 		return errno;
 	}

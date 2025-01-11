@@ -31,21 +31,13 @@ constexpr Char const* skip_separators(Char const* const beg, Char const* const e
 }
 
 template<typename Char>
-constexpr int compare_chars(Char const* beg1, Char const* const end1, Char const* beg2, Char const* const end2)
+constexpr std::strong_ordering compare_chars(
+	Char const* l_beg,
+	Char const* const l_end,
+	Char const* r_beg,
+	Char const* const r_end)
 {
-	size_t const size1 = end1 - beg1;
-	size_t const size2 = end2 - beg2;
-
-	for (size_t i = 0, c = std::min(size1, size2); i < c; ++i)
-	{
-		//TODO: how valid is this in the presence of unsigned character types?
-		if (int const cmp = beg1[i] - beg2[i])
-		{
-			return cmp;
-		}
-	}
-
-	return size1 - size2;
+	return std::lexicographical_compare_three_way(l_beg, l_end, r_beg, r_end);
 }
 
 
@@ -124,7 +116,7 @@ constexpr Char const* find_trailing_separator(Char const* const beg, Char const*
 }
 
 template<typename Char>
-constexpr std::pair<int, bool> root_path_compare(
+constexpr std::pair<std::strong_ordering, bool> root_path_compare(
 	Char const*& l_beg_ref, Char const* const l_end,
 	Char const*& r_beg_ref, Char const* const r_end)
 {
@@ -140,13 +132,13 @@ constexpr std::pair<int, bool> root_path_compare(
 	// Equivalent paths are either both absolute or both relative.
 	if (l_absolute != r_absolute)
 	{
-		return { static_cast<int>(l_absolute) - static_cast<int>(r_absolute), false };
+		return { l_absolute <=> r_absolute, false };
 	}
 
 	l_beg_ref = l_rel;
 	r_beg_ref = r_rel;
 
-	return { 0, l_absolute };
+	return { std::strong_ordering::equal, l_absolute };
 }
 
 } // namespace detail::path_impl
@@ -291,7 +283,7 @@ constexpr bool basic_path_view<Char>::equal(basic_path_view const lhs, basic_pat
 	Char const* beg2 = rhs_string.data();
 	Char const* const end2 = beg2 + lhs_string.size();
 
-	if (root_path_compare(beg1, end1, beg2, end2).first)
+	if (root_path_compare(beg1, end1, beg2, end2).first != 0)
 	{
 		return false;
 	}
@@ -328,7 +320,9 @@ constexpr bool basic_path_view<Char>::equal(basic_path_view const lhs, basic_pat
 }
 
 template <typename Char>
-constexpr int basic_path_view<Char>::compare(basic_path_view const lhs, basic_path_view const rhs)
+constexpr std::strong_ordering basic_path_view<Char>::compare(
+	basic_path_view const lhs,
+	basic_path_view const rhs)
 {
 	using namespace detail::path_impl;
 
@@ -341,9 +335,9 @@ constexpr int basic_path_view<Char>::compare(basic_path_view const lhs, basic_pa
 	Char const* beg2 = rhs_string.data();
 	Char const* const end2 = beg2 + lhs_string.size();
 
-	if (int const cmp = root_path_compare(beg1, end1, beg2, end2).first)
+	if (auto const ordering = root_path_compare(beg1, end1, beg2, end2).first)
 	{
-		return cmp;
+		return ordering;
 	}
 
 	while (true)
@@ -355,15 +349,15 @@ constexpr int basic_path_view<Char>::compare(basic_path_view const lhs, basic_pa
 		beg2 = find_separator(beg2, end2);
 
 		// Compare components.
-		if (int const cmp = compare_chars(cbeg1, beg1, cbeg2, beg2))
+		if (auto const ordering = compare_chars(cbeg1, beg1, cbeg2, beg2))
 		{
-			return cmp;
+			return ordering;
 		}
 
 		// If one path ends and the other doesn't, the comparison result depends on which path ends.
 		if (bool const e1 = beg1 == end1, e2 = beg2 == end2; e1 || e2)
 		{
-			return static_cast<int>(!e1) - static_cast<int>(!e2);
+			return e2 <=> e1;
 		}
 
 		beg1 = skip_separators(beg1 + 1, end1);
@@ -372,7 +366,7 @@ constexpr int basic_path_view<Char>::compare(basic_path_view const lhs, basic_pa
 		// If one path ends and the other doesn't, the comparison result depends on which path ends.
 		if (bool const e1 = beg1 == end1, e2 = beg2 == end2; e1 || e2)
 		{
-			return static_cast<int>(!e1) - static_cast<int>(!e2);
+			return e2 <=> e1;
 		}
 	}
 }
@@ -528,8 +522,8 @@ constexpr basic_path_combine_result<Char> combine_path(basic_path_view<Char> con
 }
 
 
-using platform_path_view = basic_path_view<wchar_t>;
-using platform_path_combine_result = basic_path_combine_result<wchar_t>;
+using platform_path_view = basic_path_view<char>;
+using platform_path_combine_result = basic_path_combine_result<char>;
 
 } // namespace allio
 

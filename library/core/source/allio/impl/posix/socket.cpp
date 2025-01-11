@@ -195,7 +195,7 @@ static vsm::result<void> socket_connect_with_timeout(
 
 			// If connecting failed, use recv to get the reason for the connect failure.
 			char dummy_buffer;
-			int const recv_result = recv(socket, &dummy_buffer, 1, 0);
+			ssize_t const recv_result = recv(socket, &dummy_buffer, 1, 0);
 			vsm_assert(recv_result == socket_error_value);
 
 			return recv_result == socket_error_value

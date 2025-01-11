@@ -101,9 +101,16 @@ vsm_configure(
 		include/allio/win32/detail/win32_fwd.hpp
 
 		# iocp
+		include/allio/win32/detail/iocp/directory.hpp
 		include/allio/win32/detail/iocp/event.hpp
-		include/allio/win32/detail/iocp/wait.hpp
+		include/allio/win32/detail/iocp/file.hpp
 		include/allio/win32/detail/iocp/multiplexer.hpp
+		include/allio/win32/detail/iocp/opaque_object.hpp
+		include/allio/win32/detail/iocp/process.hpp
+		include/allio/win32/detail/iocp/raw_datagram_socket.hpp
+		include/allio/win32/detail/iocp/raw_listen_socket.hpp
+		include/allio/win32/detail/iocp/raw_socket.hpp
+		include/allio/win32/detail/iocp/wait.hpp
 
 	SOURCES
 		source/allio/impl/posix/socket.cpp
@@ -203,16 +210,22 @@ vsm_configure(
 		include/allio/linux/detail/undef.i
 
 		# io_uring
+		include/allio/linux/detail/io_uring/directory.hpp
 		include/allio/linux/detail/io_uring/event.hpp
-		include/allio/linux/detail/io_uring/listen_socket.hpp
+		include/allio/linux/detail/io_uring/file.hpp
+		include/allio/linux/detail/io_uring/io_uring.hpp
 		include/allio/linux/detail/io_uring/multiplexer.hpp
-		include/allio/linux/detail/io_uring/socket.hpp
+		include/allio/linux/detail/io_uring/opaque_object.hpp
+		include/allio/linux/detail/io_uring/process.hpp
+		include/allio/linux/detail/io_uring/raw_datagram_socket.hpp
+		include/allio/linux/detail/io_uring/raw_listen_socket.hpp
+		include/allio/linux/detail/io_uring/raw_socket.hpp
 
 	SOURCES
 		source/allio/impl/linux/api_string.hpp
 		source/allio/impl/linux/byte_io.cpp
 		source/allio/impl/linux/byte_io.hpp
-		source/allio/impl/linux/error.cpp
+		#source/allio/impl/linux/error.cpp
 		source/allio/impl/linux/error.hpp
 		source/allio/impl/linux/fcntl.hpp
 		source/allio/impl/linux/fork_exec.cpp
@@ -264,4 +277,7 @@ vsm_configure(
 
 	TEST_SOURCES
 		source/allio/test/linux/io_uring.cpp
+
+	SOURCE_DEPENDENCIES
+		vsm::intrusive
 )

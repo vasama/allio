@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 using namespace allio;
+using namespace allio::detail;
 
 template<size_t MaxSize>
 using supported_page_levels = bounded_vector<page_level, MaxSize>;
@@ -72,13 +73,13 @@ static vsm::result<supported_page_levels<2>> get_supported_huge_page_levels()
 }
 
 
-page_level allio::get_default_page_level()
+page_level detail::get_default_page_level()
 {
-	static page_level const value = get_page_level(sysconf(_SC_PAGE_SIZE));
+	static page_level const value = get_page_level(static_cast<size_t>(sysconf(_SC_PAGE_SIZE)));
 	return value;
 }
 
-std::span<page_level const> allio::get_supported_page_levels()
+std::span<page_level const> detail::get_supported_page_levels()
 {
 	static auto const value = []() -> supported_page_levels<3>
 	{
@@ -98,7 +99,7 @@ std::span<page_level const> allio::get_supported_page_levels()
 	return value;
 }
 
-size_t allio::get_allocation_granularity(page_level const level)
+size_t detail::get_allocation_granularity(page_level const level)
 {
 	return get_page_size(level);
 }

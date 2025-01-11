@@ -19,7 +19,7 @@ io_result<void> open_s::submit(M& m, H& h, C& c, open_s&, open_a const& a_ref, i
 
 	basic_detached_handle<directory_t> handle;
 	vsm_try_void(blocking_io<directory_t::open_t>(handle, a));
-	vsm_try_void(m.attach_handle(handle.native().platform_handle, c));
+	vsm_try_void(m.attach_platform_handle(handle.native().platform_handle, c));
 	h = handle.release();
 
 	return {};

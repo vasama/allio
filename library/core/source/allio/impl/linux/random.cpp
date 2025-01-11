@@ -24,7 +24,7 @@ static vsm::result<int> get_urandom_fd()
 	});
 }
 
-vsm::result<size_t> detail::secure_random_fill(std::span<std::byte> const buffer)
+vsm::result<size_t> detail::secure_random_fill_some(std::span<std::byte> const buffer)
 {
 	vsm_try(fd, get_urandom_fd());
 

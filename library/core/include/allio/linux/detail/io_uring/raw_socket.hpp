@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/detail/handles/socket.hpp>
+#include <allio/detail/handles/raw_socket.hpp>
 #include <allio/linux/detail/io_uring/multiplexer.hpp>
 
 #include <allio/linux/detail/socket.hpp>
@@ -15,14 +15,14 @@ struct async_connector<io_uring_multiplexer, raw_socket_t>
 };
 
 template<>
-struct async_operation<io_uring_multiplexer, raw_socket_t, socket_io::connect_t>
+struct async_operation<io_uring_multiplexer, raw_socket_t, connect_t>
 	: io_uring_multiplexer::operation_type
 {
 	using M = io_uring_multiplexer;
-	using H = raw_socket_t::native_type;
+	using H = native_handle<raw_socket_t>;
 	using C = async_connector_t<M, raw_socket_t>;
-	using S = async_operation_t<M, raw_socket_t, socket_io::connect_t>;
-	using A = io_parameters_t<raw_socket_t, socket_io::connect_t>;
+	using S = async_operation_t<M, raw_socket_t, connect_t>;
+	using A = io_parameters_t<raw_socket_t, connect_t>;
 
 	unique_wrapped_socket socket;
 	socket_address_storage addr_storage;
@@ -38,11 +38,12 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, byte_io::stream_read_
 	: io_uring_multiplexer::operation_type
 {
 	using M = io_uring_multiplexer;
-	using H = raw_socket_t::native_type;
+	using H = native_handle<raw_socket_t>;
 	using C = async_connector_t<M, raw_socket_t>;
 	using S = async_operation_t<M, raw_socket_t, byte_io::stream_read_t>;
 	using A = io_parameters_t<raw_socket_t, byte_io::stream_read_t>;
 
+	new_io_buffers_storage buffers_storage;
 	M::timeout timeout;
 
 	static io_result<size_t> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
@@ -55,11 +56,12 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, byte_io::stream_write
 	: io_uring_multiplexer::operation_type
 {
 	using M = io_uring_multiplexer;
-	using H = raw_socket_t::native_type;
+	using H = native_handle<raw_socket_t>;
 	using C = async_connector_t<M, raw_socket_t>;
 	using S = async_operation_t<M, raw_socket_t, byte_io::stream_write_t>;
 	using A = io_parameters_t<raw_socket_t, byte_io::stream_write_t>;
 
+	new_io_buffers_storage buffers_storage;
 	M::timeout timeout;
 
 	static io_result<size_t> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
@@ -72,7 +74,7 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, close_t>
 	: io_uring_multiplexer::operation_type
 {
 	using M = io_uring_multiplexer;
-	using H = raw_socket_t::native_type;
+	using H = native_handle<raw_socket_t>;
 	using C = async_connector_t<M, raw_socket_t>;
 	using S = async_operation_t<M, raw_socket_t, close_t>;
 	using A = io_parameters_t<raw_socket_t, close_t>;

@@ -1,9 +1,9 @@
 #include <allio/impl/linux/io_uring.hpp>
 
-#include <allio/event.hpp>
 #include <allio/linux/detail/unique_mmap.hpp>
 
 #include <vsm/atomic.hpp>
+#include <vsm/numeric.hpp>
 
 #include <catch2/catch_all.hpp>
 
@@ -11,6 +11,8 @@
 #include <poll.h>
 #include <sys/mman.h>
 #include <unistd.h>
+
+#include <allio/linux/detail/undef.i>
 
 using namespace allio;
 using namespace allio::detail;
@@ -25,7 +27,7 @@ static vsm::result<unique_mmap<T>> mmap(int const fd, uint64_t const offset, siz
 		PROT_READ | PROT_WRITE,
 		MAP_SHARED | MAP_POPULATE,
 		fd,
-		offset);
+		vsm::truncating(offset));
 
 	if (addr == MAP_FAILED)
 	{
@@ -44,7 +46,6 @@ static vsm::result<std::pair<unique_handle, unique_handle>> create_pipe_pair()
 	}
 	return vsm_lazy(std::pair<unique_handle, unique_handle>(fds[0], fds[1]));
 }
-
 
 TEST_CASE("io_uring", "[io_uring]")
 {
@@ -117,7 +118,7 @@ TEST_CASE("io_uring", "[io_uring]")
 				io_uring.get(),
 				/* to_submit: */ 0,
 				min_complete,
-				/* flags: */ 0,
+				IORING_ENTER_GETEVENTS,
 				/* arg: */ nullptr).value();
 
 			cq_produce = k_cq_produce.load(std::memory_order_acquire);

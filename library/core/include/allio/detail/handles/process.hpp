@@ -366,8 +366,7 @@ struct process_t : platform_object_t
 	{
 		[[nodiscard]] process_id get_id() const
 		{
-			using native_handle_type allio_detail_clang_106971 = native_handle<process_t>;
-			return static_cast<Handle const&>(*this).native().native_handle_type::id;
+			return static_cast<Handle const&>(*this).native().id;
 		}
 
 		[[nodiscard]] auto wait(auto&&... args) const

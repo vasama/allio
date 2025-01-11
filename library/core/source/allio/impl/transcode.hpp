@@ -6,6 +6,8 @@
 
 #include <vsm/assert.h>
 
+#include <cstring>
+
 namespace allio {
 
 using detail::transcode_error;
@@ -52,10 +54,21 @@ vsm::result<size_t> transcode_string(
 				: vsm::unexpected(error::invalid_encoding);
 		}
 
+		#if vsm_config_assert > 0
+		using target_string_view = std::basic_string_view<TargetChar>;
+
+		auto const hash_string = [](auto const& string)
+		{
+			return std::hash<target_string_view>()(target_string_view(string));
+		};
+
+		size_t const out_buffer_hash_1 = hash_string(out_buffer_1);
+		#endif
+
 		vsm_try(out_buffer_2, encode_buffer.resize(r1.encoded + r2.encoded));
 
 		// Resizing the encode buffer again does not overwrite the content already written into it.
-		vsm_assert(memcmp(out_buffer_1.data(), out_buffer_2.data(), r1.encoded) == 0);
+		vsm_assert(out_buffer_hash_1 == hash_string(out_buffer_2.subspan(0, r1.encoded)));
 
 		transcode_unchecked(
 			decode_buffer.substr(r1.decoded),

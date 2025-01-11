@@ -87,4 +87,75 @@ struct rebind_traits;
 template<typename Handle>
 struct handle_traits;
 
+
+//TODO: Consider if the basic_multiplexer_handle etc. should be moved to another header.
+
+template<multiplexer Multiplexer>
+struct _basic_multiplexer_handle
+{
+	class type
+	{
+		Multiplexer* m_multiplexer;
+
+	public:
+		using multiplexer_handle_concept = void;
+
+		using multiplexer_type = Multiplexer;
+
+		type(Multiplexer& multiplexer)
+			: m_multiplexer(&multiplexer)
+		{
+		}
+
+		[[nodiscard]] operator Multiplexer&() const
+		{
+			return *m_multiplexer;
+		}
+
+		template<typename Object>
+		[[nodiscard]] vsm::result<void> attach_handle(
+			native_handle<Object> const& h,
+			async_connector<Multiplexer, Object>& c) const
+		{
+			return m_multiplexer->attach_handle(h, c);
+		}
+
+		template<typename Object>
+		[[nodiscard]] vsm::result<void> detach_handle(
+			native_handle<Object> const& h,
+			async_connector<Multiplexer, Object>& c) const
+		{
+			return m_multiplexer->detach_handle(h, c);
+		}
+
+		friend vsm::result<bool> tag_invoke(poll_io_t, type const& self, auto&&... args)
+		{
+			return poll_io(*self.m_multiplexer, vsm_forward(args)...);
+		}
+	};
+};
+
+template<multiplexer Multiplexer>
+using basic_multiplexer_handle = typename _basic_multiplexer_handle<Multiplexer>::type;
+
+template<multiplexer Multiplexer>
+auto _multiplexer_handle()
+{
+	if constexpr (requires { typename Multiplexer::handle_type; })
+	{
+		static_assert(multiplexer_handle<typename Multiplexer::handle_type>);
+		return vsm_declval(typename Multiplexer::handle_type);
+	}
+	else
+	{
+		return vsm_declval(basic_multiplexer_handle<Multiplexer>);
+	}
+}
+
+template<multiplexer_handle MultiplexerHandle>
+MultiplexerHandle _multiplexer_handle(MultiplexerHandle const&);
+
+template<typename Multiplexer>
+using multiplexer_handle_t = decltype(_multiplexer_handle<Multiplexer>());
+
 } // namespace allio::detail

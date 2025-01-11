@@ -9,11 +9,7 @@
 
 namespace allio::detail {
 
-template<typename... Parameters>
-//TODO: Get rid of this
-struct /*[[deprecated]]*/ parameters_t : Parameters... {};
-
-using no_parameters_t = parameters_t<>;
+struct no_parameters_t {};
 
 
 struct set_argument_t

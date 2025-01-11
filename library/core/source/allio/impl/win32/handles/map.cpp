@@ -239,7 +239,6 @@ static vsm::result<unique_ptr<shared_native_handle<Object>>> make_shared_handle(
 	}));
 }
 
-
 static vsm::result<void> _map_section(
 	native_handle<map_t>& h,
 	io_parameters_t<map_t, map_io::map_memory_t> const& a)
@@ -301,6 +300,7 @@ static vsm::result<void> _map_section(
 	h.section = shared_section.release();
 	h.base = map.get().base;
 	h.size = a.size;
+
 	(void)map.release();
 
 	return {};
@@ -353,6 +353,7 @@ static vsm::result<void> _map_anonymous(
 	}
 
 	h.flags = object_t::flags::not_null | h_flags;
+	h.section = nullptr;
 	h.base = map.get().base;
 	h.size = map.get().size;
 
@@ -484,8 +485,9 @@ page_level map_t::get_page_level(native_handle<map_t> const& h)
 
 	auto const supported_levels = get_supported_page_levels();
 
-	// Windows only supports two paging levels.
-	// Large pages must be supported if the flag was set.
+	// Windows only supports two paging levels. This is not only an assumption about the values
+	// returned by the kernel, but a fact of the get_supported_page_levels implementation on
+	// Windows. Large pages must be supported if the flag was set.
 	vsm_assert(supported_levels.size() == 2);
 
 	return supported_levels[1];

@@ -85,8 +85,7 @@ vsm::result<posix::socket_with_flags> posix::create_socket(
 
 	if (vsm::any_flags(flags, io_flags::create_non_blocking))
 	{
-		h_flags |= set_file_completion_notification_modes(vsm_detail_c_cast(HANDLE, socket.get()));
-		//h_flags |= set_file_completion_notification_modes((HANDLE)socket.get());
+		h_flags |= set_file_completion_notification_modes(reinterpret_cast<HANDLE>(socket.get()));
 	}
 
 	return vsm_lazy(socket_with_flags
@@ -137,7 +136,7 @@ vsm::result<posix::socket_with_flags> posix::socket_accept(
 
 	if (vsm::any_flags(flags, io_flags::create_inheritable))
 	{
-		HANDLE const handle = vsm_detail_c_cast(HANDLE, socket.get());
+		HANDLE const handle = reinterpret_cast<HANDLE>(socket.get());
 
 		//TODO: Does WSAAccept set inheritable by default?
 		if (!SetHandleInformation(

@@ -533,7 +533,7 @@ public:
 	}
 
 private:
-	friend vsm::result<directory_entry_view> tag_invoke(
+	friend vsm::result<bool> tag_invoke(
 		blocking_io_t<directory_iterator_t::next_t>,
 		directory_iterator_handle const& h,
 		no_parameters_t const& a)

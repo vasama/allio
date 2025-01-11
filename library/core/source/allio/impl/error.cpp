@@ -24,6 +24,8 @@ std::string detail::error_category::message(int const code) const
 		return "The requested operation is not supported.";
 	case error::unsupported_input_format:
 		return "The provided data format is not supported.";
+	case error::device_or_resource_busy:
+		return "The device or resource is busy.";
 
 	// Arguments
 	case error::invalid_argument:
@@ -109,6 +111,8 @@ std::error_condition detail::error_category::default_error_condition(int const c
 		return std::error_condition(std::errc::operation_not_supported);
 	case error::unsupported_input_format:
 		return std::error_condition(std::errc::invalid_argument);
+	case error::device_or_resource_busy:
+		return std::error_condition(std::errc::device_or_resource_busy);
 
 	// Arguments
 	case error::invalid_argument:

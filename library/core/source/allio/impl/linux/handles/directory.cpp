@@ -91,22 +91,26 @@ static std::string_view get_entry_name(directory_stream_entry const& entry)
 }
 
 
-static directory_stream_native_handle wrap_stream(directory_stream_entry const* const stream)
+static directory_stream_pointer wrap_stream(directory_stream_entry const* const stream)
 {
-	return static_cast<directory_stream_native_handle>(reinterpret_cast<uintptr_t>(stream));
+	return stream == nullptr
+		? directory_stream_pointer::end_of_stream
+		: static_cast<directory_stream_pointer>(reinterpret_cast<uintptr_t>(stream));
 }
 
-static directory_stream_entry const* unwrap_stream(directory_stream_native_handle const handle)
+static directory_stream_entry const* unwrap_stream(directory_stream_pointer const pointer)
 {
-	vsm_assert(handle != directory_stream_native_handle::directory_end);
-	return reinterpret_cast<directory_stream_entry const*>(static_cast<uintptr_t>(handle));
+	vsm_assert(pointer != directory_stream_pointer::end_of_directory);
+	return pointer == directory_stream_pointer::end_of_stream
+		? nullptr
+		: reinterpret_cast<directory_stream_entry const*>(static_cast<uintptr_t>(pointer));
 }
 
 static directory_stream_entry const* next_entry(directory_stream_entry const* const entry)
 {
 	vsm_assert(entry != nullptr);
 
-	if (size_t const next_offset = entry->d_off)
+	if (size_t const next_offset = static_cast<size_t>(entry->d_off))
 	{
 		return reinterpret_cast<directory_stream_entry const*>(
 			reinterpret_cast<std::byte const*>(entry) + next_offset);
@@ -121,10 +125,10 @@ vsm::result<size_t> directory_entry::get_name(any_string_buffer const buffer) co
 	return transcode_string(name.view<char>(), buffer);
 }
 
-directory_entry directory_entry_view::get_entry(directory_stream_native_handle const handle)
+directory_entry detail::get_directory_entry(directory_stream_pointer const pointer)
 {
-	vsm_assert(handle != directory_stream_native_handle::end);
-	directory_stream_entry const& entry = *unwrap_stream(handle);
+	vsm_assert(pointer != directory_stream_pointer::end_of_stream);
+	directory_stream_entry const& entry = *unwrap_stream(pointer);
 
 	return
 	{
@@ -134,9 +138,9 @@ directory_entry directory_entry_view::get_entry(directory_stream_native_handle c
 	};
 }
 
-directory_stream_native_handle directory_stream_iterator::advance(directory_stream_native_handle const handle)
+directory_stream_pointer detail::next_directory_entry(directory_stream_pointer const pointer)
 {
-	return wrap_stream(next_entry(unwrap_stream(handle)));
+	return wrap_stream(next_entry(unwrap_stream(pointer)));
 }
 
 
@@ -184,10 +188,10 @@ static directory_stream_entry* create_entry_list(std::span<std::byte> const buff
 		if (filter_entry(entry))
 		{
 			// Store the relative offset between the two chosen entries in d_off of the previous entry.
-			*p_last_offset = offset - *p_last_offset;
+			*p_last_offset = static_cast<offset_type>(offset - static_cast<size_t>(*p_last_offset));
 
 			// Temporarily store the absolute offset of this entry in its d_off.
-			entry.d_off = offset;
+			entry.d_off = static_cast<offset_type>(offset);
 
 			// Store the address of this entry's d_off to be updated in the next iteration.
 			p_last_offset = &entry.d_off;
@@ -198,7 +202,7 @@ static directory_stream_entry* create_entry_list(std::span<std::byte> const buff
 
 	// It is possible that p_last_offset still points to first_offset.
 	// Get a pointer to the first entry before potentially zeroing the offset.
-	directory_stream_entry* const first_entry = get_entry(first_offset);
+	directory_stream_entry* const first_entry = get_entry(static_cast<size_t>(first_offset));
 
 	// Finally set the relative offset of the last entry to zero to indicate the end of the list.
 	*p_last_offset = 0;
@@ -207,6 +211,7 @@ static directory_stream_entry* create_entry_list(std::span<std::byte> const buff
 }
 
 
+#if 0
 vsm::result<void> directory_t::open(
 	native_type& h,
 	io_parameters_t<directory_t, open_t> const& a)
@@ -239,39 +244,40 @@ vsm::result<void> directory_t::open(
 
 	return {};
 }
+#endif
 
 vsm::result<directory_stream_view> directory_t::read(
-	native_type const& h,
+	native_handle<directory_t> const& h,
 	io_parameters_t<directory_t, read_t> const& a)
 {
 	//TODO: Align the buffer first.
 	auto buffer = a.buffer;
 
 	memset(a.buffer.data(), 0xCD, a.buffer.size());
-	ssize_t const count = getdents64(
+	ssize_t const size = getdents64(
 		unwrap_handle(h.platform_handle),
 		reinterpret_cast<directory_stream_entry*>(buffer.data()),
 		buffer.size());
 
-	if (count == -1)
+	if (size == -1)
 	{
 		return vsm::unexpected(get_last_error());
 	}
 
-	if (count == 0)
+	if (size == 0)
 	{
-		return directory_stream_view(directory_stream_native_handle::directory_end);
+		return directory_stream_view(directory_stream_pointer::end_of_directory);
 	}
 
-	// Create the iterable entry list by linking the entries together
-	// with relative offsets and discarding . and .. entries.
-	directory_stream_entry const* const entry = create_entry_list(buffer, count);
+	// Create the iterable entry list by linking the entries together with relative offsets and discarding relative
+	// entries (. and ..).
+	directory_stream_entry const* const entry = create_entry_list(buffer, static_cast<size_t>(size));
 
 	return directory_stream_view(wrap_stream(entry));
 }
 
 
-vsm::result<size_t> this_process::get_current_directory(any_path_buffer const buffer)
+vsm::result<size_t> detail::_get_current_directory(any_path_buffer const buffer)
 {
 	char const* const c_string = getcwd(nullptr, 0);
 
@@ -292,7 +298,7 @@ vsm::result<size_t> this_process::get_current_directory(any_path_buffer const bu
 	return transcode_string(std::string_view(c_string), buffer);
 }
 
-vsm::result<void> this_process::set_current_directory(fs_path const path)
+vsm::result<void> detail::_set_current_directory(fs_path const& path)
 {
 	api_string_storage storage;
 	vsm_try(path_string, make_api_string(storage, path.path.string()));
@@ -329,26 +335,20 @@ vsm::result<void> this_process::set_current_directory(fs_path const path)
 	return {};
 }
 
-vsm::result<blocking::directory_handle> this_process::open_current_directory()
+vsm::result<basic_detached_handle<directory_t>> detail::_open_current_directory()
 {
 	vsm_try(fd, linux::open_file(
 		/* dir_fd: */ -1,
-		"",
+		".",
 		O_RDONLY | O_DIRECTORY | O_CLOEXEC));
 
-	return vsm_lazy(blocking::directory_handle(
+	native_handle<directory_t> h = {};
+
+	h.flags = object_t::flags::not_null;
+	h.platform_handle = wrap_handle(fd.release());
+
+	return vsm::result<basic_detached_handle<directory_t>>(
+		vsm::result_value,
 		adopt_handle,
-		fs_object_t::native_type
-		{
-			platform_object_t::native_type
-			{
-				object_t::native_type
-				{
-					object_t::flags::not_null,
-				},
-				wrap_handle(fd.release()),
-			},
-			file_flags::none,
-		}
-	));
+		h);
 }

@@ -4,6 +4,8 @@
 #include <allio/detail/handles/section.hpp>
 #include <allio/detail/new.hpp>
 
+#include <vsm/atomic.hpp>
+
 #include <optional>
 
 namespace allio::detail {
@@ -267,14 +269,12 @@ struct map_t : object_t
 	{
 		[[nodiscard]] void* base() const
 		{
-			using native_handle_type allio_detail_clang_106971 = native_handle<map_t>;
-			return static_cast<Handle const&>(*this).native().native_handle_type::base;
+			return static_cast<Handle const&>(*this).native().base;
 		}
 
 		[[nodiscard]] size_t size() const
 		{
-			using native_handle_type allio_detail_clang_106971 = native_handle<map_t>;
-			return static_cast<Handle const&>(*this).native().native_handle_type::size;
+			return static_cast<Handle const&>(*this).native().size;
 		}
 
 		[[nodiscard]] size_t allocated_size() const

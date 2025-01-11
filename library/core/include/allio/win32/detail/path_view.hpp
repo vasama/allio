@@ -49,7 +49,11 @@ constexpr Char const* skip_separators(Char const* const beg, Char const* const e
 }
 
 template<typename Char>
-constexpr std::strong_ordering compare_chars(Char const* l_beg, Char const* const l_end, Char const* r_beg, Char const* const r_end)
+constexpr std::strong_ordering compare_chars(
+	Char const* l_beg,
+	Char const* const l_end,
+	Char const* r_beg,
+	Char const* const r_end)
 {
 	return std::lexicographical_compare_three_way(l_beg, l_end, r_beg, r_end);
 }

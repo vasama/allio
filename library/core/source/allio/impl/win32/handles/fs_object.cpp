@@ -40,6 +40,7 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 	case open_kind::path:
 		if (args.mode != file_mode::none)
 		{
+			// When opening a path, it is not possible to specify a mode.
 			return vsm::unexpected(error::invalid_argument);
 		}
 		break;
@@ -62,19 +63,19 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 	{
 		info.desired_access |= READ_CONTROL;
 	}
-	if (vsm::any_flags(args.mode, file_mode::read_data))
+	if (vsm::all_flags(args.mode, file_mode::read_data))
 	{
 		info.desired_access |= FILE_GENERIC_READ;
 	}
-	if (vsm::any_flags(args.mode, file_mode::write_data))
+	if (vsm::all_flags(args.mode, file_mode::write_data))
 	{
 		info.desired_access |= FILE_GENERIC_WRITE | DELETE;
 	}
-	if (vsm::any_flags(args.mode, file_mode::read_attributes))
+	if (vsm::all_flags(args.mode, file_mode::read_attributes))
 	{
 		info.desired_access |= FILE_READ_ATTRIBUTES | FILE_READ_EA;
 	}
-	if (vsm::any_flags(args.mode, file_mode::write_attributes))
+	if (vsm::all_flags(args.mode, file_mode::write_attributes))
 	{
 		info.desired_access |= FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA;
 	}
@@ -106,15 +107,15 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 	}
 
 	// Sharing
-	if (vsm::any_flags(args.sharing, file_sharing::unlink))
+	if (vsm::all_flags(args.sharing, file_sharing::unlink))
 	{
 		info.share_access |= FILE_SHARE_DELETE;
 	}
-	if (vsm::any_flags(args.sharing, file_sharing::read))
+	if (vsm::all_flags(args.sharing, file_sharing::read))
 	{
 		info.share_access |= FILE_SHARE_READ;
 	}
-	if (vsm::any_flags(args.sharing, file_sharing::write))
+	if (vsm::all_flags(args.sharing, file_sharing::write))
 	{
 		info.share_access |= FILE_SHARE_WRITE;
 	}
@@ -481,6 +482,7 @@ vsm::result<handle_with_flags> detail::open_file(open_parameters const& a)
 	}
 }
 
+
 vsm::result<size_t> fs_object_t::get_current_path(
 	native_handle<fs_object_t> const& h,
 	io_parameters_t<fs_object_t, get_current_path_t> const& a)
@@ -498,7 +500,7 @@ vsm::result<size_t> fs_object_t::get_current_path(
 }
 
 
-
+//TODO: Why is this inside a namespace?
 namespace allio::win32 {
 
 static vsm::result<FILE_ID_INFO> get_file_id_info(HANDLE const handle)

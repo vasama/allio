@@ -57,7 +57,7 @@ static vsm::result<pid_t> get_process_id(int const fd)
 
 
 vsm::result<void> process_t::open(
-	native_type& h,
+	native_handle<process_t>& h,
 	io_parameters_t<process_t, open_t> const& a)
 {
 	vsm_try(pid, vsm::try_truncate<pid_t>(
@@ -68,37 +68,25 @@ vsm::result<void> process_t::open(
 		pid,
 		/* flags: */ 0));
 
-	if (a.inheritable)
+	if (vsm::any_flags(a.flags, io_flags::create_inheritable))
 	{
-		// Linux currently only supports the FD_CLOEXEC flag,
-		// and it is implicitly assigned by pidfd_open.
-		vsm_assert(linux::fcntl(fd.get(), F_GETFD) == FD_CLOEXEC);
-
-		// Remove the FD_CLOEXEC flag.
-		vsm_try_discard(linux::fcntl(fd.get(), F_SETFD, /* flags: */ 0));
+		linux::set_inheritable(fd.get(), /* inheritable: */ true);
 	}
 
-	h = native_type
-	{
-		platform_object_t::native_type
-		{
-			object_t::native_type
-			{
-				flags::not_null,
-			},
-			wrap_handle(fd.release()),
-		},
-		process_id(0),
-		a.id,
-	};
+	h.flags = flags::not_null;
+	h.platform_handle = wrap_handle(fd.release());
+	h.id = a.id;
+	h.reaper = nullptr;
 
 	return {};
 }
 
-vsm::result<void> process_t::launch(
-	native_type& h,
-	io_parameters_t<process_t, launch_t> const& a)
+vsm::result<void> process_t::create(
+	native_handle<process_t>& h,
+	io_parameters_t<process_t, create_t> const& a)
 {
+	//TODO: Implement inherit_handles
+
 	process_reaper_ptr reaper;
 	handle_flags h_flags = {};
 
@@ -109,11 +97,11 @@ vsm::result<void> process_t::launch(
 	{
 		fork_exec_data data =
 		{
-			.exec_base = a.path.base == nullptr
+			.exec_base = a.executable_path.base == nullptr
 				? AT_FDCWD
-				: unwrap_handle(a.path.base->platform_handle),
+				: unwrap_handle(a.executable_path.base->platform_handle),
 
-			.inheritable_fd = a.inheritable,
+			.inheritable_fd = vsm::any_flags(a.flags, io_flags::create_inheritable),
 		};
 
 		api_string_storage string_storage;
@@ -121,38 +109,44 @@ vsm::result<void> process_t::launch(
 		std::string_view wdir_path;
 		unique_handle exec_fd;
 
+		bool const set_working_directory =
+			a.working_directory.base != nullptr ||
+			!a.working_directory.path.empty();
+
 		vsm_try_void(api_string_builder::make(string_storage, [&](auto&& ctx)
 		{
-			exec_path = ctx.string(a.path.path.string());
+			exec_path = ctx.string(a.executable_path.path.string());
 
-			if (!a.command_line.empty())
+			if (!a.arguments.empty())
 			{
-				data.exec_argv = const_cast<char* const*>(ctx.strings(a.path.path.string(), a.command_line));
+				data.exec_argv = const_cast<char* const*>(ctx.strings(
+					a.executable_path.path.string(),
+					a.arguments));
 			}
 
-			if (a.environment)
+			if (vsm::any_flags(a.options, process_options::set_environment))
 			{
-				data.exec_envp = const_cast<char* const*>(ctx.strings(*a.environment));
+				data.exec_envp = const_cast<char* const*>(ctx.strings(a.environment));
 			}
 
-			if (a.working_directory)
+			if (set_working_directory)
 			{
-				wdir_path = ctx.string(a.working_directory->path.string());
+				wdir_path = ctx.string(a.working_directory.path.string());
 			}
 		}));
 		data.exec_path = exec_path.data();
 
-		if (a.working_directory)
+		if (set_working_directory)
 		{
 			data.wdir_path = wdir_path.data();
 
-			// If the executable path is relative, its meaning
-			// would change with the change of working directory.
-			if (a.path.base == nullptr && path_view(exec_path).is_relative())
+			// If the executable path is relative, its meaning would change with the change of
+			// working directory. In this case the file is opened ahead of time and the file
+			// descriptor is passed to exec instead.
+			if (a.executable_path.base == nullptr && path_view(exec_path).is_relative())
 			{
-				// Open the executable file to deal with the change of working directory.
 				vsm_try_assign(exec_fd, linux::open_file(
-					-1,
+					/* dir_fd: */ -1,
 					exec_path.data(),
 					O_PATH | O_CLOEXEC));
 
@@ -161,75 +155,79 @@ vsm::result<void> process_t::launch(
 				data.exec_flags |= AT_EMPTY_PATH;
 			}
 
-			auto const wdir_base = a.working_directory->base;
-
-			// If a working directory base handle is specified,
-			// make use of it only if the path is relative.
-			if (wdir_base != native_platform_handle::null &&
-				path_view(wdir_path).is_relative())
+			// If a working directory base handle is specified, make use of it only if the path is
+			// relative. If the path is absolute, thee is no need for the base file descriptor.
+			if (a.working_directory.base != nullptr && path_view(wdir_path).is_relative())
 			{
-				data.wdir_base = unwrap_handle(wdir_base);
+				data.wdir_base = unwrap_handle(a.working_directory.base->platform_handle);
 			}
 		}
 
-		if (a.std_input != native_platform_handle::null)
+		if (a.redirect_stdin != nullptr)
 		{
-			data.exec_stdin = unwrap_handle(a.std_input);
+			data.exec_stdin = unwrap_handle(a.redirect_stdin->platform_handle);
 		}
-		if (a.std_output != native_platform_handle::null)
+		if (a.redirect_stdout != nullptr)
 		{
-			data.exec_stdout = unwrap_handle(a.std_output);
+			data.exec_stdout = unwrap_handle(a.redirect_stdout->platform_handle);
 		}
-		if (a.std_error != native_platform_handle::null)
+		if (a.redirect_stderr != nullptr)
 		{
-			data.exec_stderr = unwrap_handle(a.std_error);
+			data.exec_stderr = unwrap_handle(a.redirect_stderr->platform_handle);
 		}
 
-		if (!a.launch_detached && !a.wait_on_close)
+		// If the process is not launched detached and this handle does not wait on close, then a
+		// process reaper object must be created to wait upon the child process.
+		if (vsm::no_flags(
+			a.options,
+			process_options::launch_detached | process_options::wait_on_close))
 		{
 			// A duplicate fd is required for the reaper.
 			data.duplicate_fd = true;
 
-			// Create the reaper before launching so that we are not in trouble
-			// if its creation fails after the child process was already launched.
+			// Create the reaper before launching to avoid the failure after the child process was
+			// already launched, at which point we would have to terminate it and wait for exit.
 			vsm_try_assign(reaper, acquire_process_reaper());
 		}
 
+		// Actually create the process:
 		if (int const error = fork_exec(data))
 		{
 			return vsm::unexpected(static_cast<system_error>(error));
 		}
 
+		// Take ownership of the returned pid_fd.
 		pid_fd.reset(data.pid_fd);
-		pid = data.pid;
 
 		if (reaper != nullptr)
 		{
+			// If a reaper is used, pass ownership of the duplicate pid_fd to it.
 			start_process_reaper(reaper.get(), data.dup_fd);
 		}
 		else
 		{
 			vsm_assert(data.dup_fd == -1);
 		}
+
+		pid = data.pid;
 	}
 
-	if (a.wait_on_close)
+	if (vsm::any_flags(a.options, process_options::wait_on_close))
 	{
 		h_flags |= flags::wait_on_close;
 	}
 
-	h = native_type
+	h = native_handle<process_t>
 	{
-		platform_object_t::native_type
+		native_handle<platform_object_t>
 		{
-			object_t::native_type
+			native_handle<object_t>
 			{
 				flags::not_null | h_flags,
 			},
 			wrap_handle(pid_fd.release()),
 		},
-		process_id(0),
-		process_id(pid),
+		process_id(static_cast<process_id::integer_type>(pid)),
 		reaper.release(),
 	};
 
@@ -237,7 +235,7 @@ vsm::result<void> process_t::launch(
 }
 
 vsm::result<void> process_t::terminate(
-	native_type const& h,
+	native_handle<process_t> const& h,
 	io_parameters_t<process_t, terminate_t> const& a)
 {
 	if (a.exit_code)
@@ -252,8 +250,7 @@ vsm::result<void> process_t::terminate(
 		/* siginfo: */ nullptr,
 		/* flags: */ 0) == -1)
 	{
-		// The process might have exited and been reaped already.
-		// This is not considered an error.
+		// The process might have exited and been reaped already. This is not considered an error.
 		if (int const e = errno; e != ESRCH)
 		{
 			return vsm::unexpected(static_cast<system_error>(e));
@@ -264,7 +261,7 @@ vsm::result<void> process_t::terminate(
 }
 
 vsm::result<process_exit_code> process_t::wait(
-	native_type const& h,
+	native_handle<process_t> const& h,
 	io_parameters_t<process_t, wait_t> const& a)
 {
 	if (static_cast<pid_t>(h.id.integer()) == getpid())
@@ -276,8 +273,8 @@ vsm::result<process_exit_code> process_t::wait(
 
 	if (h.reaper == nullptr || !a.deadline.is_trivial())
 	{
-		// Poll is required to wait for non-child processes,
-		// or to specify a timeout regardless of the relationship.
+		// Poll is required to wait for non-child processes, or to specify a timeout regardless of
+		// the relationship.
 		vsm_try_void(linux::poll(fd, POLLIN, a.deadline));
 	}
 
@@ -292,7 +289,7 @@ vsm::result<process_exit_code> process_t::wait(
 }
 
 vsm::result<void> process_t::close(
-	native_type& h,
+	native_handle<process_t>& h,
 	io_parameters_t<process_t, close_t> const& a)
 {
 	if (h.reaper != nullptr)
@@ -304,6 +301,12 @@ vsm::result<void> process_t::close(
 }
 
 
+process_id _this_process::get_id() noexcept
+{
+	return process_id(static_cast<process_id::integer_type>(getpid()));
+}
+
+#if 0
 blocking::process_handle const& this_process::get_handle()
 {
 	static constexpr auto make_handle = []()
@@ -334,3 +337,4 @@ vsm::result<blocking::process_handle> this_process::open()
 {
 	return blocking::open_process(process_id(getpid()));
 }
+#endif

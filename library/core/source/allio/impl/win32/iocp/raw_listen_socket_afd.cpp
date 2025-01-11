@@ -38,7 +38,7 @@ io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s&, listen_a const& a,
 		addr,
 		a.backlog));
 
-	vsm_try_void(m.attach_handle(
+	vsm_try_void(m.attach_platform_handle(
 		posix::wrap_socket(socket.get()),
 		c));
 
@@ -75,7 +75,7 @@ static io_result<accept_result_type> make_accept_result(
 	posix::socket_address_union const& addr)
 {
 	socket_handle_type::connector_type c;
-	vsm_try_void(m.attach_handle(socket.get(), c));
+	vsm_try_void(m.attach_platform_handle(socket.get(), c));
 
 	auto const make_socket_handle = [&]()
 	{
@@ -98,7 +98,7 @@ static io_result<accept_result_type> continue_accept_2(M& m, H const& h, accept_
 
 	unique_handle& handle = s.handle;
 	socket_handle_type::connector_type new_c;
-	vsm_try_void(m.attach_handle(handle.get(), new_c));
+	vsm_try_void(m.attach_platform_handle(handle.get(), new_c));
 
 	auto const make_socket_handle = [&]()
 	{

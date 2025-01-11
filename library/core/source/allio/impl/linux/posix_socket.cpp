@@ -136,14 +136,20 @@ vsm::result<void> posix::socket_set_non_blocking(
 	return {};
 }
 
+//TODO: Detect the iovec layout automatically.
+static constexpr auto layout = new_io_buffer_layout::data_size;
+
 vsm::result<size_t> posix::socket_scatter_read(
 	socket_type const socket,
-	read_buffers const buffers)
+	new_read_buffers const buffers)
 {
+	new_io_buffers_storage storage;
+	vsm_try(transformed_buffers, get_io_buffers(storage, buffers, layout));
+
 	ssize_t const r = readv(
 		socket,
-		reinterpret_cast<iovec const*>(buffers.data()),
-		vsm::saturating(buffers.size()));
+		reinterpret_cast<iovec const*>(transformed_buffers.buffers_data),
+		vsm::saturating(transformed_buffers.buffers_size));
 
 	if (r == -1)
 	{
@@ -155,12 +161,15 @@ vsm::result<size_t> posix::socket_scatter_read(
 
 vsm::result<size_t> posix::socket_gather_write(
 	socket_type const socket,
-	write_buffers const buffers)
+	new_write_buffers const buffers)
 {
+	new_io_buffers_storage storage;
+	vsm_try(transformed_buffers, get_io_buffers(storage, buffers, layout));
+
 	ssize_t const r = writev(
 		socket,
-		reinterpret_cast<iovec const*>(buffers.data()),
-		vsm::saturating(buffers.size()));
+		reinterpret_cast<iovec const*>(transformed_buffers.buffers_data),
+		vsm::saturating(transformed_buffers.buffers_size));
 
 	if (r == -1)
 	{
@@ -173,15 +182,19 @@ vsm::result<size_t> posix::socket_gather_write(
 vsm::result<size_t> posix::socket_receive_from(
 	socket_type const socket,
 	socket_address& addr,
-	read_buffers const buffers)
+	new_read_buffers const buffers)
 {
+	new_io_buffers_storage storage;
+	vsm_try(transformed_buffers, get_io_buffers(storage, buffers, layout));
+	auto const vectors = reinterpret_cast<iovec const*>(transformed_buffers.buffers_data);
+
 	msghdr message =
 	{
 		.msg_name = &addr.addr,
 		.msg_namelen = sizeof(socket_address_union),
 		// msghdr::msg_iov seems to be non-const-correct.
-		.msg_iov = reinterpret_cast<iovec*>(const_cast<read_buffer*>(buffers.data())),
-		.msg_iovlen = buffers.size(),
+		.msg_iov = const_cast<iovec*>(vectors),
+		.msg_iovlen = transformed_buffers.buffers_size,
 	};
 
 	ssize_t const r = recvmsg(
@@ -201,15 +214,19 @@ vsm::result<size_t> posix::socket_receive_from(
 vsm::result<void> posix::socket_send_to(
 	socket_type const socket,
 	socket_address const& addr,
-	write_buffers const buffers)
+	new_write_buffers const buffers)
 {
+	new_io_buffers_storage storage;
+	vsm_try(transformed_buffers, get_io_buffers(storage, buffers, layout));
+	auto const vectors = reinterpret_cast<iovec const*>(transformed_buffers.buffers_data);
+
 	msghdr const message =
 	{
 		.msg_name = &const_cast<socket_address&>(addr).addr,
 		.msg_namelen = addr.size,
 		// msghdr::msg_iov seems to be non-const-correct.
-		.msg_iov = reinterpret_cast<iovec*>(const_cast<write_buffer*>(buffers.data())),
-		.msg_iovlen = buffers.size(),
+		.msg_iov = const_cast<iovec*>(vectors),
+		.msg_iovlen = transformed_buffers.buffers_size,
 	};
 
 	ssize_t const r = sendmsg(
@@ -221,7 +238,9 @@ vsm::result<void> posix::socket_send_to(
 	{
 		return vsm::unexpected(get_last_socket_error());
 	}
-	//TODO: Assert transferred against total buffers size.
+
+	// The transferred size must match the total specified in the buffers.
+	vsm_assert_slow(static_cast<size_t>(r) == get_io_buffers_size(buffers));
 
 	return {};
 }

@@ -30,15 +30,15 @@ static protection get_file_protection(native_handle<fs_object_t> const& h)
 static ACCESS_MASK get_section_access(protection const protection)
 {
 	ACCESS_MASK section_access = STANDARD_RIGHTS_REQUIRED | SECTION_QUERY;
-	if (vsm::any_flags(protection, protection::read))
+	if (vsm::all_flags(protection, protection::read))
 	{
 		section_access |= SECTION_MAP_READ | SECTION_MAP_EXECUTE;
 	}
-	if (vsm::any_flags(protection, protection::write))
+	if (vsm::all_flags(protection, protection::write))
 	{
 		section_access |= SECTION_MAP_WRITE;
 	}
-	if (vsm::any_flags(protection, protection::execute))
+	if (vsm::all_flags(protection, protection::execute))
 	{
 		section_access |= SECTION_MAP_EXECUTE_EXPLICIT;
 	}
@@ -71,13 +71,13 @@ vsm::result<void> section_t::create(
 			return vsm::unexpected(error::invalid_argument);
 		}
 
+		if (!a.backing_storage->flags[object_t::flags::not_null])
+		{
+			return vsm::unexpected(error::invalid_argument);
+		}
+
 		if (vsm::any_flags(a.options, section_options::backing_file))
 		{
-			if (!a.backing_storage->flags[object_t::flags::not_null])
-			{
-				return vsm::unexpected(error::invalid_argument);
-			}
-
 			backing_file_handle = unwrap_handle(a.backing_storage->platform_handle);
 
 			maximum_protection = get_file_protection(*a.backing_storage);
@@ -85,7 +85,7 @@ vsm::result<void> section_t::create(
 		}
 		else
 		{
-			//TODO: Open new backing file
+			//TODO: Open new backing file in the specified directory.
 			return vsm::unexpected(error::unsupported_operation);
 		}
 	}

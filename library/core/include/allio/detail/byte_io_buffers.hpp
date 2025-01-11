@@ -260,7 +260,9 @@ class new_io_buffers_storage
 
 		explicit storage_type(size_t const size)
 			: size(size)
+#if vsm_compiler_msvc
 			, data{}
+#endif
 		{
 		}
 	};

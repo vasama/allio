@@ -319,10 +319,12 @@ public:
 	}
 
 
+#if 0
 	//TODO: Implement lexically_equivalent
 	/*[[nodiscard]]*/ friend constexpr bool lexically_equivalent(
 		basic_path_view const lhs,
 		basic_path_view const rhs);
+#endif
 
 private:
 	static constexpr bool equal(basic_path_view lhs, basic_path_view rhs);

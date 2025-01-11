@@ -46,7 +46,7 @@ static std::optional<int> wait(int const fd, int const flags)
 	siginfo_t siginfo;
 	int const r = waitid(
 		static_cast<idtype_t>(P_PIDFD),
-		fd,
+		static_cast<id_t>(fd),
 		&siginfo,
 		flags | WEXITED);
 
@@ -95,7 +95,7 @@ public:
 		splice_shared_queue();
 		while (!m_local_queue.empty())
 		{
-			release_process_reaper(m_local_queue.pop_front());
+			release_process_reaper(&m_local_queue.pop_front());
 		}
 	}
 
@@ -131,11 +131,11 @@ public:
 
 	void register_process(process_reaper* const process)
 	{
-		process->refcount.fetch_add(1, std::memory_order_relaxed);
+		(void)process->refcount.fetch_add(1, std::memory_order_relaxed);
 
 		if (!create_process_wait(process))
 		{
-			if (m_shared_queue.push_back(process))
+			if (m_shared_queue.push_back(*process))
 			{
 				vsm_verify(linux::eventfd_write(m_event.get(), 1));
 			}
@@ -168,8 +168,8 @@ private:
 					// Reset the event so the poll may fire again.
 					vsm_verify(linux::eventfd_read(m_event.get()));
 
-					// The event is signalled after new processes
-					// have been pushed into the shared queue.
+					// The event is signaled after new processes have been pushed into the shared
+					// queue.
 					splice_shared_queue();
 				}
 				else
@@ -197,7 +197,7 @@ private:
 			// Flush the local queue into the epoll.
 			while (!m_local_queue.empty())
 			{
-				if (create_process_wait(m_local_queue.front()))
+				if (create_process_wait(&m_local_queue.front()))
 				{
 					(void)m_local_queue.pop_front();
 				}
@@ -280,6 +280,9 @@ vsm::result<int> linux::process_reaper_wait(process_reaper* const process, int c
 	{
 		switch (process->exit_state.load(std::memory_order_acquire))
 		{
+		case exit_state::exit_pending:
+			break;
+
 		case exit_state::exit_code_available:
 			return process->exit_code;
 

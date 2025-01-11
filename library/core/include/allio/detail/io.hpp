@@ -100,7 +100,14 @@ struct attach_handle_t
 		H const& h,
 		C& c) vsm_static_operator_const
 	{
-		return C::attach(m, h, c);
+		if constexpr (requires { C::attach(m, h, c); })
+		{
+			return C::attach(m, h, c);
+		}
+		else
+		{
+			return m.attach_handle(h, c);
+		}
 	}
 };
 inline constexpr attach_handle_t attach_handle = {};
@@ -113,7 +120,14 @@ struct detach_handle_t
 		H const& h,
 		C& c) vsm_static_operator_const
 	{
-		return C::detach(m, h, c);
+		if constexpr (requires { C::detach(m, h, c); })
+		{
+			return C::detach(m, h, c);
+		}
+		else
+		{
+			return m.detach_handle(h, c);
+		}
 	}
 };
 inline constexpr detach_handle_t detach_handle = {};
@@ -414,6 +428,7 @@ struct cancel_io_t
 inline constexpr cancel_io_t cancel_io = {};
 
 
+//TODO: Rename to io_connector
 template<typename M, typename H>
 struct async_connector;
 
@@ -421,6 +436,7 @@ template<multiplexer Multiplexer, object Object>
 using async_connector_t = async_connector<Multiplexer, Object>;
 
 
+//TODO: Rename to io_operation
 template<typename M, typename H, typename O>
 struct async_operation;
 

@@ -27,7 +27,8 @@ public:
 		, m_sq_acquire(multiplexer.m_sq_acquire)
 		, m_cq_free(multiplexer.m_cq_free)
 	{
-		vsm_assert(m_multiplexer.acquire_record_lock() &&
+		vsm_assert(
+			m_multiplexer.acquire_record_lock() &&
 			"The I/O recording context may not be re-entered.");
 	}
 
@@ -36,7 +37,8 @@ public:
 
 	~record_context()
 	{
-		vsm_assert(m_multiplexer.release_record_lock() &&
+		vsm_assert(
+			m_multiplexer.release_record_lock() &&
 			"The I/O recording context may not be re-entered.");
 	}
 
@@ -51,7 +53,7 @@ public:
 	{
 		return c.file_index != -1
 			? fd_pair{ c.file_index, IOSQE_FIXED_FILE }
-			: fd_pair{ linux::unwrap_handle(handle), 0 };
+			: fd_pair{ unwrap_handle(handle), 0 };
 	}
 
 
@@ -147,7 +149,7 @@ public:
 	/// @brief Emulate skipping of CQEs of linked operations on failure.
 	///        The CQE associated with this SQE is skipped if the result is ECANCELED.
 	///        The primary purpose of skipping the CQE is to avoid extending the lifetime of the
-	///        associated io_data until all linked operations are canceled.
+	///        associated io_slot until all linked operations are canceled.
 	/// @pre @param sqe has associated user data. CQEs without user data are always skipped.
 	/// @note This prevents the direct manual cancelation of the affected operation.
 	void set_cqe_skip_success_linked_emulation(io_uring_sqe& sqe)
@@ -161,10 +163,12 @@ public:
 	{
 		vsm_assert(m_last_sqe != nullptr); //PRECONDITION
 
-		vsm_assert((m_last_sqe->flags & link_flags) == 0 &&
+		vsm_assert(
+			(m_last_sqe->flags & link_flags) == 0 &&
 			"The final SQE in a series may not be linked.");
 
-		vsm_assert((m_last_sqe->flags & IOSQE_CQE_SKIP_SUCCESS) == 0 &&
+		vsm_assert(
+			(m_last_sqe->flags & IOSQE_CQE_SKIP_SUCCESS) == 0 &&
 			"The CQE of the final SQE in a series may not be skipped.");
 
 		m_multiplexer.m_sq_acquire = m_sq_acquire;
@@ -177,16 +181,18 @@ public:
 private:
 	[[nodiscard]] vsm::result<io_uring_sqe*> acquire_sqe(bool const acquire_cqe)
 	{
+		//TODO: Implement a way to wait for SQEs to become available.
+
 		if (m_sq_acquire - m_multiplexer.m_sq_consume == m_multiplexer.m_sq_size)
 		{
-			return vsm::unexpected(error::too_many_concurrent_async_operations);
+			return vsm::unexpected(error::device_or_resource_busy);
 		}
 
 		if (acquire_cqe)
 		{
 			if (m_cq_free == 0)
 			{
-				return vsm::unexpected(error::too_many_concurrent_async_operations);
+				return vsm::unexpected(error::device_or_resource_busy);
 			}
 
 			--m_cq_free;

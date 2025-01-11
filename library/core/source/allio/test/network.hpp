@@ -13,8 +13,8 @@
 
 namespace allio::test {
 
-// Use shared_ptr with the aliasing constructor to hide
-// the storage used for the local_address endpoint path.
+// Use shared_ptr with the aliasing constructor to hide the storage used for the local_address
+// endpoint path.
 using endpoint_type = shared_object<network_endpoint>;
 
 class endpoint_factory
@@ -110,9 +110,9 @@ inline endpoint_factory_ptr generate_endpoint_factory()
 {
 	return GENERATE(
 		as<endpoint_factory_ptr(*)()>()
-		//, make_endpoint_factory<local_endpoint_factory>
+		, make_endpoint_factory<local_endpoint_factory>
 		, make_endpoint_factory<ipv4_endpoint_factory>
-		//, make_endpoint_factory<ipv6_endpoint_factory>
+		, make_endpoint_factory<ipv6_endpoint_factory>
 	)();
 }
 

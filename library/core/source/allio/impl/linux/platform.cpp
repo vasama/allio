@@ -1,5 +1,6 @@
 #include <allio/detail/platform.hpp>
 
+#include <allio/error.hpp>
 #include <allio/impl/linux/error.hpp>
 
 #include <unistd.h>

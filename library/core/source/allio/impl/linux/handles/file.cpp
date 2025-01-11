@@ -5,6 +5,10 @@
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/handles/fs_object.hpp>
 
+#include <vsm/numeric.hpp>
+
+#include <sys/stat.h>
+
 #include <allio/linux/detail/undef.i>
 
 using namespace allio;
@@ -17,9 +21,12 @@ fs_path detail::get_null_device_path()
 }
 
 vsm::result<void> file_t::open(
-	native_type& h,
+	native_handle<file_t>& h,
 	io_parameters_t<file_t, open_t> const& a)
 {
+	return open_fs_object(h, a, open_kind::file);
+
+#if 0
 	auto const open_args = open_parameters::make(open_kind::file, a);
 	vsm_try_bind((flags, mode), open_info::make(open_args));
 
@@ -47,10 +54,11 @@ vsm::result<void> file_t::open(
 	};
 
 	return {};
+#endif
 }
 
 vsm::result<fs_size> file_t::tell(
-	native_type const& h,
+	native_handle<file_t> const& h,
 	io_parameters_t<file_t, tell_t> const&)
 {
 	off_t const offset = lseek(
@@ -67,45 +75,63 @@ vsm::result<fs_size> file_t::tell(
 }
 
 vsm::result<void> file_t::seek(
-	native_type const& h,
+	native_handle<file_t> const& h,
 	io_parameters_t<file_t, seek_t> const& a)
 {
-	off_t const offset = lseek(
+	vsm_try(offset, vsm::try_truncate<off_t>(a.offset, error::invalid_argument));
+
+	off_t const r = lseek(
 		unwrap_handle(h.platform_handle),
-		a.offset,
+		offset,
 		SEEK_SET);
 
-	if (offset == -1)
+	if (r == -1)
 	{
 		return vsm::unexpected(get_last_error());
 	}
+	vsm_assert(r == offset);
 
 	return {};
 }
 
+vsm::result<fs_size> file_t::get_maximum_extent(
+	native_handle<file_t> const& h,
+	io_parameters_t<file_t, get_maximum_extent_t> const& a)
+{
+	struct stat data;
+
+	if (fstat(unwrap_handle(h.platform_handle), &data) == -1)
+	{
+		return vsm::unexpected(get_last_error());
+	}
+	vsm_assert(data.st_size >= 0);
+
+	return static_cast<fs_size>(data.st_size);
+}
+
 vsm::result<size_t> file_t::stream_read(
-	native_type const& h,
+	native_handle<file_t> const& h,
 	io_parameters_t<file_t, stream_read_t> const& a)
 {
 	return linux::stream_read(h, a);
 }
 
 vsm::result<size_t> file_t::stream_write(
-	native_type const& h,
+	native_handle<file_t> const& h,
 	io_parameters_t<file_t, stream_write_t> const& a)
 {
 	return linux::stream_write(h, a);
 }
 
 vsm::result<size_t> file_t::random_read(
-	native_type const& h,
+	native_handle<file_t> const& h,
 	io_parameters_t<file_t, random_read_t> const& a)
 {
 	return linux::random_read(h, a);
 }
 
 vsm::result<size_t> file_t::random_write(
-	native_type const& h,
+	native_handle<file_t> const& h,
 	io_parameters_t<file_t, random_write_t> const& a)
 {
 	return linux::random_write(h, a);

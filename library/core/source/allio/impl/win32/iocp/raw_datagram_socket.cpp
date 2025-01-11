@@ -34,7 +34,7 @@ io_result<void> bind_s::submit(M& m, H& h, C& c, bind_s&, bind_a const& a, io_ha
 
 	vsm_try_void(socket_bind(socket.get(), addr));
 
-	vsm_try_void(m.attach_handle(
+	vsm_try_void(m.attach_platform_handle(
 		posix::wrap_socket(socket.get()),
 		c));
 

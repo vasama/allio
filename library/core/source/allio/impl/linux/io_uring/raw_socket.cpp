@@ -1,7 +1,9 @@
-#include <allio/linux/detail/io_uring/socket.hpp>
+#include <allio/linux/detail/io_uring/raw_socket.hpp>
 
 #include <allio/impl/linux/socket.hpp>
 #include <allio/linux/io_uring_record_context.hpp>
+
+#include <vsm/numeric.hpp>
 
 #include <allio/linux/detail/undef.i>
 
@@ -10,10 +12,9 @@ using namespace allio::detail;
 using namespace allio::linux;
 
 using M = io_uring_multiplexer;
-using H = raw_socket_t::native_type;
+using H = native_handle<raw_socket_t>;
 using C = async_connector_t<M, raw_socket_t>;
 
-using connect_t = raw_socket_t::connect_t;
 using connect_s = async_operation_t<M, raw_socket_t, connect_t>;
 using connect_a = io_parameters_t<raw_socket_t, connect_t>;
 
@@ -68,9 +69,9 @@ io_result<void> connect_s::notify(M&, H& h, C&, connect_s& s, connect_a const&, 
 
 	h = H
 	{
-		platform_object_t::native_type
+		native_handle<platform_object_t>
 		{
-			object_t::native_type
+			native_handle<object_t>
 			{
 				object_t::flags::not_null,
 			},
@@ -86,15 +87,23 @@ void connect_s::cancel(M&, H const&, C const&, S& s)
 }
 
 
-using read_t = raw_socket_t::read_some_t;
+//TODO: Detect the iovec layout automatically.
+static constexpr auto layout = new_io_buffer_layout::data_size;
+
+using read_t = byte_io::stream_read_t;
 using read_s = async_operation_t<M, raw_socket_t, read_t>;
 using read_a = io_parameters_t<raw_socket_t, read_t>;
 
 io_result<size_t> read_s::submit(M& m, H const& h, C const& c, read_s& s, read_a const& a, io_handler<M>& handler)
 {
+	vsm_try(buffers, get_io_buffers(s.buffers_storage, a.buffers, layout));
+
+	vsm_try(buffers_size, vsm::try_truncate<uint32_t>(
+		buffers.buffers_size,
+		error::invalid_argument));
+
 	io_uring_multiplexer::record_context ctx(m);
 
-	auto const buffers = a.buffers.buffers();
 	auto const [fd, fd_flags] = ctx.get_fd(c, h.platform_handle);
 
 	vsm_try_discard(ctx.push(
@@ -102,8 +111,8 @@ io_result<size_t> read_s::submit(M& m, H const& h, C const& c, read_s& s, read_a
 		.opcode = IORING_OP_READV,
 		.flags = fd_flags,
 		.fd = fd,
-		.addr = reinterpret_cast<uintptr_t>(buffers.data()),
-		.len = buffers.size(),
+		.addr = reinterpret_cast<uintptr_t>(buffers.buffers_data),
+		.len = buffers_size,
 		.user_data = ctx.get_user_data(handler),
 	}));
 
@@ -136,13 +145,17 @@ void read_s::cancel(M&, H const& h, C const&, read_s& s)
 }
 
 
-using write_t = raw_socket_t::write_some_t;
+using write_t = byte_io::stream_write_t;
 using write_s = async_operation_t<M, raw_socket_t, write_t>;
 using write_a = io_parameters_t<raw_socket_t, write_t>;
 
 io_result<size_t> write_s::submit(M& m, H const& h, C const& c, write_s& s, write_a const& a, io_handler<M>& handler)
 {
-	auto const buffers = a.buffers.buffers();
+	vsm_try(buffers, get_io_buffers(s.buffers_storage, a.buffers, layout));
+
+	vsm_try(buffers_size, vsm::try_truncate<uint32_t>(
+		buffers.buffers_size,
+		error::invalid_argument));
 
 	io_uring_multiplexer::record_context ctx(m);
 
@@ -153,8 +166,8 @@ io_result<size_t> write_s::submit(M& m, H const& h, C const& c, write_s& s, writ
 		.opcode = IORING_OP_WRITEV,
 		.flags = fd_flags,
 		.fd = fd,
-		.addr = reinterpret_cast<uintptr_t>(buffers.data()),
-		.len = buffers.size(),
+		.addr = reinterpret_cast<uintptr_t>(buffers.buffers_data),
+		.len = buffers_size,
 		.user_data = ctx.get_user_data(handler),
 	}));
 

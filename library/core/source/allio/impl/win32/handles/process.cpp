@@ -231,6 +231,7 @@ vsm::result<void> process_t::open(
 	h.flags = flags::not_null;
 	h.platform_handle = wrap_handle(handle.release());
 	h.id = a.id;
+	h.reaper = nullptr;
 
 	return {};
 }

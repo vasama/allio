@@ -14,14 +14,14 @@ struct async_connector<io_uring_multiplexer, event_t>
 };
 
 template<>
-struct async_operation<io_uring_multiplexer, event_t, event_io::wait_t>
+struct async_operation<io_uring_multiplexer, event_t, event_t::wait_t>
 	: io_uring_multiplexer::operation_type
 {
 	using M = io_uring_multiplexer;
-	using H = event_t::native_type const;
+	using H = native_handle<event_t> const;
 	using C = async_connector_t<M, event_t> const;
-	using S = async_operation_t<M, event_t, event_io::wait_t>;
-	using A = io_parameters_t<event_t, event_io::wait_t>;
+	using S = async_operation_t<M, event_t, event_t::wait_t>;
+	using A = io_parameters_t<event_t, event_t::wait_t>;
 
 	//TODO: Pass handler to notify instead of storing it.
 	io_handler<M>* handler;
