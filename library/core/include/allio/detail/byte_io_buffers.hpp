@@ -289,6 +289,8 @@ public:
 	new_io_buffers_base const& view,
 	new_io_buffer_layout required_layout);
 
+[[nodiscard]] bool io_buffers_is_empty(new_io_buffers_base buffers);
+
 [[nodiscard]] size_t get_io_buffers_size(new_io_buffers_base buffers);
 
 } // namespace allio::detail

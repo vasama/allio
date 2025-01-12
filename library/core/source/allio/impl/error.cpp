@@ -61,6 +61,10 @@ std::string detail::error_category::message(int const code) const
 	case error::operation_timed_out:
 		return "The operation timed out and was canceled.";
 
+	// Byte I/O
+	case error::end_of_stream:
+		return "The end of the byte stream was reached.";
+
 	// Filesystem
 	case error::filename_too_long:
 		return "The specified path was too long.";
@@ -144,6 +148,10 @@ std::error_condition detail::error_category::default_error_condition(int const c
 		return std::error_condition(std::errc::operation_canceled);
 	case error::operation_timed_out:
 		return std::error_condition(std::errc::timed_out);
+
+	// Byte I/O
+	case error::end_of_stream:
+		break;
 
 	// Filesystem
 	case error::filename_too_long:

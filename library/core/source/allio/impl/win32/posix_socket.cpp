@@ -224,6 +224,11 @@ vsm::result<size_t> posix::socket_scatter_read(
 		return vsm::unexpected(get_last_socket_error());
 	}
 
+	if (transferred == 0 && !io_buffers_is_empty(buffers))
+	{
+		return vsm::unexpected(error::end_of_stream);
+	}
+
 	return transferred;
 }
 

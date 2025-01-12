@@ -14,7 +14,7 @@
 using namespace allio;
 namespace ex = stdexec;
 
-TEST_CASE("a stream socket can connect to a listening socket and exchange data", "[socket][blocking]")
+TEST_CASE("Blocking stream sockets can exchange data", "[socket][blocking]")
 {
 	using namespace blocking;
 
@@ -28,9 +28,9 @@ TEST_CASE("a stream socket can connect to a listening socket and exchange data",
 	});
 
 	auto const server_socket = listen_socket.accept().socket;
-	auto const client_socket = connect_future.get();
+	auto client_socket = connect_future.get();
 
-	SECTION("The server socket has no data to read")
+	// The server socket has no data to read:
 	{
 		signed char value = 0;
 		REQUIRE_THROWS_MATCHES(
@@ -39,7 +39,7 @@ TEST_CASE("a stream socket can connect to a listening socket and exchange data",
 			match_error(std::errc::timed_out));
 	}
 
-	SECTION("The client socket has no data to read")
+	// The client socket has no data to read:
 	{
 		signed char value = 0;
 		REQUIRE_THROWS_MATCHES(
@@ -48,28 +48,41 @@ TEST_CASE("a stream socket can connect to a listening socket and exchange data",
 			match_error(std::errc::timed_out));
 	}
 
-	SECTION("The client can send data to the server")
+	// The client can send data to the server:
 	{
 		signed char value = 42;
 		REQUIRE(client_socket.write_some(as_write_buffer(&value, 1)) == 1);
-
-		static_cast<volatile signed char&>(value) = 0;
-		REQUIRE(server_socket.read_some(as_read_buffer(&value, 1)) == 1);
-		REQUIRE(value == 42);
 	}
 
-	SECTION("The server can send data to the client")
+	// The server can receive and send data from and to the client:
 	{
-		signed char value = 42;
-		REQUIRE(server_socket.write_some(as_write_buffer(&value, 1)) == 1);
+		signed char value = 0;
+		REQUIRE(server_socket.read_some(as_read_buffer(&value, 1)) == 1);
 
-		static_cast<volatile signed char&>(value) = 0;
+		value = -value;
+		REQUIRE(server_socket.write_some(as_write_buffer(&value, 1)) == 1);
+	}
+
+	// The client can receive data from the server:
+	{
+		signed char value = 0;
 		REQUIRE(client_socket.read_some(as_read_buffer(&value, 1)) == 1);
-		REQUIRE(value == 42);
+		REQUIRE(value == -42);
+
+		client_socket.close();
+	}
+
+	// The server can no longer read after client close:
+	{
+		signed char value = 0;
+		REQUIRE_THROWS_MATCHES(
+			server_socket.read_some(as_read_buffer(&value, 1)),
+			std::system_error,
+			match_error(error::end_of_stream));
 	}
 }
 
-TEST_CASE("a stream socket can asynchronously connect to a listening socket and exchange data", "[socket][async]")
+TEST_CASE("Asynchronous stream sockets can exchange data", "[socket][async]")
 {
 	using namespace senders;
 
@@ -98,14 +111,11 @@ TEST_CASE("a stream socket can asynchronously connect to a listening socket and 
 				signed char const reply_data = -request_data;
 				REQUIRE(co_await socket.write_some(as_write_buffer(&reply_data, 1)) == 1);
 
-				// Wait for orderly shutdown:
-				REQUIRE(co_await socket.read_some(as_read_buffer(&request_data, 1)) == 0);
-
 				// Any further read should result in an error:
 				REQUIRE_THROWS_MATCHES(
 					co_await socket.read_some(as_read_buffer(&request_data, 1)),
 					std::system_error,
-					match_error(std::errc::connection_reset));
+					match_error(error::end_of_stream));
 			}(),
 
 			// Client

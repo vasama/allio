@@ -126,6 +126,16 @@ using read_t = raw_socket_t::stream_read_t;
 using read_s = async_operation_t<M, raw_socket_t, read_t>;
 using read_a = io_parameters_t<raw_socket_t, read_t>;
 
+static vsm::result<size_t> get_read_transferred(read_a const& a, size_t const transferred)
+{
+	if (transferred == 0 && !io_buffers_is_empty(a.buffers))
+	{
+		return vsm::unexpected(error::end_of_stream);
+	}
+
+	return transferred;
+}
+
 io_result<size_t> read_s::submit(
 	M& m,
 	H const& h,
@@ -145,8 +155,8 @@ io_result<size_t> read_s::submit(
 
 	s.overlapped.bind(handler);
 
-	// If using a multithreaded completion port, after this call
-	// another thread will race to complete this operation.
+	// If using a multithreaded completion port, after this call another thread will race to
+	// complete this operation.
 	vsm_try(already_completed, submit_socket_io(m, h, [&]() -> DWORD
 	{
 		if (win32::WSARecv(
@@ -166,7 +176,7 @@ io_result<size_t> read_s::submit(
 	if (already_completed)
 	{
 		vsm_assert(flags == 0);
-		return transferred;
+		return get_read_transferred(a, transferred);
 	}
 
 	return io_pending(error::operation_pending);
@@ -177,7 +187,7 @@ io_result<size_t> read_s::notify(
 	H const& h,
 	C const&,
 	read_s& s,
-	read_a const&,
+	read_a const& a,
 	M::io_status_type const status)
 {
 	vsm_assert(&status.slot == &s.overlapped);
@@ -187,7 +197,7 @@ io_result<size_t> read_s::notify(
 		return vsm::unexpected(static_cast<kernel_error>(status.status));
 	}
 
-	return get_transfer_result(h, s.overlapped);
+	return get_read_transferred(a, get_transfer_result(h, s.overlapped));
 }
 
 void read_s::cancel(M&, H const& h, C const&, read_s& s)

@@ -237,6 +237,23 @@ vsm::result<new_io_buffers_view> detail::get_io_buffers(
 	};
 }
 
+bool detail::io_buffers_is_empty(new_io_buffers_base const buffers)
+{
+	auto const lambda = [&]<new_io_buffer_layout Layout>(layout_constant<Layout>)
+	{
+		for (new_io_buffer const buffer : read_io_buffers(buffers.get_buffers()))
+		{
+			if (get_size<Layout>(buffer) != 0)
+			{
+				return false;
+			}
+		}
+		return true;
+	};
+
+	return with_constant_layouts(lambda, buffers.get_layout());
+}
+
 size_t detail::get_io_buffers_size(new_io_buffers_base const buffers)
 {
 	auto const lambda = [&]<new_io_buffer_layout Layout>(layout_constant<Layout>)

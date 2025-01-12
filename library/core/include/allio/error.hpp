@@ -83,6 +83,9 @@ enum class error
 	operation_canceled,
 	operation_timed_out,
 
+	// Byte I/O
+	end_of_stream,
+
 	// Filesystem
 	filename_too_long,
 	invalid_path,
@@ -107,6 +110,11 @@ enum class error
 [[nodiscard]] inline std::error_code make_error_code(error const error)
 {
 	return std::error_code(static_cast<int>(error), detail::error_category_instance);
+}
+
+[[nodiscard]] inline std::error_condition make_error_condition(error const error)
+{
+	return make_error_code(error).default_error_condition();
 }
 
 
@@ -146,6 +154,12 @@ void set_error_handler(error_handler* const handler) noexcept;
 
 template<>
 struct std::is_error_code_enum<allio::error>
+{
+	static constexpr bool value = true;
+};
+
+template<>
+struct std::is_error_condition_enum<allio::error>
 {
 	static constexpr bool value = true;
 };

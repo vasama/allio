@@ -18,7 +18,13 @@ using C = async_connector_t<M, raw_socket_t>;
 using connect_s = async_operation_t<M, raw_socket_t, connect_t>;
 using connect_a = io_parameters_t<raw_socket_t, connect_t>;
 
-io_result<void> connect_s::submit(M& m, H& h, C& c, connect_s& s, connect_a const& a, io_handler<M>& handler)
+io_result<void> connect_s::submit(
+	M& m,
+	H& h,
+	C& c,
+	connect_s& s,
+	connect_a const& a,
+	io_handler<M>& handler)
 {
 	posix::socket_address_union& addr = new_address(s.addr_storage);
 
@@ -57,7 +63,13 @@ io_result<void> connect_s::submit(M& m, H& h, C& c, connect_s& s, connect_a cons
 	return io_pending(error::operation_pending);
 }
 
-io_result<void> connect_s::notify(M&, H& h, C&, connect_s& s, connect_a const&, M::io_status_type const status)
+io_result<void> connect_s::notify(
+	M&,
+	H& h,
+	C&,
+	connect_s& s,
+	connect_a const&,
+	M::io_status_type const status)
 {
 	// This operation uses no io_slots.
 	vsm_assert(status.slot == nullptr);
@@ -94,7 +106,13 @@ using read_t = byte_io::stream_read_t;
 using read_s = async_operation_t<M, raw_socket_t, read_t>;
 using read_a = io_parameters_t<raw_socket_t, read_t>;
 
-io_result<size_t> read_s::submit(M& m, H const& h, C const& c, read_s& s, read_a const& a, io_handler<M>& handler)
+io_result<size_t> read_s::submit(
+	M& m,
+	H const& h,
+	C const& c,
+	read_s& s,
+	read_a const& a,
+	io_handler<M>& handler)
 {
 	vsm_try(buffers, get_io_buffers(s.buffers_storage, a.buffers, layout));
 
@@ -126,7 +144,13 @@ io_result<size_t> read_s::submit(M& m, H const& h, C const& c, read_s& s, read_a
 	return io_pending(error::operation_pending);
 }
 
-io_result<size_t> read_s::notify(M&, H const& h, C const&, read_s& s, read_a const&, M::io_status_type const status)
+io_result<size_t> read_s::notify(
+	M&,
+	H const& h,
+	C const&,
+	read_s& s,
+	read_a const& a,
+	M::io_status_type const status)
 {
 	// This operation uses no io_slots.
 	vsm_assert(status.slot == nullptr);
@@ -134,6 +158,11 @@ io_result<size_t> read_s::notify(M&, H const& h, C const&, read_s& s, read_a con
 	if (status.result < 0)
 	{
 		return vsm::unexpected(static_cast<system_error>(-status.result));
+	}
+
+	if (status.result == 0 && !io_buffers_is_empty(a.buffers))
+	{
+		return vsm::unexpected(error::end_of_stream);
 	}
 
 	return static_cast<size_t>(status.result);
@@ -149,7 +178,13 @@ using write_t = byte_io::stream_write_t;
 using write_s = async_operation_t<M, raw_socket_t, write_t>;
 using write_a = io_parameters_t<raw_socket_t, write_t>;
 
-io_result<size_t> write_s::submit(M& m, H const& h, C const& c, write_s& s, write_a const& a, io_handler<M>& handler)
+io_result<size_t> write_s::submit(
+	M& m,
+	H const& h,
+	C const& c,
+	write_s& s,
+	write_a const& a,
+	io_handler<M>& handler)
 {
 	vsm_try(buffers, get_io_buffers(s.buffers_storage, a.buffers, layout));
 
@@ -181,7 +216,13 @@ io_result<size_t> write_s::submit(M& m, H const& h, C const& c, write_s& s, writ
 	return io_pending(error::operation_pending);
 }
 
-io_result<size_t> write_s::notify(M&, H const& h, C const&, write_s& s, write_a const&, M::io_status_type const status)
+io_result<size_t> write_s::notify(
+	M&,
+	H const& h,
+	C const&,
+	write_s& s,
+	write_a const&,
+	M::io_status_type const status)
 {
 	// This operation uses no io_slots.
 	vsm_assert(status.slot == nullptr);

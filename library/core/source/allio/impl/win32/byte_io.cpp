@@ -45,6 +45,8 @@ static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h,
 		void const* const data,
 		ULONG const max_transfer_size) -> vsm::result<size_t>
 	{
+		vsm_assert(max_transfer_size != 0);
+
 		vsm_try(relative_deadline, absolute_deadline.step());
 
 		IO_STATUS_BLOCK io_status_block;
@@ -71,6 +73,11 @@ static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h,
 		if (!NT_SUCCESS(status))
 		{
 			return vsm::unexpected(static_cast<kernel_error>(status));
+		}
+
+		if (io_status_block.Information == 0)
+		{
+			return vsm::unexpected(error::end_of_stream);
 		}
 
 		return io_status_block.Information;

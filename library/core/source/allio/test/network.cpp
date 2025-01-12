@@ -8,7 +8,7 @@ using namespace allio::network_literals;
 
 TEST_CASE("IPv4 addresses can be parsed from text", "[network]")
 {
-	//TODO Re-enable these assertions:
+	//TODO: Re-enable these assertions:
 	//static_assert(std::is_same_v<decltype("127.0.0.1"_ipv4), ipv4_address>);
 	//static_assert(std::is_same_v<decltype("127.0.0.1:80"_ipv4), ipv4_endpoint>);
 
