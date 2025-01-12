@@ -190,10 +190,30 @@ public:
 	}
 
 
-	[[nodiscard]] vsm::result<void> attach_handle(native_platform_handle handle, connector_type& c);
+	[[nodiscard]] vsm::result<void> attach_platform_handle(
+		native_platform_handle handle,
+		connector_type& c);
 
 	//TODO: Handles should gain a multiplexer coupling aware close to avoid detaching.
-	[[nodiscard]] vsm::result<void> detach_handle(native_platform_handle handle, connector_type& c);
+	[[nodiscard]] vsm::result<void> detach_platform_handle(
+		native_platform_handle handle,
+		connector_type& c);
+
+	template<typename Object>
+	[[nodiscard]] vsm::result<void> attach_handle(
+		native_handle<Object> const& h,
+		async_connector<iocp_multiplexer, Object>& c)
+	{
+		return attach_platform_handle(h.platform_handle, c);
+	}
+
+	template<typename Object>
+	[[nodiscard]] vsm::result<void> detach_handle(
+		native_handle<Object> const& h,
+		async_connector<iocp_multiplexer, Object>& c)
+	{
+		return detach_platform_handle(h.platform_handle, c);
+	}
 
 
 	/// @brief Attempt to cancel a pending I/O operation described by handle and slot.
@@ -278,17 +298,6 @@ private:
 
 	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(create_parameters const& args);
 	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(iocp_multiplexer const& other);
-
-
-	friend vsm::result<void> tag_invoke(attach_handle_t, iocp_multiplexer& m, native_handle<platform_object_t> const& h, connector_type& c)
-	{
-		return m.attach_handle(h.platform_handle, c);
-	}
-
-	friend vsm::result<void> tag_invoke(detach_handle_t, iocp_multiplexer& m, native_handle<platform_object_t> const& h, connector_type& c)
-	{
-		return m.detach_handle(h.platform_handle, c);
-	}
 
 
 	[[nodiscard]] vsm::result<bool> _poll(poll_parameters const& args);

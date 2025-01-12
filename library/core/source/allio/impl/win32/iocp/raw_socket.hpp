@@ -12,7 +12,7 @@ namespace allio::win32 {
 
 inline void cancel_socket_io(SOCKET const socket, OVERLAPPED& overlapped)
 {
-	if (!CancelIoEx(vsm_detail_c_cast(HANDLE, socket), &overlapped))
+	if (!CancelIoEx(reinterpret_cast<HANDLE>(socket), &overlapped))
 	{
 		if (DWORD const error = GetLastError(); error != ERROR_NOT_FOUND)
 		{
@@ -30,8 +30,8 @@ vsm::result<bool> submit_socket_io(
 	// After the operation is submitted, it is no longer safe to access the handle.
 	bool const supports_synchronous_completion = m.supports_synchronous_completion(h);
 
-	// If using a multithreaded completion port, after this call
-	// another thread will race to complete this operation.
+	// If using a multithreaded completion port, after this call another thread will race to
+	// complete this operation.
 	DWORD const error = vsm_forward(callable)();
 
 	if (error == WSA_IO_PENDING)

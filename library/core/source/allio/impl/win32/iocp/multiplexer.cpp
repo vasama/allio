@@ -57,7 +57,9 @@ iocp_multiplexer::iocp_multiplexer(vsm::intrusive_ptr<shared_state_t> shared_sta
 }
 
 
-vsm::result<void> iocp_multiplexer::attach_handle(native_platform_handle const handle, connector_type&)
+vsm::result<void> iocp_multiplexer::attach_platform_handle(
+	native_platform_handle const handle,
+	connector_type&)
 {
 	return set_completion_information(
 		unwrap_handle(handle),
@@ -65,12 +67,14 @@ vsm::result<void> iocp_multiplexer::attach_handle(native_platform_handle const h
 		std::bit_cast<void*>(key_context::generic));
 }
 
-vsm::result<void> iocp_multiplexer::detach_handle(native_platform_handle const handle, connector_type&)
+vsm::result<void> iocp_multiplexer::detach_platform_handle(
+	native_platform_handle const handle,
+	connector_type&)
 {
 	return set_completion_information(
 		unwrap_handle(handle),
-		NULL,
-		nullptr);
+		/* completion_port: */ NULL,
+		/* key_context: */ nullptr);
 }
 
 
@@ -144,9 +148,9 @@ vsm::result<bool> iocp_multiplexer::submit_wait(
 
 	if (already_signaled)
 	{
-		//TODO: We cannot simply remove the completion if another thread has concurrently
-		//      removed the completion and reused the wait packet. It can only be removed
-		//      if it is guaranteed that this multiplexer is not being used concurrently.
+		//TODO: We cannot simply remove the completion if another thread has concurrently removed
+		//      the completion and reused the wait packet. It can only be removed if it is
+		//      guaranteed that this multiplexer is not being used concurrently.
 		already_signaled = false;
 	}
 
@@ -169,8 +173,7 @@ bool iocp_multiplexer::cancel_wait(wait_packet const packet, wait_slot& slot)
 	{
 		// If the wait was canceled before its completion, a completion event must be queued
 		// manually.
-		//TODO: Instead of going through the OS,
-		//      it might be better to queue this in user space.
+		//TODO: Instead of going through the OS, it might be better to queue this in user space.
 		vsm_verify(set_io_completion(
 			m_completion_port.value,
 			std::bit_cast<void*>(key_context::wait_packet),
@@ -206,8 +209,8 @@ vsm::result<bool> iocp_multiplexer::_poll(poll_parameters const& args)
 				size_t const io_status_block_offset = io_status_block::get_storage_offset();
 				static_assert(io_status_block_offset == overlapped::get_storage_offset());
 
-				// The ApcContext contains the pointer to the original IO_STATUS_BLOCK
-				// or OVERLAPPED passed to the I/O API when this operation was started.
+				// The ApcContext contains the pointer to the original IO_STATUS_BLOCK or OVERLAPPED
+				// passed to the I/O API when this operation was started.
 				io_slot& slot = *std::launder(reinterpret_cast<io_slot*>(
 					reinterpret_cast<uintptr_t>(entry.ApcContext) - io_status_block_offset));
 

@@ -20,7 +20,13 @@ using connect_t = raw_socket_t::connect_t;
 using connect_s = async_operation_t<M, raw_socket_t, connect_t>;
 using connect_a = io_parameters_t<raw_socket_t, connect_t>;
 
-io_result<void> connect_s::submit(M& m, H& h, C& c, connect_s& s, connect_a const& a, io_handler<M>& handler)
+io_result<void> connect_s::submit(
+	M& m,
+	H& h,
+	C& c,
+	connect_s& s,
+	connect_a const& a,
+	io_handler<M>& handler)
 {
 	vsm_try(addr, posix::socket_address::make(a.endpoint));
 	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_STREAM));
@@ -72,7 +78,13 @@ io_result<void> connect_s::submit(M& m, H& h, C& c, connect_s& s, connect_a cons
 	return io_pending(error::operation_pending);
 }
 
-io_result<void> connect_s::notify(M&, H& h, C&, connect_s& s, connect_a const&, M::io_status_type const status)
+io_result<void> connect_s::notify(
+	M&,
+	H& h,
+	C&,
+	connect_s& s,
+	connect_a const&,
+	M::io_status_type const status)
 {
 	vsm_assert(&status.slot == &s.overlapped);
 
@@ -105,7 +117,6 @@ static size_t get_transfer_result(H const& h, M::overlapped& overlapped)
 		/* fWait: */ false,
 		&flags));
 
-	vsm_assert(transferred != 0);
 	vsm_assert(flags == 0);
 
 	return transferred;
@@ -115,7 +126,13 @@ using read_t = raw_socket_t::stream_read_t;
 using read_s = async_operation_t<M, raw_socket_t, read_t>;
 using read_a = io_parameters_t<raw_socket_t, read_t>;
 
-io_result<size_t> read_s::submit(M& m, H const& h, C const&, read_s& s, read_a const& a, io_handler<M>& handler)
+io_result<size_t> read_s::submit(
+	M& m,
+	H const& h,
+	C const&,
+	read_s& s,
+	read_a const& a,
+	io_handler<M>& handler)
 {
 	vsm_try(wsa_buffers, get_wsa_buffers(s.buffers, a.buffers));
 
@@ -155,7 +172,13 @@ io_result<size_t> read_s::submit(M& m, H const& h, C const&, read_s& s, read_a c
 	return io_pending(error::operation_pending);
 }
 
-io_result<size_t> read_s::notify(M&, H const& h, C const&, read_s& s, read_a const&, M::io_status_type const status)
+io_result<size_t> read_s::notify(
+	M&,
+	H const& h,
+	C const&,
+	read_s& s,
+	read_a const&,
+	M::io_status_type const status)
 {
 	vsm_assert(&status.slot == &s.overlapped);
 
@@ -177,7 +200,13 @@ using write_t = raw_socket_t::stream_write_t;
 using write_s = async_operation_t<M, raw_socket_t, write_t>;
 using write_a = io_parameters_t<raw_socket_t, write_t>;
 
-io_result<size_t> write_s::submit(M& m, H const& h, C const&, write_s& s, write_a const& a, io_handler<M>& handler)
+io_result<size_t> write_s::submit(
+	M& m,
+	H const& h,
+	C const&,
+	write_s& s,
+	write_a const& a,
+	io_handler<M>& handler)
 {
 	vsm_try(wsa_buffers, get_wsa_buffers(s.buffers, a.buffers));
 
@@ -189,8 +218,8 @@ io_result<size_t> write_s::submit(M& m, H const& h, C const&, write_s& s, write_
 
 	s.overlapped.bind(handler);
 
-	// If using a multithreaded completion port, after this call
-	// another thread will race to complete this operation.
+	// If using a multithreaded completion port, after this call another thread will race to
+	// complete this operation.
 	vsm_try(already_completed, submit_socket_io(m, h, [&]() -> DWORD
 	{
 		if (win32::WSASend(
@@ -215,7 +244,13 @@ io_result<size_t> write_s::submit(M& m, H const& h, C const&, write_s& s, write_
 	return io_pending(error::operation_pending);
 }
 
-io_result<size_t> write_s::notify(M&, H const& h, C const&, write_s& s, write_a const&, M::io_status_type const status)
+io_result<size_t> write_s::notify(
+	M&,
+	H const& h,
+	C const&,
+	write_s& s,
+	write_a const&,
+	M::io_status_type const status)
 {
 	vsm_assert(&status.slot == &s.overlapped);
 
