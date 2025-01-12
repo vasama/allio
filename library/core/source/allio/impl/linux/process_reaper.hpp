@@ -16,6 +16,8 @@ struct unix_process_reaper;
 
 namespace allio::linux {
 
+vsm::result<int, system_error> process_wait(int fd, int flags = 0);
+
 using process_reaper = detail::unix_process_reaper;
 void release_process_reaper(process_reaper* reaper);
 
@@ -28,13 +30,16 @@ struct process_reaper_deleter
 };
 using process_reaper_ptr = std::unique_ptr<process_reaper, process_reaper_deleter>;
 
-vsm::result<process_reaper_ptr> acquire_process_reaper();
+[[nodiscard]] vsm::result<process_reaper_ptr> acquire_process_reaper();
 
 /// @note This function takes ownership of the file descriptor.
 void start_process_reaper(process_reaper* reaper, int fd);
 
 /// @note The file descriptor must match the one previously passed to @ref start_process_reaper.
-vsm::result<std::optional<int>> process_reaper_wait(process_reaper* reaper, int fd);
+[[nodiscard]] vsm::result<std::optional<int>> process_reaper_wait(
+	process_reaper* reaper,
+	int fd,
+	deadline deadline);
 
 } // namespace allio::linux
 

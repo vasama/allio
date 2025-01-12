@@ -9,6 +9,7 @@
 #include <allio/impl/linux/poll.hpp>
 #include <allio/impl/linux/proc.hpp>
 #include <allio/impl/linux/process_reaper.hpp>
+#include <allio/impl/linux/process.hpp>
 
 #include <vsm/numeric.hpp>
 #include <vsm/utility.hpp>
@@ -295,9 +296,18 @@ vsm::result<process_wait_result> process_t::wait(
 
 	if (h.reaper != nullptr)
 	{
-		vsm_try(exit_code, process_reaper_wait(h.reaper, fd));
+		vsm_try(exit_code, process_reaper_wait(h.reaper, fd, a.deadline));
 		return process_wait_result(exit_code.value_or(no_exit_code));
 	}
+
+	siginfo_t siginfo;
+	int const r = waitid(
+		static_cast<idtype_t>(P_PIDFD),
+		static_cast<id_t>(fd),
+		&siginfo,
+		WEXITED | WSTOPPED);
+
+	if (r )
 
 	//TODO: Implement direct waiting when wait_on_close is enabled.
 	return process_wait_result(no_exit_code);
@@ -307,15 +317,35 @@ vsm::result<void> process_t::close(
 	native_handle<process_t>& h,
 	io_parameters_t<process_t, close_t> const& a)
 {
-	//TODO: Implement wait_on_close.
+	if (h.flags[process_t::flags::wait_on_close])
+	{
+		int const fd = unwrap_handle(h.platform_handle);
 
+		// Propagate any errors apart from ECHILD. Since the handle is being closed anyway, the exit
+		// code is discarded.
+		if (auto const r = process_wait(fd); !r && r.error() != static_cast<system_error>(ECHILD))
+		{
+			return vsm::unexpected(r.error());
+		}
+
+		// Fall back to polling on ECHILD. It may be that the process is not a child process, or
+		// that it was already reaped. There is no way to distinguish these two cases based on the
+		// result of waitid. In any case, apart from the possibility of some spurious kernel error,
+		// poll should only complete once the process has indeed terminated.
+		vsm_try_void(linux::poll(fd, POLLIN, deadline::never()));
+	}
+
+	// Close the underlying platform handle:
+	vsm_try_void(base_type::close(h, a));
+
+	// Only once the platform handle has been successfully closed, is the process reaper released.
 	if (h.reaper != nullptr)
 	{
 		release_process_reaper(h.reaper);
 		h.reaper = nullptr;
 	}
 
-	return base_type::close(h, a);
+	return {};
 }
 
 

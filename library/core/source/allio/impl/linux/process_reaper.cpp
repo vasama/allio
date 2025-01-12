@@ -41,22 +41,24 @@ struct detail::unix_process_reaper : vsm::intrusive::mpsc_queue_link
 	int exit_code = 0;
 };
 
-static std::optional<int> _wait(int const fd, int const flags)
+vsm::result<int, system_error> process_wait(int const fd, int const flags)
 {
 	siginfo_t siginfo;
 	int const r = waitid(
 		static_cast<idtype_t>(P_PIDFD),
 		static_cast<id_t>(fd),
 		&siginfo,
-		flags | WEXITED);
+		flags | WEXITED | WSTOPPED);
 
 	if (r == -1)
 	{
-		// Perhaps a rogue user already waited the process. In any case it is now waited and can be
-		// released.
-		vsm_assert(errno == ECHILD);
+		return vsm::unexpected(get_last_error());
+	}
 
-		return std::nullopt;
+	if (r == 0)
+	{
+		vsm_assert(flags & WNOHANG);
+		return vsm::unexpected(error::operation_timed_out);
 	}
 
 	//TODO: Should the exit code be different when the process was killed?
@@ -70,6 +72,22 @@ static std::optional<int> _wait(int const fd, int const flags)
 	return siginfo.si_code == CLD_EXITED
 		? siginfo.si_status & 0xFF
 		: siginfo.si_status + 128;
+}
+
+static std::optional<int> process_wait_or_echild(int const fd, int const flags)
+{
+	auto const r = process_wait(fd, flags);
+
+	if (!r)
+	{
+		// Perhaps a rogue user already waited the process. In any case it is now waited and can be
+		// released.
+		vsm_assert(errno == ECHILD);
+
+		return std::nullopt;
+	}
+
+	return *r;
 }
 
 namespace {
@@ -186,14 +204,26 @@ private:
 					// A child process exited. Wait it to release its zombified pid.
 					auto const process = static_cast<process_reaper*>(event.data.ptr);
 
-					if (auto const exit_code = _wait(process->fd, WNOHANG))
+					if (auto const exit_code = process_wait(process->fd, WNOHANG))
 					{
 						process->exit_code = *exit_code;
-						process->exit_state.store(exit_state::exit_code_available, std::memory_order_release);
+						process->exit_state.store(
+							exit_state::exit_code_available,
+							std::memory_order_release);
 					}
 					else
 					{
-						process->exit_state.store(exit_state::exit_code_not_available, std::memory_order_release);
+						// Any error besides ECHILD is unexpected and unrecoverable. ECHILD means a
+						// rogue user must have waited the process manually, in which case the
+						// process has terminated but the exit code is not available.
+						if (r.error() != static_cast<system_error>(ECHILD))
+						{
+							unrecoverable_error(r.error());
+						}
+
+						process->exit_state.store(
+							exit_state::exit_code_not_available,
+							std::memory_order_release);
 					}
 
 					vsm_verify(close(process->fd) != -1);
@@ -276,7 +306,8 @@ void linux::start_process_reaper(process_reaper* const process, int const fd)
 
 vsm::result<std::optional<int>> linux::process_reaper_wait(
 	process_reaper* const process,
-	int const fd)
+	int const fd,
+	deadline const deadline)
 {
 	// The reaper thread may mutate process->fd at any point. For this reason the duplicate
 	// file descriptor provided by the caller must be used instead.
@@ -286,10 +317,32 @@ vsm::result<std::optional<int>> linux::process_reaper_wait(
 	// fact that the process has terminated and in its exit code.
 	if (process->exit_state.load(std::memory_order_acquire) == exit_state::exit_pending)
 	{
-		if (auto const exit_code = _wait(fd, WNOWAIT))
+		int flags = WNOWAIT;
+
+		if (!deadline.is_trivial())
 		{
-			return *exit_code;
+			// Polling is required to specify a non-trivial timeout.
+			vsm_try_void(linux::poll(fd, POLLIN, deadline));
 		}
+		else if (deadline == deadline::instant())
+		{
+			flags |= WNOHANG;
+		}
+
+		auto const r = process_wait(fd, flags);
+
+		if (r)
+		{
+			return *r;
+		}
+
+		if (r.error() != static_cast<system_error>(ECHILD))
+		{
+			return vsm::unexpected(r.error());
+		}
+
+		// In the case of ECHILD, the reaper thread must have won the race to reap the child
+		// process. The exit code must now be retrieved from the process reaper shared state.
 	}
 
 	while (true)
