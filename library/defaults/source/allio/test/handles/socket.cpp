@@ -100,6 +100,12 @@ TEST_CASE("a stream socket can asynchronously connect to a listening socket and 
 
 				// Wait for orderly shutdown:
 				REQUIRE(co_await socket.read_some(as_read_buffer(&request_data, 1)) == 0);
+
+				// Any further read should result in an error:
+				REQUIRE_THROWS_MATCHES(
+					co_await socket.read_some(as_read_buffer(&request_data, 1)),
+					std::system_error,
+					match_error(std::errc::connection_reset));
 			}(),
 
 			// Client

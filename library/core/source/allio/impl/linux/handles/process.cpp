@@ -275,7 +275,7 @@ vsm::result<void> process_t::terminate(
 	return {};
 }
 
-vsm::result<process_exit_code> process_t::wait(
+vsm::result<process_wait_result> process_t::wait(
 	native_handle<process_t> const& h,
 	io_parameters_t<process_t, wait_t> const& a)
 {
@@ -300,7 +300,7 @@ vsm::result<process_exit_code> process_t::wait(
 	}
 
 	//TODO: Implement direct waiting when wait_on_close is enabled.
-	return no_exit_code;
+	return process_wait_result(no_exit_code);
 }
 
 vsm::result<void> process_t::close(

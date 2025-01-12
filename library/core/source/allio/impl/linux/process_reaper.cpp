@@ -274,7 +274,9 @@ void linux::start_process_reaper(process_reaper* const process, int const fd)
 	g_reaper_thread.register_process(process);
 }
 
-vsm::result<int> linux::process_reaper_wait(process_reaper* const process, int const fd)
+vsm::result<std::optional<int>> linux::process_reaper_wait(
+	process_reaper* const process,
+	int const fd)
 {
 	// The reaper thread may mutate process->fd at any point. For this reason the duplicate
 	// file descriptor provided by the caller must be used instead.
