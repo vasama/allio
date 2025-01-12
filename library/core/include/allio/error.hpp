@@ -99,7 +99,6 @@ enum class error
 	// Process
 	process_is_current_process,
 	process_arguments_too_long,
-	process_exit_code_not_available,
 
 	// Sockets
 	socket_already_bound,

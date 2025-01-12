@@ -34,7 +34,7 @@ TEST_CASE("Child process can be created", "[process]")
 	auto const process = create_process(
 		path_view(allio_detail_test_exe));
 
-	REQUIRE(process.wait() == EXIT_SUCCESS);
+	REQUIRE(process.wait().get_exit_code() == EXIT_SUCCESS);
 }
 
 TEST_CASE("Child process can be created with arguments", "[process]")
@@ -49,7 +49,7 @@ TEST_CASE("Child process can be created with arguments", "[process]")
 			path_view(allio_detail_test_exe),
 			process_arguments(args));
 
-		REQUIRE(process.wait() == EXIT_SUCCESS);
+		REQUIRE(process.wait().get_exit_code() == EXIT_SUCCESS);
 	}
 	test::check_file_content(allio_detail_test_exe_output, "hello\n");
 }
@@ -65,7 +65,7 @@ TEST_CASE("Child process exit code can be observed", "[process]")
 		path_view(allio_detail_test_exe),
 		process_arguments(args));
 
-	REQUIRE(process.wait() == exit_code);
+	REQUIRE(process.wait().get_exit_code() == exit_code);
 }
 
 TEST_CASE("Child process working directory can be changed", "[process]")
@@ -101,7 +101,7 @@ TEST_CASE("Child process working directory can be changed", "[process]")
 			working_directory(path_view(wdir)));
 #endif
 
-		REQUIRE(process.wait() == EXIT_SUCCESS);
+		REQUIRE(process.wait().get_exit_code() == EXIT_SUCCESS);
 	}
 	test::check_file_content(allio_detail_test_exe_output, wdir + '\n');
 }
@@ -131,7 +131,7 @@ TEST_CASE("Child process environment can be changed", "[process]")
 			process_environment(env),
 			process_arguments(args));
 
-		REQUIRE(process.wait() == EXIT_SUCCESS);
+		REQUIRE(process.wait().get_exit_code() == EXIT_SUCCESS);
 	}
 	test::check_file_content(
 		allio_detail_test_exe_output,
@@ -162,7 +162,7 @@ TEST_CASE("Child stdin can be redirected", "[process][pipe_handle]")
 			process_arguments(args),
 			redirect_stdin(pipe.read_pipe));
 
-		REQUIRE(process.wait() == EXIT_SUCCESS);
+		REQUIRE(process.wait().get_exit_code() == EXIT_SUCCESS);
 	}
 	test::check_file_content(allio_detail_test_exe_output, "input data\n");
 }
@@ -182,7 +182,7 @@ TEST_CASE("Child stdout can be redirected", "[process][pipe_handle]")
 		redirect_stdout(pipe.write_pipe));
 
 	pipe.write_pipe.close();
-	REQUIRE(process.wait() == EXIT_SUCCESS);
+	REQUIRE(process.wait().get_exit_code() == EXIT_SUCCESS);
 
 	char output_data[input_data.size() + 1];
 
@@ -207,7 +207,7 @@ TEST_CASE("Child stderr can be redirected", "[process][pipe_handle]")
 		redirect_stderr(pipe.write_pipe));
 
 	pipe.write_pipe.close();
-	REQUIRE(process.wait() == EXIT_SUCCESS);
+	REQUIRE(process.wait().get_exit_code() == EXIT_SUCCESS);
 
 	char output_data[input_data.size() + 1];
 
@@ -234,7 +234,7 @@ TEST_CASE("Child process can be terminated", "[process]")
 	// Requesting termination again is fine.
 	process.terminate();
 
-	REQUIRE(process.wait() != EXIT_SUCCESS);
+	REQUIRE(process.wait().get_exit_code() != EXIT_SUCCESS);
 
 	// Requesting termination after the program has already terminated is fine.
 	process.terminate();

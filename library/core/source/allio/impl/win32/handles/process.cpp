@@ -222,6 +222,12 @@ vsm::result<process_exit_code> win32::get_process_exit_code(HANDLE const handle)
 }
 
 
+std::optional<process_exit_code> process_wait_result::_get(process_exit_code const exit_code)
+{
+	return exit_code;
+}
+
+
 vsm::result<void> process_t::open(
 	native_handle<process_t>& h,
 	io_parameters_t<process_t, open_t> const& a)
@@ -424,7 +430,7 @@ vsm::result<void> process_t::terminate(
 	return {};
 }
 
-vsm::result<process_exit_code> process_t::wait(
+vsm::result<process_wait_result> process_t::wait(
 	native_handle<process_t> const& h,
 	io_parameters_t<process_t, wait_t> const& a)
 {
@@ -450,13 +456,16 @@ vsm::result<process_exit_code> process_t::wait(
 		return vsm::unexpected(static_cast<kernel_error>(status));
 	}
 
-	return get_process_exit_code(handle);
+	vsm_try(exit_code, get_process_exit_code(handle));
+
+	return process_wait_result(exit_code);
 }
 
 vsm::result<void> process_t::close(
 	native_handle<process_t>& h,
 	io_parameters_t<process_t, close_t> const& a)
 {
+	//TODO: Implement wait_on_close.
 	vsm_assert(h.reaper == nullptr);
 	return base_type::close(h, a);
 }

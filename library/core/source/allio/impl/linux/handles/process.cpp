@@ -56,6 +56,21 @@ static vsm::result<pid_t> get_process_id(int const fd)
 #endif
 
 
+static constexpr process_exit_code no_exit_code = -1;
+
+std::optional<process_exit_code> process_wait_result::_get(process_exit_code const exit_code)
+{
+	std::optional<process_exit_code> r;
+
+	if (exit_code != no_exit_code)
+	{
+		r = exit_code;
+	}
+
+	return r;
+}
+
+
 vsm::result<void> process_t::open(
 	native_handle<process_t>& h,
 	io_parameters_t<process_t, open_t> const& a)
@@ -278,25 +293,28 @@ vsm::result<process_exit_code> process_t::wait(
 		vsm_try_void(linux::poll(fd, POLLIN, a.deadline));
 	}
 
-	if (h.reaper == nullptr)
+	if (h.reaper != nullptr)
 	{
-		// A reaper is required in order to wait for the exit code.
-		return vsm::unexpected(error::process_exit_code_not_available);
+		vsm_try(exit_code, process_reaper_wait(h.reaper, fd));
+		return process_wait_result(exit_code.value_or(no_exit_code));
 	}
 
-	//TODO: Close the reaper duplicate fd as early as possible.
-	return process_reaper_wait(h.reaper, fd);
+	//TODO: Implement direct waiting when wait_on_close is enabled.
+	return no_exit_code;
 }
 
 vsm::result<void> process_t::close(
 	native_handle<process_t>& h,
 	io_parameters_t<process_t, close_t> const& a)
 {
+	//TODO: Implement wait_on_close.
+
 	if (h.reaper != nullptr)
 	{
 		release_process_reaper(h.reaper);
 		h.reaper = nullptr;
 	}
+
 	return base_type::close(h, a);
 }
 

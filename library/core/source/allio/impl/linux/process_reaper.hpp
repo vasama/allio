@@ -4,6 +4,7 @@
 #include <vsm/standard.hpp>
 
 #include <memory>
+#include <optional>
 
 #include <allio/linux/detail/undef.i>
 
@@ -28,9 +29,12 @@ struct process_reaper_deleter
 using process_reaper_ptr = std::unique_ptr<process_reaper, process_reaper_deleter>;
 
 vsm::result<process_reaper_ptr> acquire_process_reaper();
+
+/// @note This function takes ownership of the file descriptor.
 void start_process_reaper(process_reaper* reaper, int fd);
 
-vsm::result<int> process_reaper_wait(process_reaper* reaper, int fd);
+/// @note The file descriptor must match the one previously passed to @ref start_process_reaper.
+vsm::result<std::optional<int>> process_reaper_wait(process_reaper* reaper, int fd);
 
 } // namespace allio::linux
 

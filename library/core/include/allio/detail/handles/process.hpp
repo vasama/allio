@@ -6,6 +6,8 @@
 #include <allio/detail/handles/platform_object.hpp>
 #include <allio/detail/integer_id.hpp>
 
+#include <optional>
+
 namespace allio::detail {
 
 struct unix_process_reaper;
@@ -13,8 +15,8 @@ struct unix_process_reaper;
 
 struct process_t;
 
-/// Windows: Valid process IDs have a range of [1, 2^32).
-/// Linux: Valid process IDs have a range of [1, 2^22].
+/// Windows:    Valid process IDs have a range of [1, 2^32).
+/// Linux:      Valid process IDs have a range of [1, 2^22].
 using process_id = integer_id<process_t, uint32_t>;
 
 using process_exit_code = int32_t;
@@ -70,6 +72,42 @@ inline constexpr redirect_stream_parameter<2> redirect_stderr = {};
 
 struct with_exit_code_t : explicit_argument<with_exit_code_t, process_exit_code> {};
 inline constexpr explicit_parameter<with_exit_code_t> with_exit_code = {};
+
+class process_wait_result
+{
+	process_exit_code m_exit_code;
+
+public:
+	explicit process_wait_result(process_exit_code const exit_code)
+		: m_exit_code(exit_code)
+	{
+	}
+
+	[[nodiscard]] bool has_exit_code() const
+	{
+		return _get(m_exit_code).has_value();
+	}
+
+	[[nodiscard]] process_exit_code get_exit_code() const
+	{
+		auto const exit_code = _get(m_exit_code);
+		vsm_assert(exit_code);
+		return *exit_code;
+	}
+
+	[[nodiscard]] operator std::optional<process_exit_code>() const
+	{
+		return _get(m_exit_code);
+	}
+
+	[[nodiscard]] std::optional<process_exit_code> operator->() const
+	{
+		return _get(m_exit_code);
+	}
+
+private:
+	static std::optional<process_exit_code> _get(process_exit_code exit_code);
+};
 
 template<object BaseObject>
 class any_handle_span
@@ -320,10 +358,10 @@ struct process_t : platform_object_t
 	{
 		using operation_concept = void;
 		using params_type = deadline_t;
-		using result_type = process_exit_code;
+		using result_type = process_wait_result;
 
 		template<object Object>
-		static vsm::result<process_exit_code> blocking_io(
+		static vsm::result<process_wait_result> blocking_io(
 			native_handle<Object> const& h,
 			io_parameters_t<Object, wait_t> const& a)
 			requires requires { Object::wait(h, a); }
@@ -353,7 +391,7 @@ struct process_t : platform_object_t
 		native_handle<process_t> const& h,
 		io_parameters_t<process_t, terminate_t> const& args);
 
-	static vsm::result<process_exit_code> wait(
+	static vsm::result<process_wait_result> wait(
 		native_handle<process_t> const& h,
 		io_parameters_t<process_t, wait_t> const& args);
 

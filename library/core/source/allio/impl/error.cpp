@@ -88,8 +88,6 @@ std::string detail::error_category::message(int const code) const
 		return "The specified handle refers to the current process.";
 	case error::process_arguments_too_long:
 		return "The specified process arguments are too long.";
-	case error::process_exit_code_not_available:
-		return "The operation was completed successfully but the process exit code is not available.";
 
 	// Sockets
 	case error::socket_already_bound:
@@ -174,8 +172,6 @@ std::error_condition detail::error_category::default_error_condition(int const c
 		break;
 	case error::process_arguments_too_long:
 		return std::error_condition(std::errc::argument_list_too_long);
-	case error::process_exit_code_not_available:
-		break;
 
 	// Sockets
 	case error::socket_already_bound:

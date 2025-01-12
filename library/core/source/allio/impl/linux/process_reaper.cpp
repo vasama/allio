@@ -35,13 +35,13 @@ enum class exit_state : uint8_t
 struct detail::unix_process_reaper : vsm::intrusive::mpsc_queue_link
 {
 	vsm::atomic<size_t> refcount = 1;
-	vsm::atomic<::exit_state> exit_state = {};
+	vsm::atomic<::exit_state> exit_state = ::exit_state::exit_pending;
 
 	int fd = -1;
 	int exit_code = 0;
 };
 
-static std::optional<int> wait(int const fd, int const flags)
+static std::optional<int> _wait(int const fd, int const flags)
 {
 	siginfo_t siginfo;
 	int const r = waitid(
@@ -52,8 +52,8 @@ static std::optional<int> wait(int const fd, int const flags)
 
 	if (r == -1)
 	{
-		// Perhaps a rogue user already waited the process.
-		// In any case it is now waited and can be released.
+		// Perhaps a rogue user already waited the process. In any case it is now waited and can be
+		// released.
 		vsm_assert(errno == ECHILD);
 
 		return std::nullopt;
@@ -61,7 +61,15 @@ static std::optional<int> wait(int const fd, int const flags)
 
 	//TODO: Should the exit code be different when the process was killed?
 	//      See what other libraries are doing here.
-	return siginfo.si_status;
+
+	// If si_status describes a signal, add 128 to match common shell behaviour. This is used to
+	// distinguish between user-specified exit codes in the range [0, 127] and signals. Otherwise
+	// the user-specified exit code is truncated to its low 8 bits. This is most likely redundant,
+	// as the kernel has already truncated it, but it is also done here as a defensive measure to
+	// proof against an allio API break due to future kernels returning the full exit code.
+	return siginfo.si_code == CLD_EXITED
+		? siginfo.si_status & 0xFF
+		: siginfo.si_status + 128;
 }
 
 namespace {
@@ -119,6 +127,7 @@ public:
 
 		try
 		{
+			//TODO: Reduce the thread stack size to bare minimum.
 			m_thread = std::thread([this]() { thread_start(); });
 		}
 		catch (std::system_error const& e)
@@ -177,7 +186,7 @@ private:
 					// A child process exited. Wait it to release its zombified pid.
 					auto const process = static_cast<process_reaper*>(event.data.ptr);
 
-					if (auto const exit_code = wait(process->fd, WNOHANG))
+					if (auto const exit_code = _wait(process->fd, WNOHANG))
 					{
 						process->exit_code = *exit_code;
 						process->exit_state.store(exit_state::exit_code_available, std::memory_order_release);
@@ -258,8 +267,8 @@ void linux::release_process_reaper(process_reaper* const process)
 
 void linux::start_process_reaper(process_reaper* const process, int const fd)
 {
-	vsm_assert(fd != -1);
-	vsm_assert(process->fd == -1);
+	vsm_assert(fd != -1); //PRECONDITION
+	vsm_assert(process->fd == -1); //PRECONDITION
 
 	process->fd = fd;
 	g_reaper_thread.register_process(process);
@@ -267,10 +276,15 @@ void linux::start_process_reaper(process_reaper* const process, int const fd)
 
 vsm::result<int> linux::process_reaper_wait(process_reaper* const process, int const fd)
 {
-	// If the process exit is still pending, wait for it without reaping.
+	// The reaper thread may mutate process->fd at any point. For this reason the duplicate
+	// file descriptor provided by the caller must be used instead.
+
+	// If the process exit is still pending, wait for it without reaping. Even if the wait succeeds,
+	// the reaper thread will later reap the child process. The caller is only interested in the
+	// fact that the process has terminated and in its exit code.
 	if (process->exit_state.load(std::memory_order_acquire) == exit_state::exit_pending)
 	{
-		if (auto const exit_code = wait(fd, WNOWAIT))
+		if (auto const exit_code = _wait(fd, WNOWAIT))
 		{
 			return *exit_code;
 		}
@@ -287,7 +301,7 @@ vsm::result<int> linux::process_reaper_wait(process_reaper* const process, int c
 			return process->exit_code;
 
 		case exit_state::exit_code_not_available:
-			return vsm::unexpected(error::process_exit_code_not_available);
+			return std::nullopt;
 		}
 
 		// Wait until the reaper thread produces the exit code.
