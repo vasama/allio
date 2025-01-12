@@ -1,5 +1,7 @@
 #pragma once
 
+#include <allio/detail/deadline.hpp>
+
 #include <vsm/result.hpp>
 #include <vsm/standard.hpp>
 
@@ -15,8 +17,6 @@ struct unix_process_reaper;
 } // namespace allio::detail
 
 namespace allio::linux {
-
-vsm::result<int, system_error> process_wait(int fd, int flags = 0);
 
 using process_reaper = detail::unix_process_reaper;
 void release_process_reaper(process_reaper* reaper);
@@ -39,7 +39,7 @@ void start_process_reaper(process_reaper* reaper, int fd);
 [[nodiscard]] vsm::result<std::optional<int>> process_reaper_wait(
 	process_reaper* reaper,
 	int fd,
-	deadline deadline);
+	detail::deadline deadline);
 
 } // namespace allio::linux
 

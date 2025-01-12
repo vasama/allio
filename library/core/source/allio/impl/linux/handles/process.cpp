@@ -287,30 +287,28 @@ vsm::result<process_wait_result> process_t::wait(
 
 	int const fd = unwrap_handle(h.platform_handle);
 
-	if (h.reaper == nullptr || !a.deadline.is_trivial())
-	{
-		// Poll is required to wait for non-child processes, or to specify a timeout regardless of
-		// the relationship.
-		vsm_try_void(linux::poll(fd, POLLIN, a.deadline));
-	}
-
 	if (h.reaper != nullptr)
 	{
+		// If a reaper is available, it must be used in order to store the exit code for any
+		// subsequent calls to wait.
 		vsm_try(exit_code, process_reaper_wait(h.reaper, fd, a.deadline));
 		return process_wait_result(exit_code.value_or(no_exit_code));
 	}
+	else
+	{
+		// Otherwise, the process must be waited directly. The assumed child-process is not reaped
+		// here, because a handle to it will still exist and in order to keep the exit code
+		// available for subsequent calls to wait. The child-process will either be reaped at close
+		// due to wait_on_close, or this handle was constructed manually by the user without neither
+		// a reaper or wait_on_close. In this case the user has taken the responsibility of reaping
+		// the child-process or either letting it zombify.
+		vsm_try(exit_code, linux::wait_process(
+			unwrap_handle(h.platform_handle),
+			/* reap: */ false,
+			a.deadline));
 
-	siginfo_t siginfo;
-	int const r = waitid(
-		static_cast<idtype_t>(P_PIDFD),
-		static_cast<id_t>(fd),
-		&siginfo,
-		WEXITED | WSTOPPED);
-
-	if (r )
-
-	//TODO: Implement direct waiting when wait_on_close is enabled.
-	return process_wait_result(no_exit_code);
+		return process_wait_result(exit_code.value_or(no_exit_code));
+	}
 }
 
 vsm::result<void> process_t::close(
@@ -319,23 +317,16 @@ vsm::result<void> process_t::close(
 {
 	if (h.flags[process_t::flags::wait_on_close])
 	{
-		int const fd = unwrap_handle(h.platform_handle);
-
-		// Propagate any errors apart from ECHILD. Since the handle is being closed anyway, the exit
-		// code is discarded.
-		if (auto const r = process_wait(fd); !r && r.error() != static_cast<system_error>(ECHILD))
-		{
-			return vsm::unexpected(r.error());
-		}
-
-		// Fall back to polling on ECHILD. It may be that the process is not a child process, or
-		// that it was already reaped. There is no way to distinguish these two cases based on the
-		// result of waitid. In any case, apart from the possibility of some spurious kernel error,
-		// poll should only complete once the process has indeed terminated.
-		vsm_try_void(linux::poll(fd, POLLIN, deadline::never()));
+		// Wait for the process to exit and reap it if possible. If the process is a non-child
+		// process, requesting for it to be reaped does not return an error. Since the handle is
+		// being closed anyway, the exit code can be discarded.
+		vsm_try_discard(linux::wait_process(
+			unwrap_handle(h.platform_handle),
+			/* reap: */ true,
+			deadline::never()));
 	}
 
-	// Close the underlying platform handle:
+	// Close the underlying platform handle.
 	vsm_try_void(base_type::close(h, a));
 
 	// Only once the platform handle has been successfully closed, is the process reaper released.
@@ -344,6 +335,8 @@ vsm::result<void> process_t::close(
 		release_process_reaper(h.reaper);
 		h.reaper = nullptr;
 	}
+
+	h.id = {};
 
 	return {};
 }

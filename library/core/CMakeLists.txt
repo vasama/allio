@@ -240,6 +240,8 @@ vsm_configure(
 		source/allio/impl/linux/proc.hpp
 		source/allio/impl/linux/process_reaper.cpp
 		source/allio/impl/linux/process_reaper.hpp
+		source/allio/impl/linux/process.cpp
+		source/allio/impl/linux/process.hpp
 		source/allio/impl/linux/random.cpp
 		source/allio/impl/linux/stat.hpp
 		source/allio/impl/linux/timeout.hpp

@@ -3,6 +3,7 @@
 #include <allio/detail/unique_handle.hpp>
 #include <allio/impl/linux/epoll.hpp>
 #include <allio/impl/linux/eventfd.hpp>
+#include <allio/impl/linux/process.hpp>
 #include <allio/impl/new.hpp>
 
 #include <vsm/atomic.hpp>
@@ -40,55 +41,6 @@ struct detail::unix_process_reaper : vsm::intrusive::mpsc_queue_link
 	int fd = -1;
 	int exit_code = 0;
 };
-
-vsm::result<int, system_error> process_wait(int const fd, int const flags)
-{
-	siginfo_t siginfo;
-	int const r = waitid(
-		static_cast<idtype_t>(P_PIDFD),
-		static_cast<id_t>(fd),
-		&siginfo,
-		flags | WEXITED | WSTOPPED);
-
-	if (r == -1)
-	{
-		return vsm::unexpected(get_last_error());
-	}
-
-	if (r == 0)
-	{
-		vsm_assert(flags & WNOHANG);
-		return vsm::unexpected(error::operation_timed_out);
-	}
-
-	//TODO: Should the exit code be different when the process was killed?
-	//      See what other libraries are doing here.
-
-	// If si_status describes a signal, add 128 to match common shell behaviour. This is used to
-	// distinguish between user-specified exit codes in the range [0, 127] and signals. Otherwise
-	// the user-specified exit code is truncated to its low 8 bits. This is most likely redundant,
-	// as the kernel has already truncated it, but it is also done here as a defensive measure to
-	// proof against an allio API break due to future kernels returning the full exit code.
-	return siginfo.si_code == CLD_EXITED
-		? siginfo.si_status & 0xFF
-		: siginfo.si_status + 128;
-}
-
-static std::optional<int> process_wait_or_echild(int const fd, int const flags)
-{
-	auto const r = process_wait(fd, flags);
-
-	if (!r)
-	{
-		// Perhaps a rogue user already waited the process. In any case it is now waited and can be
-		// released.
-		vsm_assert(errno == ECHILD);
-
-		return std::nullopt;
-	}
-
-	return *r;
-}
 
 namespace {
 
@@ -204,9 +156,14 @@ private:
 					// A child process exited. Wait it to release its zombified pid.
 					auto const process = static_cast<process_reaper*>(event.data.ptr);
 
-					if (auto const exit_code = process_wait(process->fd, WNOHANG))
+					auto const exit_code = linux::wait_process(
+						process->fd,
+						/* reap: */ true,
+						deadline::instant());
+
+					if (exit_code && *exit_code)
 					{
-						process->exit_code = *exit_code;
+						process->exit_code = **exit_code;
 						process->exit_state.store(
 							exit_state::exit_code_available,
 							std::memory_order_release);
@@ -216,9 +173,9 @@ private:
 						// Any error besides ECHILD is unexpected and unrecoverable. ECHILD means a
 						// rogue user must have waited the process manually, in which case the
 						// process has terminated but the exit code is not available.
-						if (r.error() != static_cast<system_error>(ECHILD))
+						if (exit_code)
 						{
-							unrecoverable_error(r.error());
+							unrecoverable_error(exit_code.error());
 						}
 
 						process->exit_state.store(
@@ -317,32 +274,17 @@ vsm::result<std::optional<int>> linux::process_reaper_wait(
 	// fact that the process has terminated and in its exit code.
 	if (process->exit_state.load(std::memory_order_acquire) == exit_state::exit_pending)
 	{
-		int flags = WNOWAIT;
+		vsm_try(exit_code, linux::wait_process(fd, /* reap: */ false, deadline));
 
-		if (!deadline.is_trivial())
+		if (exit_code)
 		{
-			// Polling is required to specify a non-trivial timeout.
-			vsm_try_void(linux::poll(fd, POLLIN, deadline));
-		}
-		else if (deadline == deadline::instant())
-		{
-			flags |= WNOHANG;
+			return exit_code;
 		}
 
-		auto const r = process_wait(fd, flags);
-
-		if (r)
-		{
-			return *r;
-		}
-
-		if (r.error() != static_cast<system_error>(ECHILD))
-		{
-			return vsm::unexpected(r.error());
-		}
-
-		// In the case of ECHILD, the reaper thread must have won the race to reap the child
-		// process. The exit code must now be retrieved from the process reaper shared state.
+		// If the exit code is not available, wait must have returned ECHILD, in which case the
+		// reaper thread must have won the race to reap the child process, or a rogue user must have
+		// manually waited the process. In any case, the exit code or lack thereof must now be
+		// retrieved from the process reaper shared state.
 	}
 
 	while (true)
