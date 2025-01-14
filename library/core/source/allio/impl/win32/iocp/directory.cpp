@@ -27,6 +27,7 @@ io_result<void> open_s::submit(M& m, H& h, C& c, open_s&, open_a const& a_ref, i
 
 io_result<void> open_s::notify(M&, H&, C&, open_s&, open_a const&, io_handler<M>&, M::io_status_type)
 {
+	vsm_unreachable();
 }
 
 void open_s::cancel(M&, H const&, C const&, S&)
@@ -80,7 +81,7 @@ io_result<directory_stream_view> read_s::submit(M& m, H& h, C&, read_s& s, read_
 	return io_pending(error::operation_pending);
 }
 
-io_result<directory_stream_view> read_s::notify(M&, H&, C&, read_s& s, read_a const& a, M::io_status_type const status)
+io_result<directory_stream_view> read_s::notify(M&, H&, C&, read_s& s, read_a const& a, io_handler<M>& handler, M::io_status_type const status)
 {
 	vsm_assert(&status.slot == &s.io_status_block);
 	vsm_assert(status.status == s.io_status_block->Status);
