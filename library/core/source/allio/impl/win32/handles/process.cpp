@@ -465,8 +465,26 @@ vsm::result<void> process_t::close(
 	native_handle<process_t>& h,
 	io_parameters_t<process_t, close_t> const& a)
 {
-	//TODO: Implement wait_on_close.
 	vsm_assert(h.reaper == nullptr);
+
+	if (h.flags[process_t::flags::wait_on_close])
+	{
+		if (h.id.integer() == GetCurrentProcessId())
+		{
+			return vsm::unexpected(error::process_is_current_process);
+		}
+
+		NTSTATUS const status = win32::NtWaitForSingleObject(
+			unwrap_handle(h.platform_handle),
+			/* Alertable: */ false,
+			/* Timeout: */ nullptr);
+
+		if (!NT_SUCCESS(status))
+		{
+			return vsm::unexpected(static_cast<kernel_error>(status));
+		}
+	}
+
 	return base_type::close(h, a);
 }
 

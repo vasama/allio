@@ -2,6 +2,8 @@
 
 #include <allio/impl/linux/handles/event.hpp>
 
+#include <allio/impl/linux/eventfd.hpp>
+
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::linux;
@@ -23,7 +25,7 @@ io_result operation<M, H, wait_t>::submit(M& m, H const& h, C const& c, wait_s& 
 
 		if (is_auto_reset(h))
 		{
-			vsm_try(was_non_zero, reset_event(unwrap_handle(h.get_platform_handle())));
+			vsm_try(was_non_zero, eventfd_reset(unwrap_handle(h.get_platform_handle())));
 
 			if (was_non_zero)
 			{
@@ -50,7 +52,7 @@ io_result operation<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& 
 
 		if (is_auto_reset(h))
 		{
-			vsm_try(was_non_zero, reset_event(unwrap_handle(h.get_platform_handle())));
+			vsm_try(was_non_zero, eventfd_reset(unwrap_handle(h.get_platform_handle())));
 
 			if (!was_non_zero)
 			{

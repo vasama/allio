@@ -22,4 +22,7 @@ struct native_handle<platform_object_t> : native_handle<platform_object_t::base_
 	native_platform_handle platform_handle;
 };
 
+template<typename Object>
+concept platform_object = object<Object> && std::derived_from<Object, platform_object_t>;
+
 } // namespace allio::detail

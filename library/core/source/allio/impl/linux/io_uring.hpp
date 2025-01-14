@@ -86,4 +86,20 @@ inline vsm::result<uint32_t> io_uring_enter(
 	return static_cast<uint32_t>(r);
 }
 
+inline vsm::result<int> io_uring_register(
+	int const fd,
+	unsigned const opcode,
+	void* const arg,
+	unsigned const arg_count)
+{
+	int const r = _io_uring_register(fd, opcode, arg, arg_count);
+
+	if (r < 0)
+	{
+		return vsm::unexpected(static_cast<system_error>(-r));
+	}
+
+	return r;
+}
+
 } // namespace allio::linux

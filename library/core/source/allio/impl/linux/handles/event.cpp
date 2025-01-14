@@ -16,37 +16,11 @@ static vsm::result<void> poll_event(int const fd, deadline const deadline)
 	return linux::poll(fd, POLLIN, deadline);
 }
 
-vsm::result<bool> linux::reset_event(int const fd)
-{
-	eventfd_t value;
-
-	int const r = ::eventfd_read(
-		fd,
-		&value);
-
-	if (r == -1)
-	{
-		int const e = errno;
-
-		// If the counter is already zero, EAGAIN is returned.
-		if (e != EAGAIN)
-		{
-			return vsm::unexpected(static_cast<system_error>(e));
-		}
-
-		return false;
-	}
-
-	vsm_assert(value != 0);
-
-	return true;
-}
-
 vsm::result<void> linux::test_event(int const fd, bool const auto_reset)
 {
 	if (auto_reset)
 	{
-		vsm_try(was_non_zero, reset_event(fd));
+		vsm_try(was_non_zero, eventfd_reset(fd));
 
 		if (was_non_zero)
 		{
@@ -105,22 +79,7 @@ vsm::result<void> event_t::signal(
 	native_handle<event_t> const& h,
 	io_parameters_t<event_t, signal_t> const& a)
 {
-	int const r = ::eventfd_write(
-		unwrap_handle(h.platform_handle),
-		/* value: */ 1);
-
-	if (r == -1)
-	{
-		// If the counter is already full, EAGAIN is returned. This case is extremely unlikely, as
-		// it would require signaling the event object 2^64-1 times. However this case is also not
-		// problematic. The event object remains signaled as long as the counter is non-zero.
-		if (int const e = errno; e != EAGAIN)
-		{
-			return vsm::unexpected(static_cast<system_error>(e));
-		}
-	}
-
-	return {};
+	return eventfd_signal(unwrap_handle(h.platform_handle));
 }
 
 vsm::result<void> event_t::reset(
@@ -130,7 +89,7 @@ vsm::result<void> event_t::reset(
 	// It doesn't matter whether the counter was already zero, as long as it is now zero. Thus the
 	// value can be discarded.
 	return vsm::discard_value(
-		reset_event(unwrap_handle(h.platform_handle))
+		eventfd_reset(unwrap_handle(h.platform_handle))
 	);
 }
 
@@ -166,7 +125,7 @@ vsm::result<void> event_t::wait(
 
 		if (auto_reset)
 		{
-			vsm_try(was_non_zero, reset_event(fd));
+			vsm_try(was_non_zero, eventfd_reset(fd));
 
 			// It is possible that another thread (possibly in another process) reset the event
 			// object between polling and reading. The auto reset mode guarantees that only a single

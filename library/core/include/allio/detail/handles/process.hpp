@@ -370,6 +370,20 @@ struct process_t : platform_object_t
 		}
 	};
 
+	template<platform_object Object>
+	struct duplicate_handle_t
+	{
+		using operation_concept = void;
+
+		struct params_type : io_flags_t
+		{
+			any_string_view serialized_handle;
+		};
+
+		template<handle Handle>
+		using result_type_template = typename Handle::template rebind_object<Object>;
+	};
+
 	using operations = type_list_append
 	<
 		base_type::operations

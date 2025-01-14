@@ -317,6 +317,11 @@ vsm::result<void> process_t::close(
 {
 	if (h.flags[process_t::flags::wait_on_close])
 	{
+		if (static_cast<pid_t>(h.id.integer()) == getpid())
+		{
+			return vsm::unexpected(error::process_is_current_process);
+		}
+
 		// Wait for the process to exit and reap it if possible. If the process is a non-child
 		// process, requesting for it to be reaped does not return an error. Since the handle is
 		// being closed anyway, the exit code can be discarded.

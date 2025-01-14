@@ -26,17 +26,15 @@ static eventfd_t dummy_event_value;
 
 static io_result<void> _submit(M& m, H const& h, C const& c, wait_s& s, io_handler<M>& handler)
 {
-	deadline relative_deadline;
-
 	// Evaluate the stepped deadline.
-	vsm_try_assign(relative_deadline, s.absolute_deadline.step());
+	vsm_try(relative_deadline, s.absolute_deadline.step());
 
 	io_uring_multiplexer::record_context ctx(m);
 
 	auto const [fd, fd_flags] = ctx.get_fd(c, h.platform_handle);
 
 	// Polling is required even in auto reset mode because the event is opened in non-blocking mode.
-	vsm_try(poll_sqe, ctx.push(
+	vsm_try_ptr(poll_sqe, ctx.push(
 	{
 		.opcode = IORING_OP_POLL_ADD,
 		.flags = fd_flags,
@@ -58,22 +56,22 @@ static io_result<void> _submit(M& m, H const& h, C const& c, wait_s& s, io_handl
 
 		// The read value is not actually needed for anything. Just read the value into a global
 		// dummy buffer.
-		vsm_try(read_sqe, ctx.push(
+		vsm_try_ptr(read_sqe, ctx.push(
 		{
 			.opcode = IORING_OP_READ,
 			.flags = fd_flags,
 			.fd = fd,
 			.addr = reinterpret_cast<uintptr_t>(&dummy_event_value),
 			.len = sizeof(dummy_event_value),
-			.user_data = ctx.get_user_data(handler),
+			.user_data = ctx.get_user_data(s),
 		}));
 
 		// Successful poll CQE can be skipped when reading.
-		ctx.set_cqe_skip_success(*poll_sqe);
+		ctx.set_cqe_skip_success(poll_sqe);
 		ctx.set_cqe_skip_success_emulation(s.poll_slot);
 
 		// The read CQE can be skipped when it is canceled.
-		ctx.set_cqe_skip_success_linked_emulation(*read_sqe);
+		ctx.set_cqe_skip_success_linked_emulation(read_sqe);
 	}
 
 	vsm_try_void(ctx.commit());
@@ -81,7 +79,13 @@ static io_result<void> _submit(M& m, H const& h, C const& c, wait_s& s, io_handl
 	return io_pending(error::operation_pending);
 }
 
-io_result<void> wait_s::submit(M& m, H const& h, C const& c, wait_s& s, wait_a const& a, io_handler<M>& handler)
+io_result<void> wait_s::submit(
+	M& m,
+	H const& h,
+	C const& c,
+	wait_s& s,
+	wait_a const& a,
+	io_handler<M>& handler)
 {
 	// If the deadline is instant just check the event synchronously.
 	if (a.deadline == deadline::instant())
@@ -89,14 +93,20 @@ io_result<void> wait_s::submit(M& m, H const& h, C const& c, wait_s& s, wait_a c
 		return linux::test_event(unwrap_handle(h.platform_handle), is_auto_reset(h));
 	}
 
-	s.handler = &handler;
-	s.poll_slot.bind(handler);
+	s.set_handler(handler);
 	s.absolute_deadline = a.deadline;
+	s.poll_slot.bind(s);
 
 	return _submit(m, h, c, s, handler);
 }
 
-io_result<void> wait_s::notify(M& m, H const& h, C const& c, wait_s& s, wait_a const&, M::io_status_type const status)
+io_result<void> wait_s::notify(
+	M& m,
+	H const& h,
+	C const& c,
+	wait_s& s,
+	wait_a const&,
+	M::io_status_type const status)
 {
 	if (status.result < 0)
 	{
@@ -129,5 +139,5 @@ io_result<void> wait_s::notify(M& m, H const& h, C const& c, wait_s& s, wait_a c
 
 void wait_s::cancel(M& m, H const&, C const&, S& s)
 {
-	m.cancel_io(s.poll_slot);
+	m.cancel_io(s, s.poll_slot);
 }

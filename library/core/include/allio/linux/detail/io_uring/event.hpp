@@ -23,9 +23,6 @@ struct async_operation<io_uring_multiplexer, event_t, event_t::wait_t>
 	using S = async_operation_t<M, event_t, event_t::wait_t>;
 	using A = io_parameters_t<event_t, event_t::wait_t>;
 
-	//TODO: Pass handler to notify instead of storing it.
-	io_handler<M>* handler;
-
 	step_deadline absolute_deadline;
 
 	/// @brief Timeout passed by reference in a linked timeout SQE.
@@ -35,7 +32,7 @@ struct async_operation<io_uring_multiplexer, event_t, event_t::wait_t>
 	M::io_slot poll_slot;
 
 	static io_result<void> submit(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler);
-	static io_result<void> notify(M& m, H& h, C& c, S& s, A const& a, M::io_status_type status);
+	static io_result<void> notify(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler, M::io_status_type status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 

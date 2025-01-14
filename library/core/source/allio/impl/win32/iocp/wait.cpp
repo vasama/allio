@@ -22,8 +22,8 @@ io_result<void> iocp_wait_state::submit(M& m, H const& h, S&, io_handler<M>& han
 		return {};
 	}
 
-	// The wait is now pending so the wait packet must retained until completion.
-	// Otherwise the lease automatically releases the wait packet back to the multiplexer.
+	// The wait is now pending so the wait packet must retained until completion. Otherwise the
+	// lease automatically releases the wait packet back to the multiplexer.
 	lease.release();
 
 	return io_pending(error::operation_pending);

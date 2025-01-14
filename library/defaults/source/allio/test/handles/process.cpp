@@ -4,6 +4,7 @@
 #include <allio/pipe.hpp>
 #include <allio/path.hpp>
 #include <allio/test/filesystem.hpp>
+#include <allio/test/match_error.hpp>
 
 #include <catch2/catch_all.hpp>
 
@@ -16,16 +17,15 @@
 
 using namespace allio;
 
-#if 0
-TEST_CASE("Waiting on the current process returns an error", "[process]")
+TEST_CASE("Waiting on the current process returns an error", "[process][this_process]")
 {
-	auto const& process = this_process::get_handle();
+	auto const process = blocking::this_process::open();
 
-	auto const r = process.wait();
-	REQUIRE(!r);
-	REQUIRE(r.error() == error::process_is_current_process);
+	REQUIRE_THROWS_MATCHES(
+		process.wait(),
+		std::system_error,
+		match_error(error::process_is_current_process));
 }
-#endif
 
 TEST_CASE("Child process can be created", "[process]")
 {
@@ -239,3 +239,6 @@ TEST_CASE("Child process can be terminated", "[process]")
 	// Requesting termination after the program has already terminated is fine.
 	process.terminate();
 }
+
+//TODO: Add test for wait_on_close. Probably requires handle serialization support and a function
+//      in the test tool to wait on a specified handle.

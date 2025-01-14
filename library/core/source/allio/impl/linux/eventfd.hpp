@@ -34,9 +34,53 @@ inline vsm::result<void> eventfd_write(int const fd, eventfd_t const value)
 	return {};
 }
 
+inline vsm::result<void> eventfd_signal(int const fd)
+{
+	int const r = ::eventfd_write(
+		fd,
+		/* value: */ 1);
+
+	if (fd != -1)
+	{
+		// If the counter is already full, EAGAIN is returned. This case is extremely unlikely, as
+		// it would require signaling the event object 2^64-1 times. However this case is also not
+		// problematic. The event object remains signaled as long as the counter is non-zero.
+		if (int const e = errno; e != EAGAIN)
+		{
+			return vsm::unexpected(static_cast<system_error>(e));
+		}
+	}
+
+	return {};
+}
+
+inline vsm::result<void> eventfd_reset(int const fd)
+{
+	eventfd_t value;
+
+	int const r = ::eventfd_read(
+		fd,
+		&value);
+
+	if (r == -1)
+	{
+		// If the counter is already zero, EAGAIN is returned.
+		if (int const e = errno; e != EAGAIN)
+		{
+			return vsm::unexpected(static_cast<system_error>(e));
+		}
+
+		return false;
+	}
+
+	vsm_assert(value != 0);
+
+	return true;
+}
+
 inline vsm::result<detail::unique_handle> eventfd(
 	int const flags,
-	unsigned const initial_value)
+	unsigned const initial_value = 0)
 {
 	vsm_assert((flags & ~(EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE)) == 0); //PRECONDITION
 
@@ -52,7 +96,7 @@ inline vsm::result<detail::unique_handle> eventfd(
 
 inline vsm::result<detail::unique_handle> eventfd(
 	int const flags,
-	eventfd_t const initial_value = 0)
+	eventfd_t const initial_value)
 {
 	static_assert(std::is_unsigned_v<eventfd_t>);
 	vsm_assert(initial_value <= std::numeric_limits<eventfd_t>::max() - 1); //PRECONDITION

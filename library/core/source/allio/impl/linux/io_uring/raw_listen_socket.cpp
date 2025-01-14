@@ -134,5 +134,6 @@ io_result<accept_result_type> accept_s::notify(M& m, H const&, C const& c, accep
 
 void accept_s::cancel(M& m, H const& h, C const&, S& s)
 {
+	m.cancel_io(handler);
 	//TODO: cancel
 }

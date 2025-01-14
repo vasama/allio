@@ -74,6 +74,7 @@ vsm_add_library(
 		source/allio/impl/handles/fs_object.cpp
 		source/allio/impl/handles/fs_object.hpp
 		source/allio/impl/handles/map.cpp
+		source/allio/impl/handles/opaque_object.cpp
 
 	HEADER_DEPENDENCIES
 		vsm::core
@@ -163,6 +164,7 @@ vsm_configure(
 		source/allio/impl/win32/handles/fs_object.cpp
 		source/allio/impl/win32/handles/fs_object.hpp
 		source/allio/impl/win32/handles/map.cpp
+		source/allio/impl/win32/handles/opaque_object.cpp
 		source/allio/impl/win32/handles/pipe.cpp
 		source/allio/impl/win32/handles/platform_object.cpp
 		source/allio/impl/win32/handles/platform_object.hpp
@@ -261,6 +263,7 @@ vsm_configure(
 		source/allio/impl/linux/handles/fs_object.cpp
 		source/allio/impl/linux/handles/fs_object.hpp
 		source/allio/impl/linux/handles/map.cpp
+		source/allio/impl/linux/handles/opaque_object.cpp
 		source/allio/impl/linux/handles/pipe.cpp
 		source/allio/impl/linux/handles/platform_object.cpp
 		source/allio/impl/linux/handles/process.cpp

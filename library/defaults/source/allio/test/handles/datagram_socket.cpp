@@ -29,7 +29,7 @@ static bool is_supported_address_kind(network_address_kind const kind)
 	return true;
 }
 
-TEST_CASE("Datagram socket can send and receive data", "[datagram_socket][blocking]")
+TEST_CASE("Blocking datagram sockets can exchange data", "[datagram_socket][blocking]")
 {
 	using namespace blocking;
 
@@ -71,7 +71,7 @@ TEST_CASE("Datagram socket can send and receive data", "[datagram_socket][blocki
 		match_error(std::errc::timed_out));
 }
 
-TEST_CASE("Datagram socket can asynchronously send and receive data", "[datagram_socket][async]")
+TEST_CASE("Asynchronous datagram sockets can exchange data", "[datagram_socket][async]")
 {
 	using namespace senders;
 

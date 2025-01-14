@@ -1,160 +1,100 @@
 #pragma once
 
-#include <allio/detail/opaque_object.hpp>
+#include <allio/abi.hpp>
+#include <allio/detail/deadline.hpp>
+#include <allio/detail/handles/platform_object.hpp>
 
 #include <vsm/intrusive_ptr.hpp>
-#include <vsm/standard.hpp>
 
 namespace allio::detail {
 
-class _opaque_handle : public handle
+struct opaque_object_t : object_t
 {
-protected:
-	using base_type = handle;
-
-private:
-	unique_opaque_handle m_opaque_handle;
-
-public:
-	struct native_handle_type : base_type::native_handle_type
-	{
-		detail::opaque_handle* opaque_handle;
-	};
-
-	[[nodiscard]] native_handle_type get_native_handle() const
-	{
-		return
-		{
-			base_type::get_native_handle(),
-			m_opaque_handle.get(),
-		};
-	}
-
-
-	[[nodiscard]] unique_opaque_handle const& get_opaque_handle() const
-	{
-		return m_opaque_handle.get();
-	}
-
+	using base_type = object_t;
 
 	struct poll_t
 	{
-		using handle_type = _opaque_handle const;
+		using operation_concept = void;
+		using params_type = deadline_t;
 		using result_type = void;
-
-		using required_params_type = no_parameters_t;
-		using optional_params_type = deadline_t;
 	};
 
-
-	using opeations = type_list_append
+	using operations = type_list_append
 	<
 		base_type::operations
 		, poll_t
 	>;
 
-protected:
-	allio_detail_default_lifetime(_opaque_handle);
+	static vsm::result<void> poll(
+		native_handle<opaque_object_t> const& h,
+		io_parameters_t<opaque_object_t, poll_t> const& a);
 
-	explicit _opaque_handle(native_handle_type const& native)
-		: base_type(native)
-		, m_opaque_handle(native.opaque_handle)
+	static vsm::result<void> close(
+		native_handle<opaque_object_t>& h,
+		io_parameters_t<opaque_object_t, close_t> const& a);
+
+	template<typename Handle, typename Traits>
+	struct facade : base_type::facade<Handle, Traits>
 	{
-	}
-
-
-	static bool check_native_handle(native_handle_type const& native)
-	{
-		return base_type::check_native_handle(native)
-			&& native.opaque_handle != nullptr
-		;
-	}
-
-	void set_native_handle(native_handle_type const& native)
-	{
-		base_type::set_native_handle(native);
-		m_opaque_handle.value = native.opaque_handle;
-	}
-
-
-	void close()
-	{
-		m_opaque_handle.reset();
-	}
-
-
-	template<typename H>
-	struct sync_interface
-	{
-		vsm::result<void> poll(auto&&... args) const
+		[[nodiscard]] vsm::result<void> poll(auto&&... args)
 		{
-			return do_blocking_io(
-				static_cast<_opaque_handle const&>(*this),
-				no_result,
-				io_arguments_t<poll_t>()(vsm_forward(args)...));
+			auto a = io_parameters_t<typename Handle::object_type, poll_t>{};
+			(set_argument(a, vsm_forward(args)), ...);
+			return Traits::template observe<poll_t>(static_cast<Handle const&>(*this), a);
 		}
 	};
-
-	template<typename H>
-	struct async_interface
-	{
-		io_sender<H, poll_t> poll_async(auto&&... args) const
-		{
-			return io_sender<H, poll_t>(
-				static_cast<H const&>(*this),
-				io_arguments_t<poll_t>()(vsm_forward(args)...));
-		}
-	};
-
-
-	static vsm::result<void> do_blocking_io(
-		_opaque_handle const& h,
-		io_result_ref_t<poll_t> result,
-		io_parameters_t<poll_t> const& args);
 };
 
-using blocking_opaque_handle = basic_blocking_handle<detail::_opaque_handle>;
-
-template<typename Multiplexer>
-using basic_opaque_handle = async_handle<detail::_opaque_handle, Multiplexer>;
-
-
-template<typename Object>
-class shared_opaque_handle
-	: public vsm::intrusive_ptr_ref_count
-	, opaque_handle
+template<>
+struct native_handle<opaque_object_t> : native_handle<opaque_object_t::base_type>
 {
-	vsm_no_unique_address Object m_object;
+	allio_abi_object* object;
+};
+
+
+template<typename Implementation>
+struct opaque_object_wrapper_base
+{
+	vsm_no_unique_address Implementation m_implementation;
+};
+
+template<typename Implementation>
+class opaque_object_wrapper
+	: public vsm::intrusive_refcount
+	, public opaque_object_wrapper_base<Implementation>
+	, public allio_abi_object
+{
+	using base = opaque_object_wrapper_base<Implementation>;
 
 public:
-	template<std::convertible_to<Object> T = Object>
-	explicit shared_opaque_handle(Object&& object)
-		: opaque_handle
+	template<typename... Args>
+		requires std::constructible_from<Implementation, Args...>
+	explicit opaque_object_wrapper(Args&&... args)
+		: base{ Implementation(vsm_forward(args)...) }
+		, allio_abi_object
 		{
-			.version = allio_abi_version,
-			.handle_value = object.handle_value(),
-			.handle_information = object.handle_information(),
+			.version = allio_abi_v1,
+			.handle_value = base::get_handle_value(),
+			.handle_flags = base::get_handle_flags(),
 			.functions = &functions,
 		}
-		, m_object(object)
 	{
 	}
 
 private:
-	static void _close(opaque_handle* const p_self)
+	static void _close(allio_abi_object* const object)
 	{
-		auto& self = static_cast<shared_opaque_handle&>(*p_self);
-
-		(void)vsm::intrusive_ptr<shared_opaque_handle>::acquire(&self);
+		auto const self = static_cast<opaque_object_wrapper*>(object);
+		(void)vsm::intrusive_ptr<opaque_object_wrapper>::adopt(self);
 	}
 
-	static allio_abi_result _notify(opaque_handle* const p_self, uintptr_t const information)
+	static allio_abi_result _notify(allio_abi_object* const object, uintptr_t const information)
 	{
-		auto& self = static_cast<shared_opaque_handle&>(*p_self);
+		auto const self = static_cast<opaque_object_wrapper*>(object);
 
-		if constexpr (requires { self.m_object.notify(); })
+		if constexpr (requires { self->m_implementation.notify(information); })
 		{
-			self.m_object.notify();
+			return self->m_implementation.notify(information);
 		}
 		else
 		{
@@ -162,23 +102,39 @@ private:
 		}
 	}
 
-	static const opaque_handle_functions functions;
+	static allio_abi_object_functions const functions;
 };
 
-template<typename Object>
-opaque_handle_functions const shared_opaque_handle<Object>::functions =
+template<typename Implementation>
+allio_abi_object_functions const opaque_object_wrapper<Implementation>::functions =
 {
 	.close = _close,
 	.notify = _notify,
 };
 
-template<typename Object>
-using shared_opaque_handle_ptr = vsm::intrusive_ptr<shared_opaque_handle<Object>>;
-
-template<typename Object>
-shared_opaque_handle_ptr<Object> make_shared_opaque_handle(auto&&... args)
+template<typename Implementation, typename... Args>
+	requires std::constructible_from<Implementation, Args...>
+vsm::result<basic_detached_handle<opaque_object_t>> make_opaque_object(Args&&... args)
 {
-	return shared_opaque_handle_ptr<Object>(new shared_opaque_handle<Object>(vsm_forward(args)...));
+	//TODO: Use acquire_storage
+	auto const object = new (std::nothrow) opaque_object_wrapper<Implementation>(
+		vsm_forward(args)...);
+
+	if (object == nullptr)
+	{
+		return vsm::unexpected(error::not_enough_memory);
+	}
+
+	return basic_detached_handle<opaque_object_t>(
+		adopt_handle,
+		native_handle<opaque_object_t>
+		{
+			native_handle<object_t>
+			{
+				object_t::flags::not_null,
+			},
+			object,
+		});
 }
 
 } // namespace allio::detail

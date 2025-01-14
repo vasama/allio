@@ -57,16 +57,16 @@ public:
 	}
 
 
-	[[nodiscard]] uintptr_t get_user_data(io_handler_type& handler) const
+	[[nodiscard]] uintptr_t get_user_data(operation_type& operation) const
 	{
 		return vsm::reinterpret_pointer_cast<uintptr_t>(
-			basic_user_data_ptr<io_handler_type>(&handler));
+			basic_user_data_ptr<io_handler_type>(&operation));
 	}
 
 	[[nodiscard]] uintptr_t get_user_data(io_slot& slot) const
 	{
 		return vsm::reinterpret_pointer_cast<uintptr_t>(
-			basic_user_data_ptr<io_slot>(&slot, user_data_tag::io_slot));
+			basic_user_data_ptr<io_slot>(&slot, user_data_tag::type_io_slot));
 	}
 
 
@@ -139,17 +139,17 @@ public:
 		sqe.flags |= m_multiplexer.m_cqe_skip_success;
 	}
 
-	/// @brief Emulate skipping of CQEs of operations on success.
-	///        Any CQEs associated with this slot are skipped if successful.
+	/// @brief Emulate skipping of CQEs of operations on success. Any CQEs associated with this slot
+	///        are skipped if successful.
 	void set_cqe_skip_success_emulation(io_slot& slot)
 	{
 		slot.m_handler.set_tag(slot.m_handler.tag() | handler_tag::cqe_skip_success);
 	}
 
-	/// @brief Emulate skipping of CQEs of linked operations on failure.
-	///        The CQE associated with this SQE is skipped if the result is ECANCELED.
-	///        The primary purpose of skipping the CQE is to avoid extending the lifetime of the
-	///        associated io_slot until all linked operations are canceled.
+	/// @brief Emulate skipping of CQEs of linked operations on failure. The CQE associated with
+	///        this SQE is skipped if the result is ECANCELED. The primary purpose of skipping the
+	///        CQE is to avoid extending the lifetime of the associated io_slot until all linked
+	///        operations are canceled.
 	/// @pre @param sqe has associated user data. CQEs without user data are always skipped.
 	/// @note This prevents the direct manual cancelation of the affected operation.
 	void set_cqe_skip_success_linked_emulation(io_uring_sqe& sqe)

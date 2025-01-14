@@ -77,6 +77,7 @@ enum class error
 	handle_is_null,
 	handle_is_not_null,
 	handle_is_not_multiplexable,
+	handle_cannot_be_detached,
 
 	// Operations
 	operation_pending,

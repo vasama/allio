@@ -10,6 +10,8 @@
 
 #include <vsm/atomic.hpp>
 #include <vsm/flags.hpp>
+#include <vsm/intrusive/list.hpp>
+#include <vsm/intrusive/mpsc_queue.hpp>
 #include <vsm/result.hpp>
 #include <vsm/tag_ptr.hpp>
 
@@ -116,6 +118,10 @@ public:
 
 	struct io_status_type;
 
+private:
+	using io_handler_type = basic_io_handler<io_status_type>;
+
+public:
 	class connector_type
 	{
 		int32_t file_index = -1;
@@ -123,14 +129,22 @@ public:
 		friend io_uring_multiplexer;
 	};
 
-	class operation_type
+	class operation_type : vsm::intrusive::list_link
 	{
+		io_handler_type* m_handler;
+
+	public:
+		void bind(io_handler_type& handler) &
+		{
+			m_handler = handler;
+		}
+
+	private:
 		friend io_uring_multiplexer;
+		friend vsm::intrusive::list<operation_type>;
 	};
 
 private:
-	using io_handler_type = basic_io_handler<io_status_type>;
-
 	enum class handler_tag : uintptr_t
 	{
 		cqe_skip_success = 1 << 0,
@@ -142,14 +156,46 @@ private:
 	using handler_ptr = vsm::tag_ptr<io_handler_type, handler_tag, handler_tag::all>;
 
 public:
+#if 0
 	class io_slot
 	{
 		handler_ptr m_handler = nullptr;
 
 	public:
-		void bind(io_handler_type& handler) &
+		void set_handler(io_handler_type& handler) &
 		{
 			m_handler = &handler;
+		}
+
+		friend io_uring_multiplexer;
+	};
+#endif
+
+	class io_slot
+	{
+		static constexpr size_t offset_bits = 15;
+
+		uint16_t m_offset : offset_bits;
+		uint16_t m_cqe_skip_success : 1;
+
+	public:
+		void bind(operation_type& operation) &
+		{
+			uintptr_t const uint_main = reinterpret_cast<uintptr_t>(&operation);
+			uintptr_t const uint_this = reinterpret_cast<uintptr_t>(this);
+
+			vsm_assert(uint_this > uint_main);
+			vsm_assert(uint_this - uint_main < static_cast<size_t>(1) << offset_bits);
+
+			m_offset = static_cast<uint16_t>(uint_this - uint_main);
+		}
+
+	private:
+		operation_type* get_operation() const
+		{
+			uintptr_t const uint_this = reinterpret_cast<uintptr_t>(this);
+			uintptr_t const uint_main = uint_this - m_offset;
+			return reinterpret_cast<operation_type*>(uint_main);
 		}
 
 		friend io_uring_multiplexer;
@@ -166,6 +212,8 @@ private:
 	/// @brief Unique owner of the io_uring kernel object.
 	unique_handle m_io_uring;
 
+	unique_handle m_wake_event;
+
 	/// @brief Unique owner of the mmapped region containing the submission queue indices.
 	unique_byte_mmap m_sq_mmap;
 
@@ -181,7 +229,7 @@ private:
 	void const* m_cqes;
 
 
-	flags m_flags;
+	flags m_flags = {};
 
 	/// @brief Dynamic size of a single @ref io_uring_sqe.
 	uint8_t m_sqe_size;
@@ -255,14 +303,12 @@ private:
 	uint32_t m_cq_consume;
 
 
-#if 0
-	using create_parameters = parameters_t
-	<
-		io_uring::kernel_thread_t,
-		io_uring::submission_queue_size_t,
-		io_uring::completion_queue_size_t
-	>;
-#endif
+	vsm::intrusive::forward_list<> m_cancel_forward_list;
+
+
+	vsm::atomic<uint32_t> m_synchronized_flags = {};
+
+	// vsm::intrusive::mpsc_queue<> cancel_mpsc_queue;
 
 	struct create_parameters
 	{
@@ -336,8 +382,15 @@ public:
 	}
 
 
-	//void cancel_io(io_handler_type& handler);
-	void cancel_io(io_slot& slot);
+	void cancel_io(io_handler_type& handler)
+	{
+		_cancel_io(user_data_ptr(&handler));
+	}
+
+	void cancel_io(io_slot& slot)
+	{
+		_cancel_io(user_data_ptr(&slot, user_data_tag::io_slot));
+	}
 
 
 	class timeout
@@ -379,14 +432,18 @@ public:
 
 private:
 	explicit io_uring_multiplexer(
+		io_uring_params const& setup,
 		unique_handle&& io_uring,
 		unique_byte_mmap&& sq_ring,
 		unique_byte_mmap&& cq_ring,
-		unique_void_mmap&& sq_data,
-		io_uring_params const& setup);
+		unique_void_mmap&& sq_data);
 
+	[[nodiscard]] static vsm::result<void> _create(
+		create_parameters const& args,
+		vsm::result<io_uring_multiplexer>& storage);
 
 	[[nodiscard]] static vsm::result<io_uring_multiplexer> _create(create_parameters const& args);
+
 
 
 	[[nodiscard]] bool acquire_record_lock()
@@ -443,7 +500,13 @@ private:
 
 	[[nodiscard]] vsm::result<void> commit();
 
-	[[nodiscard]] vsm::result<void> async_cancel_io(io_slot& slot);
+	void _cancel_io(user_data_ptr user_data);
+	void _cancel_io_synchronized(user_data_ptr user_data);
+
+	[[nodiscard]] bool submit_async_cancel(user_data_ptr user_data);
+
+	void wake_poll_thread();
+	void wake_poll_thread_reset();
 
 
 	[[nodiscard]] bool has_kernel_thread() const
