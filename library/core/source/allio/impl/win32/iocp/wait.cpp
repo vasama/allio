@@ -29,7 +29,7 @@ io_result<void> iocp_wait_state::submit(M& m, H const& h, S&, io_handler<M>& han
 	return io_pending(error::operation_pending);
 }
 
-io_result<void> iocp_wait_state::notify(M& m, H const&, S&, M::io_status_type const status)
+io_result<void> iocp_wait_state::notify(M& m, H const&, S&, io_handler<M>& handler, M::io_status_type const status)
 {
 	vsm_assert(&status.slot == &wait_slot);
 

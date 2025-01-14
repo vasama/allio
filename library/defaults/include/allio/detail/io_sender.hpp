@@ -109,6 +109,7 @@ class io_sender
 				m_handle,
 				m_operation,
 				vsm_as_const(m_args),
+				static_cast<io_handler_type&>(*this),
 				vsm_move(status));
 
 			// This is not a stream sender.
@@ -262,6 +263,7 @@ class io_handle_sender
 				m_handle,
 				m_operation,
 				vsm_as_const(m_args),
+				static_cast<io_handler_type&>(*this),
 				vsm_move(status));
 
 			// This is not a stream sender.

@@ -411,6 +411,7 @@ struct handle_traits<basic_attached_handle<Object, MultiplexerHandle>>
 		handle_const_t<Operation, _handle_type>& h,
 		async_operation_t<_multiplexer_type, Object, Operation>& s,
 		io_parameters_t<Object, Operation> const& a,
+		io_handler<_multiplexer_type>& handler,
 		typename _multiplexer_type::io_status_type&& status)
 	{
 		return detail::notify_io(
@@ -419,6 +420,7 @@ struct handle_traits<basic_attached_handle<Object, MultiplexerHandle>>
 			h.m_connector,
 			s,
 			a,
+			handler,
 			vsm_move(status));
 	}
 

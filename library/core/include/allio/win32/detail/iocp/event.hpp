@@ -41,7 +41,7 @@ struct async_operation<iocp_multiplexer, event_t, event_t::wait_t>
 	iocp_wait_state wait_state;
 
 	static io_result<void> submit(M& m, H& h, C& c, S& s, A const& args, io_handler<M>& handler);
-	static io_result<void> notify(M& m, H& h, C& c, S& s, A const& args, M::io_status_type status);
+	static io_result<void> notify(M& m, H& h, C& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 

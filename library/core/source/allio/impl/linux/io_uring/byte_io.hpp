@@ -14,7 +14,7 @@ struct io_uring_byte_io_state
 	M::timeout timeout;
 
 	io_result<size_t> submit(M& m, H& h, C& c, S& s, io_handler<M>& handler);
-	io_result<size_t> notify(M& m, H& h, C& c, S& s, M::io_status_type status);
+	io_result<size_t> notify(M& m, H& h, C& c, S& s, io_handler<M>& handler, M::io_status_type status);
 	void cancel(M& m, H const& h, C const& c, S& s);
 };
 

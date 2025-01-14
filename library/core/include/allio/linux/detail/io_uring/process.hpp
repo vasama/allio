@@ -30,7 +30,7 @@ struct async_operation<io_uring_multiplexer, process_t, process_t::wait_t>
 	M::timeout timeout;
 
 	static io_result<process_exit_code> submit(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler);
-	static io_result<process_exit_code> notify(M& m, H& h, C& c, S& s, A const& a, M::io_status_type status);
+	static io_result<process_exit_code> notify(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler, M::io_status_type status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 

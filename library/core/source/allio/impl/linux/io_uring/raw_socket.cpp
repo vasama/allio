@@ -45,7 +45,7 @@ io_result<void> connect_s::submit(
 		.fd = socket.get(),
 		.off = addr_size,
 		.addr = reinterpret_cast<uintptr_t>(&addr),
-		.user_data = ctx.get_user_data(handler),
+		.user_data = ctx.get_user_data(s),
 	}));
 
 	if (a.deadline != deadline::never())
@@ -69,6 +69,7 @@ io_result<void> connect_s::notify(
 	C&,
 	connect_s& s,
 	connect_a const&,
+	io_handler<M>&,
 	M::io_status_type const status)
 {
 	// This operation uses no io_slots.
@@ -94,8 +95,9 @@ io_result<void> connect_s::notify(
 	return {};
 }
 
-void connect_s::cancel(M&, H const&, C const&, S& s)
+void connect_s::cancel(M& m, H const&, C const&, S& s)
 {
+	m.cancel_io(s);
 }
 
 
@@ -131,7 +133,7 @@ io_result<size_t> read_s::submit(
 		.fd = fd,
 		.addr = reinterpret_cast<uintptr_t>(buffers.buffers_data),
 		.len = buffers_size,
-		.user_data = ctx.get_user_data(handler),
+		.user_data = ctx.get_user_data(s),
 	}));
 
 	if (a.deadline != deadline::never())
@@ -150,6 +152,7 @@ io_result<size_t> read_s::notify(
 	C const&,
 	read_s& s,
 	read_a const& a,
+	io_handler<M>&,
 	M::io_status_type const status)
 {
 	// This operation uses no io_slots.
@@ -168,9 +171,9 @@ io_result<size_t> read_s::notify(
 	return static_cast<size_t>(status.result);
 }
 
-void read_s::cancel(M&, H const& h, C const&, read_s& s)
+void read_s::cancel(M& m, H const& h, C const&, read_s& s)
 {
-	//TODO: cancel
+	m.cancel_io(s);
 }
 
 
@@ -203,7 +206,7 @@ io_result<size_t> write_s::submit(
 		.fd = fd,
 		.addr = reinterpret_cast<uintptr_t>(buffers.buffers_data),
 		.len = buffers_size,
-		.user_data = ctx.get_user_data(handler),
+		.user_data = ctx.get_user_data(s),
 	}));
 
 	if (a.deadline != deadline::never())
@@ -222,6 +225,7 @@ io_result<size_t> write_s::notify(
 	C const&,
 	write_s& s,
 	write_a const&,
+	io_handler<M>&,
 	M::io_status_type const status)
 {
 	// This operation uses no io_slots.
@@ -235,7 +239,7 @@ io_result<size_t> write_s::notify(
 	return static_cast<size_t>(status.result);
 }
 
-void write_s::cancel(M&, H const& h, C const&, write_s& s)
+void write_s::cancel(M& m, H const& h, C const&, write_s& s)
 {
-	//TODO: cancel
+	m.cancel_io(s);
 }

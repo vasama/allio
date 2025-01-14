@@ -14,7 +14,7 @@ using open_a = io_parameters_t<directory_t, open_t>;
 
 io_result<void> open_s::submit(M& m, H& h, C& c, open_s&, open_a const& a_ref, io_handler<M>&)
 {
-	auto a = a_ref;
+	open_t::params_type a = a_ref;
 	a.flags |= io_flags::create_non_blocking;
 
 	basic_detached_handle<directory_t> handle;
@@ -23,6 +23,15 @@ io_result<void> open_s::submit(M& m, H& h, C& c, open_s&, open_a const& a_ref, i
 	h = handle.release();
 
 	return {};
+}
+
+io_result<void> open_s::notify(M&, H&, C&, open_s&, open_a const&, io_handler<M>&, M::io_status_type)
+{
+}
+
+void open_s::cancel(M&, H const&, C const&, S&)
+{
+	vsm_unreachable();
 }
 
 

@@ -131,6 +131,7 @@ struct async_operation<M, openssl_listen_socket_t, listen_t>
 		C& c,
 		S& s,
 		A const& a,
+		io_handler<M>& handler,
 		M::io_status_type&& status,
 		_raw_listen& raw_state)
 	{

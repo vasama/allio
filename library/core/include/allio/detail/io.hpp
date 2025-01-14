@@ -377,30 +377,33 @@ inline constexpr submit_io_t submit_io = {};
 
 struct notify_io_t
 {
-	template<typename H, typename S, typename A, typename Status>
+	template<typename H, typename S, typename A, typename Handler, typename Status>
 	[[nodiscard]] vsm_static_operator auto operator()(
 		H& h,
 		S& s,
 		A const& a,
+		Handler& handler,
 		Status&& status) vsm_static_operator_const
 	{
 		return handle_traits<std::remove_cv_t<H>>::notify_io(
 			h,
 			s,
 			a,
+			handler,
 			static_cast<Status&&>(status));
 	}
 
-	template<typename M, typename H, typename C, typename S, typename A, typename Status>
+	template<typename M, typename H, typename C, typename S, typename A, typename Handler, typename Status>
 	[[nodiscard]] vsm_static_operator auto operator()(
 		M& m,
 		H& h,
 		C& c,
 		S& s,
 		A const& a,
+		Handler& handler,
 		Status&& status) vsm_static_operator_const
 	{
-		return S::notify(m, h, c, s, a, static_cast<Status&&>(status));
+		return S::notify(m, h, c, s, a, handler, static_cast<Status&&>(status));
 	}
 };
 inline constexpr notify_io_t notify_io = {};

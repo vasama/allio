@@ -52,6 +52,8 @@ std::string detail::error_category::message(int const code) const
 		return "The provided handle is not null.";
 	case error::handle_is_not_multiplexable:
 		return "The provided handle is not multiplexable.";
+	case error::handle_cannot_be_detached:
+		return "The provided handle cannot be detached.";
 
 	// Operations
 	case error::operation_pending:
@@ -139,6 +141,8 @@ std::error_condition detail::error_category::default_error_condition(int const c
 	case error::handle_is_not_null:
 		break;
 	case error::handle_is_not_multiplexable:
+		break;
+	case error::handle_cannot_be_detached:
 		break;
 
 	// Operations

@@ -40,7 +40,7 @@ inline vsm::result<void> eventfd_signal(int const fd)
 		fd,
 		/* value: */ 1);
 
-	if (fd != -1)
+	if (r != -1)
 	{
 		// If the counter is already full, EAGAIN is returned. This case is extremely unlikely, as
 		// it would require signaling the event object 2^64-1 times. However this case is also not
@@ -54,7 +54,7 @@ inline vsm::result<void> eventfd_signal(int const fd)
 	return {};
 }
 
-inline vsm::result<void> eventfd_reset(int const fd)
+inline vsm::result<bool> eventfd_reset(int const fd)
 {
 	eventfd_t value;
 

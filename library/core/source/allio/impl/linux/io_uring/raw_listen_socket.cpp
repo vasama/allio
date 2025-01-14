@@ -55,7 +55,7 @@ io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s&, listen_a const& a,
 	return {};
 }
 
-io_result<void> listen_s::notify(M&, H&, C&, listen_s&, listen_a const&, M::io_status_type)
+io_result<void> listen_s::notify(M&, H&, C&, listen_s&, listen_a const&, io_handler<M>&, M::io_status_type)
 {
 	vsm_unreachable();
 }
@@ -87,7 +87,7 @@ io_result<accept_result_type> accept_s::submit(M& m, H const& h, C const& c, acc
 		.accept_flags = vsm::any_flags(a.flags, io_flags::create_inheritable)
 			? static_cast<uint32_t>(0)
 			: static_cast<uint32_t>(SOCK_CLOEXEC),
-		.user_data = ctx.get_user_data(handler),
+		.user_data = ctx.get_user_data(s),
 	}));
 
 	vsm_try_void(ctx.commit());
@@ -95,7 +95,7 @@ io_result<accept_result_type> accept_s::submit(M& m, H const& h, C const& c, acc
 	return io_pending(error::operation_pending);
 }
 
-io_result<accept_result_type> accept_s::notify(M& m, H const&, C const& c, accept_s& s, accept_a const&, M::io_status_type const status)
+io_result<accept_result_type> accept_s::notify(M& m, H const&, C const& c, accept_s& s, accept_a const&, io_handler<M>&, M::io_status_type const status)
 {
 	// This operation uses no io_slots.
 	vsm_assert(status.slot == nullptr);
@@ -134,6 +134,5 @@ io_result<accept_result_type> accept_s::notify(M& m, H const&, C const& c, accep
 
 void accept_s::cancel(M& m, H const& h, C const&, S& s)
 {
-	m.cancel_io(handler);
-	//TODO: cancel
+	m.cancel_io(s);
 }

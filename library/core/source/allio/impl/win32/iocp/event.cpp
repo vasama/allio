@@ -16,9 +16,9 @@ io_result<void> wait_s::submit(M& m, H const& h, C const&, wait_s& s, wait_a con
 	return s.wait_state.submit(m, h, s, handler);
 }
 
-io_result<void> wait_s::notify(M& m, H const& h, C const&, wait_s& s, wait_a const&, M::io_status_type const status)
+io_result<void> wait_s::notify(M& m, H const& h, C const&, wait_s& s, wait_a const&, io_handler<M>& handler, M::io_status_type const status)
 {
-	return s.wait_state.notify(m, h, s, status);
+	return s.wait_state.notify(m, h, s, handler, status);
 }
 
 void wait_s::cancel(M& m, H const& h, C const&, S& s)

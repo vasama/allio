@@ -14,11 +14,11 @@ class externally_synchronized
 public:
 	externally_synchronized() = default;
 
-	externally_synchronized(externally_synchronized const&)
+	externally_synchronized(externally_synchronized const&) noexcept
 	{
 	}
 
-	externally_synchronized& operator=(externally_synchronized const&) &
+	externally_synchronized& operator=(externally_synchronized const&) & noexcept
 	{
 		return *this;
 	}

@@ -11,11 +11,6 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::linux;
 
-static vsm::result<void> poll_event(int const fd, deadline const deadline)
-{
-	return linux::poll(fd, POLLIN, deadline);
-}
-
 vsm::result<void> linux::test_event(int const fd, bool const auto_reset)
 {
 	if (auto_reset)
@@ -31,7 +26,7 @@ vsm::result<void> linux::test_event(int const fd, bool const auto_reset)
 	}
 	else
 	{
-		return poll_event(fd, deadline::instant());
+		return vsm::discard_value(linux::poll(fd, POLLIN, deadline::instant()));
 	}
 }
 
@@ -121,7 +116,7 @@ vsm::result<void> event_t::wait(
 		// 2. The event must be opened in non-blocking mode to allow non-blocking reset using write
 		//    even in the unlikely case of a maxed out counter value. There is also no way to open
 		//    the event in both blocking and non-blocking modes at the same time.
-		vsm_try_void(poll_event(fd, relative_deadline));
+		vsm_try_discard(linux::poll(fd, POLLIN, relative_deadline));
 
 		if (auto_reset)
 		{

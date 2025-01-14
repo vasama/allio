@@ -84,6 +84,7 @@ io_result<void> connect_s::notify(
 	C&,
 	connect_s& s,
 	connect_a const&,
+	io_handler<M>& handler,
 	M::io_status_type const status)
 {
 	vsm_assert(&status.slot == &s.overlapped);
@@ -188,6 +189,7 @@ io_result<size_t> read_s::notify(
 	C const&,
 	read_s& s,
 	read_a const& a,
+	io_handler<M>& handler,
 	M::io_status_type const status)
 {
 	vsm_assert(&status.slot == &s.overlapped);
@@ -260,6 +262,7 @@ io_result<size_t> write_s::notify(
 	C const&,
 	write_s& s,
 	write_a const&,
+	io_handler<M>& handler,
 	M::io_status_type const status)
 {
 	vsm_assert(&status.slot == &s.overlapped);

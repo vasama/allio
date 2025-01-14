@@ -29,7 +29,7 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, connect_t>
 	M::timeout timeout;
 
 	static io_result<void> submit(M& m, H& h, C& c, S& s, A const& args, io_handler<M>& handler);
-	static io_result<void> notify(M& m, H& h, C& c, S& s, A const& args, M::io_status_type status);
+	static io_result<void> notify(M& m, H& h, C& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 
@@ -47,7 +47,7 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, byte_io::stream_read_
 	M::timeout timeout;
 
 	static io_result<size_t> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
-	static io_result<size_t> notify(M& m, H const& h, C const& c, S& s, A const& args, M::io_status_type status);
+	static io_result<size_t> notify(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 
@@ -65,7 +65,7 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, byte_io::stream_write
 	M::timeout timeout;
 
 	static io_result<size_t> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
-	static io_result<size_t> notify(M& m, H const& h, C const& c, S& s, A const& args, M::io_status_type status);
+	static io_result<size_t> notify(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 
@@ -84,7 +84,7 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, close_t>
 		return raw_socket_t::close(h, a);
 	}
 
-	static io_result<void> notify(M&, H&, C const&, S&, A const&, M::io_status_type)
+	static io_result<void> notify(M&, H&, C const&, S&, A const&, io_handler<M>&, M::io_status_type)
 	{
 		vsm_unreachable();
 	}

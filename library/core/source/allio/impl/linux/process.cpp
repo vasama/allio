@@ -26,7 +26,7 @@ vsm::result<std::optional<int>> linux::wait_process(
 	if (!deadline.is_trivial())
 	{
 		// Polling is required to specify a non-trivial timeout.
-		vsm_try_void(linux::poll(fd, POLLIN, deadline));
+		vsm_try_discard(linux::poll(fd, POLLIN, deadline));
 	}
 	else if (deadline == deadline::instant())
 	{
@@ -53,7 +53,7 @@ vsm::result<std::optional<int>> linux::wait_process(
 		{
 			// Polling is required to wait for non-child processes. If the deadline is trivial,
 			// the file descriptor was also not polled previously in order to implement a timeout.
-			vsm_try_void(linux::poll(fd, POLLIN, deadline));
+			vsm_try_discard(linux::poll(fd, POLLIN, deadline));
 		}
 
 		// In any case, the exit code of a non-child process cannot be made available.

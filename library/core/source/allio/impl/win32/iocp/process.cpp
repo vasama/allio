@@ -29,9 +29,10 @@ io_result<process_exit_code> wait_s::notify(
 	C const&,
 	wait_s& s,
 	wait_a const&,
+	io_handler<M>& handler,
 	M::io_status_type const status)
 {
-	vsm_try_void(s.wait_state.notify(m, h, s, status));
+	vsm_try_void(s.wait_state.notify(m, h, s, handler, status));
 	return get_process_exit_code(unwrap_handle(h.platform_handle));
 }
 

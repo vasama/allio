@@ -4,7 +4,7 @@
 #include <allio/detail/deadline.hpp>
 #include <allio/detail/handles/platform_object.hpp>
 
-#include <vsm/intrusive_ptr.hpp>
+//#include <vsm/intrusive_ptr.hpp>
 
 namespace allio::detail {
 
@@ -52,6 +52,7 @@ struct native_handle<opaque_object_t> : native_handle<opaque_object_t::base_type
 };
 
 
+#if 0
 template<typename Implementation>
 struct opaque_object_wrapper_base
 {
@@ -136,5 +137,6 @@ vsm::result<basic_detached_handle<opaque_object_t>> make_opaque_object(Args&&...
 			object,
 		});
 }
+#endif
 
 } // namespace allio::detail

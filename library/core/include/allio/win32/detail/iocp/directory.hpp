@@ -22,15 +22,8 @@ struct async_operation<iocp_multiplexer, directory_t, directory_t::open_t>
 	using A = io_parameters_t<directory_t, directory_t::open_t>;
 
 	static io_result<void> submit(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler);
-
-	static io_result<void> notify(M&, H&, C&, S&, A const&, M::io_status_type)
-	{
-		vsm_unreachable();
-	}
-
-	static void cancel(M&, H const&, C const&, S&)
-	{
-	}
+	static io_result<void> notify(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler, M::io_status_type status);
+	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 
 template<>
@@ -47,7 +40,7 @@ struct async_operation<iocp_multiplexer, directory_t, directory_t::read_t>
 	iocp_multiplexer::io_status_block io_status_block;
 
 	static io_result<R> submit(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler);
-	static io_result<R> notify(M& m, H& h, C& c, S& s, A const& a, M::io_status_type status);
+	static io_result<R> notify(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler, M::io_status_type status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 

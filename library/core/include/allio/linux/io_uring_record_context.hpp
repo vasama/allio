@@ -60,13 +60,13 @@ public:
 	[[nodiscard]] uintptr_t get_user_data(operation_type& operation) const
 	{
 		return vsm::reinterpret_pointer_cast<uintptr_t>(
-			basic_user_data_ptr<io_handler_type>(&operation));
+			basic_user_data_ptr<operation_type>(&operation));
 	}
 
 	[[nodiscard]] uintptr_t get_user_data(io_slot& slot) const
 	{
 		return vsm::reinterpret_pointer_cast<uintptr_t>(
-			basic_user_data_ptr<io_slot>(&slot, user_data_tag::type_io_slot));
+			basic_user_data_ptr<io_slot>(&slot, user_data_tag::io_slot));
 	}
 
 
@@ -143,7 +143,7 @@ public:
 	///        are skipped if successful.
 	void set_cqe_skip_success_emulation(io_slot& slot)
 	{
-		slot.m_handler.set_tag(slot.m_handler.tag() | handler_tag::cqe_skip_success);
+		slot.m_cqe_skip_success = 1;
 	}
 
 	/// @brief Emulate skipping of CQEs of linked operations on failure. The CQE associated with

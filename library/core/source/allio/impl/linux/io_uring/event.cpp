@@ -106,6 +106,7 @@ io_result<void> wait_s::notify(
 	C const& c,
 	wait_s& s,
 	wait_a const&,
+	io_handler<M>& handler,
 	M::io_status_type const status)
 {
 	if (status.result < 0)
@@ -122,7 +123,7 @@ io_result<void> wait_s::notify(
 
 			// Someone else won the race to reset the event. Retry by submitting both operations
 			// again.
-			return _submit(m, h, c, s, *s.handler);
+			return _submit(m, h, c, s, handler);
 
 		case -ECANCELED:
 			return io_canceled(static_cast<system_error>(ECANCELED));

@@ -3,24 +3,16 @@
 #include <allio/handles/opaque_object.hpp>
 #include <allio/linux/io_uring/multiplexer.hpp>
 
-namespace allio {
+namespace allio::detail {
 
 template<>
-struct async_handle_traits<linux::io_uring_multiplexer, opaque_handle::base_type>
+struct async_connector<io_uring_multiplexer, opaque_object_t>
 {
-	struct context_type
-	{
-	};
 };
 
 template<>
-struct async_operation_traits<linux::io_uring_multiplexer, opaque_handle::base_type, opaque_handle::poll_tag>
+struct async_operation<io_uring_multiplexer, opaque_object_t, opaque_object_t::poll_t>
 {
-	struct storage_type
-	{
-		/// @brief Timeout passed by reference in a linked timeout SQE.
-		linux::io_uring_multiplexer::timeout timeout;
-	};
 };
 
-} // namespace allio
+} // namespace allio::detail

@@ -1,3 +1,4 @@
+#if 0 //TODO
 #include <allio/detail/handles/opaque_object.hpp>
 
 using namespace allio;
@@ -12,3 +13,4 @@ vsm::result<void> opaque_object_t::close(
 
 	return {};
 }
+#endif

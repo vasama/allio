@@ -3,6 +3,7 @@
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/eventfd.hpp>
 #include <allio/impl/linux/io_uring.hpp>
+#include <allio/impl/linux/poll.hpp>
 #include <allio/impl/linux/timeout.hpp>
 #include <allio/linux/io_uring_record_context.hpp>
 
@@ -90,11 +91,11 @@ static uint32_t* get_shared_uint32(unique_byte_mmap const& mmap, size_t const of
 }
 
 io_uring_multiplexer::io_uring_multiplexer(
-	io_uring_params const& setup
+	io_uring_params const& setup,
 	unique_handle&& io_uring,
 	unique_byte_mmap&& sq_ring,
 	unique_byte_mmap&& cq_ring,
-	unique_void_mmap&& sq_data)
+	unique_void_mmap&& sq_data) noexcept
 	: m_io_uring(vsm_move(io_uring))
 	, m_sq_mmap(vsm_move(sq_ring))
 	, m_cq_mmap(vsm_move(cq_ring))
@@ -162,8 +163,13 @@ vsm::result<void> io_uring_multiplexer::_create(
 		return static_cast<uint32_t>(1) << (31 - lz);
 	};
 
-	vsm_try(submission_queue_size, vsm::try_truncate<uint32_t>(args.submission_queue_size));
-	vsm_try(completion_queue_size, vsm::try_truncate<uint32_t>(args.completion_queue_size));
+	vsm_try(submission_queue_size, vsm::try_truncate<uint32_t>(
+		args.submission_queue_size,
+		error::invalid_argument));
+
+	vsm_try(completion_queue_size, vsm::try_truncate<uint32_t>(
+		args.completion_queue_size,
+		error::invalid_argument));
 
 	vsm_try(min_entries, round_up_to_power_of_two(std::max(
 		min_queue_entries,
@@ -231,16 +237,16 @@ vsm::result<void> io_uring_multiplexer::_create(
 		vsm_move(rings.cq_ring),
 		vsm_move(sq_data))));
 
-	vsm_try_assign(self.wake_event, eventfd(EFD_CLOEXEC | EFD_NOBLOCK));
+	vsm_try_assign(self.m_wake_event, eventfd(EFD_CLOEXEC | EFD_NONBLOCK));
 
 	// Upon construction of the io_uring, a multishot poll operation is submitted on the wake event.
 	// Any time the event enters a signaled state, the completion wakes up the poll thread.
 	{
 		record_context ctx(self);
-		vsm_try_ptr(sqe, ctx.push(
+		vsm_try_discard(ctx.push(
 		{
 			.opcode = IORING_OP_POLL_ADD,
-			.fd = m_wake_event.get(),
+			.fd = self.m_wake_event.get(),
 			.len = IORING_POLL_ADD_MULTI,
 			.poll_events = POLLIN,
 		}));
@@ -478,7 +484,7 @@ void io_uring_multiplexer::reap_cqe(io_uring_cqe const& cqe)
 		++m_cq_free;
 	}
 
-	if (sqe.user_data == 0)
+	if (cqe.user_data == 0)
 	{
 		return;
 	}
@@ -527,21 +533,25 @@ void io_uring_multiplexer::reap_cqe(io_uring_cqe const& cqe)
 
 bool io_uring_multiplexer::submit_async_cancel(user_data_ptr const user_data)
 {
+#if 0
 	record_context ctx(*this);
 
 	vsm_try_ptr(sqe, ctx.push(
 	{
 		.opcode = IORING_OP_ASYNC_CANCEL,
-		.addr = reinterpret_pointer_cast<uintptr_t>(user_data),
+		.addr = vsm::reinterpret_pointer_cast<uintptr_t>(user_data),
 	}));
 
 	// There's no need for any CQEs for cancel operations.
 	ctx.set_cqe_skip_success(sqe);
 
 	return ctx.commit();
+#endif
+
+	return false;
 }
 
-void io_uring_multiplexer::_cancel_io(user_data_ptr const user_data)
+void io_uring_multiplexer::_cancel_io(operation_type& operation, user_data_ptr const user_data)
 {
 	// Plan:
 	// * Insert element into mpsc queue.
@@ -554,10 +564,12 @@ void io_uring_multiplexer::_cancel_io(user_data_ptr const user_data)
 	}
 	else
 	{
+#if 0
 		if (m_cancel_mpsc_queue.push_back())
 		{
 			wake_poll_thread();
 		}
+#endif
 	}
 }
 
@@ -569,16 +581,18 @@ void io_uring_multiplexer::_cancel_io_synchronized(user_data_ptr const user_data
 	{
 		//TODO: Handle errors not caused by SQE exhaustion.
 
+#if 0
 		m_cancel_forward_list.push_back();
+#endif
 	}
 }
 
 void io_uring_multiplexer::wake_poll_thread()
 {
-	uint32_t flags = m_shared_flags.load(std::memory_order_acquire);
+	uint32_t flags = vsm::atomic_ref(m_synchronized_flags).load(std::memory_order_acquire);
 	if (vsm::no_flags(flags, synchronized_flags::wake_requested))
 	{
-		flags = m_shared_flags.fetch_or(
+		flags = vsm::atomic_ref(m_synchronized_flags).fetch_or(
 			synchronized_flags::wake_requested,
 			std::memory_order_acq_rel);
 
@@ -586,20 +600,20 @@ void io_uring_multiplexer::wake_poll_thread()
 		{
 			// Signal the continuously polled wake event in order to wake up the poll thread if it
 			// happens to be waiting on io_uring_enter.
-			unrecoverable_error(eventfd_signal(m_wake_event.get()));
+			unrecoverable(eventfd_signal(m_wake_event.get()));
 		}
 	}
 }
 
 void io_uring_multiplexer::wake_poll_thread_reset()
 {
-	uint32_t const flags = m_synchronized_flags.load(std::memory_order_acquire);
+	uint32_t const flags = vsm::atomic_ref(m_synchronized_flags).load(std::memory_order_acquire);
 	if (vsm::any_flags(flags, synchronized_flags::wake_requested))
 	{
 		// Before resetting the atomic flag, the event object must be reset.
-		unrecoverable_error(eventfd_reset(m_wake_event.get()));
+		unrecoverable(vsm::discard_value(eventfd_reset(m_wake_event.get())));
 
-		(void)m_synchronized_flags.fetch_and(
+		(void)vsm::atomic_ref(m_synchronized_flags).fetch_and(
 			~synchronized_flags::wake_requested,
 			std::memory_order_release);
 	}
@@ -690,7 +704,7 @@ vsm::result<bool> io_uring_multiplexer::_poll(poll_parameters const& args)
 				// Submitting a timeout operation is possible, but the timespec lifetime and
 				// cancelation required make it very complicated. Instead we'll just fall back to
 				// polling the io_uring object.
-				vsm_try_void(linux::poll(m_io_uring.get(), POLLIN, args.deadline));
+				vsm_try_discard(linux::poll(m_io_uring.get(), POLLIN, args.deadline));
 
 				//TODO: Also specify POLLOUT depending on the multiplexer state?
 			}

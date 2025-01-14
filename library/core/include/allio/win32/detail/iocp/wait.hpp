@@ -15,7 +15,7 @@ struct iocp_wait_state
 	iocp_multiplexer::wait_slot wait_slot;
 
 	io_result<void> submit(M& m, H const& h, S& s, io_handler<M>& handler);
-	io_result<void> notify(M& m, H const& h, S& s, M::io_status_type status);
+	io_result<void> notify(M& m, H const& h, S& s, io_handler<M>& handler, M::io_status_type status);
 	void cancel(M& m, H const& h, S& s);
 };
 

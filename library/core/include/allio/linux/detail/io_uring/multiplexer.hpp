@@ -134,9 +134,9 @@ public:
 		io_handler_type* m_handler;
 
 	public:
-		void bind(io_handler_type& handler) &
+		void set_handler(io_handler_type& handler) &
 		{
-			m_handler = handler;
+			m_handler = &handler;
 		}
 
 	private:
@@ -144,38 +144,9 @@ public:
 		friend vsm::intrusive::list<operation_type>;
 	};
 
-private:
-	enum class handler_tag : uintptr_t
+	class alignas(4) io_slot
 	{
-		cqe_skip_success = 1 << 0,
-
-		all = cqe_skip_success
-	};
-	vsm_flag_enum_friend(handler_tag);
-
-	using handler_ptr = vsm::tag_ptr<io_handler_type, handler_tag, handler_tag::all>;
-
-public:
-#if 0
-	class io_slot
-	{
-		handler_ptr m_handler = nullptr;
-
-	public:
-		void set_handler(io_handler_type& handler) &
-		{
-			m_handler = &handler;
-		}
-
-		friend io_uring_multiplexer;
-	};
-#endif
-
-	class io_slot
-	{
-		static constexpr size_t offset_bits = 15;
-
-		uint16_t m_offset : offset_bits;
+		uint16_t m_offset;
 		uint16_t m_cqe_skip_success : 1;
 
 	public:
@@ -185,7 +156,7 @@ public:
 			uintptr_t const uint_this = reinterpret_cast<uintptr_t>(this);
 
 			vsm_assert(uint_this > uint_main);
-			vsm_assert(uint_this - uint_main < static_cast<size_t>(1) << offset_bits);
+			vsm_assert(uint_this - uint_main <= static_cast<uint16_t>(-1));
 
 			m_offset = static_cast<uint16_t>(uint_this - uint_main);
 		}
@@ -302,13 +273,11 @@ private:
 	/// @ref m_k_cq_consume == m_cq_consume <= @ref m_k_cq_produce
 	uint32_t m_cq_consume;
 
+	uint32_t m_synchronized_flags = 0;
 
-	vsm::intrusive::forward_list<> m_cancel_forward_list;
+	//vsm::intrusive::forward_list<operation_type> m_cancel_forward_list;
 
-
-	vsm::atomic<uint32_t> m_synchronized_flags = {};
-
-	// vsm::intrusive::mpsc_queue<> cancel_mpsc_queue;
+	// vsm::intrusive::mpsc_queue<operation_type> cancel_mpsc_queue;
 
 	struct create_parameters
 	{
@@ -382,14 +351,14 @@ public:
 	}
 
 
-	void cancel_io(io_handler_type& handler)
+	void cancel_io(operation_type& operation)
 	{
-		_cancel_io(user_data_ptr(&handler));
+		_cancel_io(operation, user_data_ptr(&operation));
 	}
 
-	void cancel_io(io_slot& slot)
+	void cancel_io(operation_type& operation, io_slot& slot)
 	{
-		_cancel_io(user_data_ptr(&slot, user_data_tag::io_slot));
+		_cancel_io(operation, user_data_ptr(&slot, user_data_tag::io_slot));
 	}
 
 
@@ -436,7 +405,7 @@ private:
 		unique_handle&& io_uring,
 		unique_byte_mmap&& sq_ring,
 		unique_byte_mmap&& cq_ring,
-		unique_void_mmap&& sq_data);
+		unique_void_mmap&& sq_data) noexcept;
 
 	[[nodiscard]] static vsm::result<void> _create(
 		create_parameters const& args,
@@ -500,7 +469,7 @@ private:
 
 	[[nodiscard]] vsm::result<void> commit();
 
-	void _cancel_io(user_data_ptr user_data);
+	void _cancel_io(operation_type& operation, user_data_ptr user_data);
 	void _cancel_io_synchronized(user_data_ptr user_data);
 
 	[[nodiscard]] bool submit_async_cancel(user_data_ptr user_data);

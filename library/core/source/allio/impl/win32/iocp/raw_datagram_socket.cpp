@@ -44,7 +44,7 @@ io_result<void> bind_s::submit(M& m, H& h, C& c, bind_s&, bind_a const& a, io_ha
 	return {};
 }
 
-io_result<void> bind_s::notify(M&, H&, C&, bind_s&, bind_a const&, M::io_status_type)
+io_result<void> bind_s::notify(M&, H&, C&, bind_s&, bind_a const&, io_handler<M>&, M::io_status_type)
 {
 	vsm_unreachable();
 }
@@ -116,7 +116,7 @@ io_result<void> send_s::submit(M& m, H const& h, C const&, send_s& s, send_a con
 	return io_pending(error::operation_pending);
 }
 
-io_result<void> send_s::notify(M&, H const& h, C const&, send_s& s, send_a const& a, M::io_status_type const status)
+io_result<void> send_s::notify(M&, H const& h, C const&, send_s& s, send_a const& a, io_handler<M>& handler, M::io_status_type const status)
 {
 	vsm_assert(&status.slot == &s.overlapped);
 
@@ -188,7 +188,7 @@ io_result<receive_result> recv_s::submit(M& m, H const& h, C const&, recv_s& s, 
 	return io_pending(error::operation_pending);
 }
 
-io_result<receive_result> recv_s::notify(M&, H const& h, C const&, recv_s& s, recv_a const&, M::io_status_type const status)
+io_result<receive_result> recv_s::notify(M&, H const& h, C const&, recv_s& s, recv_a const&, io_handler<M>& handler, M::io_status_type const status)
 {
 	vsm_assert(&status.slot == &s.overlapped);
 

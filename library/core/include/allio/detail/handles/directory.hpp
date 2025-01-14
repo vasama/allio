@@ -368,6 +368,7 @@ struct async_operation<Multiplexer, directory_iterator_t, directory_iterator_t::
 		C& c,
 		S& s,
 		A const&,
+		io_handler<M>& handler,
 		typename M::io_status_type status)
 	{
 		auto const r = decltype(_directory_read)::notify(
@@ -378,7 +379,6 @@ struct async_operation<Multiplexer, directory_iterator_t, directory_iterator_t::
 			_make_directory_read_args(h),
 			vsm_move(status));
 
-		io_handler<M>& handler = *s._handler;
 		vsm_try(done, _notify_directory_read(
 			m,
 			h,

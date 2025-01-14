@@ -13,7 +13,7 @@
 
 namespace allio::linux {
 
-inline vsm::result<void> poll(int const fd, short const events, deadline const deadline)
+inline vsm::result<short> poll(int const fd, short const events, deadline const deadline)
 {
 	vsm_assert(events != 0); //PRECONDITION
 
@@ -42,7 +42,7 @@ inline vsm::result<void> poll(int const fd, short const events, deadline const d
 	vsm_assert((poll_fd.revents & events) != 0);
 	vsm_assert((poll_fd.revents & ~events) == 0);
 
-	return {};
+	return poll_fd.revents;
 }
 
 } // namespace allio::linux
