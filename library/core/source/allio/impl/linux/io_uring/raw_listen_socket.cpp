@@ -90,6 +90,7 @@ io_result<accept_result_type> accept_s::submit(M& m, H const& h, C const& c, acc
 		.user_data = ctx.get_user_data(s),
 	}));
 
+	s.set_handler(handler);
 	vsm_try_void(ctx.commit());
 
 	return io_pending(error::operation_pending);

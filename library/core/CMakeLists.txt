@@ -78,6 +78,7 @@ vsm_add_library(
 
 	HEADER_DEPENDENCIES
 		vsm::core
+		vsm::partial
 		vsm::result
 		vsm::tag_ptr
 		vsm::unique_resource

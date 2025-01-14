@@ -20,6 +20,10 @@
 			"version": "0.1"
 		},
 		{
+			"package": "vsm.partial",
+			"version": "0.1"
+		},
+		{
 			"package": "vsm.result",
 			"version": "0.1"
 		},

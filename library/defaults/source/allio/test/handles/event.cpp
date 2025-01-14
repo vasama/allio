@@ -287,7 +287,7 @@ TEST_CASE("Asynchronous wait on unsignaled event completes after signaling", "[e
 	REQUIRE(signaled);
 }
 
-TEST_CASE("Auto reset event becomes unsignaled after asynchronous wait", "[event][async]")
+TEST_CASE("Auto reset event becomes unsignaled after asynchronous wait", "[event][async][debug]")
 {
 	auto multiplexer = default_multiplexer::create().value();
 	auto const event = blocking::event(auto_reset_event, initially_signaled).via(multiplexer);
@@ -299,7 +299,7 @@ TEST_CASE("Auto reset event becomes unsignaled after asynchronous wait", "[event
 	REQUIRE(!wait(event));
 }
 
-TEST_CASE("Manual reset event remains signaled after asynchronous wait", "[event][async]")
+TEST_CASE("Manual reset event remains signaled after asynchronous wait", "[event][async][debug]")
 {
 	auto multiplexer = default_multiplexer::create().value();
 	auto const event = blocking::event(manual_reset_event, initially_signaled).via(multiplexer);

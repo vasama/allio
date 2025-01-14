@@ -7,12 +7,12 @@
 
 #include <allio/linux/detail/undef.i>
 
-class allio::detail::io_uring_multiplexer::record_context
+class allio::detail::_io_uring_multiplexer::record_context
 {
 	static constexpr uint8_t link_flags = IOSQE_IO_LINK | IOSQE_IO_HARDLINK;
 
 
-	io_uring_multiplexer& m_multiplexer;
+	_io_uring_multiplexer& m_multiplexer;
 
 	uint32_t m_sq_acquire;
 	uint32_t m_cq_free;
@@ -22,7 +22,7 @@ class allio::detail::io_uring_multiplexer::record_context
 	io_uring_sqe* m_last_sqe = nullptr;
 
 public:
-	explicit record_context(io_uring_multiplexer& multiplexer)
+	explicit record_context(_io_uring_multiplexer& multiplexer)
 		: m_multiplexer(multiplexer)
 		, m_sq_acquire(multiplexer.m_sq_acquire)
 		, m_cq_free(multiplexer.m_cq_free)
@@ -30,6 +30,11 @@ public:
 		vsm_assert(
 			m_multiplexer.acquire_record_lock() &&
 			"The I/O recording context may not be re-entered.");
+	}
+
+	explicit record_context(io_uring_multiplexer& multiplexer)
+		: record_context(*multiplexer.m_multiplexer)
+	{
 	}
 
 	record_context(record_context const&) = delete;

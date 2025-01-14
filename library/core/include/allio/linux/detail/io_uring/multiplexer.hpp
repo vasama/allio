@@ -48,7 +48,7 @@ inline constexpr explicit_parameter<completion_queue_size_t> completion_queue_si
 
 } // namespace io_uring
 
-class io_uring_multiplexer final : public externally_synchronized
+struct _io_uring_multiplexer : externally_synchronized
 {
 	/// Submission ring buffer.
 	///
@@ -108,30 +108,31 @@ class io_uring_multiplexer final : public externally_synchronized
 	};
 	vsm_flag_enum_friend(user_data_tag);
 
+	enum class handler_tag : uintptr_t
+	{
+		none,
+		cancel_list,
+		cancel_mpsc_queue,
+	};
+
 	template<typename T>
 	using basic_user_data_ptr = vsm::tag_ptr<T, user_data_tag, user_data_tag::all>;
 
 	using user_data_ptr = vsm::incomplete_tag_ptr<void, user_data_tag, user_data_tag::all>;
 
-public:
-	using multiplexer_concept = void;
-
 	struct io_status_type;
-
-private:
 	using io_handler_type = basic_io_handler<io_status_type>;
 
-public:
 	class connector_type
 	{
 		int32_t file_index = -1;
 
-		friend io_uring_multiplexer;
+		friend _io_uring_multiplexer;
 	};
 
 	class operation_type : vsm::intrusive::list_link
 	{
-		io_handler_type* m_handler;
+		vsm::tag_ptr<io_handler_type, handler_tag> m_handler = nullptr;
 
 	public:
 		void set_handler(io_handler_type& handler) &
@@ -140,14 +141,18 @@ public:
 		}
 
 	private:
-		friend io_uring_multiplexer;
+		friend _io_uring_multiplexer;
+
+		//TODO: Add a separate class in vsm::intrusive for access.
 		friend vsm::intrusive::list<operation_type>;
+		friend vsm::intrusive::forward_list<operation_type>;
+		friend vsm::intrusive::mpsc_queue<operation_type>;
 	};
 
 	class alignas(4) io_slot
 	{
-		uint16_t m_offset;
-		uint16_t m_cqe_skip_success : 1;
+		uint16_t m_offset = 0;
+		bool m_cqe_skip_success = false;
 
 	public:
 		void bind(operation_type& operation) &
@@ -164,12 +169,13 @@ public:
 	private:
 		operation_type* get_operation() const
 		{
+			vsm_assert(m_offset != 0);
 			uintptr_t const uint_this = reinterpret_cast<uintptr_t>(this);
 			uintptr_t const uint_main = uint_this - m_offset;
 			return reinterpret_cast<operation_type*>(uint_main);
 		}
 
-		friend io_uring_multiplexer;
+		friend _io_uring_multiplexer;
 	};
 
 	struct io_status_type
@@ -179,7 +185,7 @@ public:
 		uint32_t flags;
 	};
 
-private:
+
 	/// @brief Unique owner of the io_uring kernel object.
 	unique_handle m_io_uring;
 
@@ -273,11 +279,166 @@ private:
 	/// @ref m_k_cq_consume == m_cq_consume <= @ref m_k_cq_produce
 	uint32_t m_cq_consume;
 
-	uint32_t m_synchronized_flags = 0;
+	vsm::intrusive::forward_list<operation_type> m_cancel_forward_list;
 
-	//vsm::intrusive::forward_list<operation_type> m_cancel_forward_list;
+	vsm::atomic<bool> m_wake_requested = false;
+	vsm::atomic<bool> m_cancel_pending = false;
 
-	// vsm::intrusive::mpsc_queue<operation_type> cancel_mpsc_queue;
+	vsm::intrusive::mpsc_queue<operation_type> m_cancel_mpsc_queue;
+
+	explicit _io_uring_multiplexer(
+		io_uring_params const& setup,
+		unique_handle&& io_uring,
+		unique_byte_mmap&& sq_ring,
+		unique_byte_mmap&& cq_ring,
+		unique_void_mmap&& sq_data) noexcept;
+
+
+	class timeout
+	{
+		struct timespec
+		{
+			long long tv_sec;
+			long long tv_nsec;
+		};
+
+		timespec m_timespec;
+
+	public:
+		class reference
+		{
+			timespec const& m_timespec;
+			bool m_absolute;
+
+			explicit reference(timespec const& timespec, bool const absolute)
+				: m_timespec(timespec)
+				, m_absolute(absolute)
+			{
+			}
+
+			friend _io_uring_multiplexer;
+		};
+
+		reference set(deadline const deadline) &
+		{
+			m_timespec = make_timespec<timespec>(deadline);
+			return reference(m_timespec, deadline.is_absolute());
+		}
+
+	private:
+		friend _io_uring_multiplexer;
+	};
+
+	class record_context;
+
+
+	template<typename T>
+	class ring_view
+	{
+		using void_type = vsm::copy_cv_t<T, void>;
+		using byte_type = vsm::copy_cv_t<T, std::byte>;
+
+		byte_type* m_ring;
+		uint32_t m_mask;
+		uint32_t m_multiply_shift;
+
+	public:
+		explicit ring_view(
+			void_type* const ring,
+			uint32_t const mask,
+			uint32_t const multiply_shift)
+			: m_ring(static_cast<byte_type*>(ring))
+			, m_mask(mask)
+			, m_multiply_shift(multiply_shift)
+		{
+		}
+
+		[[nodiscard]] T& operator[](uint32_t const offset) const
+		{
+			return *reinterpret_cast<T*>(m_ring + ((offset & m_mask) << m_multiply_shift));
+		}
+	};
+
+	[[nodiscard]] ring_view<io_uring_sqe> get_sqes() const
+	{
+		return ring_view<io_uring_sqe>(m_sqes.get(), m_sq_size - 1, m_sqe_multiply_shift);
+	}
+
+	[[nodiscard]] ring_view<io_uring_cqe const> get_cqes() const
+	{
+		return ring_view<io_uring_cqe const>(m_cqes, m_cq_size - 1, m_cqe_multiply_shift);
+	}
+
+
+	[[nodiscard]] vsm::result<void> attach_platform_handle(
+		native_platform_handle handle,
+		connector_type& c);
+
+	[[nodiscard]] vsm::result<void> detach_platform_handle(
+		native_platform_handle handle,
+		connector_type& c);
+
+
+	[[nodiscard]] bool acquire_record_lock()
+	{
+		return vsm::no_flags(
+			std::exchange(m_flags, m_flags | flags::record_lock),
+			flags::record_lock);
+	}
+
+	[[nodiscard]] bool release_record_lock()
+	{
+		return vsm::any_flags(
+			std::exchange(m_flags, m_flags & ~flags::record_lock),
+			flags::record_lock);
+	}
+
+	[[nodiscard]] bool has_pending_sqes() const;
+	void release_sqes();
+
+	[[nodiscard]] bool has_pending_cqes() const;
+	void acquire_cqes();
+
+	[[nodiscard]] bool reap_all_cqes();
+	void reap_cqe(io_uring_cqe const& cqe);
+
+	[[nodiscard]] vsm::result<void> commit();
+
+
+	void cancel_io(operation_type& operation, user_data_ptr user_data);
+	[[nodiscard]] vsm::result<void> submit_async_cancel(user_data_ptr user_data);
+
+	void wake_poll_thread();
+	void wake_poll_thread_reset();
+
+	[[nodiscard]] bool has_kernel_thread() const
+	{
+		return vsm::any_flags(m_flags, flags::kernel_thread);
+	}
+
+	[[nodiscard]] bool is_kernel_thread_inactive() const;
+
+	[[nodiscard]] vsm::result<bool> poll(deadline_t const& args);
+};
+
+static_assert(std::is_default_constructible_v<_io_uring_multiplexer::io_slot>);
+static_assert(std::is_default_constructible_v<_io_uring_multiplexer::timeout>);
+
+
+//TODO: The io_uring_multiplexer handle should point directly to the internal object.
+class io_uring_multiplexer final : public externally_synchronized
+{
+public:
+	using multiplexer_concept = void;
+
+	using connector_type = _io_uring_multiplexer::connector_type;
+	using operation_type = _io_uring_multiplexer::operation_type;
+	using io_status_type = _io_uring_multiplexer::io_status_type;
+
+private:
+	//TODO: Use acquire_storage/release_storage.
+	std::unique_ptr<_io_uring_multiplexer> m_multiplexer;
+
 
 	struct create_parameters
 	{
@@ -319,27 +480,26 @@ public:
 	}
 
 
-	/// @return True if the multiplexer made any progress.
-	[[nodiscard]] vsm::result<bool> poll(auto&&... args)
+	[[nodiscard]] vsm::result<void> attach_platform_handle(
+		native_platform_handle const handle,
+		connector_type& c)
 	{
-		return _poll(make_args<poll_parameters>(vsm_forward(args)...));
+		return m_multiplexer->attach_platform_handle(handle, c);
 	}
 
-
-	[[nodiscard]] vsm::result<void> attach_platform_handle(
-		native_platform_handle handle,
-		connector_type& c);
-
 	[[nodiscard]] vsm::result<void> detach_platform_handle(
-		native_platform_handle handle,
-		connector_type& c);
+		native_platform_handle const handle,
+		connector_type& c)
+	{
+		return m_multiplexer->detach_platform_handle(handle, c);
+	}
 
 	template<typename Object>
 	[[nodiscard]] vsm::result<void> attach_handle(
 		native_handle<Object> const& h,
 		async_connector<io_uring_multiplexer, Object>& c)
 	{
-		return attach_platform_handle(h.platform_handle, c);
+		return m_multiplexer->attach_platform_handle(h.platform_handle, c);
 	}
 
 	template<typename Object>
@@ -347,165 +507,69 @@ public:
 		native_handle<Object> const& h,
 		async_connector<io_uring_multiplexer, Object>& c)
 	{
-		return detach_platform_handle(h.platform_handle, c);
+		return m_multiplexer->detach_platform_handle(h.platform_handle, c);
 	}
 
 
 	void cancel_io(operation_type& operation)
 	{
-		_cancel_io(operation, user_data_ptr(&operation));
+		m_multiplexer->cancel_io(
+			operation,
+			_io_uring_multiplexer::user_data_ptr(&operation));
 	}
 
-	void cancel_io(operation_type& operation, io_slot& slot)
+	void cancel_io(operation_type& operation, _io_uring_multiplexer::io_slot& slot)
 	{
-		_cancel_io(operation, user_data_ptr(&slot, user_data_tag::io_slot));
+		m_multiplexer->cancel_io(
+			operation,
+			_io_uring_multiplexer::user_data_ptr(
+				&slot,
+				_io_uring_multiplexer::user_data_tag::io_slot));
 	}
 
 
-	class timeout
+	/// @return True if the multiplexer made any progress.
+	[[nodiscard]] vsm::result<bool> poll(auto&&... args)
 	{
-		struct timespec
-		{
-			long long tv_sec;
-			long long tv_nsec;
-		};
+		return m_multiplexer->poll(make_args<poll_parameters>(vsm_forward(args)...));
+	}
 
-		timespec m_timespec;
 
-	public:
-		class reference
-		{
-			timespec const& m_timespec;
-			bool m_absolute;
+	void external_synchronization_acquired() &
+	{
+		m_multiplexer->external_synchronization_acquired();
+	}
 
-			explicit reference(timespec const& timespec, bool const absolute)
-				: m_timespec(timespec)
-				, m_absolute(absolute)
-			{
-			}
+	void external_synchronization_released() &
+	{
+		m_multiplexer->external_synchronization_released();
+	}
 
-			friend class io_uring_multiplexer;
-		};
+	[[nodiscard]] bool is_externally_synchronized() const
+	{
+		return m_multiplexer->is_externally_synchronized();
+	}
 
-		reference set(deadline const deadline) &
-		{
-			m_timespec = make_timespec<timespec>(deadline);
-			return reference(m_timespec, deadline.is_absolute());
-		}
 
-	private:
-		friend class io_uring_multiplexer;
-	};
-
-	class record_context;
+	using io_slot = _io_uring_multiplexer::io_slot;
+	using timeout = _io_uring_multiplexer::timeout;
+	using record_context = _io_uring_multiplexer::record_context;
 
 private:
-	explicit io_uring_multiplexer(
-		io_uring_params const& setup,
-		unique_handle&& io_uring,
-		unique_byte_mmap&& sq_ring,
-		unique_byte_mmap&& cq_ring,
-		unique_void_mmap&& sq_data) noexcept;
-
-	[[nodiscard]] static vsm::result<void> _create(
-		create_parameters const& args,
-		vsm::result<io_uring_multiplexer>& storage);
-
-	[[nodiscard]] static vsm::result<io_uring_multiplexer> _create(create_parameters const& args);
-
-
-
-	[[nodiscard]] bool acquire_record_lock()
+	explicit io_uring_multiplexer(std::unique_ptr<_io_uring_multiplexer> multiplexer) noexcept
+		: m_multiplexer(vsm_move(multiplexer))
 	{
-		return vsm::no_flags(
-			std::exchange(m_flags, m_flags | flags::record_lock),
-			flags::record_lock);
 	}
 
-	[[nodiscard]] bool release_record_lock()
-	{
-		return vsm::any_flags(
-			std::exchange(m_flags, m_flags & ~flags::record_lock),
-			flags::record_lock);
-	}
-
-
-	template<typename T>
-	class ring_view
-	{
-		using void_type = vsm::copy_cv_t<T, void>;
-		using byte_type = vsm::copy_cv_t<T, std::byte>;
-
-		byte_type* m_ring;
-		uint32_t m_mask;
-		uint32_t m_multiply_shift;
-
-	public:
-		explicit ring_view(
-			void_type* const ring,
-			uint32_t const mask,
-			uint32_t const multiply_shift)
-			: m_ring(static_cast<byte_type*>(ring))
-			, m_mask(mask)
-			, m_multiply_shift(multiply_shift)
-		{
-		}
-
-		[[nodiscard]] T& operator[](uint32_t const offset) const
-		{
-			return *reinterpret_cast<T*>(m_ring + ((offset & m_mask) << m_multiply_shift));
-		}
-	};
-
-	[[nodiscard]] ring_view<io_uring_sqe> get_sqes()
-	{
-		return ring_view<io_uring_sqe>(m_sqes.get(), m_sq_size - 1, m_sqe_multiply_shift);
-	}
-
-	[[nodiscard]] ring_view<io_uring_cqe const> get_cqes()
-	{
-		return ring_view<io_uring_cqe const>(m_cqes, m_cq_size - 1, m_cqe_multiply_shift);
-	}
-
-	[[nodiscard]] vsm::result<void> commit();
-
-	void _cancel_io(operation_type& operation, user_data_ptr user_data);
-	void _cancel_io_synchronized(user_data_ptr user_data);
-
-	[[nodiscard]] bool submit_async_cancel(user_data_ptr user_data);
-
-	void wake_poll_thread();
-	void wake_poll_thread_reset();
-
-
-	[[nodiscard]] bool has_kernel_thread() const
-	{
-		return vsm::any_flags(m_flags, flags::kernel_thread);
-	}
-
-	[[nodiscard]] bool is_kernel_thread_inactive() const;
-
-
-	[[nodiscard]] bool has_pending_sqes() const;
-	void release_sqes();
-
-	[[nodiscard]] bool has_pending_cqes() const;
-	void acquire_cqes();
-
-	[[nodiscard]] bool reap_all_cqes();
-	void reap_cqe(io_uring_cqe const& cqe);
-
-
-	[[nodiscard]] vsm::result<bool> _poll(poll_parameters const& args);
+	static vsm::result<io_uring_multiplexer> _create(create_parameters const& args) noexcept;
 
 	friend vsm::result<bool> tag_invoke(poll_io_t, io_uring_multiplexer& m, auto&&... args)
 	{
-		return m._poll(make_args<poll_parameters>(vsm_forward(args)...));
+		return m.m_multiplexer->poll(make_args<poll_parameters>(vsm_forward(args)...));
 	}
-};
 
-static_assert(std::is_default_constructible_v<io_uring_multiplexer::io_slot>);
-static_assert(std::is_default_constructible_v<io_uring_multiplexer::timeout>);
+	friend _io_uring_multiplexer::record_context;
+};
 
 } // namespace allio::detail
 

@@ -53,6 +53,7 @@ io_result<void> connect_s::submit(
 		vsm_try_void(ctx.link_timeout(s.timeout.set(a.deadline)));
 	}
 
+	s.set_handler(handler);
 	vsm_try_void(ctx.commit());
 
 	s.socket = unique_wrapped_socket(posix::wrap_socket(socket.release()));
@@ -141,6 +142,7 @@ io_result<size_t> read_s::submit(
 		vsm_try_void(ctx.link_timeout(s.timeout.set(a.deadline)));
 	}
 
+	s.set_handler(handler);
 	vsm_try_void(ctx.commit());
 
 	return io_pending(error::operation_pending);
@@ -214,6 +216,7 @@ io_result<size_t> write_s::submit(
 		vsm_try_void(ctx.link_timeout(s.timeout.set(a.deadline)));
 	}
 
+	s.set_handler(handler);
 	vsm_try_void(ctx.commit());
 
 	return io_pending(error::operation_pending);

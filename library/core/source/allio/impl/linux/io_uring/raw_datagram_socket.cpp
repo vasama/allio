@@ -108,6 +108,7 @@ io_result<void> send_s::submit(
 		.user_data = ctx.get_user_data(s),
 	}));
 
+	s.set_handler(handler);
 	vsm_try_void(ctx.commit());
 
 	return io_pending(error::operation_pending);
@@ -177,6 +178,7 @@ io_result<receive_result> recv_s::submit(
 		.user_data = ctx.get_user_data(s),
 	}));
 
+	s.set_handler(handler);
 	vsm_try_void(ctx.commit());
 
 	return io_pending(error::operation_pending);
