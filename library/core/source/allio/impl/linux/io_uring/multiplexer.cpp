@@ -249,6 +249,7 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 		vsm_lazy(io_uring_multiplexer(vsm_move(multiplexer))));
 }
 
+
 vsm::result<void> _io_uring_multiplexer::attach_platform_handle(
 	native_platform_handle const handle,
 	connector_type& c)
