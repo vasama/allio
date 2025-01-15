@@ -115,6 +115,8 @@ _io_uring_multiplexer::_io_uring_multiplexer(
 	, m_cq_size(setup.cq_entries)
 	, m_cq_free(m_cq_size)
 	, m_cq_consume(m_k_cq_produce.load(std::memory_order_relaxed))
+
+	, m_cancel_list_end(m_operation_list.end())
 {
 	if (setup.features & IORING_FEAT_EXT_ARG)
 	{
@@ -409,8 +411,11 @@ void _io_uring_multiplexer::reap_cqe(io_uring_cqe const& cqe)
 		operation = static_cast<operation_type*>(user_data.ptr());
 	}
 
-	vsm_assert(operation->m_handler != nullptr);
-	operation->m_handler->notify(vsm_move(status));
+	vsm_assert(operation->get_handler());
+
+	// The CQE is invalidated when the handler is notified, so it is important not to pass any
+	// references to the CQE to the handler.
+	operation->get_handler()->notify(vsm_move(status));
 }
 
 vsm::result<void> _io_uring_multiplexer::submit_async_cancel(user_data_ptr const user_data)
@@ -424,8 +429,32 @@ vsm::result<void> _io_uring_multiplexer::submit_async_cancel(user_data_ptr const
 	return ctx.commit();
 }
 
+vsm::result<void> _io_uring_multiplexer::request_sync_cancel(user_data_ptr const user_data)
+{
+	io_uring_sync_cancel_reg reg =
+	{
+		.addr = vsm::reinterpret_pointer_cast<uintptr_t>(user_data),
+	};
+
+	return io_uring_register(
+		m_io_uring.get(),
+		IORING_REGISTER_SYNC_CANCEL,
+		&reg,
+		/* nr_args: */ 1);
+}
+
 void _io_uring_multiplexer::cancel_io(operation_type& operation, user_data_ptr const user_data)
 {
+	static constexpr auto cancel_requested = std::to_underlying(io_handler_tag::cancel_requested);
+
+	// Set the cancel_requested flag, or return if it has already been set.
+	if (vsm::atomic_ref const handler(operation.m_handler);
+		(cancel_requested & handler.load(std::memory_order_acquire)) ||
+		(cancel_requested & handler.fetch_or(cancel_requested, std::memory_order_acq_rel)))
+	{
+		return;
+	}
+
 	if (is_externally_synchronized())
 	{
 		auto const r = submit_async_cancel(user_data);
@@ -435,20 +464,19 @@ void _io_uring_multiplexer::cancel_io(operation_type& operation, user_data_ptr c
 			//TODO: Handle errors other than SQE exhaustion?
 			vsm_assert(r.error() == make_error_code(error::device_or_resource_busy));
 
-			operation.m_handler.set_tag(handler_tag::cancel_list);
-			m_cancel_forward_list.push_back(operation);
+			m_cancel_list.push_back(operation);
 		}
 	}
-	else
+	else if (vsm::any_flags(m_flags, flags::sync_cancel))
 	{
-		operation.m_handler.set_tag(handler_tag::cancel_mpsc_queue);
-		if (m_cancel_mpsc_queue.push_back(operation))
+		unrecoverable(request_sync_cancel(user_data));
+	}
+	else if (m_cancel_mpsc_queue.push_back(operation))
+	{
+		if (!m_cancel_pending.load(std::memory_order_acquire) &&
+			!m_cancel_pending.exchange(true, std::memory_order_acq_rel))
 		{
-			if (!m_cancel_pending.load(std::memory_order_acquire) &&
-				!m_cancel_pending.exchange(true, std::memory_order_acq_rel))
-			{
-				wake_poll_thread();
-			}
+			wake_poll_thread();
 		}
 	}
 }
@@ -488,16 +516,65 @@ enum class enter_reason : uint32_t
 };
 vsm_flag_enum(enter_reason);
 
+template<typename ExternallySynchronized>
+class optional_scoped_synchronization
+{
+	std::optional<scoped_synchronization<ExternallySynchronized>> m_object;
+
+public:
+	optional_scoped_synchronization(Externallysynchronized& object)
+	{
+		if (!object.is_externally_synchronized())
+		{
+			m_object.emplace(object);
+		}
+	}
+};
+
 } // namespace
 
 vsm::result<bool> _io_uring_multiplexer::poll(deadline_t const& args)
 {
+	optional_scoped_synchronization const synchronization(*this);
+
 	using reason = enter_reason;
 
 	enter_reason enter_reason = reason::none;
 	unsigned int enter_to_submit = 0;
 	unsigned int enter_min_complete = 0;
 	unsigned int enter_flags = 0;
+
+	if (m_cancel_pending.load(std::memory_order_acquire))
+	{
+		do
+		{
+			// Popping the queue elements in reversed order avoids reversing the list eagerly.
+			auto forward_list = m_cancel_mpsc_queue.pop_all_reversed();
+
+			// Insert the forward list elements into the cancel list in their original order:
+			while (!forward_list.empty())
+			{
+				auto& operation = forward_list.pop_front();
+				m_operation_list.insert_before(m_cancel_list_end, operation);
+			}
+		}
+		while (m_cancel.exchange(false, std::memory_order_acq_rel));
+	}
+
+	while (!m_operation_list.empty())
+	{
+		auto& operation = m_operation_list.pop_front();
+		auto const handler = operation.get_handler();
+
+		bool const made_progress = vsm::any_flags(handler.tag(), io_handler_tag::cancel_requested)
+			? handler->cancel()
+			: handler->submit();
+
+		if (!made_progress)
+		{
+			break;
+		}
+	}
 
 	// If the auto submit mode is not enabled, submit all pending SQEs now.
 	if (vsm::no_flags(m_flags, flags::auto_submit) && has_pending_sqes())
@@ -560,7 +637,7 @@ vsm::result<bool> _io_uring_multiplexer::poll(deadline_t const& args)
 				enter_min_complete = 0;
 
 				// Submitting a timeout operation is possible, but the timespec lifetime and
-				// cancelation required make it very complicated. Instead we'll just fall back to
+				// cancellation required make it very complicated. Instead we'll just fall back to
 				// polling the io_uring object.
 				vsm_try_discard(linux::poll(m_io_uring.get(), POLLIN, args.deadline));
 

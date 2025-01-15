@@ -1,8 +1,8 @@
 #pragma once
 
-#include <allio/linux/detail/undef.i>
-
 #include <linux/version.h>
+
+#include <allio/linux/detail/undef.i>
 
 namespace allio::linux {
 

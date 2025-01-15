@@ -292,8 +292,15 @@ inline constexpr blocking_observe_t<Operation> blocking_observe = {};
 #endif
 
 
+enum class io_callback_mode
+{
+	submit,
+	notify,
+	cancel,
+};
+
 template<typename Handler, typename Status>
-using basic_io_callback = void(Handler& handler, Status&& status) noexcept;
+using basic_io_callback = void(Handler& handler, io_callback_mode mode, Status* status) noexcept;
 
 template<typename Status>
 class basic_io_handler
@@ -308,9 +315,19 @@ public:
 	{
 	}
 
+	void submit() & noexcept
+	{
+		m_callback(*this, io_callback_mode::submit, nullptr);
+	}
+
 	void notify(Status&& status) & noexcept
 	{
-		m_callback(*this, vsm_move(status));
+		m_callback(*this, io_callback_mode::notify, &status);
+	}
+
+	void cancel() & noexcept
+	{
+		m_callback(*this, io_callback_mode::cancel, nullptr);
 	}
 
 protected:
@@ -326,7 +343,7 @@ class basic_io_handler_base : protected basic_io_handler<Status>
 
 protected:
 	basic_io_handler_base()
-		: io_handler_type(_notify)
+		: io_handler_type(_callback)
 	{
 	}
 
@@ -335,10 +352,40 @@ protected:
 	~basic_io_handler_base() = default;
 
 private:
-	static void _notify(io_handler_type& self, Status&& status) noexcept
+	static bool _callback(
+		io_handler_type& base,
+		io_callback_mode const mode,
+		Status* const status) noexcept
 	{
-		//TODO: Give this a more descriptive name. Maybe notify_io or on_notify_io?
-		static_cast<Handler&>(static_cast<io_handler_type&>(self)).notify(vsm_move(status));
+		auto& implementation = static_cast<Handler&>(static_cast<basic_io_handler_base&>(base));
+
+		switch (mode)
+		{
+		case io_callback_mode::submit:
+			if constexpr (requires { implementation.submit(); })
+			{
+				return implementation.on_submit_io();
+			}
+			else
+			{
+				break;
+			}
+
+		case io_callback_mode::notify:
+			return implementation.on_notify_io(vsm_move(*status));
+
+		case io_callback_mode::cancel:
+			if constexpr (requires { implementation.cancel(); })
+			{
+				return implementation.on_cancel_io();
+			}
+			else
+			{
+				break;
+			}
+		}
+
+		vsm_unreachable();
 	}
 };
 

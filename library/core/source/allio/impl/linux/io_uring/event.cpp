@@ -121,6 +121,11 @@ io_result<void> wait_s::notify(
 			// The read operation is only submitted in auto reset mode.
 			vsm_assert(is_auto_reset(h));
 
+			if (s.is_cancel_requested())
+			{
+				return io_canceled(static_cast<system_error>(ECANCELED));
+			}
+
 			// Someone else won the race to reset the event. Retry by submitting both operations
 			// again.
 			return _submit(m, h, c, s, handler);

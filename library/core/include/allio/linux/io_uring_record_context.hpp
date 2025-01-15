@@ -156,7 +156,7 @@ public:
 	///        CQE is to avoid extending the lifetime of the associated io_slot until all linked
 	///        operations are canceled.
 	/// @pre @param sqe has associated user data. CQEs without user data are always skipped.
-	/// @note This prevents the direct manual cancelation of the affected operation.
+	/// @note This prevents the direct manual cancellation of the affected operation.
 	void set_cqe_skip_success_linked_emulation(io_uring_sqe& sqe)
 	{
 		vsm_assert(sqe.user_data != 0); //PRECONDITION

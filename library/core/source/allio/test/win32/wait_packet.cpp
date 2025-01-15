@@ -87,7 +87,7 @@ TEST_CASE("wait packet can be used to wait for events", "[wait_packet][win32][ke
 			REQUIRE(get_completion());
 		}
 
-		SECTION("a posted completion can be removed on cancelation")
+		SECTION("a posted completion can be removed on cancellation")
 		{
 			REQUIRE(cancel(
 				/* remove_queued_completion: */ true));
@@ -95,7 +95,7 @@ TEST_CASE("wait packet can be used to wait for events", "[wait_packet][win32][ke
 			REQUIRE(!get_completion());
 		}
 
-		SECTION("a posted completion must be removed on cancelation")
+		SECTION("a posted completion must be removed on cancellation")
 		{
 			REQUIRE(!cancel(
 				/* remove_queued_completion: */ false));

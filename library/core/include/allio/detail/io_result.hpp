@@ -63,6 +63,15 @@ template<typename E>
 io_canceled(E) -> io_canceled<E>;
 
 template<typename E>
+struct io_try_again : basic_io_result_value<E, io_try_again<E>>
+{
+	using basic_io_result_value<E, io_try_again<E>>::basic_io_result_value;
+};
+
+template<typename E>
+io_try_again(E) -> io_try_again<E>;
+
+template<typename E>
 class io_unexpected : public basic_io_result_value<E, void>
 {
 	unsigned char m_status;
@@ -87,6 +96,7 @@ class io_result : vsm::result<T, E>
 
 	static constexpr unsigned char status_pending           = 1;
 	static constexpr unsigned char status_canceled          = 2;
+	static constexpr unsigned char status_try_again         = 3;
 
 	unsigned char m_status = 0;
 
@@ -119,6 +129,15 @@ public:
 	{
 	}
 
+	template<any_cvref_of_template<io_try_again> TryAgain>
+		requires std::is_constructible_v<E, unexpected_value_t<TryAgain>>
+	explicit(!std::is_convertible_v<unexpected_value_t<TryAgain>, E>)
+	io_result(TryAgain&& try_again)
+		: base(vsm::result_error, try_again.value())
+		, m_status(status_try_again)
+	{
+	}
+
 	template<any_cvref_of_template<io_unexpected> Unexpected>
 		requires std::is_constructible_v<E, unexpected_value_t<Unexpected>>
 	explicit(!std::is_convertible_v<unexpected_value_t<Unexpected>, E>)
@@ -137,6 +156,11 @@ public:
 	[[nodiscard]] bool is_canceled() const
 	{
 		return m_status == status_canceled;
+	}
+
+	[[nodiscard]] bool is_try_again() const
+	{
+		return m_status == status_try_again;
 	}
 
 

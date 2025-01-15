@@ -96,6 +96,7 @@ struct _io_uring_multiplexer : externally_synchronized
 		cqe_skip_success                = 1 << 2,
 		auto_submit                     = 1 << 3,
 		record_lock                     = 1 << 4,
+		sync_cancel                     = 1 << 5,
 	};
 	vsm_flag_enum_friend(flags);
 
@@ -108,12 +109,13 @@ struct _io_uring_multiplexer : externally_synchronized
 	};
 	vsm_flag_enum_friend(user_data_tag);
 
-	enum class handler_tag : uintptr_t
+	enum class io_handler_tag : uintptr_t
 	{
-		none,
+		cancel_requested            = 1 << 0,
 		cancel_list,
 		cancel_mpsc_queue,
 	};
+	vsm_flag_enum_friend(user_data_tag);
 
 	template<typename T>
 	using basic_user_data_ptr = vsm::tag_ptr<T, user_data_tag, user_data_tag::all>;
@@ -122,6 +124,7 @@ struct _io_uring_multiplexer : externally_synchronized
 
 	struct io_status_type;
 	using io_handler_type = basic_io_handler<io_status_type>;
+	using io_handler_ptr = vsm::tag_ptr<io_handler_type, io_handler_tag>;
 
 	class connector_type
 	{
@@ -132,15 +135,25 @@ struct _io_uring_multiplexer : externally_synchronized
 
 	class operation_type : vsm::intrusive::list_link
 	{
-		vsm::tag_ptr<io_handler_type, handler_tag> m_handler = nullptr;
+		mutable uintptr_t m_handler = 0;
 
 	public:
 		void set_handler(io_handler_type& handler) &
 		{
-			m_handler = &handler;
+			m_handler = vsm::reinterpret_pointer_cast<uintptr_t>(io_handler_ptr(&handler));
+		}
+
+		[[nodiscard]] bool is_cancel_requested() const
+		{
+			return vsm::any_flags(get_handler().tag(), cancel_requested);
 		}
 
 	private:
+		[[nodiscard]] io_handler_ptr get_handler() const
+		{
+			return vsm::atomic_ref(m_handler).load(std::memory_order_acquire);
+		}
+
 		friend _io_uring_multiplexer;
 
 		//TODO: Add a separate class in vsm::intrusive for access.
@@ -279,7 +292,8 @@ struct _io_uring_multiplexer : externally_synchronized
 	/// @ref m_k_cq_consume == m_cq_consume <= @ref m_k_cq_produce
 	uint32_t m_cq_consume;
 
-	vsm::intrusive::forward_list<operation_type> m_cancel_forward_list;
+	vsm::intrusive::list<operation_type> m_operation_list;
+	vsm::intrusive::list<operation_type>::iterator_type m_cancel_list_end;
 
 	vsm::atomic<bool> m_wake_requested = false;
 	vsm::atomic<bool> m_cancel_pending = false;
@@ -407,6 +421,7 @@ struct _io_uring_multiplexer : externally_synchronized
 
 	void cancel_io(operation_type& operation, user_data_ptr user_data);
 	[[nodiscard]] vsm::result<void> submit_async_cancel(user_data_ptr user_data);
+	[[nodiscard]] vsm::result<void> request_sync_cancel(user_data_ptr user_data);
 
 	void wake_poll_thread();
 	void wake_poll_thread_reset();

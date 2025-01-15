@@ -83,6 +83,22 @@ class io_sender
 
 		void start() & noexcept
 		{
+			if (_submit() != submit_status::completed)
+			{
+				stoppable_base::register_stoppable();
+			}
+		}
+
+	private:
+		enum class submit_status
+		{
+			completed,
+			submitted,
+			try_again,
+		};
+
+		[[nodiscard]] submit_status _submit() noexcept
+		{
 			auto r = submit_io(
 				m_handle,
 				m_operation,
@@ -93,17 +109,24 @@ class io_sender
 			{
 				// This is not a stream sender.
 				vsm_assert(!r.has_value());
+				return submit_status::submitted;
+			}
 
-				stoppable_base::register_stoppable();
-			}
-			else
+			if (r.is_try_again())
 			{
-				handle_result(vsm_move(r));
+				return submit_status::try_again;
 			}
+
+			handle_result(vsm_move(r));
+			return submit_status::completed;
 		}
 
-	private:
-		void notify(io_status_type&& status) noexcept
+		bool on_submit_io() noexcept
+		{
+			return _submit() != submit_status::try_again;
+		}
+
+		bool on_notify_io(io_status_type&& status) noexcept
 		{
 			auto r = notify_io(
 				m_handle,
@@ -112,17 +135,39 @@ class io_sender
 				static_cast<io_handler_type&>(*this),
 				vsm_move(status));
 
-			// This is not a stream sender.
-			vsm_assert(!r.is_pending());
+			if (r.is_try_again())
+			{
+				return false;
+			}
 
-			stoppable_base::deregister_stoppable();
+			if (r.is_pending())
+			{
+				// This is not a stream sender.
+				vsm_assert(!r.has_value());
+			}
+			else
+			{
+				handle_result(vsm_move(r));
+			}
 
-			handle_result(vsm_move(r));
+			return true;
+		}
+
+		bool on_cancel_io() noexcept
+		{
+			return cancel_io(m_handle, m_operation);
+		}
+
+		void on_stop_requested()
+		{
+			(void)on_cancel_io();
 		}
 
 		template<typename R>
 		void handle_result(io_result<R>&& r)
 		{
+			stoppable_base::deregister_stoppable();
+
 			if (r.has_value())
 			{
 				if constexpr (std::is_void_v<R>)
@@ -156,11 +201,6 @@ class io_sender
 			{
 				ex::set_error(vsm_move(m_receiver), r.error());
 			}
-		}
-
-		void on_stop_requested()
-		{
-			cancel_io(m_handle, m_operation);
 		}
 
 		friend io_handler_base<multiplexer_type, operation<Receiver>>;
