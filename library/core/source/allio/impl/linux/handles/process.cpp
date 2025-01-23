@@ -44,7 +44,7 @@ static vsm::result<pid_t> get_process_id(int const fd)
 
 	if (pid == 0)
 	{
-		return vsm::unexpected(error::process_id_not_available);
+		return vsm::unexpected(allio_error(error::process_id_not_available));
 	}
 
 	// Linux PIDs are in the range [1, 2^22] and further limited
@@ -258,7 +258,7 @@ vsm::result<void> process_t::terminate(
 	if (a.exit_code)
 	{
 		//TODO: Deal with the requested exit code somehow?
-		return vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
 	if (pidfd_send_signal(

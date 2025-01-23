@@ -65,7 +65,7 @@ vsm::result<socket_address_size_type> socket_address::make(
 			std::string_view const path = endpoint.local().path().string();
 			if (path.size() > unix_socket_max_path)
 			{
-				return vsm::unexpected(error::filename_too_long);
+				return vsm::unexpected(allio_error(error::filename_too_long));
 			}
 			addr.unix.sun_family = AF_UNIX;
 			memcpy(addr.unix.sun_path, path.data(), path.size());
@@ -101,7 +101,7 @@ vsm::result<socket_address_size_type> socket_address::make(
 		break;
 
 	default:
-		return vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
 	return addr_size;
@@ -172,7 +172,7 @@ static vsm::result<void> socket_connect_with_timeout(
 	{
 		if (deadline == deadline::instant())
 		{
-			return vsm::unexpected(error::operation_timed_out);
+			return vsm::unexpected(allio_error(error::operation_timed_out));
 		}
 
 		step_deadline step_deadline(deadline);
@@ -190,7 +190,7 @@ static vsm::result<void> socket_connect_with_timeout(
 
 			if (getpeername_error != socket_error::not_connected)
 			{
-				return vsm::unexpected(error::unknown_failure);
+				return vsm::unexpected(allio_error(error::unknown_failure));
 			}
 
 			// If connecting failed, use recv to get the reason for the connect failure.

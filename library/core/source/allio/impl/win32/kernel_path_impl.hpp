@@ -71,7 +71,7 @@ public:
 
 		if (args.path.empty())
 		{
-			return vsm::unexpected(error::invalid_path);
+			return vsm::unexpected(allio_error(error::invalid_path));
 		}
 
 		basic_kernel_path_converter c(context, storage, args);
@@ -98,7 +98,7 @@ private:
 	{
 		if (m_storage.m_dynamic != nullptr)
 		{
-			return vsm::unexpected(error::filename_too_long);
+			return vsm::unexpected(allio_error(error::filename_too_long));
 		}
 
 		wchar_t const* const old_beg = m_buffer_pos;
@@ -118,7 +118,7 @@ private:
 			new_buffer_beg = new (std::nothrow) wchar_t[max_path_size];
 			if (new_buffer_beg == nullptr)
 			{
-				return vsm::unexpected(error::not_enough_memory);
+				return vsm::unexpected(allio_error(error::not_enough_memory));
 			}
 			m_storage.m_dynamic.reset(new_buffer_beg);
 
@@ -168,12 +168,12 @@ private:
 		{
 			if (r1.ec != transcode_error::no_buffer_space)
 			{
-				return vsm::unexpected(error::invalid_encoding);
+				return vsm::unexpected(allio_error(error::invalid_encoding));
 			}
 
 			if (m_storage.m_dynamic != nullptr)
 			{
-				return vsm::unexpected(error::filename_too_long);
+				return vsm::unexpected(allio_error(error::filename_too_long));
 			}
 
 
@@ -184,8 +184,8 @@ private:
 			if (r2.ec != transcode_error{})
 			{
 				return r2.ec == transcode_error::no_buffer_space
-					? vsm::unexpected(error::filename_too_long)
-					: vsm::unexpected(error::invalid_encoding);
+					? vsm::unexpected(allio_error(error::filename_too_long))
+					: vsm::unexpected(allio_error(error::invalid_encoding));
 			}
 
 
@@ -438,12 +438,12 @@ private:
 
 			if (is_untrimmed_name(segment_beg, segment_end))
 			{
-				return vsm::unexpected(error::invalid_path);
+				return vsm::unexpected(allio_error(error::invalid_path));
 			}
 
 			if (m_reject_dos_device_name && is_device_name(segment_beg, segment_end))
 			{
-				return vsm::unexpected(error::invalid_path);
+				return vsm::unexpected(allio_error(error::invalid_path));
 			}
 
 			if (context.backtrack != 0)
@@ -512,7 +512,7 @@ private:
 					first_segment = false;
 					return push_literal(beg, end);
 				}
-				return vsm::unexpected(error::invalid_path);
+				return vsm::unexpected(allio_error(error::invalid_path));
 			}
 		));
 
@@ -522,7 +522,7 @@ private:
 		// This catches any skipped components at the front and back.
 		if (new_path_size != old_path_size + static_cast<size_t>(end - beg))
 		{
-			return vsm::unexpected(error::invalid_path);
+			return vsm::unexpected(allio_error(error::invalid_path));
 		}
 
 		return {};
@@ -562,26 +562,26 @@ private:
 
 		if (beg == end)
 		{
-			return vsm::unexpected(error::invalid_current_directory);
+			return vsm::unexpected(allio_error(error::invalid_current_directory));
 		}
 
 		if (is_separator(*beg))
 		{
 			if (++beg == end || !is_separator(*beg) || ++beg == end)
 			{
-				return vsm::unexpected(error::invalid_current_directory);
+				return vsm::unexpected(allio_error(error::invalid_current_directory));
 			}
 
 			if (*beg == '.' || *beg == '?')
 			{
 				if (++beg == end || !is_separator(*beg))
 				{
-					return vsm::unexpected(error::invalid_current_directory);
+					return vsm::unexpected(allio_error(error::invalid_current_directory));
 				}
 
 				if (m_reject_local_device_current_directory)
 				{
-					return vsm::unexpected(error::invalid_current_directory);
+					return vsm::unexpected(allio_error(error::invalid_current_directory));
 				}
 
 				static constexpr std::wstring_view root = L"\\??\\";
@@ -597,7 +597,7 @@ private:
 
 			if (is_separator(*beg))
 			{
-				return vsm::unexpected(error::invalid_current_directory);
+				return vsm::unexpected(allio_error(error::invalid_current_directory));
 			}
 
 			wchar_t const* const server_beg = beg;
@@ -605,7 +605,7 @@ private:
 
 			if (beg == end || ++beg == end || is_separator(*beg))
 			{
-				return vsm::unexpected(error::invalid_current_directory);
+				return vsm::unexpected(allio_error(error::invalid_current_directory));
 			}
 
 			wchar_t const* const share_beg = beg;
@@ -635,7 +635,7 @@ private:
 
 			if (++beg == end || !is_separator(*beg))
 			{
-				return vsm::unexpected(error::invalid_current_directory);
+				return vsm::unexpected(allio_error(error::invalid_current_directory));
 			}
 
 			return current_path
@@ -646,7 +646,7 @@ private:
 			};
 		}
 
-		return vsm::unexpected(error::invalid_current_directory);
+		return vsm::unexpected(allio_error(error::invalid_current_directory));
 	}
 
 	vsm::result<void> push_current_path_root(current_path const& current)
@@ -698,7 +698,7 @@ private:
 		{
 			if (beg != end && is_separator(*beg))
 			{
-				return vsm::unexpected(error::invalid_path);
+				return vsm::unexpected(allio_error(error::invalid_path));
 			}
 
 			vsm_try_void(push_canonical_literal(beg, end));
@@ -719,7 +719,7 @@ private:
 		// Expect at least one non-separator character.
 		if (beg == end || is_separator(*beg))
 		{
-			return vsm::unexpected(error::invalid_path);
+			return vsm::unexpected(allio_error(error::invalid_path));
 		}
 
 		Char const* const server_beg = beg;
@@ -728,7 +728,7 @@ private:
 		// Expect exactly one separator and at least one non-separator character.
 		if (beg == end || ++beg == end || is_separator(*beg))
 		{
-			return vsm::unexpected(error::invalid_path);
+			return vsm::unexpected(allio_error(error::invalid_path));
 		}
 
 		Char const* const share_end = beg = find_separator(beg, end);
@@ -762,7 +762,7 @@ private:
 			// This is because "absolute" paths are not quite truly absolute,
 			// and the meaning of this combination would be a path relative to
 			// the root of the particular filesystem referred to by the handle.
-			return vsm::unexpected(error::invalid_path);
+			return vsm::unexpected(allio_error(error::invalid_path));
 		}
 
 		// Absolute paths with a local device current directory have unpredictable results.
@@ -787,7 +787,7 @@ private:
 		if (m_handle)
 		{
 			// Drive relative path relative to handle is not allowed.
-			return vsm::unexpected(error::invalid_path);
+			return vsm::unexpected(allio_error(error::invalid_path));
 		}
 
 		// Drive relative paths with a local device current directory have unpredictable results.
@@ -827,7 +827,7 @@ private:
 
 				if (classification_on_drive.drive != drive)
 				{
-					return vsm::unexpected(error::invalid_current_directory);
+					return vsm::unexpected(allio_error(error::invalid_current_directory));
 				}
 
 				return classification_on_drive;
@@ -853,7 +853,7 @@ private:
 		if (context.backtrack != 0)
 		{
 			// Handle relative paths cannot backtrack.
-			return vsm::unexpected(error::invalid_path);
+			return vsm::unexpected(allio_error(error::invalid_path));
 		}
 
 		return {};
@@ -928,7 +928,7 @@ private:
 				{
 					// Reject "\??", "\??\". Win32 APIs don't recognize these
 					// and convert them to e.g. "\??\C:\??" and "\??\C:\??\".
-					return vsm::unexpected(error::invalid_path);
+					return vsm::unexpected(allio_error(error::invalid_path));
 				}
 
 				return push_literal(beg, end);
@@ -1022,12 +1022,12 @@ private:
 		std::basic_string_view<char32_t>,
 		std::same_as<null_terminated_t> auto...)
 	{
-		return vsm::unexpected(error::unsupported_encoding);
+		return vsm::unexpected(allio_error(error::unsupported_encoding));
 	}
 
 	vsm::result<void> _make_path_select(string_length_out_of_range_t)
 	{
-		return vsm::unexpected(error::filename_too_long);
+		return vsm::unexpected(allio_error(error::filename_too_long));
 	}
 };
 

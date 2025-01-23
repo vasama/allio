@@ -21,7 +21,7 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 	// Linux does not provide file sharing restrictions.
 	if (!vsm::all_flags(args.sharing, file_sharing::all))
 	{
-		return vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
 	auto maximum_mode = file_mode::read_write;
@@ -49,13 +49,13 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 	{
 		if (args.opening != file_opening::open_existing)
 		{
-			return vsm::unexpected(error::invalid_argument);
+			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
 	}
 
 	if (!vsm::all_flags(maximum_mode, args.mode))
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	if (vsm::no_flags(args.flags, io_flags::create_inheritable))
@@ -81,7 +81,7 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 		break;
 
 	default:
-		return vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
 	switch (args.opening)
@@ -102,7 +102,7 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 		break;
 
 	default:
-		return vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
 	if (info.flags & O_CREAT)
@@ -190,7 +190,7 @@ static vsm::result<open_info> make_anonymous_open_info(open_parameters const& ar
 	// Linux does not provide file sharing restrictions.
 	if (!vsm::all_flags(args.sharing, file_sharing::all))
 	{
-		return vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
 	if (vsm::no_flags(args.flags, io_flags::create_inheritable))
@@ -212,13 +212,13 @@ static vsm::result<open_info> make_anonymous_open_info(open_parameters const& ar
 		break;
 
 	default:
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 	vsm_gnu_diagnostic(pop)
 
 	if (args.opening != file_opening(0))
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	return info;
@@ -271,7 +271,7 @@ static vsm::result<std::string_view> read_current_path(char const* const link_pa
 		if (stat.st_size == 0)
 		{
 			//TODO: Can we deal with this? What's the best error code?
-			return vsm::unexpected(error::unknown_failure);
+			return vsm::unexpected(allio_error(error::unknown_failure));
 		}
 
 		// This is surely never the case, and could not be handled anyway.

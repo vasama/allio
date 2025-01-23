@@ -1,5 +1,6 @@
 #include <allio/detail/handles/section.hpp>
 
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/handles/fs_object.hpp>
 
 #include <allio/linux/detail/undef.i>
@@ -50,7 +51,7 @@ static int get_file_protection_flags(protection const protection)
 static vsm::result<native_handle<fs_object_t> const*> get_default_backing_directory()
 {
 	//TODO: Implement default backing directory.
-	return vsm::unexpected(error::unsupported_operation);
+	return vsm::unexpected(allio_error(error::unsupported_operation));
 }
 
 static vsm::result<void> _create_with_backing_file(
@@ -76,7 +77,7 @@ static vsm::result<void> _create_with_backing_file(
 
 	if (!vsm::all_flags(maximum_protection, protection))
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	int open_flags = get_file_protection_flags(protection);
@@ -118,7 +119,7 @@ static vsm::result<void> _create_with_backing_directory(
 	if (!vsm::all_flags(protection, protection::write))
 	{
 		// O_TMPFILE must be specified in combination with either O_RDWR or O_WRONLY.
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	int open_flags = O_TMPFILE | O_RDWR;
@@ -156,13 +157,13 @@ static vsm::result<void> _create_anonymous(
 {
 	if (a.backing_directory == nullptr)
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	auto const& backing_directory_h = *a.backing_directory;
 	if (!backing_directory_h.flags[object_t::flags::not_null])
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	auto const protection = a.protection.value_or(protection::read_write);
@@ -170,7 +171,7 @@ static vsm::result<void> _create_anonymous(
 	if (!vsm::all_flags(protection, protection::write))
 	{
 		//TODO: Is there any point in creating a read only anonymous section?
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	int open_flags = O_TMPFILE | O_RDWR;
@@ -214,17 +215,17 @@ vsm::result<void> section_t::create(
 	{
 		if (vsm::all_flags(a.options, storage_options))
 		{
-			return vsm::unexpected(error::invalid_argument);
+			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
 
 		if (a.backing_storage == nullptr)
 		{
-			return vsm::unexpected(error::invalid_argument);
+			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
 
 		if (!a.backing_storage->flags[object_t::flags::not_null])
 		{
-			return vsm::unexpected(error::invalid_argument);
+			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
 
 		if (vsm::any_flags(a.options, section_options::backing_file))

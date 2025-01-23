@@ -29,7 +29,7 @@ vsm::result<iocp_multiplexer> iocp_multiplexer::_create(create_parameters const&
 {
 	if (args.max_concurrent_threads == 0)
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	vsm_try(completion_port, create_completion_port(args.max_concurrent_threads));
@@ -44,7 +44,7 @@ vsm::result<iocp_multiplexer> iocp_multiplexer::_create(iocp_multiplexer const& 
 {
 	if (!other.m_shared_state)
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	return vsm_lazy(iocp_multiplexer(other.m_shared_state));

@@ -40,7 +40,7 @@ private:
 		wchar_t* const new_buffer_beg = new (std::nothrow) wchar_t[dynamic_buffer_size];
 		if (new_buffer_beg == nullptr)
 		{
-			return vsm::unexpected(error::not_enough_memory);
+			return vsm::unexpected(allio_error(error::not_enough_memory));
 		}
 		m_storage.m_dynamic.reset(new_buffer_beg);
 
@@ -58,7 +58,7 @@ private:
 	{
 		if (variable.find(L'=') == std::wstring_view::npos)
 		{
-			return vsm::unexpected(error::invalid_environment_variable);
+			return vsm::unexpected(allio_error(error::invalid_environment_variable));
 		}
 
 		vsm_try(out, reserve(variable.size() + 1));
@@ -72,7 +72,7 @@ private:
 	{
 		if (variable.find('=') == std::string_view::npos)
 		{
-			return vsm::unexpected(error::invalid_environment_variable);
+			return vsm::unexpected(allio_error(error::invalid_environment_variable));
 		}
 
 		auto const r1 = transcode<wchar_t>(
@@ -85,12 +85,12 @@ private:
 		{
 			if (r1.ec != transcode_error::no_buffer_space)
 			{
-				return vsm::unexpected(error::invalid_encoding);
+				return vsm::unexpected(allio_error(error::invalid_encoding));
 			}
 
 			if (m_storage.m_dynamic != nullptr)
 			{
-				return vsm::unexpected(error::environment_variables_too_long);
+				return vsm::unexpected(allio_error(error::environment_variables_too_long));
 			}
 
 			auto const r2 = transcode_size<wchar_t>(
@@ -100,8 +100,8 @@ private:
 			if (r2.ec != transcode_error{})
 			{
 				return r2.ec == transcode_error::no_buffer_space
-					? vsm::unexpected(error::environment_variables_too_long)
-					: vsm::unexpected(error::invalid_encoding);
+					? vsm::unexpected(allio_error(error::environment_variables_too_long))
+					: vsm::unexpected(allio_error(error::invalid_encoding));
 			}
 
 			encoded += r2.encoded;
@@ -137,12 +137,12 @@ private:
 
 	[[nodiscard]] vsm::result<void> push_variable(std::basic_string_view<char32_t>)
 	{
-		return vsm::unexpected(error::unsupported_encoding);
+		return vsm::unexpected(allio_error(error::unsupported_encoding));
 	}
 
 	[[nodiscard]] vsm::result<void> push_variable(detail::string_length_out_of_range_t)
 	{
-		return vsm::unexpected(error::environment_variables_too_long);
+		return vsm::unexpected(allio_error(error::environment_variables_too_long));
 	}
 
 	[[nodiscard]] vsm::result<void> push_variable(any_string_view const variable)

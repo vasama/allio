@@ -113,7 +113,7 @@ vsm::result<void> event_t::wait(
 	//TODO: Replace NT_SUCCESS with one including a debug hook for warning and information statuses.
 	if (status == STATUS_TIMEOUT)
 	{
-		return vsm::unexpected(error::operation_timed_out);
+		return vsm::unexpected(allio_error(error::operation_timed_out));
 	}
 
 	if (!NT_SUCCESS(status))

@@ -131,7 +131,7 @@ static vsm::result<size_t> get_read_transferred(read_a const& a, size_t const tr
 {
 	if (transferred == 0 && !io_buffers_is_empty(a.buffers))
 	{
-		return vsm::unexpected(error::end_of_stream);
+		return vsm::unexpected(allio_error(error::end_of_stream));
 	}
 
 	return transferred;

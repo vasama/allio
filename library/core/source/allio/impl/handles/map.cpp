@@ -1,5 +1,6 @@
 #include <allio/detail/handles/map.hpp>
 
+#include <allio/impl/error_encoding.hpp>
 #include <allio/nothrow/blocking/file.hpp>
 #include <allio/nothrow/blocking/map.hpp>
 #include <allio/nothrow/blocking/section.hpp>
@@ -47,7 +48,7 @@ vsm::result<void> map_t::map_file(
 {
 	if (a.file == nullptr)
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	vsm_try(file_size, blocking_io<file_io::get_maximum_extent_t>(

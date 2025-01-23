@@ -158,7 +158,7 @@ vsm::result<size_t> posix::socket_scatter_read(
 
 	if (r == 0 && !io_buffers_is_empty(buffers))
 	{
-		return vsm::unexpected(error::end_of_stream);
+		return vsm::unexpected(allio_error(error::end_of_stream));
 	}
 
 	return static_cast<size_t>(r);

@@ -24,6 +24,8 @@ using listen_a = io_parameters_t<raw_listen_socket_t, listen_t>;
 
 io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s&, listen_a const& a, io_handler<M>&)
 {
+	//TODO: In kernel 6.11 and above, use IORING_OP_SOCKET, IORING_OP_BIND, IORING_OP_LISTEN.
+
 	vsm_try(addr, posix::socket_address::make(a.endpoint));
 	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_STREAM));
 

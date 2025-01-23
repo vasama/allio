@@ -38,7 +38,7 @@ static vsm::result<size_t> do_byte_io_2(
 
 	if (r == 0 && !io_buffers_is_empty(a.buffers))
 	{
-		return vsm::unexpected(error::end_of_stream);
+		return vsm::unexpected(allio_error(error::end_of_stream));
 	}
 
 	return static_cast<size_t>(r);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/error.hpp>
+#include <allio/impl/error_encoding.hpp>
 
 #include <vsm/result.hpp>
 
@@ -18,7 +19,7 @@ inline vsm::result<void> secure_random_fill(std::span<std::byte> const buffer)
 
 	if (size != buffer.size())
 	{
-		return vsm::unexpected(error::unknown_failure);
+		return vsm::unexpected(allio_error(error::unknown_failure));
 	}
 
 	return {};

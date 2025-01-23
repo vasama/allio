@@ -3,6 +3,7 @@
 #include <allio/any_string.hpp>
 #include <allio/any_string_buffer.hpp>
 #include <allio/detail/transcode.hpp>
+#include <allio/impl/error_encoding.hpp>
 
 #include <vsm/assert.h>
 
@@ -41,7 +42,7 @@ vsm::result<size_t> transcode_string(
 	{
 		if (r1.ec != transcode_error::no_buffer_space)
 		{
-			return vsm::unexpected(error::invalid_encoding);
+			return vsm::unexpected(allio_error(error::invalid_encoding));
 		}
 
 		auto const r2 = transcode_size<TargetChar>(
@@ -50,8 +51,8 @@ vsm::result<size_t> transcode_string(
 		if (r2.ec != transcode_error{})
 		{
 			return r2.ec == transcode_error::no_buffer_space
-				? vsm::unexpected(error::no_buffer_space)
-				: vsm::unexpected(error::invalid_encoding);
+				? vsm::unexpected(allio_error(error::no_buffer_space))
+				: vsm::unexpected(allio_error(error::invalid_encoding));
 		}
 
 		#if vsm_config_assert > 0
@@ -102,7 +103,7 @@ vsm::result<size_t> transcode_string(
 
 		if constexpr (std::is_same_v<decode_buffer_type, detail::string_length_out_of_range_t>)
 		{
-			return vsm::unexpected(error::argument_too_long);
+			return vsm::unexpected(allio_error(error::argument_too_long));
 		}
 		else
 		{

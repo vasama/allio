@@ -249,7 +249,7 @@ vsm::result<void> process_t::create(
 {
 	if (a.executable_path.base != nullptr)
 	{
-		return vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
 	api_string_storage string_storage(4);
@@ -275,7 +275,7 @@ vsm::result<void> process_t::create(
 	//TODO: Only error if the path is relative.
 	if (a.working_directory.base != nullptr)
 	{
-		return vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
 	wchar_t const* working_directory = nullptr;

@@ -67,7 +67,7 @@ vsm::result<std::optional<int>> linux::wait_process(
 		// pid of the terminated process.
 		vsm_assert(flags & WNOHANG);
 
-		return vsm::unexpected(error::operation_timed_out);
+		return vsm::unexpected(allio_error(error::operation_timed_out));
 	}
 
 	//TODO: Should the exit code be different when the process was killed?

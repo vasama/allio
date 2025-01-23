@@ -249,7 +249,7 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 	if ((setup.features & IORING_FEAT_NODROP) == 0)
 	{
 		// The nodrop feature is required. It is supported since Linux 5.5.
-		return vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
 	struct ring_pair
@@ -305,13 +305,10 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 	if (kernel_version >= KERNEL_VERSION(5, 18, 0) &&
 		vsm::any_flags(args.options, io_uring_options::register_ring))
 	{
-		int const io_uring_fd = multiplexer->m_io_uring.get();
-
 		io_uring_rsrc_update update =
 		{
 			.offset = static_cast<uint32_t>(-1),
-			//TODO: Check if the indireciton is correct. The docs are confusing.
-			.data = reinterpret_cast<uintptr_t>(&io_uring_fd),
+			.data = vsm::truncating(multiplexer->m_io_uring.get()),
 		};
 
 		int const r = _io_uring_register(
@@ -328,6 +325,8 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 
 	if (kernel_version < KERNEL_VERSION(6, 12, 0))
 	{
+		//TODO: Resubmit the poll operation if it ends due to CQE exhaustion.
+
 		// Upon construction of the io_uring, a multishot poll operation is submitted on the wake
 		// event. Any time the event becomes signaled, the completion wakes up the poll thread.
 
@@ -355,6 +354,11 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 
 vsm::result<void> _io_uring_multiplexer::attach_fd(int const fd, connector_type& c)
 {
+	if (fd == -1)
+	{
+		return vsm::unexpected(allio_error(error::handle_is_null));
+	}
+
 	//TODO: Implement registered files.
 	c.file_index = -1;
 
@@ -365,7 +369,7 @@ vsm::result<void> _io_uring_multiplexer::detach_fd(int const fd, connector_type&
 {
 	if (fd == -1)
 	{
-		return vsm::unexpected(error::handle_cannot_be_detached);
+		return vsm::unexpected(allio_error(error::handle_cannot_be_detached));
 	}
 
 	return {};
@@ -534,7 +538,14 @@ void _io_uring_multiplexer::cancel_io_externally_synchronized(
 
 	/**/ if (handler.tag() == io_handler_tag::not_cancelled)
 	{
-		//TODO: Explain why fetch_or is used.
+		static_assert(vsm::all_flags(
+			static_cast<uintptr_t>(io_handler_tag::cancel_pending),
+			static_cast<uintptr_t>(io_handler_tag::cancel_submitted)));
+
+		// This races with calls to cancel_io_internally_synchronized. Any such thread will attempt
+		// to set the tag to cancel_pending. Should one do so between the previous load and this
+		// operation, setting the cancel_submitted bits will have no effect, because, as asserted
+		// above, the cancel_pending value sets all the bits of the cancel_submitted value.
 		handler = operation.fetch_or(io_handler_tag::cancel_submitted, std::memory_order_acq_rel);
 
 		// Another thread could have won the race to modify the tag, in which case it must now be in
@@ -667,7 +678,10 @@ bool _io_uring_multiplexer::flush_cancel_queue()
 		{
 			operation_type& operation = *beg++;
 
-			// TODO: Explain why relaxed is okay here.
+			// This thread is currently not racing with any modification of the handler. The only
+			// other modification by another thread is in cancel_io_internally_synchronized and it
+			// loads and checks the value before modifying it, never modifying if cancellation has
+			// already been initiated. For this reason relaxed memory order is sufficient.
 			io_handler_ptr handler = operation.load(std::memory_order_relaxed);
 
 			// The handler tag must be cancel_pending before the operation can end up in the queue.
@@ -679,7 +693,7 @@ bool _io_uring_multiplexer::flush_cancel_queue()
 
 			handler->cancel();
 
-			handler = operation.load(std::memory_order_acquire);
+			handler = operation.load(std::memory_order_relaxed);
 			if (handler.tag() == io_handler_tag::cancel_flushing)
 			{
 				operation.store(

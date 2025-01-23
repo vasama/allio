@@ -22,7 +22,7 @@ vsm::result<void> linux::test_event(int const fd, bool const auto_reset)
 			return {};
 		}
 
-		return vsm::unexpected(error::operation_timed_out);
+		return vsm::unexpected(allio_error(error::operation_timed_out));
 	}
 	else
 	{

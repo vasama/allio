@@ -14,7 +14,7 @@ vsm::result<wchar_t*> win32::make_environment_block(
 		{
 			if (string.find('=') == string.npos)
 			{
-				return vsm::unexpected(error::invalid_argument);
+				return vsm::unexpected(allio_error(error::invalid_argument));
 			}
 
 			vsm_try_void(builder.push(string));

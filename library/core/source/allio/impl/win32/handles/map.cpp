@@ -70,7 +70,7 @@ static vsm::result<ULONG> get_page_level_allocation_type(page_level const level)
 		}
 	}
 
-	return vsm::unexpected(error::unsupported_page_level);
+	return vsm::unexpected(allio_error(error::unsupported_page_level));
 }
 
 
@@ -245,21 +245,21 @@ static vsm::result<void> _map_section(
 {
 	if (a.section == nullptr)
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	native_handle<section_t> const& section_h = *a.section;
 
 	if (!section_h.flags[object_t::flags::not_null])
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	if (vsm::no_flags(a.options, map_options::initial_commit))
 	{
 		//TODO: Add a test for NtMapViewOfSection with backing file and MEM_RESERVE.
 		//      If the combination is supported, add support for uncommitted maps here.
-		return vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
 	auto const page_level = a.page_level != detail::page_level(0)
@@ -272,7 +272,7 @@ static vsm::result<void> _map_section(
 	{
 		if (!vsm::all_flags(section_h.protection, a.protection))
 		{
-			return vsm::unexpected(error::invalid_argument);
+			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
 
 		protection = a.protection;
@@ -312,12 +312,12 @@ static vsm::result<void> _map_anonymous(
 {
 	if (a.section != nullptr)
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	if (a.section_offset != 0)
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	auto const page_level = a.page_level != detail::page_level(0)
@@ -382,12 +382,12 @@ vsm::result<void> map_t::commit(
 {
 	if (h.section != nullptr)
 	{
-		return vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
 	if (!check_address_range(h, a))
 	{
-		return vsm::unexpected(error::invalid_address);
+		return vsm::unexpected(allio_error(error::invalid_address));
 	}
 
 	auto const protection = a.protection != detail::protection(0)
@@ -412,7 +412,7 @@ vsm::result<void> map_t::decommit(
 {
 	if (h.section != nullptr)
 	{
-		return vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
 	return free_virtual_memory(
@@ -429,12 +429,12 @@ vsm::result<void> map_t::protect(
 {
 	if (!check_address_range(h, a))
 	{
-		return vsm::unexpected(error::invalid_address);
+		return vsm::unexpected(allio_error(error::invalid_address));
 	}
 
 	if (!vsm::all_flags(get_max_protection(h), a.protection))
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	vsm_try(new_page_protection, get_page_protection(a.protection));

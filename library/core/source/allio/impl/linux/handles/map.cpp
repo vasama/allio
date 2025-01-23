@@ -23,7 +23,7 @@ static vsm::result<int> get_page_protection(protection const protection)
 	// PROT_WRITE or PROT_EXEC and without PROT_READ, but the mapping still provides read access.
 	if (protection != protection::none && !vsm::all_flags(protection, protection::read))
 	{
-		return vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
 	int page_protection = 0;
@@ -71,7 +71,7 @@ static vsm::result<level_flags_pair> get_page_level_flags(page_level const reque
 		return level_flags_pair{ mmap_flags, map_t::flags::page_level_2 };
 	}
 
-	return vsm::unexpected(error::unsupported_operation);
+	return vsm::unexpected(allio_error(error::unsupported_operation));
 }
 
 
@@ -124,7 +124,7 @@ static vsm::result<protection> get_protection(
 	{
 		if (!vsm::all_flags(section_protection, desired_protection))
 		{
-			return vsm::unexpected(error::invalid_argument);
+			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
 	}
 
@@ -183,7 +183,7 @@ static vsm::result<map_pair> _map_common(
 
 	if (mmap_address != nullptr && map.get().base != mmap_address)
 	{
-		return vsm::unexpected(error::virtual_address_not_available);
+		return vsm::unexpected(allio_error(error::virtual_address_not_available));
 	}
 
 	return vsm::result<map_pair>(vsm::result_value, vsm_move(map), h_flags);
@@ -210,7 +210,7 @@ static vsm::result<void> _map_section(
 
 	if (!section_h.flags[object_t::flags::not_null])
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	auto const page_level = a.page_level != detail::page_level(0)
@@ -219,7 +219,7 @@ static vsm::result<void> _map_section(
 
 	if (!is_page_aligned(a.section_offset, page_level))
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	auto protection = section_h.protection;
@@ -229,7 +229,7 @@ static vsm::result<void> _map_section(
 		protection = a.protection;
 		if (!vsm::all_flags(section_h.protection, protection))
 		{
-			return vsm::unexpected(error::invalid_argument);
+			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
 	}
 
@@ -268,12 +268,12 @@ static vsm::result<void> _map_anonymous(
 {
 	if (a.section != nullptr)
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	if (a.section_offset != 0)
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	auto const page_level = a.page_level != detail::page_level(0)
@@ -327,7 +327,7 @@ vsm::result<void> map_t::commit(
 {
 	if (!check_address_range(h, a))
 	{
-		return vsm::unexpected(error::invalid_address);
+		return vsm::unexpected(allio_error(error::invalid_address));
 	}
 
 	vsm_try(protection, get_protection(h, a.protection));
@@ -345,7 +345,7 @@ vsm::result<void> map_t::decommit(
 {
 	if (!check_address_range(h, a))
 	{
-		return vsm::unexpected(error::invalid_address);
+		return vsm::unexpected(allio_error(error::invalid_address));
 	}
 
 	vsm_try_void(linux::mprotect(
@@ -368,7 +368,7 @@ vsm::result<void> map_t::protect(
 {
 	if (!check_address_range(h, a))
 	{
-		return vsm::unexpected(error::invalid_address);
+		return vsm::unexpected(allio_error(error::invalid_address));
 	}
 
 	vsm_try(page_protection, get_page_protection(a.protection));

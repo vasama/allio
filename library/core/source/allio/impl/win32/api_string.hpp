@@ -103,7 +103,7 @@ public:
 	{
 		if (m_storage.m_dynamic != nullptr)
 		{
-			return vsm::unexpected(error::argument_too_long);
+			return vsm::unexpected(allio_error(error::argument_too_long));
 		}
 
 		size_t const max_size = m_storage.m_count * max_string_size;
@@ -111,7 +111,7 @@ public:
 
 		if (new_beg == nullptr)
 		{
-			return vsm::unexpected(error::not_enough_memory);
+			return vsm::unexpected(allio_error(error::not_enough_memory));
 		}
 
 		m_storage.m_dynamic.reset(new_beg);
@@ -135,7 +135,7 @@ public:
 
 			if (old_size + size > max_string_size - m_insert_null_terminator)
 			{
-				return vsm::unexpected(error::argument_too_long);
+				return vsm::unexpected(allio_error(error::argument_too_long));
 			}
 
 			vsm_try_void(allocate_dynamic_buffer());
@@ -169,12 +169,12 @@ public:
 		{
 			if (r1.ec != transcode_error::no_buffer_space)
 			{
-				return vsm::unexpected(error::invalid_encoding);
+				return vsm::unexpected(allio_error(error::invalid_encoding));
 			}
 
 			if (m_storage.m_dynamic != nullptr)
 			{
-				return vsm::unexpected(error::invalid_argument);
+				return vsm::unexpected(allio_error(error::invalid_argument));
 			}
 
 			size_t const max_size = max_string_size - m_insert_null_terminator - reserve_suffix;
@@ -187,8 +187,8 @@ public:
 			if (r2.ec != transcode_error{})
 			{
 				return r2.ec == transcode_error::no_buffer_space
-					? vsm::unexpected(error::invalid_argument)
-					: vsm::unexpected(error::invalid_encoding);
+					? vsm::unexpected(allio_error(error::invalid_argument))
+					: vsm::unexpected(allio_error(error::invalid_encoding));
 			}
 
 			vsm_try_void(allocate_dynamic_buffer());
@@ -255,12 +255,12 @@ private:
 
 	[[nodiscard]] static vsm::result<void> _visit(auto&&, std::basic_string_view<char32_t>)
 	{
-		return vsm::unexpected(error::unsupported_encoding);
+		return vsm::unexpected(allio_error(error::unsupported_encoding));
 	}
 
 	[[nodiscard]] static vsm::result<void> _visit(auto&&, detail::string_length_out_of_range_t)
 	{
-		return vsm::unexpected(error::argument_too_long);
+		return vsm::unexpected(allio_error(error::argument_too_long));
 	}
 };
 

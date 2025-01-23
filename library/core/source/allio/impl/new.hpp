@@ -2,6 +2,7 @@
 
 #include <allio/detail/new.hpp>
 #include <allio/error.hpp>
+#include <allio/impl/error_encoding.hpp>
 
 #include <vsm/concepts.hpp>
 #include <vsm/lazy.hpp>
@@ -54,7 +55,7 @@ template<vsm::non_cvref T = void>
 	{
 		if (size > std::numeric_limits<size_t>::max() / sizeof(T))
 		{
-			return vsm::unexpected(error::not_enough_memory);
+			return vsm::unexpected(allio_error(error::not_enough_memory));
 		}
 
 		size = size * sizeof(T);
@@ -68,7 +69,7 @@ template<vsm::non_cvref T = void>
 
 	if (allocation.storage == nullptr)
 	{
-		return vsm::unexpected(error::not_enough_memory);
+		return vsm::unexpected(allio_error(error::not_enough_memory));
 	}
 
 	return vsm::result<unique_storage_ptr<T>>(
@@ -133,7 +134,7 @@ vsm::result<std::unique_ptr<T, detail::operator_deleter>> allocate_unique(size_t
 
 	if (ptr == nullptr)
 	{
-		return vsm::unexpected(error::not_enough_memory);
+		return vsm::unexpected(allio_error(error::not_enough_memory));
 	}
 
 	return vsm_lazy(std::unique_ptr<T, detail::operator_deleter>(ptr));
@@ -148,7 +149,7 @@ constexpr vsm::result<std::unique_ptr<T>> make_unique(auto&&... args)
 
 	if (ptr == nullptr)
 	{
-		return vsm::unexpected(error::not_enough_memory);
+		return vsm::unexpected(allio_error(error::not_enough_memory));
 	}
 
 	return vsm_lazy(std::unique_ptr<T>(ptr));
@@ -162,7 +163,7 @@ constexpr vsm::result<std::unique_ptr<T>> make_unique(size_t const size)
 
 	if (ptr == nullptr)
 	{
-		return vsm::unexpected(error::not_enough_memory);
+		return vsm::unexpected(allio_error(error::not_enough_memory));
 	}
 
 	return vsm_lazy(std::unique_ptr<T>(ptr));

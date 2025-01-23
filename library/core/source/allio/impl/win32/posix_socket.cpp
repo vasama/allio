@@ -124,7 +124,7 @@ vsm::result<posix::socket_with_flags> posix::socket_accept(
 {
 	if (vsm::any_flags(flags, io_flags::create_non_blocking | io_flags::create_registered_io))
 	{
-		return vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
 	if (deadline != deadline::never())
@@ -226,7 +226,7 @@ vsm::result<size_t> posix::socket_scatter_read(
 
 	if (transferred == 0 && !io_buffers_is_empty(buffers))
 	{
-		return vsm::unexpected(error::end_of_stream);
+		return vsm::unexpected(allio_error(error::end_of_stream));
 	}
 
 	return transferred;

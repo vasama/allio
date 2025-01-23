@@ -2,6 +2,7 @@
 
 #include <allio/any_string.hpp>
 #include <allio/error.hpp>
+#include <allio/impl/error_encoding.hpp>
 
 #include <vsm/result.hpp>
 #include <vsm/utility.hpp>
@@ -169,7 +170,7 @@ private:
 
 			if (buffer == nullptr)
 			{
-				return vsm::unexpected(error::not_enough_memory);
+				return vsm::unexpected(allio_error(error::not_enough_memory));
 			}
 
 			m_storage.m_dynamic.reset(buffer);

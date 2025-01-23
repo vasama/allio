@@ -134,7 +134,7 @@ vsm::result<void> check_wsa_buffers_size(detail::new_io_buffers_base const& buff
 		buffers.get_buffers_size() > std::numeric_limits<SizeT>::max())
 	{
 		//TODO: Return a more specific error code.
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	return {};

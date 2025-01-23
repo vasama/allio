@@ -47,12 +47,12 @@ vsm::result<handle_with_flags> detail::open_unique_file(open_parameters const& a
 	//TODO: Should a non-empty path specify the directory in this case?
 	if (!a.path.path.empty())
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	if (a.opening != file_opening(0))
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	a.opening = file_opening::create_only;

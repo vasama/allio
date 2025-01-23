@@ -25,6 +25,8 @@ static io_result<void> _submit_connect(
 	connect_s& s,
 	connect_a const& a)
 {
+	//TODO: In kernel 5.19 and above, use IORING_OP_SOCKET.
+
 	posix::socket_address_union& addr = get_address(s.addr_storage);
 
 	io_uring_multiplexer::record_context ctx(m, a.deadline);
@@ -193,7 +195,7 @@ io_result<size_t> recv_s::notify(
 
 	if (status.result == 0 && !io_buffers_is_empty(a.buffers))
 	{
-		return vsm::unexpected(error::end_of_stream);
+		return vsm::unexpected(allio_error(error::end_of_stream));
 	}
 
 	return static_cast<size_t>(status.result);

@@ -57,13 +57,13 @@ static io_result<void> _submit(
 
 	if (is_auto_reset(h))
 	{
+		// The read value is not actually needed for anything. Just read the value into a global
+		// dummy buffer.
 		static constinit eventfd_t dummy_event_value = 0;
 
 		// Link the previous SQE to this one.
 		ctx.link_last(IOSQE_IO_LINK);
 
-		// The read value is not actually needed for anything. Just read the value into a global
-		// dummy buffer.
 		vsm_try_ptr(read_sqe, ctx.push());
 
 		read_sqe =

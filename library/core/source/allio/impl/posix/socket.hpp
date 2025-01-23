@@ -35,7 +35,7 @@ inline vsm::result<int> get_address_family(network_address_kind const address_ki
 		return AF_INET;
 
 	default:
-		return vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 }
 
@@ -94,7 +94,7 @@ inline vsm::result<int> choose_protocol(int const address_family, int const type
 	}
 
 	//TODO: Use better error code.
-	return vsm::unexpected(error::invalid_argument);
+	return vsm::unexpected(allio_error(error::invalid_argument));
 }
 
 
@@ -153,7 +153,7 @@ inline vsm::result<void> socket_poll_or_timeout(
 
 	if ((r & mask) == 0)
 	{
-		return vsm::unexpected(error::operation_timed_out);
+		return vsm::unexpected(allio_error(error::operation_timed_out));
 	}
 
 	return {};

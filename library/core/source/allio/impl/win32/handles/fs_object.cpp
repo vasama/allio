@@ -41,7 +41,7 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 		if (args.mode != file_mode::none)
 		{
 			// When opening a path, it is not possible to specify a mode.
-			return vsm::unexpected(error::invalid_argument);
+			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
 		break;
 
@@ -56,7 +56,7 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 		vsm_msvc_warning(pop)
 
 	default:
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	if (args.mode != file_mode::none)
@@ -103,7 +103,7 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 		break;
 
 	default:
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	// Sharing
@@ -379,7 +379,7 @@ static vsm::result<file_name_information_ptr> query_file_name_information(
 
 	if (kind == static_cast<path_kind>(0))
 	{
-		return vsm::unexpected(error::invalid_argument);
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	vsm_try(name_information, allocate_file_name_information());
@@ -414,7 +414,7 @@ static vsm::result<file_name_information_ptr> query_file_name_information(
 		}
 	}
 
-	return vsm::unexpected(error::unrepresentable_path);
+	return vsm::unexpected(allio_error(error::unrepresentable_path));
 }
 
 

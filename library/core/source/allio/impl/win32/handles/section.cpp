@@ -63,17 +63,17 @@ vsm::result<void> section_t::create(
 	{
 		if (vsm::all_flags(a.options, storage_options))
 		{
-			return vsm::unexpected(error::invalid_argument);
+			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
 
 		if (a.backing_storage == nullptr)
 		{
-			return vsm::unexpected(error::invalid_argument);
+			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
 
 		if (!a.backing_storage->flags[object_t::flags::not_null])
 		{
-			return vsm::unexpected(error::invalid_argument);
+			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
 
 		if (vsm::any_flags(a.options, section_options::backing_file))
@@ -86,7 +86,7 @@ vsm::result<void> section_t::create(
 		else
 		{
 			//TODO: Open new backing file in the specified directory.
-			return vsm::unexpected(error::unsupported_operation);
+			return vsm::unexpected(allio_error(error::unsupported_operation));
 		}
 	}
 
@@ -96,7 +96,7 @@ vsm::result<void> section_t::create(
 	{
 		if (!vsm::all_flags(maximum_protection, a.protection))
 		{
-			return vsm::unexpected(error::invalid_argument);
+			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
 
 		protection = a.protection;

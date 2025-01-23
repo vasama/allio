@@ -77,7 +77,7 @@ static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h,
 
 		if (io_status_block.Information == 0)
 		{
-			return vsm::unexpected(error::end_of_stream);
+			return vsm::unexpected(allio_error(error::end_of_stream));
 		}
 
 		return io_status_block.Information;

@@ -124,7 +124,7 @@ static vsm::result<void const*> swizzle_buffers_1(
 			if (get_size<SrcLayout>(src_buffer) > std::numeric_limits<uint32_t>::max())
 			{
 				//TODO: Return a more specific error code.
-				return vsm::unexpected(error::invalid_argument);
+				return vsm::unexpected(allio_error(error::invalid_argument));
 			}
 		}
 
@@ -203,7 +203,7 @@ vsm::result<new_io_buffer*> detail::new_io_buffers_storage::resize(size_t const 
 
 	if (allocation.storage == nullptr)
 	{
-		return vsm::unexpected(error::not_enough_memory);
+		return vsm::unexpected(allio_error(error::not_enough_memory));
 	}
 
 	m_storage = new (allocation.storage) storage_type(size);

@@ -95,7 +95,7 @@ vsm::result<ULONG> win32::get_page_protection(protection const protection)
 		return PAGE_EXECUTE_READWRITE;
 
 	default:
-		return vsm::unexpected(error::unsupported_operation);
+		return vsm::unexpected(allio_error(error::unsupported_operation));
 
 		vsm_msvc_warning(pop)
 		vsm_clang_diagnostic(pop)

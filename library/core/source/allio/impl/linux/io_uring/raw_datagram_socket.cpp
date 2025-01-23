@@ -27,6 +27,8 @@ using bind_a = io_parameters_t<raw_datagram_socket_t, bind_t>;
 
 io_result<void> bind_s::submit(M& m, H& h, C& c, bind_s&, bind_a const& a, io_handler<M>&)
 {
+	//TODO: In kernel 6.11 and above, use IORING_OP_SOCKET, IORING_OP_BIND.
+
 	vsm_try(addr, posix::socket_address::make(a.endpoint));
 	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_DGRAM));
 

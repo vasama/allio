@@ -37,7 +37,7 @@ inline vsm::result<short> poll(int const fd, short const events, deadline const 
 
 	if (r == 0)
 	{
-		return vsm::unexpected(error::operation_timed_out);
+		return vsm::unexpected(allio_error(error::operation_timed_out));
 	}
 
 	vsm_assert((poll_fd.revents & events) != 0);

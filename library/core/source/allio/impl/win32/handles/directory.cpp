@@ -201,7 +201,7 @@ static vsm::result<directory_stream_pointer> query_directory_file(
 {
 	if (buffer.size() <= sizeof(FILE_ID_FULL_DIR_INFORMATION))
 	{
-		return vsm::unexpected(error::no_buffer_space);
+		return vsm::unexpected(allio_error(error::no_buffer_space));
 	}
 
 	IO_STATUS_BLOCK io_status_block;
@@ -262,7 +262,7 @@ static vsm::result<UNICODE_STRING> make_unicode_path(platform_path_view const pa
 
 	if (string.size() > max_unicode_string_size)
 	{
-		return vsm::unexpected(error::filename_too_long);
+		return vsm::unexpected(allio_error(error::filename_too_long));
 	}
 
 	UNICODE_STRING unicode_string;
