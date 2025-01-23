@@ -52,7 +52,7 @@ public:
 			FALSE,
 			flags))
 		{
-			return vsm::unexpected(get_last_socket_error());
+			return vsm::unexpected(allio_error(get_last_socket_error()));
 		}
 
 		return {};
@@ -140,7 +140,7 @@ vsm::result<accept_result_type> raw_listen_socket_t::accept(
 		{
 			if (int const e = WSAGetLastError(); e != WSA_IO_PENDING)
 			{
-				return vsm::unexpected(static_cast<socket_error>(e));
+				return vsm::unexpected(allio_error(static_cast<socket_error>(e)));
 			}
 
 			DWORD flags;
@@ -165,7 +165,7 @@ vsm::result<accept_result_type> raw_listen_socket_t::accept(
 
 		if (socket == SOCKET_ERROR)
 		{
-			return vsm::unexpected(posix::get_last_socket_error());
+			return vsm::unexpected(posix::allio_error(get_last_socket_error()));
 		}
 	}
 

@@ -4,7 +4,6 @@
 #include <allio/linux/detail/io_uring/multiplexer.hpp>
 
 #include <allio/linux/detail/socket.hpp>
-#include <allio/detail/unique_socket.hpp>
 
 namespace allio::detail {
 
@@ -24,9 +23,12 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, connect_t>
 	using S = async_operation_t<M, raw_socket_t, connect_t>;
 	using A = io_parameters_t<raw_socket_t, connect_t>;
 
-	unique_wrapped_socket socket;
+	unique_handle socket;
 	socket_address_storage addr_storage;
 	M::timeout timeout;
+
+	//TODO: Get rid of this once the address rework is done.
+	uint32_t addr_size;
 
 	static io_result<void> submit(M& m, H& h, C& c, S& s, A const& args, io_handler<M>& handler);
 	static io_result<void> notify(M& m, H& h, C& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);

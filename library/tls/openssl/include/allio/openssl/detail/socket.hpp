@@ -207,7 +207,7 @@ struct openssl_operation<RawSocket, async_operation<M, Socket, Operation>, RawSt
 
 		}
 
-		return io_pending(error::operation_pending);
+		return vsm::unexpected(io_notify_status::submitted);
 	}
 
 	static auto const& _get_rw_h(H& h, S&)

@@ -1,9 +1,10 @@
 #include <allio/handles/directory.hpp>
 
-#include <allio/impl/transcode.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/api_string.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/handles/fs_object.hpp>
+#include <allio/impl/transcode.hpp>
 
 #include <vsm/lazy.hpp>
 #include <vsm/numeric.hpp>
@@ -261,7 +262,7 @@ vsm::result<directory_stream_view> directory_t::read(
 
 	if (size == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	if (size == 0)
@@ -283,7 +284,7 @@ vsm::result<size_t> detail::_get_current_directory(any_path_buffer const buffer)
 
 	if (c_string == nullptr)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	struct cwd_deleter
@@ -307,7 +308,7 @@ vsm::result<void> detail::_set_current_directory(fs_path const& path)
 	{
 		if (chdir(path_string.data()) == -1)
 		{
-			return vsm::unexpected(get_last_error());
+			return vsm::unexpected(allio_error(get_last_error()));
 		}
 	}
 	else
@@ -328,7 +329,7 @@ vsm::result<void> detail::_set_current_directory(fs_path const& path)
 
 		if (fchdir(fd) == -1)
 		{
-			return vsm::unexpected(get_last_error());
+			return vsm::unexpected(allio_error(get_last_error()));
 		}
 	}
 

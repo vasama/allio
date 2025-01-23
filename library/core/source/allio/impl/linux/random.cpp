@@ -1,6 +1,7 @@
 #include <allio/impl/random.hpp>
 
 #include <allio/impl/linux/error.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/handles/fs_object.hpp>
 
 #include <fcntl.h>
@@ -35,7 +36,7 @@ vsm::result<size_t> detail::secure_random_fill_some(std::span<std::byte> const b
 
 	if (size == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return static_cast<size_t>(size);

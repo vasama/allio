@@ -21,7 +21,7 @@ vsm::result<unique_handle> win32::create_completion_port(size_t const max_concur
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return vsm_lazy(unique_handle(handle));
@@ -51,7 +51,7 @@ vsm::result<void> win32::set_completion_information(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return {};
@@ -73,7 +73,7 @@ vsm::result<void> win32::set_io_completion(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return {};
@@ -118,7 +118,7 @@ vsm::result<size_t> win32::remove_io_completions(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return num_entries_removed;

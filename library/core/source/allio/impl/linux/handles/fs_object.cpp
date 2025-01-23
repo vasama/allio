@@ -132,7 +132,7 @@ vsm::result<unique_handle> linux::open_file(
 
 	if (fd == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return vsm_lazy(unique_handle(fd));
@@ -171,7 +171,7 @@ vsm::result<unique_handle> linux::reopen_file(
 
 	if (new_fd == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return vsm_lazy(unique_handle(new_fd));
@@ -252,7 +252,7 @@ static vsm::result<size_t> _readlink(char const* const path, std::span<char> con
 	ssize_t const size = readlink(path, buffer.data(), buffer.size());
 	if (size == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 	return static_cast<size_t>(size);
 }

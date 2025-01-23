@@ -104,16 +104,14 @@ public:
 	}
 
 
+	[[nodiscard]] deadline start(time_point const now) const
+	{
+		return _start([&]() { return now; });
+	}
+
 	[[nodiscard]] deadline start() const
 	{
-		if (m_bits & absolute_flag)
-		{
-			return *this;
-		}
-
-		repr_type const max = max_units - m_bits;
-		repr_type const now = units_since_epoch(clock().now());
-		return deadline(absolute_flag | (now > max ? max : now + m_bits));
+		return _start([]() { return clock::now(); });
 	}
 
 
@@ -139,6 +137,20 @@ private:
 	explicit constexpr deadline(repr_type const flag, repr_type const units)
 		: m_bits(units > max_units ? never_bits : flag | units)
 	{
+	}
+
+
+	[[nodiscard]] deadline _start(auto get_now) const
+	{
+		if (m_bits & absolute_flag)
+		{
+			return *this;
+		}
+
+		repr_type const max = max_units - m_bits;
+		repr_type const now = units_since_epoch(get_now());
+
+		return deadline(absolute_flag | (now > max ? max : now + m_bits));
 	}
 
 

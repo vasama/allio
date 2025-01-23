@@ -25,7 +25,7 @@ vsm::result<void> opaque_object_t::poll(
 
 	if (result != allio_abi_result_success)
 	{
-		return vsm::unexpected(make_abi_error_code(result));
+		return vsm::unexpected(result);
 	}
 
 	return {};

@@ -8,6 +8,8 @@
 
 #include <allio/linux/detail/undef.i>
 
+#include <allio/detail/unique_handle.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
 
 #include <poll.h>
@@ -57,8 +59,10 @@ inline void close_socket(socket_type const socket)
 
 	if (::close(socket) == -1)
 	{
-		unrecoverable_error(get_last_socket_error());
+		unrecoverable_error(allio_error(get_last_socket_error()));
 	}
 }
+
+using unique_socket = detail::unique_handle;
 
 } // namespace allio::posix

@@ -72,7 +72,7 @@ static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h,
 
 		if (!NT_SUCCESS(status))
 		{
-			return vsm::unexpected(static_cast<kernel_error>(status));
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
 
 		if (io_status_block.Information == 0)

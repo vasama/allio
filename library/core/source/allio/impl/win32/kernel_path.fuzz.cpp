@@ -58,7 +58,7 @@ static vsm::result<kernel_path> rtl_convert_path(rtl_kernel_path_storage& storag
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	UNICODE_STRING const rtl_kernel_path =

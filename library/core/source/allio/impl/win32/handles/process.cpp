@@ -3,6 +3,7 @@
 
 #include <allio/detail/dynamic_buffer.hpp>
 #include <allio/impl/bounded_vector.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/transcode.hpp>
 #include <allio/impl/win32/command_line.hpp>
 #include <allio/impl/win32/environment_block.hpp>
@@ -100,7 +101,7 @@ public:
 				/* dwFlags: */ 0,
 				&buffer_size))
 			{
-				return vsm::unexpected(get_last_error());
+				return vsm::unexpected(allio_error(get_last_error()));
 			}
 
 			r.emplace(list);
@@ -116,7 +117,7 @@ public:
 					/* lpPreviousValue: */ nullptr,
 					/* lpReturnSize: */ nullptr))
 				{
-					return vsm::unexpected(get_last_error());
+					return vsm::unexpected(allio_error(get_last_error()));
 				}
 			}
 		}
@@ -205,7 +206,7 @@ vsm::result<unique_handle> win32::open_process(DWORD const id)
 
 	if (!handle)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return vsm_lazy(unique_handle(handle));
@@ -216,7 +217,7 @@ vsm::result<process_exit_code> win32::get_process_exit_code(HANDLE const handle)
 	DWORD exit_code;
 	if (!GetExitCodeProcess(handle, &exit_code))
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 	return static_cast<process_exit_code>(exit_code);
 }
@@ -373,7 +374,7 @@ vsm::result<void> process_t::create(
 		&startup_info.StartupInfo,
 		&process_information))
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	unique_handle process(process_information.hProcess);
@@ -424,7 +425,7 @@ vsm::result<void> process_t::terminate(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return {};
@@ -436,7 +437,7 @@ vsm::result<process_wait_result> process_t::wait(
 {
 	if (h.id.integer() == GetCurrentProcessId())
 	{
-		return vsm::unexpected(error::process_is_current_process);
+		return vsm::unexpected(allio_error(error::process_is_current_process));
 	}
 
 	HANDLE const handle = unwrap_handle(h.platform_handle);
@@ -448,12 +449,12 @@ vsm::result<process_wait_result> process_t::wait(
 
 	if (status == STATUS_TIMEOUT)
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	vsm_try(exit_code, get_process_exit_code(handle));
@@ -471,7 +472,7 @@ vsm::result<void> process_t::close(
 	{
 		if (h.id.integer() == GetCurrentProcessId())
 		{
-			return vsm::unexpected(error::process_is_current_process);
+			return vsm::unexpected(allio_error(error::process_is_current_process));
 		}
 
 		NTSTATUS const status = win32::NtWaitForSingleObject(
@@ -481,7 +482,7 @@ vsm::result<void> process_t::close(
 
 		if (!NT_SUCCESS(status))
 		{
-			return vsm::unexpected(static_cast<kernel_error>(status));
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
 	}
 

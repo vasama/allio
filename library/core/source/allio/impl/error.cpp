@@ -1,10 +1,12 @@
 #include <allio/error.hpp>
+#include <allio/impl/error_encoding_impl.hpp>
 
 #include <format>
 
 #include <cinttypes>
 
 using namespace allio;
+using namespace allio::detail;
 
 char const* detail::error_category::name() const noexcept
 {
@@ -193,6 +195,22 @@ std::error_condition detail::error_category::default_error_condition(int const c
 }
 
 detail::error_category const detail::error_category_instance;
+
+
+template<>
+uint32_t ec::encode_error_code(error const e)
+{
+	//TODO: Static assert that e is never out of range.
+	return static_cast<uint32_t>(e);
+}
+
+template<>
+error ec::decode_error_code(uint32_t const e)
+{
+	return static_cast<error>(e);
+}
+
+template class ec::encoded_error_category<allio_error_encoding, allio::error>;
 
 
 namespace {

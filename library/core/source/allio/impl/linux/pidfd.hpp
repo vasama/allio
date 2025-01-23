@@ -19,7 +19,7 @@ inline vsm::result<detail::unique_handle> pidfd_open(pid_t const pid, unsigned c
 
 	if (fd == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return vsm_lazy(detail::unique_handle(fd));

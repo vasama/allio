@@ -1,6 +1,7 @@
 #include <allio/linux/detail/mmap.hpp>
 
 #include <allio/error.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
 
 #include <sys/mman.h>
@@ -15,6 +16,6 @@ void detail::close_mmap(void* const base, size_t const size)
 {
 	if (munmap(base, size) == -1)
 	{
-		unrecoverable_error(get_last_error());
+		unrecoverable_error(allio_error(get_last_error()));
 	}
 }

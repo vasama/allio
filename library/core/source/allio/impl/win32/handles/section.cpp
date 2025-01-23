@@ -134,7 +134,7 @@ vsm::result<void> section_t::create(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	h.flags = flags::not_null;

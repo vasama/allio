@@ -50,7 +50,7 @@ public:
 			FALSE,
 			flags))
 		{
-			return vsm::unexpected(get_last_socket_error());
+			return vsm::unexpected(allio_error(get_last_socket_error()));
 		}
 
 		return {};
@@ -101,7 +101,7 @@ vsm::result<void> raw_socket_t::connect(
 		{
 			if (int const e = WSAGetLastError(); e != WSA_IO_PENDING)
 			{
-				return vsm::unexpected(static_cast<socket_error>(e));
+				return vsm::unexpected(allio_error(static_cast<socket_error>(e)));
 			}
 
 			DWORD flags;
@@ -117,7 +117,7 @@ vsm::result<void> raw_socket_t::connect(
 	{
 		if (::connect(socket, &addr.addr, addr.size) == SOCKET_ERROR)
 		{
-			return vsm::unexpected(get_last_socket_error());
+			return vsm::unexpected(allio_error(get_last_socket_error()));
 		}
 	}
 
@@ -151,7 +151,7 @@ vsm::result<size_t> raw_socket_t::stream_read(
 	{
 		if (int const e = WSAGetLastError(); e != WSA_IO_PENDING)
 		{
-			return vsm::unexpected(static_cast<socket_error>(e));
+			return vsm::unexpected(allio_error(static_cast<socket_error>(e)));
 		}
 
 		vsm_try_void(overlapped.wait(
@@ -188,7 +188,7 @@ vsm::result<size_t> raw_socket_t::stream_write(
 	{
 		if (int const e = WSAGetLastError(); e != WSA_IO_PENDING)
 		{
-			return vsm::unexpected(static_cast<socket_error>(e));
+			return vsm::unexpected(allio_error(static_cast<socket_error>(e)));
 		}
 
 		vsm_try_void(overlapped.wait(

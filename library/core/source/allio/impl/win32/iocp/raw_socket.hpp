@@ -16,7 +16,7 @@ inline void cancel_socket_io(SOCKET const socket, OVERLAPPED& overlapped)
 	{
 		if (DWORD const error = GetLastError(); error != ERROR_NOT_FOUND)
 		{
-			unrecoverable_error(static_cast<system_error>(error));
+			unrecoverable_error(allio_error(static_cast<system_error>(error)));
 		}
 	}
 }

@@ -23,7 +23,7 @@ inline vsm::result<unique_timer> create_timer()
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return vsm_lazy(unique_timer(wrap_timer(handle)));
@@ -45,7 +45,7 @@ inline vsm::result<void> set_timer(timer const timer, deadline const deadline)
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return {};

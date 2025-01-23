@@ -10,7 +10,7 @@ vsm::result<thread_exit_code> win32::get_thread_exit_code(HANDLE const handle)
 	DWORD exit_code;
 	if (!GetExitCodeThread(handle, &exit_code))
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 	return static_cast<thread_exit_code>(exit_code);
 }
@@ -44,7 +44,7 @@ vsm::result<void> thread_t::terminate(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return {};
@@ -63,12 +63,12 @@ vsm::result<process_exit_code> thread_t::wait(
 
 	if (status == STATUS_TIMEOUT)
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return get_thread_exit_code(handle);

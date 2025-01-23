@@ -33,7 +33,7 @@ vsm::result<size_t> detail::secure_random_fill_some(std::span<std::byte> const b
 				break;
 			}
 
-			return vsm::unexpected(static_cast<kernel_error>(status));
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
 
 		size += part_size;

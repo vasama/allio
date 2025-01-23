@@ -5,6 +5,8 @@
 #include <vsm/concepts.hpp>
 #include <vsm/result.hpp>
 
+#include <cstring>
+
 namespace allio {
 
 void unrecoverable_error(std::error_code error);
@@ -119,6 +121,19 @@ enum class error
 }
 
 
+[[nodiscard]] inline bool is_allio_category(std::error_category const& category)
+{
+	return
+		&category == &detail::error_category_instance ||
+		std::strcmp(category.name(), detail::error_category_name) == 0;
+}
+
+[[nodiscard]] inline bool is_error(std::error_code const ec, error const e)
+{
+	return ec.value() == static_cast<int>(e) && is_allio_category(ec.category());
+}
+
+
 enum class error_source : uintptr_t;
 
 struct error_information
@@ -147,9 +162,6 @@ void set_error_handler(error_handler* const handler) noexcept;
 {
 	return handler != nullptr ? *handler : get_error_handler();
 }
-
-
-
 
 } // namespace allio
 

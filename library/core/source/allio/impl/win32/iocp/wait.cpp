@@ -26,7 +26,7 @@ io_result<void> iocp_wait_state::submit(M& m, H const& h, S&, io_handler<M>& han
 	// lease automatically releases the wait packet back to the multiplexer.
 	lease.release();
 
-	return io_pending(error::operation_pending);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
 io_result<void> iocp_wait_state::notify(M& m, H const&, S&, io_handler<M>& handler, M::io_status_type const status)
@@ -37,7 +37,7 @@ io_result<void> iocp_wait_state::notify(M& m, H const&, S&, io_handler<M>& handl
 
 	if (!NT_SUCCESS(status.status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status.status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
 	}
 
 	return {};

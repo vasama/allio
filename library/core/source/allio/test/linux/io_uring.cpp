@@ -18,6 +18,8 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::linux;
 
+namespace {
+
 template<typename T>
 static vsm::result<unique_mmap<T>> mmap(int const fd, uint64_t const offset, size_t const size)
 {
@@ -666,3 +668,5 @@ TEST_CASE("io_uring", "[io_uring]")
 		}
 	}
 }
+
+} // namespace

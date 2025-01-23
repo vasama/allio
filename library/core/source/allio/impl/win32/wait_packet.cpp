@@ -20,7 +20,7 @@ vsm::result<unique_handle> win32::create_wait_packet()
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return handle;
@@ -48,7 +48,7 @@ vsm::result<bool> win32::associate_wait_packet(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return already_signaled;
@@ -64,7 +64,7 @@ vsm::result<bool> win32::cancel_wait_packet(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return status != STATUS_PENDING;

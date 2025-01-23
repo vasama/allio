@@ -83,50 +83,22 @@ class io_sender
 
 		void start() & noexcept
 		{
-			if (_submit() != submit_status::completed)
-			{
-				stoppable_base::register_stoppable();
-			}
-		}
+			stoppable_base::register_stoppable();
 
-	private:
-		enum class submit_status
-		{
-			completed,
-			submitted,
-			try_again,
-		};
-
-		[[nodiscard]] submit_status _submit() noexcept
-		{
 			auto r = submit_io(
 				m_handle,
 				m_operation,
 				vsm_as_const(m_args),
 				static_cast<io_handler_type&>(*this));
 
-			if (r.is_pending())
+			if (get_io_notify_status(r) != io_notify_status::submitted)
 			{
-				// This is not a stream sender.
-				vsm_assert(!r.has_value());
-				return submit_status::submitted;
+				handle_result(vsm_move(r));
 			}
-
-			if (r.is_try_again())
-			{
-				return submit_status::try_again;
-			}
-
-			handle_result(vsm_move(r));
-			return submit_status::completed;
 		}
 
-		bool on_submit_io() noexcept
-		{
-			return _submit() != submit_status::try_again;
-		}
-
-		bool on_notify_io(io_status_type&& status) noexcept
+	private:
+		void on_io_notification(io_status_type&& status) noexcept
 		{
 			auto r = notify_io(
 				m_handle,
@@ -135,32 +107,20 @@ class io_sender
 				static_cast<io_handler_type&>(*this),
 				vsm_move(status));
 
-			if (r.is_try_again())
-			{
-				return false;
-			}
-
-			if (r.is_pending())
-			{
-				// This is not a stream sender.
-				vsm_assert(!r.has_value());
-			}
-			else
+			if (get_io_notify_status(r) != io_notify_status::submitted)
 			{
 				handle_result(vsm_move(r));
 			}
-
-			return true;
 		}
 
-		bool on_cancel_io() noexcept
+		void on_cancel_requested()
 		{
-			return cancel_io(m_handle, m_operation);
+			cancel_io(m_handle, m_operation);
 		}
 
 		void on_stop_requested()
 		{
-			(void)on_cancel_io();
+			cancel_io(m_handle, m_operation);
 		}
 
 		template<typename R>
@@ -168,38 +128,32 @@ class io_sender
 		{
 			stoppable_base::deregister_stoppable();
 
-			if (r.has_value())
+			if (r)
 			{
 				if constexpr (std::is_void_v<R>)
 				{
 					ex::set_value(vsm_move(m_receiver));
 				}
+				else if constexpr (std::is_same_v<R, result_type>)
+				{
+					ex::set_value(vsm_move(m_receiver), vsm_move(*r));
+				}
+				else if (auto r2 = rebind_handle<result_type>(vsm_move(*r)))
+				{
+					ex::set_value(vsm_move(m_receiver), vsm_move(*r2));
+				}
 				else
 				{
-					if constexpr (std::is_same_v<R, result_type>)
-					{
-						ex::set_value(vsm_move(m_receiver), vsm_move(*r));
-					}
-					else
-					{
-						if (auto r2 = rebind_handle<result_type>(vsm_move(*r)))
-						{
-							ex::set_value(vsm_move(m_receiver), vsm_move(*r2));
-						}
-						else
-						{
-							ex::set_error(vsm_move(m_receiver), r2.error());
-						}
-					}
+					ex::set_error(vsm_move(m_receiver), r2.error());
 				}
 			}
-			else if (r.is_canceled())
+			else if (r.error().get_io_notify_status() == io_notify_status::cancelled)
 			{
 				ex::set_stopped(vsm_move(m_receiver));
 			}
 			else
 			{
-				ex::set_error(vsm_move(m_receiver), r.error());
+				ex::set_error(vsm_move(m_receiver), static_cast<std::error_code const&>(r.error()));
 			}
 		}
 
@@ -277,27 +231,22 @@ class io_handle_sender
 
 		void start() & noexcept
 		{
+			stoppable_base::register_stoppable();
+
 			auto r = submit_io(
 				m_handle,
 				m_operation,
 				vsm_as_const(m_args),
 				static_cast<io_handler_type&>(*this));
 
-			if (r.is_pending())
+			if (get_io_notify_status(r) != io_notify_status::submitted)
 			{
-				// This is not a stream sender.
-				vsm_assert(!r.has_value());
-
-				stoppable_base::register_stoppable();
-			}
-			else
-			{
-				handle_result(vsm_move(r));
+				handle_result(r);
 			}
 		}
 
 	private:
-		void notify(io_status_type&& status) noexcept
+		void on_io_notification(io_status_type&& status) noexcept
 		{
 			auto r = notify_io(
 				m_handle,
@@ -306,33 +255,38 @@ class io_handle_sender
 				static_cast<io_handler_type&>(*this),
 				vsm_move(status));
 
-			// This is not a stream sender.
-			vsm_assert(!r.is_pending());
+			if (get_io_notify_status(r) != io_notify_status::submitted)
+			{
+				handle_result(r);
+			}
+		}
 
-			stoppable_base::deregister_stoppable();
+		void on_cancel_requested() noexcept
+		{
+			cancel_io(m_handle, m_operation);
+		}
 
-			handle_result(vsm_move(r));
+		void on_stop_requested() noexcept
+		{
+			cancel_io(m_handle, m_operation);
 		}
 
 		void handle_result(io_result<void> const& r)
 		{
-			if (r.has_value())
+			stoppable_base::deregister_stoppable();
+
+			if (r)
 			{
 				ex::set_value(vsm_move(m_receiver), vsm_move(m_handle));
 			}
-			else if (r.is_canceled())
+			else if (r.error().get_io_notify_status() == io_notify_status::cancelled)
 			{
 				ex::set_stopped(vsm_move(m_receiver));
 			}
 			else
 			{
-				ex::set_error(vsm_move(m_receiver), r.error());
+				ex::set_error(vsm_move(m_receiver), static_cast<std::error_code const&>(r.error()));
 			}
-		}
-
-		void on_stop_requested()
-		{
-			cancel_io(m_handle, m_operation);
 		}
 
 		friend io_handler_base<multiplexer_type, operation<MultiplexerHandle, Receiver>>;

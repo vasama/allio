@@ -407,7 +407,7 @@ vsm::result<unique_rio_cq> win32::rio_create_completion_queue(
 
 	if (cq == RIO_INVALID_CQ)
 	{
-		return vsm::unexpected(posix::get_last_socket_error());
+		return vsm::unexpected(posix::allio_error(get_last_socket_error()));
 	}
 
 	return vsm_lazy(unique_rio_cq(cq));
@@ -440,7 +440,7 @@ vsm::result<RIO_RQ> win32::rio_create_request_queue(
 
 	if (rq == RIO_INVALID_RQ)
 	{
-		return vsm::unexpected(posix::get_last_socket_error());
+		return vsm::unexpected(posix::allio_error(get_last_socket_error()));
 	}
 
 	return rq;
@@ -455,7 +455,7 @@ vsm::result<unique_rio_buffer> win32::rio_register_buffer(
 
 	if (buffer_id == RIO_INVALID_BUFFERID)
 	{
-		return vsm::unexpected(posix::get_last_socket_error());
+		return vsm::unexpected(posix::allio_error(get_last_socket_error()));
 	}
 
 	return vsm_lazy(unique_rio_buffer(buffer_id));

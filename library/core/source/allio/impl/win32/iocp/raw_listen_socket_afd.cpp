@@ -135,7 +135,7 @@ static io_result<accept_result_type> continue_accept_1(M& m, H const& h, accept_
 
 		if (!NT_SUCCESS(status))
 		{
-			return vsm::unexpected(static_cast<kernel_error>(status));
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
 	}
 
@@ -154,7 +154,7 @@ static io_result<accept_result_type> continue_accept_1(M& m, H const& h, accept_
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	if (may_complete_synchronously && status != STATUS_PENDING)
@@ -162,7 +162,7 @@ static io_result<accept_result_type> continue_accept_1(M& m, H const& h, accept_
 		return continue_accept_2(m, h, s);
 	}
 
-	return io_pending(error::operation_pending);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
 io_result<accept_result_type> accept_s::submit(M& m, H const& h, C const&, accept_s& s, accept_a const& a, io_handler<M>& handler)
@@ -186,7 +186,7 @@ io_result<accept_result_type> accept_s::submit(M& m, H const& h, C const&, accep
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	if (may_complete_synchronously && status != STATUS_PENDING)
@@ -194,7 +194,7 @@ io_result<accept_result_type> accept_s::submit(M& m, H const& h, C const&, accep
 		return continue_accept_1(m, h, s);
 	}
 
-	return io_pending(error::operation_pending);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
 io_result<accept_result_type> accept_s::notify(M& m, H const&, C const&, accept_s& s, accept_a const&, io_handler<M>& handler, M::io_status_type const status)
@@ -204,7 +204,7 @@ io_result<accept_result_type> accept_s::notify(M& m, H const&, C const&, accept_
 	if (!NT_SUCCESS(status.status))
 	{
 		s.handle.reset();
-		return vsm::unexpected(static_cast<kernel_error>(status.status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
 	}
 
 	if (s.handle)

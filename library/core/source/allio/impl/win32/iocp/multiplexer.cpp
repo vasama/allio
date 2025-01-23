@@ -110,7 +110,7 @@ bool iocp_multiplexer::cancel_io(io_slot& slot, native_platform_handle const han
 
 	if (status != STATUS_NOT_FOUND)
 	{
-		unrecoverable_error(static_cast<kernel_error>(status));
+		unrecoverable_error(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return false;

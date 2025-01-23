@@ -113,7 +113,7 @@ io_result<void> send_s::submit(M& m, H const& h, C const&, send_s& s, send_a con
 		return {};
 	}
 
-	return io_pending(error::operation_pending);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
 io_result<void> send_s::notify(M&, H const& h, C const&, send_s& s, send_a const& a, io_handler<M>& handler, M::io_status_type const status)
@@ -122,7 +122,7 @@ io_result<void> send_s::notify(M&, H const& h, C const&, send_s& s, send_a const
 
 	if (!NT_SUCCESS(status.status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status.status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
 	}
 
 	size_t const transferred = get_transfer_result(h, s.overlapped);
@@ -185,7 +185,7 @@ io_result<receive_result> recv_s::submit(M& m, H const& h, C const&, recv_s& s, 
 		});
 	}
 
-	return io_pending(error::operation_pending);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
 io_result<receive_result> recv_s::notify(M&, H const& h, C const&, recv_s& s, recv_a const&, io_handler<M>& handler, M::io_status_type const status)
@@ -194,7 +194,7 @@ io_result<receive_result> recv_s::notify(M&, H const& h, C const&, recv_s& s, re
 
 	if (!NT_SUCCESS(status.status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status.status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
 	}
 
 	size_t const transferred = get_transfer_result(h, s.overlapped);

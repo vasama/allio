@@ -46,7 +46,7 @@ vsm::result<std::optional<int>> linux::wait_process(
 	{
 		if (int const e = errno; e != ECHILD)
 		{
-			return vsm::unexpected(static_cast<system_error>(e));
+			return vsm::unexpected(allio_error(static_cast<system_error>(e)));
 		}
 
 		if (deadline.is_trivial())

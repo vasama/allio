@@ -46,7 +46,7 @@ vsm::result<unique_proc_file> proc_open(
 
 	if (file == nullptr)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return vsm_lazy(unique_proc_file(file));
@@ -61,7 +61,7 @@ vsm::result<void> proc_scan(
 
 	if (r != sizeof...(args))
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return {};

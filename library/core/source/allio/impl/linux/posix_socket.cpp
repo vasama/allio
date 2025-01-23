@@ -30,7 +30,7 @@ vsm::result<socket_with_flags> posix::create_socket(
 
 	if (socket == invalid_socket)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 
 	return vsm_lazy(socket_with_flags
@@ -71,7 +71,7 @@ vsm::result<socket_with_flags> posix::socket_accept(
 
 	if (socket == socket_error_value)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 
 	return vsm_lazy(socket_with_flags
@@ -99,7 +99,7 @@ vsm::result<posix::socket_poll_mask> posix::socket_poll(
 
 	if (r == -1)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 
 	if (r == 0)
@@ -120,7 +120,7 @@ vsm::result<void> posix::socket_set_non_blocking(
 
 	if (old_flags == -1)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 
 	if ((old_flags & O_NONBLOCK) == new_flags)
@@ -130,7 +130,7 @@ vsm::result<void> posix::socket_set_non_blocking(
 
 	if (fcntl(socket, F_SETFL, (old_flags & ~O_NONBLOCK) | new_flags) == -1)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 
 	return {};
@@ -153,7 +153,7 @@ vsm::result<size_t> posix::socket_scatter_read(
 
 	if (r == -1)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 
 	if (r == 0 && !io_buffers_is_empty(buffers))
@@ -178,7 +178,7 @@ vsm::result<size_t> posix::socket_gather_write(
 
 	if (r == -1)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 
 	return static_cast<size_t>(r);
@@ -209,7 +209,7 @@ vsm::result<size_t> posix::socket_receive_from(
 
 	if (r == -1)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 
 	addr.size = message.msg_namelen;
@@ -241,7 +241,7 @@ vsm::result<void> posix::socket_send_to(
 
 	if (r == -1)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 
 	// The transferred size must match the total specified in the buffers.

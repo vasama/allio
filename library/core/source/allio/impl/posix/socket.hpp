@@ -67,16 +67,6 @@ struct socket_address : socket_address_union
 };
 
 
-struct socket_deleter
-{
-	vsm_static_operator void operator()(socket_type const socket) vsm_static_operator_const
-	{
-		close_socket(socket);
-	}
-};
-using unique_socket = vsm::unique_resource<socket_type, socket_deleter, invalid_socket>;
-
-
 struct socket_with_flags
 {
 	unique_socket socket;
@@ -121,7 +111,7 @@ inline vsm::result<void> socket_bind(
 {
 	if (::bind(socket, &addr.addr, size) == socket_error_value)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 	return {};
 }

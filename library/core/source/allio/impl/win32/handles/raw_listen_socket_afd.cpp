@@ -38,7 +38,7 @@ vsm::result<void> raw_listen_socket_t::listen(
 
 		if (!NT_SUCCESS(status))
 		{
-			vsm::unexpected(static_cast<kernel_error>(status));
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
 	}
 
@@ -52,7 +52,7 @@ vsm::result<void> raw_listen_socket_t::listen(
 
 		if (!NT_SUCCESS(status))
 		{
-			return vsm::unexpected(static_cast<kernel_error>(status));
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
 	}
 
@@ -64,7 +64,7 @@ vsm::result<void> raw_listen_socket_t::listen(
 
 		if (!NT_SUCCESS(status))
 		{
-			return vsm::unexpected(static_cast<kernel_error>(status));
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
 	}
 
@@ -121,7 +121,7 @@ vsm::result<accept_result_type> raw_listen_socket_t::accept(
 
 		if (!NT_SUCCESS(status))
 		{
-			return vsm::unexpected(static_cast<kernel_error>(status));
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
 	}
 
@@ -145,7 +145,7 @@ vsm::result<accept_result_type> raw_listen_socket_t::accept(
 
 		if (!NT_SUCCESS(status))
 		{
-			vsm::unexpected(static_cast<kernel_error>(status));
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
 	}
 
@@ -173,7 +173,7 @@ vsm::result<accept_result_type> raw_listen_socket_t::accept(
 
 		if (!NT_SUCCESS(status))
 		{
-			return vsm::unexpected(static_cast<kernel_error>(status));
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
 	}
 

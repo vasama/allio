@@ -1,5 +1,6 @@
 #include <allio/handles/process.hpp>
 
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/api_string.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/fcntl.hpp>
@@ -209,7 +210,7 @@ vsm::result<void> process_t::create(
 		// Actually create the process:
 		if (int const error = fork_exec(data))
 		{
-			return vsm::unexpected(static_cast<system_error>(error));
+			return vsm::unexpected(allio_error(static_cast<system_error>(error)));
 		}
 
 		// Take ownership of the returned pid_fd.
@@ -269,7 +270,7 @@ vsm::result<void> process_t::terminate(
 		// The process might have exited and been reaped already. This is not considered an error.
 		if (int const e = errno; e != ESRCH)
 		{
-			return vsm::unexpected(static_cast<system_error>(e));
+			return vsm::unexpected(allio_error(static_cast<system_error>(e)));
 		}
 	}
 
@@ -282,7 +283,7 @@ vsm::result<process_wait_result> process_t::wait(
 {
 	if (static_cast<pid_t>(h.id.integer()) == getpid())
 	{
-		return vsm::unexpected(error::process_is_current_process);
+		return vsm::unexpected(allio_error(error::process_is_current_process));
 	}
 
 	int const fd = unwrap_handle(h.platform_handle);
@@ -319,7 +320,7 @@ vsm::result<void> process_t::close(
 	{
 		if (static_cast<pid_t>(h.id.integer()) == getpid())
 		{
-			return vsm::unexpected(error::process_is_current_process);
+			return vsm::unexpected(allio_error(error::process_is_current_process));
 		}
 
 		// Wait for the process to exit and reap it if possible. If the process is a non-child

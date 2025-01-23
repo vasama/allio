@@ -1,6 +1,5 @@
 #pragma once
 
-#include <allio/detail/io_result.hpp>
 #include <allio/detail/object_concepts.hpp>
 #include <allio/detail/parameters.hpp>
 #include <allio/error.hpp>
@@ -292,15 +291,59 @@ inline constexpr blocking_observe_t<Operation> blocking_observe = {};
 #endif
 
 
-enum class io_callback_mode
+enum class io_notify_status : uint32_t
 {
-	submit,
-	notify,
-	cancel,
+	completed                           = 0,
+	submitted                           = 1,
+	cancelled                           = 2,
 };
 
+class io_error_code : public std::error_code
+{
+	io_notify_status m_io_notify_status = io_notify_status::completed;
+
+public:
+	using std::error_code::error_code;
+
+	io_error_code(std::same_as<std::error_code> auto const error)
+		: std::error_code(error)
+	{
+	}
+
+	io_error_code(io_notify_status const status)
+		: std::error_code(error::operation_pending)
+		, m_io_notify_status(status)
+	{
+	}
+
+	template<typename... Args>
+		requires std::constructible_from<std::error_code, Args...>
+	explicit io_error_code(io_notify_status const status, Args&&... args)
+		: std::error_code(vsm_forward(args)...)
+		, m_io_notify_status(status)
+	{
+	}
+
+	[[nodiscard]] io_notify_status get_io_notify_status() const noexcept
+	{
+		return m_io_notify_status;
+	}
+};
+
+template<typename T>
+using io_result = vsm::result<T, io_error_code>;
+
+template<typename T>
+[[nodiscard]] inline io_notify_status get_io_notify_status(io_result<T> const& result)
+{
+	return result
+		? io_notify_status::completed
+		: result.error().get_io_notify_status();
+}
+
+
 template<typename Handler, typename Status>
-using basic_io_callback = void(Handler& handler, io_callback_mode mode, Status* status) noexcept;
+using basic_io_callback = void(Handler& handler, Status* status) noexcept;
 
 template<typename Status>
 class basic_io_handler
@@ -310,24 +353,19 @@ class basic_io_handler
 	callback_type* m_callback;
 
 public:
-	explicit basic_io_handler(callback_type& callback)
+	constexpr explicit basic_io_handler(callback_type& callback)
 		: m_callback(callback)
 	{
 	}
 
-	void submit() & noexcept
-	{
-		m_callback(*this, io_callback_mode::submit, nullptr);
-	}
-
 	void notify(Status&& status) & noexcept
 	{
-		m_callback(*this, io_callback_mode::notify, &status);
+		m_callback(*this, &status);
 	}
 
 	void cancel() & noexcept
 	{
-		m_callback(*this, io_callback_mode::cancel, nullptr);
+		m_callback(*this, nullptr);
 	}
 
 protected:
@@ -337,12 +375,12 @@ protected:
 };
 
 template<typename Status, typename Handler>
-class basic_io_handler_base : protected basic_io_handler<Status>
+class basic_io_handler_base : public basic_io_handler<Status>
 {
 	using io_handler_type = basic_io_handler<Status>;
 
 protected:
-	basic_io_handler_base()
+	constexpr basic_io_handler_base()
 		: io_handler_type(_callback)
 	{
 	}
@@ -352,40 +390,18 @@ protected:
 	~basic_io_handler_base() = default;
 
 private:
-	static bool _callback(
-		io_handler_type& base,
-		io_callback_mode const mode,
-		Status* const status) noexcept
+	static void _callback(io_handler_type& base, Status* const status) noexcept
 	{
-		auto& implementation = static_cast<Handler&>(static_cast<basic_io_handler_base&>(base));
+		auto& self = static_cast<Handler&>(static_cast<basic_io_handler_base&>(base));
 
-		switch (mode)
+		if (status != nullptr)
 		{
-		case io_callback_mode::submit:
-			if constexpr (requires { implementation.submit(); })
-			{
-				return implementation.on_submit_io();
-			}
-			else
-			{
-				break;
-			}
-
-		case io_callback_mode::notify:
-			return implementation.on_notify_io(vsm_move(*status));
-
-		case io_callback_mode::cancel:
-			if constexpr (requires { implementation.cancel(); })
-			{
-				return implementation.on_cancel_io();
-			}
-			else
-			{
-				break;
-			}
+			self.on_io_notification(vsm_move(*status));
 		}
-
-		vsm_unreachable();
+		else
+		{
+			self.on_cancel_requested();
+		}
 	}
 };
 

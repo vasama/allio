@@ -43,7 +43,7 @@ static vsm::result<posix::unique_socket> wsa_socket(
 
 	if (socket == INVALID_SOCKET)
 	{
-		return vsm::unexpected(posix::get_last_socket_error());
+		return vsm::unexpected(posix::allio_error(get_last_socket_error()));
 	}
 
 	return vsm::result<posix::unique_socket>(vsm::result_value, socket);
@@ -110,7 +110,7 @@ static vsm::result<posix::unique_socket> wsa_accept(
 
 	if (socket == static_cast<SOCKET>(SOCKET_ERROR))
 	{
-		return vsm::unexpected(posix::get_last_socket_error());
+		return vsm::unexpected(posix::allio_error(get_last_socket_error()));
 	}
 
 	return vsm::result<posix::unique_socket>(vsm::result_value, socket);
@@ -144,7 +144,7 @@ vsm::result<posix::socket_with_flags> posix::socket_accept(
 			HANDLE_FLAG_INHERIT,
 			HANDLE_FLAG_INHERIT))
 		{
-			return vsm::unexpected(get_last_error());
+			return vsm::unexpected(allio_error(get_last_error()));
 		}
 	}
 
@@ -174,7 +174,7 @@ vsm::result<posix::socket_poll_mask> posix::socket_poll(
 
 	if (r == SOCKET_ERROR)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 
 	if (r == 0)
@@ -195,7 +195,7 @@ vsm::result<void> posix::socket_set_non_blocking(
 	unsigned long mode = non_blocking ? 1 : 0;
 	if (ioctlsocket(socket, static_cast<long>(FIONBIO), &mode) == socket_error_value)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 	return {};
 }
@@ -221,7 +221,7 @@ vsm::result<size_t> posix::socket_scatter_read(
 
 	if (r == SOCKET_ERROR)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 
 	if (transferred == 0 && !io_buffers_is_empty(buffers))
@@ -251,7 +251,7 @@ vsm::result<size_t> posix::socket_gather_write(
 
 	if (r == SOCKET_ERROR)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 
 	return transferred;
@@ -283,7 +283,7 @@ vsm::result<size_t> posix::socket_receive_from(
 		/* lpOverlapped: */ nullptr,
 		/* lpCompletionRoutine: */ nullptr) == SOCKET_ERROR)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 	vsm_assert(transferred == get_io_buffers_size(buffers));
 
@@ -312,7 +312,7 @@ vsm::result<void> posix::socket_send_to(
 		/* lpOverlapped: */ nullptr,
 		/* lpCompletionRoutine */ nullptr) == SOCKET_ERROR)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 	vsm_assert(transferred == get_io_buffers_size(buffers));
 

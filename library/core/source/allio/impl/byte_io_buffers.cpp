@@ -237,6 +237,21 @@ vsm::result<new_io_buffers_view> detail::get_io_buffers(
 	};
 }
 
+new_io_buffers_view detail::get_io_buffers_unchecked(
+	new_io_buffers_storage const& storage,
+	new_io_buffers_base const& buffers,
+	new_io_buffer_layout const required_layout)
+{
+	auto const buffers_layout = buffers.get_layout();
+
+	if (buffers_layout == required_layout)
+	{
+		return buffers.get_buffers();
+	}
+
+	return storage.get_buffers_view();
+}
+
 bool detail::io_buffers_is_empty(new_io_buffers_base const buffers)
 {
 	auto const lambda = [&]<new_io_buffer_layout Layout>(layout_constant<Layout>)

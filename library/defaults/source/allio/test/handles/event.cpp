@@ -4,6 +4,7 @@
 #include <allio/default_multiplexer.hpp>
 #include <allio/handles/object.hpp>
 #include <allio/nothrow/block.hpp>
+#include <allio/sync_wait.hpp>
 
 #include <vsm/atomic.hpp>
 
@@ -16,6 +17,8 @@
 
 using namespace allio;
 namespace ex = stdexec;
+
+namespace {
 
 static bool check_timeout(vsm::result<void> const r)
 {
@@ -347,6 +350,61 @@ TEST_CASE("Manual reset event signals are observed by all asynchronous waits", "
 	REQUIRE(signal2);
 }
 
+TEST_CASE("Manual reset event can be awaited many times concurrently", "[event][async]")
+{
+	static constexpr size_t wait_count = 10'000;
+
+	auto multiplexer = default_multiplexer::create().value();
+	auto const event = blocking::event(manual_reset_event).via(multiplexer);
+
+	exec::async_scope scope;
+
+	size_t signal_count = 0;
+	size_t cancel_count = 0;
+
+	for (size_t i = 0; i < wait_count; ++i)
+	{
+		scope.spawn(
+			event.wait()
+			| ex::then([&]() { ++signal_count; })
+			| ex::upon_stopped([&]() { ++cancel_count; })
+			| ex::upon_error([](auto const&...) {}));
+	}
+
+	if (GENERATE(0, 1))
+	{
+		// Force I/O submission before signal / cancel:
+		while (multiplexer.poll(deadline::instant()).value());
+	}
+
+	bool const signal = GENERATE(1, 0);
+	bool const cancel = !signal || GENERATE(1, 0);
+
+	if (signal)
+	{
+		event.signal();
+	}
+
+	if (cancel)
+	{
+		scope.request_stop();
+	}
+
+	allio::sync_wait(multiplexer, scope.on_empty());
+
+	if (signal && cancel)
+	{
+		REQUIRE(signal_count + cancel_count == wait_count);
+	}
+	else
+	{
+		REQUIRE(signal_count == (signal ? wait_count : 0));
+		REQUIRE(cancel_count == (cancel ? wait_count : 0));
+	}
+}
+
+//TODO: Add a stress test for multithreaded cancellation.
+
 
 #if 0 //TODO: Test opaque_handle wrapping event
 TEST_CASE("blocking opaque signaling", "[event][opaque_handle][blocking]")
@@ -371,3 +429,5 @@ TEST_CASE("blocking opaque signaling", "[event][opaque_handle][blocking]")
 	REQUIRE(poll());
 }
 #endif
+
+} // namespace

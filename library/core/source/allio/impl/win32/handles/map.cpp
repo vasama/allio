@@ -91,7 +91,7 @@ static vsm::result<unique_anonymous_mmap> allocate_virtual_memory(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	if (allocation_type & MEM_RESERVE)
@@ -119,7 +119,7 @@ static vsm::result<ULONG> protect_virtual_memory(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return old_page_protection;
@@ -140,7 +140,7 @@ static vsm::result<void> free_virtual_memory(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return {};
@@ -174,7 +174,7 @@ static vsm::result<unique_section_mmap> map_view_of_section(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return vsm_lazy(unique_section_mmap(mmap_view(base, size)));
@@ -190,7 +190,7 @@ static vsm::result<void> unmap_view_of_section(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return {};

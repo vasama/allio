@@ -121,7 +121,7 @@ vsm::result<socket_address> socket_address::get(socket_type const socket)
 
 	if (getsockname(socket, &r->addr, &r->size))
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 
 	return r;
@@ -142,7 +142,7 @@ vsm::result<void> posix::socket_listen(
 
 	if (::listen(socket, backlog) == socket_error_value)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 
 	return {};
@@ -164,7 +164,7 @@ static vsm::result<void> socket_connect_with_timeout(
 			break;
 
 		default:
-			return vsm::unexpected(error);
+			return vsm::unexpected(allio_error(error));
 		}
 	}
 
@@ -186,7 +186,7 @@ static vsm::result<void> socket_connect_with_timeout(
 		// Check if the socket is connected by attempting to getting the peer address.
 		if (getpeername(socket, &addr.addr, &addr.size) == socket_error_value)
 		{
-			auto const getpeername_error = get_last_socket_error();
+			auto const getpeername_error = allio_error(get_last_socket_error());
 
 			if (getpeername_error != socket_error::not_connected)
 			{
@@ -203,7 +203,7 @@ static vsm::result<void> socket_connect_with_timeout(
 			vsm_assert(recv_result == socket_error_value);
 
 			return recv_result == socket_error_value
-				? vsm::unexpected(std::error_code(get_last_socket_error()))
+				? vsm::unexpected(std::error_code(allio_error(get_last_socket_error())))
 				: vsm::unexpected(std::error_code(error::unknown_failure));
 		}
 
@@ -232,7 +232,7 @@ vsm::result<void> posix::socket_connect(
 
 	if (::connect(socket, &addr.addr, addr.size) == socket_error_value)
 	{
-		return vsm::unexpected(get_last_socket_error());
+		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 
 	return {};

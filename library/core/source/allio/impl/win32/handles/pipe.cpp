@@ -45,7 +45,7 @@ static vsm::result<HANDLE> get_named_pipe_directory()
 
 		if (!NT_SUCCESS(status))
 		{
-			return vsm::unexpected(static_cast<kernel_error>(status));
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
 
 		return handle;
@@ -104,7 +104,7 @@ static vsm::result<handle_with_flags> create_named_pipe_file(io_flags const flag
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	if ((create_options & FILE_SYNCHRONOUS_IO_NONALERT) == 0)
@@ -160,7 +160,7 @@ static vsm::result<handle_with_flags> create_pipe(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	if ((create_options & FILE_SYNCHRONOUS_IO_NONALERT) == 0)
@@ -216,7 +216,7 @@ vsm::result<basic_detached_handle<pipe_t>> pipe_t::create_pair(
 		&security_attributes,
 		/* nSize (buffer size): */ 0))
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 #endif
 

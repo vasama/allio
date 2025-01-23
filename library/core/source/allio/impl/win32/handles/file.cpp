@@ -38,7 +38,7 @@ vsm::result<fs_size> file_t::tell(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return static_cast<fs_size>(information.CurrentByteOffset.QuadPart);
@@ -64,7 +64,7 @@ vsm::result<void> file_t::seek(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return {};
@@ -86,7 +86,7 @@ vsm::result<fs_size> file_t::get_maximum_extent(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return information.EndOfFile.QuadPart;
@@ -115,7 +115,7 @@ vsm::result<void> file_t::set_maximum_extent(
 
 		if (!NT_SUCCESS(status))
 		{
-			return vsm::unexpected(static_cast<kernel_error>(status));
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
 	}
 
@@ -134,7 +134,7 @@ vsm::result<void> file_t::set_maximum_extent(
 
 		if (!NT_SUCCESS(status))
 		{
-			return vsm::unexpected(static_cast<kernel_error>(status));
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
 	}
 

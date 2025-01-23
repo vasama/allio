@@ -388,7 +388,7 @@ vsm::result<void> map_t::close(
 {
 	if (munmap(h.base, h.size) == -1)
 	{
-		unrecoverable_error(get_last_error());
+		unrecoverable_error(allio_error(get_last_error()));
 	}
 	h = {};
 	return {};

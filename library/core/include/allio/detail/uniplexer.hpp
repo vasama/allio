@@ -42,7 +42,8 @@ public:
 		async_connector_t<multiplexer_type, Object> c;
 		async_operation_t<multiplexer_type, Object, Operation> s;
 		auto r = submit_io(multiplexer, h, c, s, a, handler);
-		vsm_assert(!r.is_pending() && !r.is_canceled());
+
+		vsm_assert(get_io_notify_status(r) == io_notify_status::completed);
 
 		if (!r)
 		{
@@ -65,16 +66,14 @@ public:
 	}
 
 private:
-	static void io_callback(io_handler<uniplexer>&, uniplexer::io_status_type&&) noexcept
+	struct io_handler_type : io_handler_base<uniplexer, io_handler_type>
 	{
-		vsm_unreachable();
-	}
+		static void on_io_notification(uniplexer::io_status_type&&) noexcept
+		{
+			vsm_unreachable();
+		}
 
-	struct io_handler_type : io_handler<uniplexer>
-	{
-		using io_handler<uniplexer>::io_handler;
-
-		static void notify(uniplexer::io_status_type&&) noexcept
+		static void on_cancel_requested() noexcept
 		{
 			vsm_unreachable();
 		}
@@ -83,8 +82,8 @@ private:
 	static uniplexer multiplexer;
 	static io_handler_type handler;
 };
-inline uniplexer uniplexer_handle::multiplexer;
-inline uniplexer_handle::io_handler_type uniplexer_handle::handler(io_callback);
+inline constinit uniplexer uniplexer_handle::multiplexer;
+inline constinit uniplexer_handle::io_handler_type uniplexer_handle::handler;
 
 template<std::same_as<uniplexer> Multiplexer, object Object>
 struct async_connector<Multiplexer, Object> : uniplexer::connector_type

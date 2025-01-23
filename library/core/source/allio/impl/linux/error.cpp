@@ -1,14 +1,27 @@
-#include <allio/error.hpp>
+#include <allio/impl/error_encoding_impl.hpp>
+#include <allio/impl/linux/error.hpp>
+
+#include <allio/linux/detail/undef.i>
 
 using namespace allio;
+using namespace allio::detail;
+using namespace allio::linux;
 
-extern "C" __attribute__((weak))
-void allio_unrecoverable_error(std::error_code const error)
+template<>
+uint32_t ec::encode_error_code(system_error const e)
 {
-	detail::unrecoverable_error_default(error);
+	if (static_cast<uint32_t>(e) <= ec::code_mask)
+	{
+		return static_cast<uint32_t>(e);
+	}
+
+	return 0;
 }
 
-void detail::unrecoverable_error(std::error_code const error)
+template<>
+system_error ec::decode_error_code(uint32_t const e)
 {
-	allio_unrecoverable_error(error);
+	return static_cast<system_error>(e);
 }
+
+template class ec::encoded_error_category<allio_error_encoding, system_error>;

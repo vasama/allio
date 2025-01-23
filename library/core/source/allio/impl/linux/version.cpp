@@ -34,6 +34,8 @@ static std::optional<int> read_kernel_version()
 
 int linux::get_kernel_version()
 {
-	static int const version = read_kernel_version().value_or(LINUX_VERSION_CODE);
+	// On failure 0 is used as a fallback. This will effectively disable any features of the library
+	// that are dependent on and check for the current kernel version.
+	static int const version = read_kernel_version().value_or(0);
 	return version;
 }

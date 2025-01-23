@@ -126,7 +126,7 @@ io_result<accept_result_type> accept_s::submit(M& m, H const& h, C const&, accep
 		return make_accept_result(m, vsm_move(s.socket), s.socket_flags, addr_buffer.remote);
 	}
 
-	return io_pending(error::operation_pending);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
 io_result<accept_result_type> accept_s::notify(M& m, H const&, C const&, accept_s& s, accept_a const&, io_handler<M>& handler, M::io_status_type const status)
@@ -135,7 +135,7 @@ io_result<accept_result_type> accept_s::notify(M& m, H const&, C const&, accept_
 
 	if (!NT_SUCCESS(status.status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status.status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
 	}
 
 	auto& addr_buffer = get_wsa_address_buffer<wsa_accept_address_buffer>(s.address_storage);

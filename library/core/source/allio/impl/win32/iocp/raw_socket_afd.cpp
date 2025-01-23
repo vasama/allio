@@ -39,7 +39,7 @@ io_result<void> connect_s::submit(M& m, H& h, C& c, connect_s& s, connect_a cons
 
 		if (!NT_SUCCESS(status))
 		{
-			vsm::unexpected(static_cast<kernel_error>(status));
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
 	}
 
@@ -58,7 +58,7 @@ io_result<void> connect_s::submit(M& m, H& h, C& c, connect_s& s, connect_a cons
 
 		if (!NT_SUCCESS(status))
 		{
-			return vsm::unexpected(static_cast<kernel_error>(status));
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
 	}
 
@@ -79,7 +79,7 @@ io_result<void> connect_s::submit(M& m, H& h, C& c, connect_s& s, connect_a cons
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	if (may_complete_synchronously && status != STATUS_PENDING)
@@ -90,7 +90,7 @@ io_result<void> connect_s::submit(M& m, H& h, C& c, connect_s& s, connect_a cons
 		return {};
 	}
 
-	return io_pending(error::operation_pending);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
 io_result<void> connect_s::notify(M&, H& h, C&, connect_s& s, connect_a const&, M::io_status_type const status)
@@ -99,7 +99,7 @@ io_result<void> connect_s::notify(M&, H& h, C&, connect_s& s, connect_a const&, 
 
 	if (!NT_SUCCESS(status.status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status.status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
 	}
 
 	h.flags = object_t::flags::not_null | s.socket_flags;
@@ -144,7 +144,7 @@ io_result<size_t> read_s::submit(M& m, H const& h, C const&, read_s& s, read_a c
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	if (may_complete_synchronously && status != STATUS_PENDING)
@@ -152,7 +152,7 @@ io_result<size_t> read_s::submit(M& m, H const& h, C const&, read_s& s, read_a c
 		return io_status_block.Information;
 	}
 
-	return io_pending(error::operation_pending);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
 io_result<size_t> read_s::notify(M&, H const& h, C const&, read_s& s, read_a const&, M::io_status_type const status)
@@ -161,7 +161,7 @@ io_result<size_t> read_s::notify(M&, H const& h, C const&, read_s& s, read_a con
 
 	if (!NT_SUCCESS(status.status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status.status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
 	}
 
 	return s.io_status_block->Information;
@@ -203,7 +203,7 @@ io_result<size_t> write_s::submit(M& m, H const& h, C const&, write_s& s, write_
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	if (may_complete_synchronously && status != STATUS_PENDING)
@@ -211,7 +211,7 @@ io_result<size_t> write_s::submit(M& m, H const& h, C const&, write_s& s, write_
 		return io_status_block.Information;
 	}
 
-	return io_pending(error::operation_pending);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
 io_result<size_t> write_s::notify(M&, H const& h, C const&, write_s& s, write_a const&, M::io_status_type const status)
@@ -220,7 +220,7 @@ io_result<size_t> write_s::notify(M&, H const& h, C const&, write_s& s, write_a 
 
 	if (!NT_SUCCESS(status.status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status.status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
 	}
 
 	return s.io_status_block->Information;

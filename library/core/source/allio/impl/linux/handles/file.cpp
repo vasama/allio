@@ -1,5 +1,6 @@
 #include <allio/detail/handles/file.hpp>
 
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/api_string.hpp>
 #include <allio/impl/linux/byte_io.hpp>
 #include <allio/impl/linux/error.hpp>
@@ -68,7 +69,7 @@ vsm::result<fs_size> file_t::tell(
 
 	if (offset == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return offset;
@@ -87,7 +88,7 @@ vsm::result<void> file_t::seek(
 
 	if (r == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 	vsm_assert(r == offset);
 
@@ -102,7 +103,7 @@ vsm::result<fs_size> file_t::get_maximum_extent(
 
 	if (fstat(unwrap_handle(h.platform_handle), &data) == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 	vsm_assert(data.st_size >= 0);
 

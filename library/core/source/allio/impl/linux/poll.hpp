@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/error.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/timeout.hpp>
 
@@ -31,7 +32,7 @@ inline vsm::result<short> poll(int const fd, short const events, deadline const 
 
 	if (r == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	if (r == 0)

@@ -15,6 +15,6 @@ void detail::close_platform_handle(HANDLE const handle) noexcept
 
 	if (!NT_SUCCESS(status))
 	{
-		unrecoverable_error(static_cast<kernel_error>(status));
+		unrecoverable_error(allio_error(static_cast<kernel_error>(status)));
 	}
 }

@@ -53,7 +53,7 @@ static vsm::result<directory_stream_view> read_completed(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return directory_stream_view(stream_pointer);
@@ -78,7 +78,7 @@ io_result<directory_stream_view> read_s::submit(M& m, H& h, C&, read_s& s, read_
 		return read_completed(a.buffer, *s.io_status_block);
 	}
 
-	return io_pending(error::operation_pending);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
 io_result<directory_stream_view> read_s::notify(M&, H&, C&, read_s& s, read_a const& a, io_handler<M>& handler, M::io_status_type const status)

@@ -25,7 +25,7 @@ vsm::result<ACCESS_MASK> win32::get_handle_access(HANDLE const handle)
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	static constexpr size_t field_extent =
@@ -51,7 +51,7 @@ vsm::result<unique_handle> win32::duplicate_handle(HANDLE const handle)
 		/* bInheritHandle: */ false,
 		/* dwOptions: */ DUPLICATE_SAME_ACCESS))
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return duplicate;

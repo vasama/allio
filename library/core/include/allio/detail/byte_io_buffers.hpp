@@ -280,13 +280,29 @@ public:
 
 	~new_io_buffers_storage();
 
-	vsm::result<new_io_buffer*> resize(size_t size) &;
+	[[nodiscard]] new_io_buffers_view get_buffers_view() const
+	{
+		vsm_assert(m_storage != nullptr);
+
+		return new_io_buffers_view
+		{
+			.buffers_data = m_storage->data,
+			.buffers_size = m_storage->size,
+		};
+	}
+
+	[[nodiscard]] vsm::result<new_io_buffer*> resize(size_t size) &;
 };
 
 
 [[nodiscard]] vsm::result<new_io_buffers_view> get_io_buffers(
 	new_io_buffers_storage& storage,
-	new_io_buffers_base const& view,
+	new_io_buffers_base const& buffers,
+	new_io_buffer_layout required_layout);
+
+[[nodiscard]] new_io_buffers_view get_io_buffers_unchecked(
+	new_io_buffers_storage const& storage,
+	new_io_buffers_base const& buffers,
 	new_io_buffer_layout required_layout);
 
 [[nodiscard]] bool io_buffers_is_empty(new_io_buffers_base buffers);

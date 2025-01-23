@@ -84,12 +84,22 @@ namespace allio::posix {
 	return static_cast<SOCKET>(static_cast<detail::platform_handle_uint_type>(socket));
 }
 
+
 [[nodiscard]] inline void close_socket(socket_type const socket)
 {
 	if (::closesocket(socket) == socket_error_value)
 	{
-		unrecoverable_error(get_last_socket_error());
+		unrecoverable_error(allio_error(get_last_socket_error()));
 	}
 }
+
+struct socket_deleter
+{
+	vsm_static_operator void operator()(socket_type const socket) vsm_static_operator_const
+	{
+		close_socket(socket);
+	}
+};
+using unique_socket = vsm::unique_resource<socket_type, socket_deleter, invalid_socket>;
 
 } // namespace allio::posix

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/abi.hpp>
+#include <allio/abi.h>
 #include <allio/detail/deadline.hpp>
 #include <allio/detail/handles/platform_object.hpp>
 

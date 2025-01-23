@@ -1,5 +1,6 @@
 #include <allio/impl/linux/byte_io.hpp>
 
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
 
 #include <vsm/numeric.hpp>
@@ -32,7 +33,7 @@ static vsm::result<size_t> do_byte_io_2(
 
 	if (r == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	if (r == 0 && !io_buffers_is_empty(a.buffers))

@@ -25,7 +25,7 @@ vsm::result<detail::unique_handle> win32::create_event(
 
 	if (!NT_SUCCESS(status))
 	{
-		r = vsm::unexpected(static_cast<kernel_error>(status));
+		r = vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return r;
@@ -39,7 +39,7 @@ vsm::result<void> win32::signal_event(HANDLE const event)
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return {};

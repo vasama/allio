@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/detail/unique_handle.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
 
 #include <vsm/lazy.hpp>
@@ -18,7 +19,7 @@ inline vsm::result<int> fcntl(int const fd, int const cmd, auto&&... args)
 
 	if (r == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return r;
@@ -44,7 +45,7 @@ inline vsm::result<detail::unique_handle> duplicate_fd(int const old_fd, int new
 
 	if (new_fd == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return vsm_lazy(detail::unique_handle(new_fd));

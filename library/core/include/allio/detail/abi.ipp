@@ -1,11 +1,6 @@
-#pragma once
-
-#include <allio/abi.h>
-
 #include <system_error>
 
-namespace allio {
-namespace detail {
+namespace allio::detail {
 
 class abi_error_category : public std::error_category
 {
@@ -24,11 +19,15 @@ private:
 	static abi_error_category const instance;
 };
 
-} // namespace detail
+} // namespace allio::detail
 
-inline std::error_code make_abi_error_code(allio_abi_result const result)
+template<>
+struct std::is_error_code_enum<allio_abi_result>
 {
-	return std::error_code(static_cast<int>(result), detail::abi_error_category::get());
-}
+	static constexpr bool value = true;
+};
 
-} // namespace allio
+inline std::error_code make_error_code(allio_abi_result const result)
+{
+	return std::error_code(static_cast<int>(result), allio::detail::abi_error_category::get());
+}

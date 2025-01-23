@@ -358,8 +358,7 @@ struct async_operation<Multiplexer, directory_iterator_t, directory_iterator_t::
 				handler));
 		}
 
-		//TODO: Figure out why return true doesn't work here.
-		return vsm::result<bool>(h.stream_position != directory_stream_position::end_of_directory);
+		return h.stream_position != directory_stream_position::end_of_directory;
 	}
 
 	static io_result<R> notify(
@@ -397,8 +396,7 @@ struct async_operation<Multiplexer, directory_iterator_t, directory_iterator_t::
 				handler));
 		}
 
-		//TODO: Figure out why return true doesn't work here.
-		return vsm::result<bool>(h.stream_position != directory_stream_position::end_of_directory);
+		return h.stream_position != directory_stream_position::end_of_directory;
 	}
 
 	static void cancel(M& m, H const& h, C const& c, S& s)
@@ -464,8 +462,7 @@ struct async_operation<Multiplexer, directory_iterator_t, directory_iterator_t::
 
 			if (pointer != directory_stream_pointer::end_of_stream)
 			{
-				//TODO: Figure out why return true didn't work.
-				return vsm::result<bool>(true);
+				return true;
 			}
 		}
 		else
@@ -478,8 +475,8 @@ struct async_operation<Multiplexer, directory_iterator_t, directory_iterator_t::
 			//TODO: Figure out if there's a better growth strategy.
 			vsm_try_discard(h.storage.reserve(h.storage.size() * 3 / 2));
 		}
-		//TODO: Figure out why return true didn't work.
-		return vsm::result<bool>(false);
+
+		return false;
 	}
 
 #if 0

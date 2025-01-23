@@ -471,6 +471,7 @@ auto sync_wait(event_queue<MultiplexerHandle>& event_queue, Sender&& sender)
 struct sync_wait_t
 {
 	//TODO: Constrain using ex::sender_in
+	//TODO: Can the multiplexer be retrieved from the sender environment?
 	template<typename Multiplexer, ex::sender Sender>
 	/* discardable */ vsm_static_operator auto operator()(
 		Multiplexer&& multiplexer,

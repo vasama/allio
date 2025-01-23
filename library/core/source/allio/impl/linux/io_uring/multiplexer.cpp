@@ -1,13 +1,16 @@
 #include <allio/linux/detail/io_uring/multiplexer.hpp>
 
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/eventfd.hpp>
 #include <allio/impl/linux/io_uring.hpp>
 #include <allio/impl/linux/poll.hpp>
 #include <allio/impl/linux/timeout.hpp>
+#include <allio/impl/linux/version.hpp>
 #include <allio/linux/io_uring_record_context.hpp>
 
 #include <vsm/assert.h>
+#include <vsm/defer.hpp>
 #include <vsm/flags.hpp>
 #include <vsm/lazy.hpp>
 #include <vsm/numeric.hpp>
@@ -26,6 +29,13 @@ using namespace allio::linux;
 
 bool io_uring::is_supported()
 {
+	//TODO: This shouldn't really be here... Move to linux default multiplexer instead.
+	// The io_uring multiplexer requires at minimum Linux 5.5 for IORING_FEAT_NODROP.
+	if (get_kernel_version() < KERNEL_VERSION(5, 5, 0))
+	{
+		return false;
+	}
+
 	static constexpr uint8_t lazy_init_flag = 0x80;
 	static constexpr uint8_t supported_flag = 0x01;
 
@@ -70,10 +80,20 @@ static vsm::result<unique_mmap<T>> mmap(int const fd, uint64_t const offset, siz
 
 	if (addr == MAP_FAILED)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return vsm_lazy(unique_mmap<T>(reinterpret_cast<T*>(addr), mmap_deleter(size)));
+}
+
+static uint8_t get_cqe_skip_success_flag(io_uring_params const& setup)
+{
+	if (setup.features & IORING_FEAT_CQE_SKIP)
+	{
+		return IOSQE_CQE_SKIP_SUCCESS;
+	}
+
+	return 0;
 }
 
 static uint32_t* get_kernel_uint32(unique_byte_mmap const& mmap, size_t const offset)
@@ -97,7 +117,7 @@ _io_uring_multiplexer::_io_uring_multiplexer(
 	, m_cqe_size(get_cqe_size(setup))
 	, m_sqe_multiply_shift(vsm::truncating(std::countr_zero(m_sqe_size)))
 	, m_cqe_multiply_shift(vsm::truncating(std::countr_zero(m_cqe_size)))
-	, m_cqe_skip_success(0)
+	, m_cqe_skip_success_flag(get_cqe_skip_success_flag(setup))
 
 	, m_k_sq_produce(*get_kernel_uint32(m_sq_mmap, setup.sq_off.tail))
 	, m_k_sq_consume(*get_kernel_uint32(m_sq_mmap, setup.sq_off.head))
@@ -113,24 +133,16 @@ _io_uring_multiplexer::_io_uring_multiplexer(
 	, m_sq_release(m_sq_acquire)
 
 	, m_cq_size(setup.cq_entries)
-	, m_cq_free(m_cq_size)
 	, m_cq_consume(m_k_cq_produce.load(std::memory_order_relaxed))
-
-	, m_cancel_list_end(m_operation_list.end())
 {
 	if (setup.features & IORING_FEAT_EXT_ARG)
 	{
-		m_flags |= flags::enter_ext_arg;
+		m_has_enter_ext_arg = true;
 	}
 
 	if (setup.flags & IORING_SETUP_SQPOLL)
 	{
-		m_flags |= flags::kernel_thread;
-	}
-
-	if (setup.features & IORING_FEAT_CQE_SKIP)
-	{
-		m_cqe_skip_success = IOSQE_CQE_SKIP_SUCCESS;
+		m_has_kernel_thread = true;
 	}
 
 	for (uint32_t i = 0; i < m_sq_size; ++i)
@@ -139,10 +151,31 @@ _io_uring_multiplexer::_io_uring_multiplexer(
 	}
 }
 
+_io_uring_multiplexer::~_io_uring_multiplexer()
+{
+	if (m_registered_io_uring != -1)
+	{
+		io_uring_rsrc_update update =
+		{
+			.offset = static_cast<uint32_t>(m_registered_io_uring),
+		};
+
+		unrecoverable(vsm::discard_value(io_uring_register(
+			/* fd: */ -1,
+			IORING_UNREGISTER_RING_FDS,
+			&update,
+			/* nr_args: */ 1)));
+	}
+}
+
 vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 	create_parameters const& args) noexcept
 {
-	static constexpr uint32_t min_queue_entries = 32;
+	static constexpr uint32_t default_submission_queue_size = 32;
+
+	// This places an upper limit on the length of SQE chains which submission is guaranteed to
+	// succeed. If the chain is longer than the full length of the SQE ring, the operation fails.
+	static constexpr uint32_t min_submission_queue_size = 4;
 
 	// Round up to the next power of two no larger than 2^31.
 	auto const round_up_to_power_of_two = [](uint32_t const value) -> vsm::result<uint32_t>
@@ -150,24 +183,55 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 		auto const lz = std::countl_zero(value);
 		if (lz == 0 && (value & value - 1) != 0)
 		{
-			return vsm::unexpected(error::invalid_argument);
+			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
 		return static_cast<uint32_t>(1) << (31 - lz);
 	};
 
-	vsm_try(submission_queue_size, vsm::try_truncate<uint32_t>(
-		args.submission_queue_size,
-		error::invalid_argument));
-
-	vsm_try(completion_queue_size, vsm::try_truncate<uint32_t>(
-		args.completion_queue_size,
-		error::invalid_argument));
-
-	vsm_try(min_entries, round_up_to_power_of_two(std::max(
-		min_queue_entries,
-		std::max(submission_queue_size, completion_queue_size))));
 
 	io_uring_params setup = {};
+
+	uint32_t entries = default_submission_queue_size;
+
+	if (args.submission_queue_size != 0)
+	{
+		if (args.submission_queue_size <= min_submission_queue_size)
+		{
+			entries = min_submission_queue_size;
+		}
+		else
+		{
+			if (vsm::loses_precision<uint32_t>(args.submission_queue_size))
+			{
+				return vsm::unexpected(allio_error(error::invalid_argument));
+			}
+
+			vsm_try_assign(entries, round_up_to_power_of_two(
+				vsm::truncating(args.submission_queue_size)));
+		}
+	}
+
+	if (args.completion_queue_size != 0)
+	{
+		if (args.submission_queue_size != 0 &&
+			args.submission_queue_size > args.completion_queue_size)
+		{
+			return vsm::unexpected(allio_error(error::invalid_argument));
+		}
+
+		if (args.completion_queue_size >= entries * 2)
+		{
+			if (vsm::loses_precision<uint32_t>(args.completion_queue_size))
+			{
+				return vsm::unexpected(allio_error(error::invalid_argument));
+			}
+
+			vsm_try_assign(setup.cq_entries, round_up_to_power_of_two(
+				vsm::truncating(args.completion_queue_size)));
+
+			setup.flags |= IORING_SETUP_CQSIZE;
+		}
+	}
 
 	if (vsm::any_flags(args.options, io_uring_options::kernel_thread))
 	{
@@ -180,7 +244,13 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 		}
 	}
 
-	vsm_try(io_uring, io_uring_setup(min_entries, setup));
+	vsm_try(io_uring, io_uring_setup(entries, setup));
+
+	if ((setup.features & IORING_FEAT_NODROP) == 0)
+	{
+		// The nodrop feature is required. It is supported since Linux 5.5.
+		return vsm::unexpected(error::unsupported_operation);
+	}
 
 	struct ring_pair
 	{
@@ -223,6 +293,8 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 		IORING_OFF_SQES,
 		setup.sq_entries * get_sqe_size(setup)));
 
+	int const kernel_version = get_kernel_version();
+
 	auto multiplexer = std::make_unique<_io_uring_multiplexer>(
 		setup,
 		vsm_move(io_uring),
@@ -230,20 +302,49 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 		vsm_move(rings.cq_ring),
 		vsm_move(sq_data));
 
-	vsm_try_assign(multiplexer->m_wake_event, eventfd(EFD_CLOEXEC | EFD_NONBLOCK));
-
-	// Upon construction of the io_uring, a multishot poll operation is submitted on the wake event.
-	// Any time the event enters a signaled state, the completion wakes up the poll thread.
+	if (kernel_version >= KERNEL_VERSION(5, 18, 0) &&
+		vsm::any_flags(args.options, io_uring_options::register_ring))
 	{
-		record_context ctx(*multiplexer);
-		vsm_try_discard(ctx.push(
+		int const io_uring_fd = multiplexer->m_io_uring.get();
+
+		io_uring_rsrc_update update =
+		{
+			.offset = static_cast<uint32_t>(-1),
+			//TODO: Check if the indireciton is correct. The docs are confusing.
+			.data = reinterpret_cast<uintptr_t>(&io_uring_fd),
+		};
+
+		int const r = _io_uring_register(
+			/* fd: */ -1,
+			IORING_REGISTER_RING_FDS,
+			&update,
+			/* nr_args: */ 1);
+
+		if (r != -1)
+		{
+			multiplexer->m_registered_io_uring = static_cast<int>(update.offset);
+		}
+	}
+
+	if (kernel_version < KERNEL_VERSION(6, 12, 0))
+	{
+		// Upon construction of the io_uring, a multishot poll operation is submitted on the wake
+		// event. Any time the event becomes signaled, the completion wakes up the poll thread.
+
+		vsm_try_assign(multiplexer->m_wake_event, eventfd(EFD_CLOEXEC | EFD_NONBLOCK));
+
+		_io_uring_multiplexer::record_context ctx(*multiplexer);
+
+		vsm_try_ptr(sqe, ctx.push());
+		sqe =
 		{
 			.opcode = IORING_OP_POLL_ADD,
 			.fd = multiplexer->m_wake_event.get(),
 			.len = IORING_POLL_ADD_MULTI,
 			.poll_events = POLLIN,
-		}));
-		vsm_try_void(ctx.commit());
+		};
+
+		ctx.commit();
 	}
 
 	return vsm::result<io_uring_multiplexer>(
@@ -252,9 +353,7 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 }
 
 
-vsm::result<void> _io_uring_multiplexer::attach_platform_handle(
-	native_platform_handle const handle,
-	connector_type& c)
+vsm::result<void> _io_uring_multiplexer::attach_fd(int const fd, connector_type& c)
 {
 	//TODO: Implement registered files.
 	c.file_index = -1;
@@ -262,11 +361,9 @@ vsm::result<void> _io_uring_multiplexer::attach_platform_handle(
 	return {};
 }
 
-vsm::result<void> _io_uring_multiplexer::detach_platform_handle(
-	native_platform_handle const handle,
-	connector_type& c)
+vsm::result<void> _io_uring_multiplexer::detach_fd(int const fd, connector_type& c)
 {
-	if (handle == native_platform_handle::null)
+	if (fd == -1)
 	{
 		return vsm::unexpected(error::handle_cannot_be_detached);
 	}
@@ -274,40 +371,17 @@ vsm::result<void> _io_uring_multiplexer::detach_platform_handle(
 	return {};
 }
 
-vsm::result<void> _io_uring_multiplexer::commit()
-{
-	if (vsm::any_flags(m_flags, flags::auto_submit))
-	{
-		release_sqes();
-
-		unsigned int enter_to_submit = 0;
-		unsigned int enter_flags = 0;
-
-		if (has_kernel_thread())
-		{
-			enter_flags |= IORING_ENTER_SQ_WAKEUP;
-		}
-		else
-		{
-			enter_to_submit = static_cast<unsigned>(-1);
-		}
-
-		vsm_try_discard(io_uring_enter(
-			m_io_uring.get(),
-			enter_to_submit,
-			/* min_complete: */ 0,
-			enter_flags,
-			/* arg: */ nullptr));
-	}
-
-	return {};
-}
 
 bool _io_uring_multiplexer::is_kernel_thread_inactive() const
 {
 	return m_k_flags.load(std::memory_order_acquire) & IORING_SQ_NEED_WAKEUP;
 }
 
+
+bool _io_uring_multiplexer::has_available_sqes() const
+{
+	return m_sq_acquire != m_sq_consume;
+}
 
 bool _io_uring_multiplexer::has_pending_sqes() const
 {
@@ -320,14 +394,87 @@ void _io_uring_multiplexer::release_sqes()
 	m_sq_release = m_sq_acquire;
 }
 
-void _io_uring_multiplexer::acquire_cqes()
+bool _io_uring_multiplexer::acquire_cqes()
 {
-	m_cq_produce = m_k_cq_produce.load(std::memory_order_acquire);
+	uint32_t const old_cq_produce = m_cq_produce;
+	uint32_t const new_cq_produce = m_k_cq_produce.load(std::memory_order_acquire);
+
+	m_cq_produce = new_cq_produce;
+	return new_cq_produce != old_cq_produce;
 }
 
 bool _io_uring_multiplexer::has_pending_cqes() const
 {
 	return m_cq_consume != m_cq_produce;
+}
+
+void _io_uring_multiplexer::reap_cqe(io_uring_cqe const& cqe)
+{
+	if (cqe.user_data == 0)
+	{
+		return;
+	}
+
+	auto const user_data = vsm::reinterpret_pointer_cast<user_data_ptr>(cqe.user_data);
+	vsm_assert(user_data.ptr() != nullptr);
+
+	auto const tag = user_data.tag();
+
+	// Emulate IOSQE_CQE_SKIP_SUCCESS for CQEs canceled via links, if requested. This avoids needing
+	// to delay completion of the operation until all linked CQEs still referencing their associated
+	// io_slot have been reaped.
+	if (cqe.res == -ECANCELED && vsm::any_flags(tag, user_data_tag::cqe_skip_cancel))
+	{
+		return;
+	}
+
+	io_status_type status =
+	{
+		.slot = nullptr,
+		.result = cqe.res,
+		.flags = cqe.flags,
+	};
+
+	operation_type* operation;
+
+	if (vsm::any_flags(tag, user_data_tag::io_slot))
+	{
+		io_slot* const slot = static_cast<io_slot*>(user_data.ptr());
+
+		// Emulate IOSQE_CQE_SKIP_SUCCESS for successful operations.
+		if (status.result >= 0 && vsm::any_flags(slot->m_flags, io_slot_flags::cqe_skip_success))
+		{
+			return;
+		}
+
+		status.slot = slot;
+
+		operation = slot->get_operation();
+	}
+	else
+	{
+		operation = static_cast<operation_type*>(user_data.ptr());
+	}
+
+	io_handler_ptr handler = operation->load(std::memory_order_acquire);
+	if (handler.tag() != io_handler_tag::cancel_pending)
+	{
+		while (true)
+		{
+			(void)flush_cancel_queue();
+
+			handler = operation->load(std::memory_order_acquire);
+			if (handler.tag() != io_handler_tag::cancel_pending)
+			{
+				break;
+			}
+
+			std::this_thread::yield();
+		}
+	}
+
+	// The CQE becomes potentially invalid upon the call to notify.
+	handler->notify(vsm_move(status));
 }
 
 bool _io_uring_multiplexer::reap_all_cqes()
@@ -359,150 +506,304 @@ bool _io_uring_multiplexer::reap_all_cqes()
 	return true;
 }
 
-void _io_uring_multiplexer::reap_cqe(io_uring_cqe const& cqe)
+void _io_uring_multiplexer::submit_async_cancel(user_data_ptr const user_data)
 {
-	if (vsm::no_flags(cqe.flags, IORING_CQE_F_MORE))
+	_io_uring_multiplexer::record_context ctx(*this);
+
+	if (auto const r = ctx.push())
 	{
-		// Whatever happens, after this function returns the CQE is free to be used again.
-		++m_cq_free;
+		**r =
+		{
+			.opcode = IORING_OP_ASYNC_CANCEL,
+			.addr = vsm::reinterpret_pointer_cast<uintptr_t>(user_data),
+		};
+
+		ctx.commit();
 	}
-
-	if (cqe.user_data == 0)
+	else
 	{
-		return;
+		unrecoverable_error(r.error());
 	}
+}
 
-	auto const user_data = vsm::reinterpret_pointer_cast<user_data_ptr>(cqe.user_data);
-	vsm_assert(user_data.ptr() != nullptr);
+void _io_uring_multiplexer::cancel_io_externally_synchronized(
+	operation_type& operation,
+	user_data_ptr const user_data)
+{
+	io_handler_ptr handler = operation.load(std::memory_order_acquire);
 
-	auto const tag = user_data.tag();
-
-	// Emulate IOSQE_CQE_SKIP_SUCCESS for CQEs canceled via links, if requested. This avoids needing
-	// to delay completion of the operation until all linked CQEs still referencing their associated
-	// io_slot have been reaped.
-	if (cqe.res == -ECANCELED && vsm::any_flags(tag, user_data_tag::cqe_skip_cancel))
+	/**/ if (handler.tag() == io_handler_tag::not_cancelled)
 	{
-		return;
-	}
+		//TODO: Explain why fetch_or is used.
+		handler = operation.fetch_or(io_handler_tag::cancel_submitted, std::memory_order_acq_rel);
 
-	io_status_type status =
-	{
-		.slot = nullptr,
-		.result = cqe.res,
-		.flags = cqe.flags,
-	};
-
-	operation_type* operation = nullptr;
-
-	if (vsm::any_flags(tag, user_data_tag::io_slot))
-	{
-		status.slot = static_cast<io_slot*>(user_data.ptr());
-
-		// Emulate IOSQE_CQE_SKIP_SUCCESS for successful operations.
-		if (status.result >= 0 && status.slot->m_cqe_skip_success)
+		// Another thread could have won the race to modify the tag, in which case it must now be in
+		// the cancel_pending state. The other thread will push the operation into the cancel queue.
+		if (handler.tag() == io_handler_tag::cancel_pending)
 		{
 			return;
 		}
 
-		operation = status.slot->get_operation();
+		vsm_assert(handler.tag() == io_handler_tag::not_cancelled);
+	}
+	else if (handler.tag() == io_handler_tag::cancel_flushing)
+	{
+		operation.store(
+			{ handler.ptr(), io_handler_tag::cancel_submitted },
+			std::memory_order_relaxed);
 	}
 	else
-	{
-		operation = static_cast<operation_type*>(user_data.ptr());
-	}
-
-	vsm_assert(operation->get_handler());
-
-	// The CQE is invalidated when the handler is notified, so it is important not to pass any
-	// references to the CQE to the handler.
-	operation->get_handler()->notify(vsm_move(status));
-}
-
-vsm::result<void> _io_uring_multiplexer::submit_async_cancel(user_data_ptr const user_data)
-{
-	record_context ctx(*this);
-	vsm_try_discard(ctx.push(
-	{
-		.opcode = IORING_OP_ASYNC_CANCEL,
-		.addr = vsm::reinterpret_pointer_cast<uintptr_t>(user_data),
-	}));
-	return ctx.commit();
-}
-
-vsm::result<void> _io_uring_multiplexer::request_sync_cancel(user_data_ptr const user_data)
-{
-	io_uring_sync_cancel_reg reg =
-	{
-		.addr = vsm::reinterpret_pointer_cast<uintptr_t>(user_data),
-	};
-
-	return io_uring_register(
-		m_io_uring.get(),
-		IORING_REGISTER_SYNC_CANCEL,
-		&reg,
-		/* nr_args: */ 1);
-}
-
-void _io_uring_multiplexer::cancel_io(operation_type& operation, user_data_ptr const user_data)
-{
-	static constexpr auto cancel_requested = std::to_underlying(io_handler_tag::cancel_requested);
-
-	// Set the cancel_requested flag, or return if it has already been set.
-	if (vsm::atomic_ref const handler(operation.m_handler);
-		(cancel_requested & handler.load(std::memory_order_acquire)) ||
-		(cancel_requested & handler.fetch_or(cancel_requested, std::memory_order_acq_rel)))
 	{
 		return;
 	}
 
-	if (is_externally_synchronized())
-	{
-		auto const r = submit_async_cancel(user_data);
+	submit_async_cancel(user_data);
+}
 
-		if (!r)
-		{
-			//TODO: Handle errors other than SQE exhaustion?
-			vsm_assert(r.error() == make_error_code(error::device_or_resource_busy));
+void _io_uring_multiplexer::cancel_io_internally_synchronized(operation_type& operation)
+{
+	io_handler_ptr handler = operation.load(std::memory_order_acquire);
 
-			m_cancel_list.push_back(operation);
-		}
-	}
-	else if (vsm::any_flags(m_flags, flags::sync_cancel))
+	if (handler.tag() != io_handler_tag::not_cancelled)
 	{
-		unrecoverable(request_sync_cancel(user_data));
+		return;
 	}
-	else if (m_cancel_mpsc_queue.push_back(operation))
+
+	(void)operation.compare_exchange_strong(
+		handler,
+		{ handler.ptr(), io_handler_tag::cancel_pending },
+		std::memory_order_release,
+		std::memory_order_relaxed);
+
+	if (handler.tag() != io_handler_tag::not_cancelled)
 	{
-		if (!m_cancel_pending.load(std::memory_order_acquire) &&
-			!m_cancel_pending.exchange(true, std::memory_order_acq_rel))
+		return;
+	}
+
+	if (m_shared.cancel_queue.push_back(operation))
+	{
+		// Checking for the cancel pending flag avoids doing a syscall when the cancellation of
+		// another operation has already woken up the polling thread and it has yet to react.
+		if (!m_shared.cancel_pending.load(std::memory_order_acquire) &&
+			!m_shared.cancel_pending.exchange(true, std::memory_order_acq_rel))
 		{
 			wake_poll_thread();
 		}
 	}
 }
 
+void _io_uring_multiplexer::cancel_io(operation_type& operation, user_data_ptr const user_data)
+{
+	if (is_externally_synchronized())
+	{
+		cancel_io_externally_synchronized(operation, user_data);
+	}
+	else
+	{
+		cancel_io_internally_synchronized(operation);
+	}
+}
+
 void _io_uring_multiplexer::wake_poll_thread()
 {
-	if (!m_wake_requested.load(std::memory_order_acquire) &&
-		!m_wake_requested.exchange(true, std::memory_order_acq_rel))
+	if (!m_shared.wake_requested.load(std::memory_order_acquire) &&
+		!m_shared.wake_requested.exchange(true, std::memory_order_acq_rel))
 	{
-		// Signal the continuously polled wake event in order to wake up the poll thread if it
-		// happens to be waiting on io_uring_enter.
-		unrecoverable(eventfd_signal(m_wake_event.get()));
+		if (m_wake_event)
+		{
+			// Signal the continuously polled wake event in order to wake up the poll thread if it
+			// happens to be waiting on io_uring_enter.
+			unrecoverable(eventfd_signal(m_wake_event.get()));
+		}
+		else
+		{
+			// Wake the polling thread by directly sending a completion to the ring.
+
+			io_uring_sqe sqe =
+			{
+				.fd = m_io_uring.get(),
+			};
+
+			unrecoverable(vsm::discard_value(io_uring_register(
+				/* fd: */ -1,
+				IORING_REGISTER_SEND_MSG_RING,
+				&sqe,
+				/* nr_args: */ 1)));
+		}
 	}
 }
 
 void _io_uring_multiplexer::wake_poll_thread_reset()
 {
-	if (m_wake_requested.load(std::memory_order_acquire))
+	if (m_shared.wake_requested.load(std::memory_order_acquire))
 	{
 		do
 		{
 			// Before resetting the atomic flag, the event object must be reset.
 			unrecoverable(vsm::discard_value(eventfd_reset(m_wake_event.get())));
 		}
-		while (m_wake_requested.exchange(false, std::memory_order_acq_rel));
+		while (m_shared.wake_requested.exchange(false, std::memory_order_acq_rel));
 	}
+}
+
+bool _io_uring_multiplexer::flush_cancel_queue()
+{
+	vsm_assert(is_externally_synchronized());
+
+	if (!m_shared.cancel_pending.load(std::memory_order_acquire))
+	{
+		return false;
+	}
+
+	do
+	{
+		// Popping the queue elements in reversed order avoids reversing the list eagerly.
+		auto list = m_shared.cancel_queue.pop_all_reversed();
+
+		auto beg = list.begin();
+		auto const end = list.end();
+
+		while (beg != end)
+		{
+			operation_type& operation = *beg++;
+
+			// TODO: Explain why relaxed is okay here.
+			io_handler_ptr handler = operation.load(std::memory_order_relaxed);
+
+			// The handler tag must be cancel_pending before the operation can end up in the queue.
+			vsm_assert(handler.tag() == io_handler_tag::cancel_pending);
+
+			operation.store(
+				{ handler.ptr(), io_handler_tag::cancel_flushing },
+				std::memory_order_relaxed);
+
+			handler->cancel();
+
+			handler = operation.load(std::memory_order_acquire);
+			if (handler.tag() == io_handler_tag::cancel_flushing)
+			{
+				operation.store(
+					{ handler.ptr(), io_handler_tag::cancel_submitted },
+					std::memory_order_relaxed);
+			}
+		}
+	}
+	while (m_shared.cancel_pending.exchange(false, std::memory_order_acq_rel));
+
+	return true;
+}
+
+vsm::result<int> _io_uring_multiplexer::enter(
+	unsigned const to_submit,
+	unsigned min_complete,
+	unsigned flags,
+	deadline const deadline)
+{
+	__kernel_timespec timespec;
+	io_uring_getevents_arg arg = {};
+	io_uring_getevents_arg* p_arg = nullptr;
+
+	if (deadline != deadline::never())
+	{
+		if (deadline == deadline::instant())
+		{
+			min_complete = 0;
+		}
+		else if (m_has_enter_ext_arg)
+		{
+			// If IORING_FEAT_EXT_ARG is available, a timeout can be specified using the
+			// extended io_uring_getevents_arg parameter structure.
+			timespec = make_timespec<__kernel_timespec>(deadline);
+			arg.ts = reinterpret_cast<uintptr_t>(&timespec);
+			flags |= IORING_ENTER_EXT_ARG;
+			p_arg = &arg;
+		}
+		else if (min_complete != 0)
+		{
+			// Submitting a timeout operation is possible, but the timespec lifetime and
+			// cancellation required make it very complicated. Instead we'll just fall back to
+			// polling the io_uring object.
+			vsm_try_discard(linux::poll(m_io_uring.get(), POLLIN, deadline));
+
+			min_complete = 1;
+		}
+	}
+
+	int io_uring_fd = m_io_uring.get();
+	if (m_registered_io_uring != -1)
+	{
+		io_uring_fd = m_registered_io_uring;
+		flags |= IORING_ENTER_REGISTERED_RING;
+	}
+
+	int const r = _io_uring_enter(
+		io_uring_fd,
+		to_submit,
+		min_complete,
+		flags,
+		p_arg,
+		sizeof(arg));
+
+	if (r == -1)
+	{
+		switch (int const e = errno)
+		{
+		case EAGAIN:
+			return EAGAIN;
+
+		case ETIME:
+			return ETIME;
+
+		case EBADR:
+			// The kernel has dropped a completion despite IORING_FEAT_NODROP. There is no possible
+			// way for the library to recover from this condition.
+			std::abort();
+
+		default:
+			return vsm::unexpected(allio_error(static_cast<system_error>(e)));
+		}
+	}
+
+	//TODO: Do we need to handle consumed if kernel thread is not being used?
+
+	m_sq_consume = m_k_sq_consume.load(std::memory_order_acquire);
+
+	return 0;
+}
+
+vsm::result<void> _io_uring_multiplexer::wait_for_sqe(deadline const deadline)
+{
+	unsigned enter_flags = 0;
+
+	if (has_pending_sqes())
+	{
+		release_sqes();
+	}
+
+	if (m_has_kernel_thread)
+	{
+		enter_flags |= IORING_ENTER_SQ_WAIT;
+
+		if (is_kernel_thread_inactive())
+		{
+			enter_flags |= IORING_ENTER_SQ_WAKEUP;
+		}
+	}
+
+	vsm_try(error, enter(
+		/* to_submit: */ static_cast<unsigned>(-1),
+		/* min_complete: */ 0,
+		enter_flags,
+		deadline));
+
+	if (error)
+	{
+		//TODO: Handle EAGAIN?
+
+		return vsm::unexpected(allio_error(static_cast<system_error>(error)));
+	}
+
+	return {};
 }
 
 namespace {
@@ -522,7 +823,7 @@ class optional_scoped_synchronization
 	std::optional<scoped_synchronization<ExternallySynchronized>> m_object;
 
 public:
-	optional_scoped_synchronization(Externallysynchronized& object)
+	optional_scoped_synchronization(ExternallySynchronized& object)
 	{
 		if (!object.is_externally_synchronized())
 		{
@@ -533,7 +834,7 @@ public:
 
 } // namespace
 
-vsm::result<bool> _io_uring_multiplexer::poll(deadline_t const& args)
+vsm::result<bool> _io_uring_multiplexer::poll(poll_parameters const& args)
 {
 	optional_scoped_synchronization const synchronization(*this);
 
@@ -544,45 +845,16 @@ vsm::result<bool> _io_uring_multiplexer::poll(deadline_t const& args)
 	unsigned int enter_min_complete = 0;
 	unsigned int enter_flags = 0;
 
-	if (m_cancel_pending.load(std::memory_order_acquire))
-	{
-		do
-		{
-			// Popping the queue elements in reversed order avoids reversing the list eagerly.
-			auto forward_list = m_cancel_mpsc_queue.pop_all_reversed();
+	bool made_progress = false;
 
-			// Insert the forward list elements into the cancel list in their original order:
-			while (!forward_list.empty())
-			{
-				auto& operation = forward_list.pop_front();
-				m_operation_list.insert_before(m_cancel_list_end, operation);
-			}
-		}
-		while (m_cancel.exchange(false, std::memory_order_acq_rel));
-	}
+	made_progress |= flush_cancel_queue();
 
-	while (!m_operation_list.empty())
-	{
-		auto& operation = m_operation_list.pop_front();
-		auto const handler = operation.get_handler();
-
-		bool const made_progress = vsm::any_flags(handler.tag(), io_handler_tag::cancel_requested)
-			? handler->cancel()
-			: handler->submit();
-
-		if (!made_progress)
-		{
-			break;
-		}
-	}
-
-	// If the auto submit mode is not enabled, submit all pending SQEs now.
-	if (vsm::no_flags(m_flags, flags::auto_submit) && has_pending_sqes())
+	if (has_pending_sqes())
 	{
 		// Release ready SQEs to the kernel.
 		release_sqes();
 
-		if (has_kernel_thread())
+		if (m_has_kernel_thread)
 		{
 			if (is_kernel_thread_inactive())
 			{
@@ -596,69 +868,44 @@ vsm::result<bool> _io_uring_multiplexer::poll(deadline_t const& args)
 			enter_to_submit = static_cast<unsigned>(-1);
 			enter_reason |= reason::submit_sqes;
 		}
+
+		made_progress = true;
 	}
 
 	// Check for new CQEs produced by the kernel. If there are any, entering will not be necessary.
 	// In any case, we want to enter before reaping the completions in order to prioritize
-	// submissions.
-	acquire_cqes();
-
-	// If there are no pending CQEs, enter the kernel and wait.
-	if (!has_pending_cqes())
+	// submissions. If there are no pending CQEs, enter the kernel and wait.
+	if (!acquire_cqes() && !has_pending_cqes())
 	{
 		enter_min_complete = 1;
+		//TODO: Should this flag always be set?
 		enter_flags |= IORING_ENTER_GETEVENTS;
 		enter_reason |= reason::wait_for_cqes;
 	}
 
 	if (enter_reason != reason::none)
 	{
-		__kernel_timespec enter_timespec;
-		io_uring_getevents_arg enter_arg = {};
-		io_uring_getevents_arg* p_enter_arg = nullptr;
+		vsm_try(error, enter(enter_to_submit, enter_min_complete, enter_flags, args.deadline));
 
-		if (args.deadline != deadline::never())
+		switch (error)
 		{
-			if (args.deadline == deadline::instant())
-			{
-				enter_min_complete = 0;
-			}
-			else if (vsm::any_flags(m_flags, flags::enter_ext_arg))
-			{
-				// If IORING_FEAT_EXT_ARG is available, a timeout can be specified using the
-				// extended io_uring_getevents_arg parameter structure.
-				enter_flags |= IORING_ENTER_EXT_ARG;
-				enter_timespec = make_timespec<__kernel_timespec>(args.deadline);
-				enter_arg.ts = reinterpret_cast<uintptr_t>(&enter_timespec);
-				p_enter_arg = &enter_arg;
-			}
-			else
-			{
-				enter_min_complete = 0;
+		case 0:
+			break;
 
-				// Submitting a timeout operation is possible, but the timespec lifetime and
-				// cancellation required make it very complicated. Instead we'll just fall back to
-				// polling the io_uring object.
-				vsm_try_discard(linux::poll(m_io_uring.get(), POLLIN, args.deadline));
+		case EAGAIN:
+			break;
 
-				//TODO: Also specify POLLOUT depending on the multiplexer state?
-			}
+		case ETIME:
+			return made_progress;
+
+		default:
+			return vsm::unexpected(allio_error(static_cast<system_error>(error)));
 		}
 
-		vsm_try(consumed, io_uring_enter(
-			m_io_uring.get(),
-			enter_to_submit,
-			enter_min_complete,
-			enter_flags,
-			p_enter_arg));
-
-		//TODO: Do we need to handle consumed if kernel thread is not being used?
-		(void)consumed;
-
 		// Check for new CQEs produced by the kernel.
-		acquire_cqes();
+		made_progress |= acquire_cqes();
 	}
 
 	// Finally, reap the pending CQEs, invoking their notify callbacks if necessary.
-	return reap_all_cqes();
+	return made_progress | reap_all_cqes();
 }

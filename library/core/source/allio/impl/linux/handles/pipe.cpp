@@ -22,7 +22,7 @@ static vsm::result<pipe_pair> _pipe(int const flags)
 	int fd[2];
 	if (pipe2(fd, flags) == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return vsm_lazy(pipe_pair

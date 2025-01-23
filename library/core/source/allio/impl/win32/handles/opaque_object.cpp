@@ -18,7 +18,7 @@ vsm::result<void> opaque_object_t::poll(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	allio_abi_result const result = h.object->functions->notify(
@@ -27,7 +27,7 @@ vsm::result<void> opaque_object_t::poll(
 
 	if (result != allio_abi_result_success)
 	{
-		return vsm::unexpected(make_abi_error_code(result));
+		return vsm::unexpected(result);
 	}
 
 	return {};

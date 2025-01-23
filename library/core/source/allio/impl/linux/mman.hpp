@@ -29,7 +29,7 @@ inline vsm::result<detail::unique_mmap<void>> mmap(
 
 	if (base == MAP_FAILED)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return vsm_lazy(detail::unique_mmap<void>(detail::mmap_view<void>(base, size)));
@@ -42,7 +42,7 @@ inline vsm::result<void> mprotect(
 {
 	if (::mprotect(base, size, protection) == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 	return {};
 }
@@ -54,7 +54,7 @@ inline vsm::result<void> madvise(
 {
 	if (::madvise(base, size, advice) == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 	return {};
 }

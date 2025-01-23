@@ -175,7 +175,7 @@ vsm::result<handle_with_flags> win32::create_file(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	//TODO: Make sure the synchronous flag is set.
@@ -320,7 +320,7 @@ static vsm::result<void, error_code_with_info<bool>> query_file_name_information
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 #else
 	DWORD const name_size = GetFinalPathNameByHandleW(
@@ -331,7 +331,7 @@ static vsm::result<void, error_code_with_info<bool>> query_file_name_information
 
 	if (name_size == 0 || name_size > file_name_information_buffer_size)
 	{
-		system_error const e = get_last_error();
+		system_error const e = allio_error(get_last_error());
 		return vsm::unexpected(error_code_with_info<bool>(
 			e,
 			e == static_cast<system_error>(ERROR_PATH_NOT_FOUND)));
@@ -463,7 +463,7 @@ static vsm::result<handle_with_flags> open_anonymous_file(open_parameters const&
 			//TODO: Fall back to non-posix semantics or at least
 			//      attempt to delete the unique file now.
 
-			return vsm::unexpected(static_cast<kernel_error>(status));
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
 	}
 
@@ -518,7 +518,7 @@ static vsm::result<FILE_ID_INFO> get_file_id_info(HANDLE const handle)
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return information;

@@ -62,3 +62,7 @@ typedef allio_abi_object_functions;
 #ifdef __cplusplus
 } // extern "C"
 #endif
+
+#ifdef __cplusplus
+#	include <allio/detail/abi.ipp>
+#endif

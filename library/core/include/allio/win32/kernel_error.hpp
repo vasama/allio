@@ -37,11 +37,6 @@ inline std::error_code make_error_code(kernel_error const error)
 	return std::error_code(static_cast<int>(error), detail::kernel_error_category::get());
 }
 
-inline std::error_category const& nt_category()
-{
-	return detail::kernel_error_category::get();
-}
-
 template<typename T>
 using kernel_result = vsm::result<T, kernel_error>;
 

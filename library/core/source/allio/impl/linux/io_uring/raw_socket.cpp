@@ -18,6 +18,38 @@ using C = async_connector_t<M, raw_socket_t>;
 using connect_s = async_operation_t<M, raw_socket_t, connect_t>;
 using connect_a = io_parameters_t<raw_socket_t, connect_t>;
 
+static io_result<void> _submit_connect(
+	M& m,
+	H& h,
+	C& c,
+	connect_s& s,
+	connect_a const& a)
+{
+	posix::socket_address_union& addr = get_address(s.addr_storage);
+
+	io_uring_multiplexer::record_context ctx(m, a.deadline);
+
+	vsm_try_ptr(sqe, ctx.push());
+
+	sqe =
+	{
+		.opcode = IORING_OP_CONNECT,
+		.fd = s.socket.get(),
+		.off = s.addr_size,
+		.addr = reinterpret_cast<uintptr_t>(&addr),
+		.user_data = ctx.get_user_data(s),
+	};
+
+	if (a.deadline != deadline::never())
+	{
+		vsm_try_void(ctx.link_timeout(s.timeout.set(a.deadline)));
+	}
+
+	ctx.commit();
+
+	return vsm::unexpected(io_notify_status::submitted);
+}
+
 io_result<void> connect_s::submit(
 	M& m,
 	H& h,
@@ -27,8 +59,7 @@ io_result<void> connect_s::submit(
 	io_handler<M>& handler)
 {
 	posix::socket_address_union& addr = new_address(s.addr_storage);
-
-	vsm_try(addr_size, posix::socket_address::make(a.endpoint, addr));
+	vsm_try_assign(s.addr_size, posix::socket_address::make(a.endpoint, addr));
 	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_STREAM));
 
 	vsm_try_bind((socket, flags), posix::create_socket(
@@ -37,39 +68,21 @@ io_result<void> connect_s::submit(
 		protocol,
 		a.flags));
 
-	io_uring_multiplexer::record_context ctx(m);
-
-	vsm_try_discard(ctx.push(
-	{
-		.opcode = IORING_OP_CONNECT,
-		.fd = socket.get(),
-		.off = addr_size,
-		.addr = reinterpret_cast<uintptr_t>(&addr),
-		.user_data = ctx.get_user_data(s),
-	}));
-
-	if (a.deadline != deadline::never())
-	{
-		vsm_try_void(ctx.link_timeout(s.timeout.set(a.deadline)));
-	}
-
-	s.set_handler(handler);
-	vsm_try_void(ctx.commit());
-
-	s.socket = unique_wrapped_socket(posix::wrap_socket(socket.release()));
-
 	// The POSIX implementation doesn't have any socket flags.
 	vsm_assert(flags == handle_flags::none);
 
-	return io_pending(error::operation_pending);
+	s.socket = vsm_move(socket);
+
+	s.set_handler(handler);
+	return _submit_connect(m, h, c, s, a);
 }
 
 io_result<void> connect_s::notify(
-	M&,
+	M& m,
 	H& h,
-	C&,
+	C& c,
 	connect_s& s,
-	connect_a const&,
+	connect_a const& a,
 	io_handler<M>&,
 	M::io_status_type const status)
 {
@@ -78,7 +91,7 @@ io_result<void> connect_s::notify(
 
 	if (status.result < 0)
 	{
-		return vsm::unexpected(static_cast<system_error>(-status.result));
+		return vsm::unexpected(allio_error(static_cast<system_error>(-status.result)));
 	}
 
 	h = H
@@ -89,7 +102,7 @@ io_result<void> connect_s::notify(
 			{
 				object_t::flags::not_null,
 			},
-			s.socket.release(),
+			wrap_handle(s.socket.release()),
 		}
 	};
 
@@ -98,62 +111,75 @@ io_result<void> connect_s::notify(
 
 void connect_s::cancel(M& m, H const&, C const&, S& s)
 {
-	m.cancel_io(s);
+	(void)m.cancel_io(s);
 }
 
 
 //TODO: Detect the iovec layout automatically.
 static constexpr auto layout = new_io_buffer_layout::data_size;
 
-using read_t = byte_io::stream_read_t;
-using read_s = async_operation_t<M, raw_socket_t, read_t>;
-using read_a = io_parameters_t<raw_socket_t, read_t>;
+using recv_t = byte_io::stream_read_t;
+using recv_s = async_operation_t<M, raw_socket_t, recv_t>;
+using recv_a = io_parameters_t<raw_socket_t, recv_t>;
 
-io_result<size_t> read_s::submit(
+static io_result<size_t> _submit_recv(
 	M& m,
 	H const& h,
 	C const& c,
-	read_s& s,
-	read_a const& a,
-	io_handler<M>& handler)
+	recv_s& s,
+	recv_a const& a)
 {
-	vsm_try(buffers, get_io_buffers(s.buffers_storage, a.buffers, layout));
+	auto const buffers = get_io_buffers_unchecked(s.buffers_storage, a.buffers, layout);
 
-	vsm_try(buffers_size, vsm::try_truncate<uint32_t>(
-		buffers.buffers_size,
-		error::invalid_argument));
-
-	io_uring_multiplexer::record_context ctx(m);
-
+	io_uring_multiplexer::record_context ctx(m, a.deadline);
 	auto const [fd, fd_flags] = ctx.get_fd(c, h.platform_handle);
 
-	vsm_try_discard(ctx.push(
+	vsm_try_ptr(sqe, ctx.push());
+
+	sqe =
 	{
 		.opcode = IORING_OP_READV,
 		.flags = fd_flags,
 		.fd = fd,
 		.addr = reinterpret_cast<uintptr_t>(buffers.buffers_data),
-		.len = buffers_size,
+		.len = vsm::truncating(buffers.buffers_size),
 		.user_data = ctx.get_user_data(s),
-	}));
+	};
 
 	if (a.deadline != deadline::never())
 	{
 		vsm_try_void(ctx.link_timeout(s.timeout.set(a.deadline)));
 	}
 
-	s.set_handler(handler);
-	vsm_try_void(ctx.commit());
+	ctx.commit();
 
-	return io_pending(error::operation_pending);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
-io_result<size_t> read_s::notify(
-	M&,
+io_result<size_t> recv_s::submit(
+	M& m,
 	H const& h,
-	C const&,
-	read_s& s,
-	read_a const& a,
+	C const& c,
+	recv_s& s,
+	recv_a const& a,
+	io_handler<M>& handler)
+{
+	vsm_try(buffers, get_io_buffers(s.buffers_storage, a.buffers, layout));
+
+	vsm_try_discard(vsm::try_truncate<uint32_t>(
+		buffers.buffers_size,
+		error::invalid_argument));
+
+	s.set_handler(handler);
+	return _submit_recv(m, h, c, s, a);
+}
+
+io_result<size_t> recv_s::notify(
+	M& m,
+	H const& h,
+	C const& c,
+	recv_s& s,
+	recv_a const& a,
 	io_handler<M>&,
 	M::io_status_type const status)
 {
@@ -162,7 +188,7 @@ io_result<size_t> read_s::notify(
 
 	if (status.result < 0)
 	{
-		return vsm::unexpected(static_cast<system_error>(-status.result));
+		return vsm::unexpected(allio_error(static_cast<system_error>(-status.result)));
 	}
 
 	if (status.result == 0 && !io_buffers_is_empty(a.buffers))
@@ -173,61 +199,74 @@ io_result<size_t> read_s::notify(
 	return static_cast<size_t>(status.result);
 }
 
-void read_s::cancel(M& m, H const& h, C const&, read_s& s)
+void recv_s::cancel(M& m, H const& h, C const&, recv_s& s)
 {
-	m.cancel_io(s);
+	(void)m.cancel_io(s);
 }
 
 
-using write_t = byte_io::stream_write_t;
-using write_s = async_operation_t<M, raw_socket_t, write_t>;
-using write_a = io_parameters_t<raw_socket_t, write_t>;
+using send_t = byte_io::stream_write_t;
+using send_s = async_operation_t<M, raw_socket_t, send_t>;
+using send_a = io_parameters_t<raw_socket_t, send_t>;
 
-io_result<size_t> write_s::submit(
+static io_result<size_t> _submit_send(
 	M& m,
 	H const& h,
 	C const& c,
-	write_s& s,
-	write_a const& a,
-	io_handler<M>& handler)
+	send_s& s,
+	send_a const& a)
 {
-	vsm_try(buffers, get_io_buffers(s.buffers_storage, a.buffers, layout));
+	auto const buffers = get_io_buffers_unchecked(s.buffers_storage, a.buffers, layout);
 
-	vsm_try(buffers_size, vsm::try_truncate<uint32_t>(
-		buffers.buffers_size,
-		error::invalid_argument));
-
-	io_uring_multiplexer::record_context ctx(m);
-
+	io_uring_multiplexer::record_context ctx(m, a.deadline);
 	auto const [fd, fd_flags] = ctx.get_fd(c, h.platform_handle);
 
-	vsm_try_discard(ctx.push(
+	vsm_try_ptr(sqe, ctx.push());
+
+	sqe =
 	{
 		.opcode = IORING_OP_WRITEV,
 		.flags = fd_flags,
 		.fd = fd,
 		.addr = reinterpret_cast<uintptr_t>(buffers.buffers_data),
-		.len = buffers_size,
+		.len = vsm::truncating(buffers.buffers_size),
 		.user_data = ctx.get_user_data(s),
-	}));
+	};
 
 	if (a.deadline != deadline::never())
 	{
 		vsm_try_void(ctx.link_timeout(s.timeout.set(a.deadline)));
 	}
 
-	s.set_handler(handler);
-	vsm_try_void(ctx.commit());
+	ctx.commit();
 
-	return io_pending(error::operation_pending);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
-io_result<size_t> write_s::notify(
-	M&,
+io_result<size_t> send_s::submit(
+	M& m,
 	H const& h,
-	C const&,
-	write_s& s,
-	write_a const&,
+	C const& c,
+	send_s& s,
+	send_a const& a,
+	io_handler<M>& handler)
+{
+	vsm_try(buffers, get_io_buffers(s.buffers_storage, a.buffers, layout));
+
+	vsm_try_discard(vsm::try_truncate<uint32_t>(
+		buffers.buffers_size,
+		error::invalid_argument));
+
+	s.set_handler(handler);
+	return _submit_send(m, h, c, s, a);
+}
+
+io_result<size_t> send_s::notify(
+	M& m,
+	H const& h,
+	C const& c,
+	send_s& s,
+	send_a const& a,
 	io_handler<M>&,
 	M::io_status_type const status)
 {
@@ -236,13 +275,13 @@ io_result<size_t> write_s::notify(
 
 	if (status.result < 0)
 	{
-		return vsm::unexpected(static_cast<system_error>(-status.result));
+		return vsm::unexpected(allio_error(static_cast<system_error>(-status.result)));
 	}
 
 	return static_cast<size_t>(status.result);
 }
 
-void write_s::cancel(M& m, H const& h, C const&, write_s& s)
+void send_s::cancel(M& m, H const& h, C const&, send_s& s)
 {
-	m.cancel_io(s);
+	(void)m.cancel_io(s);
 }

@@ -14,7 +14,6 @@ namespace allio::linux {
 
 using namespace detail::io_uring_constants;
 
-
 inline int _io_uring_setup(unsigned const entries, io_uring_params* const args)
 {
 	return static_cast<int>(syscall(__NR_io_uring_setup, entries, args));
@@ -56,7 +55,7 @@ inline vsm::result<detail::unique_handle> io_uring_setup(
 
 	if (r < 0)
 	{
-		return vsm::unexpected(static_cast<system_error>(-r));
+		return vsm::unexpected(get_last_error());
 	}
 
 	return vsm_lazy(detail::unique_handle(r));
@@ -80,7 +79,7 @@ inline vsm::result<uint32_t> io_uring_enter(
 
 	if (r < 0)
 	{
-		return vsm::unexpected(static_cast<system_error>(-r));
+		return vsm::unexpected(get_last_error());
 	}
 
 	return static_cast<uint32_t>(r);
@@ -96,7 +95,7 @@ inline vsm::result<int> io_uring_register(
 
 	if (r < 0)
 	{
-		return vsm::unexpected(static_cast<system_error>(-r));
+		return vsm::unexpected(get_last_error());
 	}
 
 	return r;

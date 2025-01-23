@@ -1,6 +1,7 @@
 #include <allio/detail/platform.hpp>
 
 #include <allio/error.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
 
 #include <unistd.h>
@@ -17,6 +18,6 @@ void detail::close_platform_handle(int const fd) noexcept
 
 	if (::close(fd) == -1)
 	{
-		unrecoverable_error(get_last_error());
+		unrecoverable_error(allio_error(get_last_error()));
 	}
 }

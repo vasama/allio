@@ -231,7 +231,7 @@ static vsm::result<directory_stream_pointer> query_directory_file(
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return stream_pointer;
@@ -280,7 +280,7 @@ static vsm::result<void> _set_current_directory(platform_path_view const path)
 
 	if (!NT_SUCCESS(status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return {};
@@ -392,7 +392,7 @@ vsm::result<void> detail::_set_current_directory(fs_path const& path)
 
 	if (!SetCurrentDirectoryW(path_beg))
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return {};

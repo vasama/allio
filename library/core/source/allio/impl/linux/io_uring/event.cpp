@@ -1,5 +1,6 @@
 #include <allio/linux/detail/io_uring/event.hpp>
 
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/handles/event.hpp>
 #include <allio/impl/linux/io_uring.hpp>
@@ -22,26 +23,31 @@ using wait_t = event_t::wait_t;
 using wait_s = async_operation_t<M, event_t, wait_t>;
 using wait_a = io_parameters_t<event_t, wait_t>;
 
-static eventfd_t dummy_event_value;
-
-static io_result<void> _submit(M& m, H const& h, C const& c, wait_s& s, io_handler<M>& handler)
+static io_result<void> _submit(
+	M& m,
+	H const& h,
+	C const& c,
+	wait_s& s,
+	wait_a const& a,
+	io_handler<M>& handler)
 {
 	// Evaluate the stepped deadline.
 	vsm_try(relative_deadline, s.absolute_deadline.step());
 
-	io_uring_multiplexer::record_context ctx(m);
-
+	io_uring_multiplexer::record_context ctx(m, relative_deadline);
 	auto const [fd, fd_flags] = ctx.get_fd(c, h.platform_handle);
 
 	// Polling is required even in auto reset mode because the event is opened in non-blocking mode.
-	vsm_try_ptr(poll_sqe, ctx.push(
+	vsm_try_ptr(poll_sqe, ctx.push());
+
+	poll_sqe =
 	{
 		.opcode = IORING_OP_POLL_ADD,
 		.flags = fd_flags,
 		.fd = fd,
 		.poll_events = POLLIN,
 		.user_data = ctx.get_user_data(s.poll_slot),
-	}));
+	};
 
 	if (relative_deadline != deadline::never())
 	{
@@ -51,12 +57,16 @@ static io_result<void> _submit(M& m, H const& h, C const& c, wait_s& s, io_handl
 
 	if (is_auto_reset(h))
 	{
+		static constinit eventfd_t dummy_event_value = 0;
+
 		// Link the previous SQE to this one.
 		ctx.link_last(IOSQE_IO_LINK);
 
 		// The read value is not actually needed for anything. Just read the value into a global
 		// dummy buffer.
-		vsm_try_ptr(read_sqe, ctx.push(
+		vsm_try_ptr(read_sqe, ctx.push());
+
+		read_sqe =
 		{
 			.opcode = IORING_OP_READ,
 			.flags = fd_flags,
@@ -64,7 +74,7 @@ static io_result<void> _submit(M& m, H const& h, C const& c, wait_s& s, io_handl
 			.addr = reinterpret_cast<uintptr_t>(&dummy_event_value),
 			.len = sizeof(dummy_event_value),
 			.user_data = ctx.get_user_data(s),
-		}));
+		};
 
 		// Successful poll CQE can be skipped when reading.
 		ctx.set_cqe_skip_success(poll_sqe);
@@ -74,9 +84,9 @@ static io_result<void> _submit(M& m, H const& h, C const& c, wait_s& s, io_handl
 		ctx.set_cqe_skip_success_linked_emulation(read_sqe);
 	}
 
-	vsm_try_void(ctx.commit());
+	ctx.commit();
 
-	return io_pending(error::operation_pending);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
 io_result<void> wait_s::submit(
@@ -97,7 +107,7 @@ io_result<void> wait_s::submit(
 	s.absolute_deadline = a.deadline;
 	s.poll_slot.bind(s);
 
-	return _submit(m, h, c, s, handler);
+	return _submit(m, h, c, s, a, handler);
 }
 
 io_result<void> wait_s::notify(
@@ -105,7 +115,7 @@ io_result<void> wait_s::notify(
 	H const& h,
 	C const& c,
 	wait_s& s,
-	wait_a const&,
+	wait_a const& a,
 	io_handler<M>& handler,
 	M::io_status_type const status)
 {
@@ -123,18 +133,22 @@ io_result<void> wait_s::notify(
 
 			if (s.is_cancel_requested())
 			{
-				return io_canceled(static_cast<system_error>(ECANCELED));
+				return vsm::unexpected(io_error_code(
+					io_notify_status::cancelled,
+					allio_error(error::operation_canceled)));
 			}
 
 			// Someone else won the race to reset the event. Retry by submitting both operations
 			// again.
-			return _submit(m, h, c, s, handler);
+			return _submit(m, h, c, s, a, handler);
 
 		case -ECANCELED:
-			return io_canceled(static_cast<system_error>(ECANCELED));
+			return vsm::unexpected(io_error_code(
+				io_notify_status::cancelled,
+				allio_error(static_cast<system_error>(ECANCELED))));
 		}
 
-		return vsm::unexpected(static_cast<system_error>(-status.result));
+		return vsm::unexpected(allio_error(static_cast<system_error>(-status.result)));
 	}
 
 	// Only one successful CQE is posted, either for the read or the poll.
@@ -145,5 +159,5 @@ io_result<void> wait_s::notify(
 
 void wait_s::cancel(M& m, H const&, C const&, S& s)
 {
-	m.cancel_io(s, s.poll_slot);
+	(void)m.cancel_io(s, s.poll_slot);
 }

@@ -4,6 +4,8 @@ project(allio_core)
 find_package(vsm.cmake REQUIRED)
 vsm_define_package(allio.core)
 
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/add_error_encoding.cmake")
+
 vsm_add_library(
 	allio::core
 
@@ -228,7 +230,7 @@ vsm_configure(
 		source/allio/impl/linux/api_string.hpp
 		source/allio/impl/linux/byte_io.cpp
 		source/allio/impl/linux/byte_io.hpp
-		#source/allio/impl/linux/error.cpp
+		source/allio/impl/linux/error.cpp
 		source/allio/impl/linux/error.hpp
 		source/allio/impl/linux/fcntl.hpp
 		source/allio/impl/linux/fork_exec.cpp
@@ -287,3 +289,5 @@ vsm_configure(
 	SOURCE_DEPENDENCIES
 		vsm::intrusive
 )
+
+allio_add_error_encoding(allio::core)

@@ -75,7 +75,7 @@ io_result<void> connect_s::submit(
 		return {};
 	}
 
-	return io_pending(error::operation_pending);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
 io_result<void> connect_s::notify(
@@ -91,7 +91,7 @@ io_result<void> connect_s::notify(
 
 	if (!NT_SUCCESS(status.status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status.status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
 	}
 
 	h.flags = object_t::flags::not_null | s.socket_flags;
@@ -180,7 +180,7 @@ io_result<size_t> read_s::submit(
 		return get_read_transferred(a, transferred);
 	}
 
-	return io_pending(error::operation_pending);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
 io_result<size_t> read_s::notify(
@@ -196,7 +196,7 @@ io_result<size_t> read_s::notify(
 
 	if (!NT_SUCCESS(status.status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status.status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
 	}
 
 	return get_read_transferred(a, get_transfer_result(h, s.overlapped));
@@ -253,7 +253,7 @@ io_result<size_t> write_s::submit(
 		return transferred;
 	}
 
-	return io_pending(error::operation_pending);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
 io_result<size_t> write_s::notify(
@@ -269,7 +269,7 @@ io_result<size_t> write_s::notify(
 
 	if (!NT_SUCCESS(status.status))
 	{
-		return vsm::unexpected(static_cast<kernel_error>(status.status));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
 	}
 
 	return get_transfer_result(h, s.overlapped);

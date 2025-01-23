@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/detail/unique_handle.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
 
 #include <vsm/assert.h>
@@ -20,7 +21,7 @@ inline vsm::result<eventfd_t> eventfd_read(int const fd)
 	eventfd_t value;
 	if (::eventfd_read(fd, &value) == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 	return value;
 }
@@ -29,7 +30,7 @@ inline vsm::result<void> eventfd_write(int const fd, eventfd_t const value)
 {
 	if (::eventfd_write(fd, value) == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 	return {};
 }
@@ -47,7 +48,7 @@ inline vsm::result<void> eventfd_signal(int const fd)
 		// problematic. The event object remains signaled as long as the counter is non-zero.
 		if (int const e = errno; e != EAGAIN)
 		{
-			return vsm::unexpected(static_cast<system_error>(e));
+			return vsm::unexpected(allio_error(static_cast<system_error>(e)));
 		}
 	}
 
@@ -67,7 +68,7 @@ inline vsm::result<bool> eventfd_reset(int const fd)
 		// If the counter is already zero, EAGAIN is returned.
 		if (int const e = errno; e != EAGAIN)
 		{
-			return vsm::unexpected(static_cast<system_error>(e));
+			return vsm::unexpected(allio_error(static_cast<system_error>(e)));
 		}
 
 		return false;
@@ -88,7 +89,7 @@ inline vsm::result<detail::unique_handle> eventfd(
 
 	if (fd == -1)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return vsm_lazy(detail::unique_handle(fd));
