@@ -1,5 +1,6 @@
 #include <allio/detail/handles/file.hpp>
 
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/win32/byte_io.hpp>
 #include <allio/impl/win32/handles/fs_object.hpp>
 #include <allio/impl/win32/kernel.hpp>

@@ -248,17 +248,38 @@ private:
 	friend class shared_value;
 };
 
+static std::exception_ptr make_exception(std::exception_ptr&& exception)
+{
+	return vsm_move(exception);
+}
+
+static std::exception_ptr make_exception(std::error_code const error)
+{
+	return std::make_exception_ptr(std::system_error(error));
+}
+
 static shared_value<bool> wait_detached(exec::async_scope& scope, auto const& event)
 {
 	shared_value<bool> boolean = false;
 
+	auto handle_value = [boolean]()
+	{
+		boolean = true;
+	};
+
+	auto handle_error = [boolean](auto e)
+	{
+		boolean.set_exception(make_exception(vsm_move(e)));
+	};
+
 	scope.spawn(
 		event.wait()
-		| ex::then([boolean]() { boolean = true; })
-		| ex::upon_error([](auto const&...) {}));
+		| ex::then(vsm_move(handle_value))
+		| ex::upon_error(vsm_move(handle_error)));
 
 	return boolean;
 }
+
 
 TEST_CASE("Asynchronous wait on signaled event may complete immediately", "[event][async]")
 {
@@ -361,6 +382,7 @@ TEST_CASE("Manual reset event can be awaited many times concurrently", "[event][
 
 	size_t signal_count = 0;
 	size_t cancel_count = 0;
+	size_t error_count = 0;
 
 	for (size_t i = 0; i < wait_count; ++i)
 	{
@@ -368,7 +390,7 @@ TEST_CASE("Manual reset event can be awaited many times concurrently", "[event][
 			event.wait()
 			| ex::then([&]() { ++signal_count; })
 			| ex::upon_stopped([&]() { ++cancel_count; })
-			| ex::upon_error([](auto const&...) {}));
+			| ex::upon_error([&](auto) { ++error_count; }));
 	}
 
 	if (GENERATE(0, 1))
@@ -401,6 +423,8 @@ TEST_CASE("Manual reset event can be awaited many times concurrently", "[event][
 		REQUIRE(signal_count == (signal ? wait_count : 0));
 		REQUIRE(cancel_count == (cancel ? wait_count : 0));
 	}
+
+	REQUIRE(error_count == 0);
 }
 
 //TODO: Add a stress test for multithreaded cancellation.

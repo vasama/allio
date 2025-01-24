@@ -1,6 +1,7 @@
 #include <allio/detail/handles/pipe.hpp>
 
 #include <allio/detail/unique_handle.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/win32/byte_io.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>

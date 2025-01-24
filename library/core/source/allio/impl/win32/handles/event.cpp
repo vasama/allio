@@ -1,6 +1,7 @@
 #include <allio/detail/handles/event.hpp>
 
 #include <allio/detail/unique_handle.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/win32/kernel_error.hpp>

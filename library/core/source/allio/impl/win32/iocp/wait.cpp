@@ -1,5 +1,6 @@
 #include <allio/win32/detail/iocp/wait.hpp>
 
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/win32/kernel.hpp>
 
 using namespace allio;
@@ -37,6 +38,13 @@ io_result<void> iocp_wait_state::notify(M& m, H const&, S&, io_handler<M>& handl
 
 	if (!NT_SUCCESS(status.status))
 	{
+		if (status.status == STATUS_CANCELLED)
+		{
+			return vsm::unexpected(io_error_code(
+				io_notify_status::cancelled,
+				allio_error(static_cast<kernel_error>(status.status))));
+		}
+
 		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
 	}
 
@@ -46,5 +54,4 @@ io_result<void> iocp_wait_state::notify(M& m, H const&, S&, io_handler<M>& handl
 void iocp_wait_state::cancel(M& m, H const&, S&)
 {
 	m.cancel_wait(wait_packet.get(), wait_slot);
-	m.release_wait_packet(vsm_move(wait_packet));
 }

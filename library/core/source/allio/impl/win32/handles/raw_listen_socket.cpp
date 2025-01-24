@@ -165,7 +165,7 @@ vsm::result<accept_result_type> raw_listen_socket_t::accept(
 
 		if (socket == SOCKET_ERROR)
 		{
-			return vsm::unexpected(posix::allio_error(get_last_socket_error()));
+			return vsm::unexpected(allio_error(posix::get_last_socket_error()));
 		}
 	}
 

@@ -1,5 +1,6 @@
 #include <allio/impl/win32/wait_packet.hpp>
 
+#include <allio/impl/error_encoding.hpp>
 #include <allio/win32/kernel_error.hpp>
 
 #include <vsm/out_resource.hpp>

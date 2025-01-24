@@ -16,7 +16,7 @@ TEST_CASE("Process command line generation", "[windows][command_line]")
 	std::string program;
 	std::vector<std::string> arguments;
 
-	std::error_code expected_error;
+	std::error_condition expected_error;
 	std::wstring expected_command_line;
 
 	std::optional<std::vector<std::string>> capture_arguments;

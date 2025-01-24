@@ -5,7 +5,7 @@
 namespace allio::nothrow {
 
 template<detail::observer Operation, detail::handle Handle>
-vsm::result<detail::io_result_t<Handle, Operation>> block(Handle& handle, auto&&... args)
+[[nodiscard]] vsm::result<detail::io_result_t<Handle, Operation>> block(Handle& handle, auto&&... args)
 {
 	return detail::blocking_io<Operation>(
 		handle,

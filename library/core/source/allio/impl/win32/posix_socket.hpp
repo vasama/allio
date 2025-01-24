@@ -4,6 +4,8 @@
 #	error Include <allio/impl/posix/socket.hpp> instead.
 #endif
 
+#include <allio/impl/error_encoding.hpp>
+
 #include <system_error>
 
 #ifndef _WINSOCKAPI_

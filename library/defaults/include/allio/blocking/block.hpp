@@ -6,7 +6,7 @@
 namespace allio {
 
 template<detail::observer Operation, detail::handle Handle>
-detail::io_result_t<Handle, Operation> block(Handle& handle, auto&&... args)
+[[nodiscard]] detail::io_result_t<Handle, Operation> block(Handle& handle, auto&&... args)
 {
 	return detail::throw_on_error(detail::blocking_io<Operation>(
 		handle,

@@ -44,7 +44,7 @@ consteval uint32_t encode_file_name(char const* const file_name)
 		file_name,
 		[](char const* const lhs, char const* const rhs)
 		{
-			return std::strcmp(lhs, rhs) < 0;
+			return std::string_view(lhs) < std::string_view(rhs);
 		});
 
 	return static_cast<uint32_t>((pos + 1) - Encoding::file_names);
@@ -75,6 +75,7 @@ template<typename Encoding, uint32_t Location, typename ErrorCode>
 
 	return error_code;
 }
+
 
 #define allio_error(...) ( \
 		::allio::detail::ec::encode< \

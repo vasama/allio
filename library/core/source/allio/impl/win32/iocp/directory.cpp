@@ -1,5 +1,6 @@
 #include <allio/win32/detail/iocp/directory.hpp>
 
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/win32/handles/directory.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/win32/kernel_error.hpp>

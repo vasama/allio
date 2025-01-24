@@ -1,6 +1,7 @@
 #include <allio/impl/win32/memory.hpp>
 
 #include <allio/error.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/bounded_vector.hpp>
 
 using namespace allio;

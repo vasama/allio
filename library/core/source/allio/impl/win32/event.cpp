@@ -1,5 +1,6 @@
 #include <allio/impl/win32/event.hpp>
 
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/win32/kernel.hpp>
 
 #include <vsm/out_resource.hpp>

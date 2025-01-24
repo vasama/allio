@@ -1,9 +1,10 @@
 #include <allio/detail/platform.hpp>
 
 #include <allio/error.hpp>
+#include <allio/impl/error_encoding.hpp>
+#include <allio/impl/win32/kernel.hpp>
 #include <allio/win32/error.hpp>
 #include <allio/win32/kernel_error.hpp>
-#include <allio/impl/win32/kernel.hpp>
 
 using namespace allio;
 using namespace allio::detail;

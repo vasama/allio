@@ -257,6 +257,18 @@ struct fs_object_t : platform_object_t
 	template<typename Handle, typename Traits>
 	struct facade : base_type::facade<Handle, Traits>
 	{
+		template<std::convertible_to<any_path_view> Path>
+		[[nodiscard]] fs_path operator/(Path const& relative_path) const noexcept
+		{
+			auto const& native = static_cast<Handle const&>(*this).native();
+			vsm_assert(native.flags[object_t::flags::not_null]); //PRECONDITION
+
+			fs_path path;
+			path.base = &native;
+			path.path = relative_path;
+			return path;
+		}
+
 		[[nodiscard]] auto read_current_path(any_path_buffer const buffer, auto&&... args) const
 		{
 			auto r = _read_current_path(buffer, vsm_forward(args)...);

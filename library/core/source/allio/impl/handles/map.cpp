@@ -1,9 +1,9 @@
 #include <allio/detail/handles/map.hpp>
 
 #include <allio/impl/error_encoding.hpp>
-#include <allio/nothrow/blocking/file.hpp>
-#include <allio/nothrow/blocking/map.hpp>
-#include <allio/nothrow/blocking/section.hpp>
+#include <allio/nothrow/file.hpp>
+#include <allio/nothrow/map.hpp>
+#include <allio/nothrow/section.hpp>
 
 #include <vsm/numeric.hpp>
 

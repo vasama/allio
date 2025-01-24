@@ -1,7 +1,7 @@
-#include <allio/map.hpp>
+#include <allio/blocking/map.hpp>
 
-#include <allio/file.hpp>
-#include <allio/section.hpp>
+#include <allio/blocking/file.hpp>
+#include <allio/blocking/section.hpp>
 #include <allio/test/filesystem.hpp>
 #include <allio/test/memory.hpp>
 
@@ -10,6 +10,7 @@
 #include <algorithm>
 
 using namespace allio;
+using namespace allio::blocking;
 
 static constexpr size_t KiB = 1024;
 static constexpr size_t MiB = 1024 * KiB;

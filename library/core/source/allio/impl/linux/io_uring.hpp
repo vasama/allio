@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/detail/unique_handle.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/linux/detail/io_uring/io_uring.hpp>
 
@@ -55,7 +56,7 @@ inline vsm::result<detail::unique_handle> io_uring_setup(
 
 	if (r < 0)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return vsm_lazy(detail::unique_handle(r));
@@ -79,7 +80,7 @@ inline vsm::result<uint32_t> io_uring_enter(
 
 	if (r < 0)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return static_cast<uint32_t>(r);
@@ -95,7 +96,7 @@ inline vsm::result<int> io_uring_register(
 
 	if (r < 0)
 	{
-		return vsm::unexpected(get_last_error());
+		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
 	return r;

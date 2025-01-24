@@ -200,12 +200,16 @@ public:
 		return view().copy_lexically_normal(buffer);
 	}
 
-	[[nodiscard]] constexpr path_view_type copy_lexically_relative(path_view_type const base, Char* buffer) const
+	[[nodiscard]] constexpr path_view_type copy_lexically_relative(
+		path_view_type const base,
+		Char* buffer) const
 	{
 		return view().copy_lexically_relative(base, buffer);
 	}
 
-	[[nodiscard]] constexpr path_view_type copy_lexically_proximate(path_view_type const base, Char* buffer) const
+	[[nodiscard]] constexpr path_view_type copy_lexically_proximate(
+		path_view_type const base,
+		Char* buffer) const
 	{
 		return view().copy_lexically_proximate(base, buffer);
 	}
@@ -406,7 +410,9 @@ private:
 };
 
 template<typename Char, typename Allocator = std::allocator<Char>>
-using basic_path = basic_path_adaptor<Char, std::basic_string<Char, std::char_traits<Char>, Allocator>>;
+using basic_path = basic_path_adaptor<
+	Char,
+	std::basic_string<Char, std::char_traits<Char>, Allocator>>;
 
 
 using path = basic_path<char>;

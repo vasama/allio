@@ -1,5 +1,6 @@
 #include <allio/impl/win32/completion_port.hpp>
 
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/win32/kernel_error.hpp>
 

@@ -1,6 +1,7 @@
 #include <allio/byte_io_buffers.hpp>
 
 #include <allio/detail/byte_io_buffer_range.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/new.hpp>
 
 #include <bit>

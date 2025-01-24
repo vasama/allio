@@ -69,11 +69,18 @@ vsm_configure(
 		source/allio/test/linux/memory.cpp
 )
 
-add_dependencies(allio_defaults_test test_exe)
-target_include_directories(allio_defaults_test PRIVATE "../core/source")
+
+get_property(
+	test_target
+	TARGET allio::defaults-test-suite
+	PROPERTY ALIASED_TARGET)
+
+
+add_dependencies("${test_target}" test_exe)
+target_include_directories("${test_target}" PRIVATE "../core/source")
 
 target_compile_definitions(
-	allio_defaults_test
+	"${test_target}"
 
 	PRIVATE
 		"allio_detail_test_exe=\"$<TARGET_FILE:test_exe>\""

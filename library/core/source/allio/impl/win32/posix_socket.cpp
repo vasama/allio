@@ -1,6 +1,7 @@
 #include <allio/impl/posix/socket.hpp>
 
 #include <allio/detail/dynamic_buffer.hpp>
+#include <allio/impl/error_encoding_impl.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
 #include <allio/impl/win32/wsa.hpp>
@@ -27,6 +28,24 @@ std::string posix::socket_error_category::message(int const code) const
 posix::socket_error_category const posix::socket_error_category::instance;
 
 
+static constexpr uint32_t error_encoding_offset = 10000;
+
+template<>
+uint32_t ec::encode_error_code(posix::socket_error const e)
+{
+	uint32_t const value = static_cast<uint32_t>(e) - error_encoding_offset;
+	return value <= ec::code_mask ? value : 0;
+}
+
+template<>
+posix::socket_error ec::decode_error_code(uint32_t const e)
+{
+	return static_cast<posix::socket_error>(e + error_encoding_offset);
+}
+
+template class ec::encoded_error_category<allio_error_encoding, posix::socket_error>;
+
+
 static vsm::result<posix::unique_socket> wsa_socket(
 	int const address_family,
 	int const type,
@@ -43,7 +62,7 @@ static vsm::result<posix::unique_socket> wsa_socket(
 
 	if (socket == INVALID_SOCKET)
 	{
-		return vsm::unexpected(posix::allio_error(get_last_socket_error()));
+		return vsm::unexpected(allio_error(posix::get_last_socket_error()));
 	}
 
 	return vsm::result<posix::unique_socket>(vsm::result_value, socket);
@@ -110,7 +129,7 @@ static vsm::result<posix::unique_socket> wsa_accept(
 
 	if (socket == static_cast<SOCKET>(SOCKET_ERROR))
 	{
-		return vsm::unexpected(posix::allio_error(get_last_socket_error()));
+		return vsm::unexpected(allio_error(posix::get_last_socket_error()));
 	}
 
 	return vsm::result<posix::unique_socket>(vsm::result_value, socket);

@@ -265,8 +265,14 @@ public:
 
 
 	[[nodiscard]] constexpr basic_path_view copy_lexically_normal(Char* buffer) const;
-	[[nodiscard]] constexpr basic_path_view copy_lexically_relative(basic_path_view base, Char* buffer) const;
-	[[nodiscard]] constexpr basic_path_view copy_lexically_proximate(basic_path_view base, Char* buffer) const;
+
+	[[nodiscard]] constexpr basic_path_view copy_lexically_relative(
+		basic_path_view base,
+		Char* buffer) const;
+
+	[[nodiscard]] constexpr basic_path_view copy_lexically_proximate(
+		basic_path_view base,
+		Char* buffer) const;
 
 
 	[[nodiscard]] constexpr iterator begin() const

@@ -331,9 +331,9 @@ static vsm::result<void, error_code_with_info<bool>> query_file_name_information
 
 	if (name_size == 0 || name_size > file_name_information_buffer_size)
 	{
-		system_error const e = allio_error(get_last_error());
+		system_error const e = get_last_error();
 		return vsm::unexpected(error_code_with_info<bool>(
-			e,
+			allio_error(e),
 			e == static_cast<system_error>(ERROR_PATH_NOT_FOUND)));
 	}
 

@@ -37,7 +37,9 @@ constexpr basic_path_literal<char> operator""_path(char const* const c_string, s
 	return basic_path_literal<char>(c_string, size);
 }
 
-constexpr basic_path_literal<wchar_t> operator""_path(wchar_t const* const c_string, size_t const size)
+constexpr basic_path_literal<wchar_t> operator""_path(
+	wchar_t const* const c_string,
+	size_t const size)
 {
 	return basic_path_literal<wchar_t>(c_string, size);
 }

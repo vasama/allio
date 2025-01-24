@@ -1,5 +1,6 @@
 #include <allio/impl/posix/socket.hpp>
 
+#include <allio/impl/error_encoding.hpp>
 #include <allio/step_deadline.hpp>
 
 #include <vsm/lazy.hpp>

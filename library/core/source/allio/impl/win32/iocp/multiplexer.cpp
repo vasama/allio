@@ -1,5 +1,6 @@
 #include <allio/win32/detail/iocp/multiplexer.hpp>
 
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/win32/completion_port.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>

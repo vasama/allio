@@ -1,7 +1,6 @@
 #include <allio/blocking/pipe.hpp>
 #include <allio/blocking/process.hpp>
 
-#include <allio/pipe.hpp>
 #include <allio/path.hpp>
 #include <allio/test/filesystem.hpp>
 #include <allio/test/match_error.hpp>

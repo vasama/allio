@@ -16,8 +16,11 @@ if __name__ == "__main__":
 
 	re_file_name = re.compile("\\ballio_error\\b")
 
+	with open(args.sources, "r") as file:
+		source_files = file.read().splitlines()
+
 	file_names = set()
-	for source_file in args.sources.split(';'):
+	for source_file in source_files:
 		with open(source_file, "r") as file:
 			source_data = file.read()
 

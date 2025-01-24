@@ -99,6 +99,6 @@ struct fs_path_t
 };
 
 
-vsm::result<fs_entry_info> get_fs_entry_info(fs_path path);
+[[nodiscard]] vsm::result<fs_entry_info> get_fs_entry_info(fs_path path);
 
 } // namespace allio::detail

@@ -80,7 +80,6 @@ vsm_add_library(
 
 	HEADER_DEPENDENCIES
 		vsm::core
-		vsm::partial
 		vsm::result
 		vsm::tag_ptr
 		vsm::unique_resource
@@ -130,6 +129,7 @@ vsm_configure(
 		source/allio/impl/win32/completion_port.hpp
 		source/allio/impl/win32/environment_block.cpp
 		source/allio/impl/win32/environment_block.hpp
+		source/allio/impl/win32/error.cpp
 		source/allio/impl/win32/error.hpp
 		source/allio/impl/win32/event.cpp
 		source/allio/impl/win32/event.hpp
@@ -290,4 +290,5 @@ vsm_configure(
 		vsm::intrusive
 )
 
-allio_add_error_encoding(allio::core)
+allio_add_error_encoding(core core_error_encoding allio::core)
+vsm_configure(allio::core INTERNAL_DEPENDENCIES core_error_encoding)

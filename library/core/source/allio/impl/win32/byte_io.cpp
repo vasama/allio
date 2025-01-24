@@ -2,6 +2,7 @@
 
 #include <allio/detail/byte_io_buffer_range.hpp>
 #include <allio/detail/unique_handle.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/thread_event.hpp>
 #include <allio/step_deadline.hpp>

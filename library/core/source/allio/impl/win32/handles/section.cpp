@@ -1,6 +1,7 @@
 #include <allio/detail/handles/section.hpp>
 
 #include <allio/detail/unique_handle.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
 #include <allio/impl/win32/memory.hpp>
 #include <allio/impl/win32/kernel.hpp>

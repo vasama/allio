@@ -41,7 +41,11 @@ static_assert(
 namespace {
 
 template<typename T>
-static bool get_extension(SOCKET const socket, DWORD const io_control_code, GUID extension, T& out)
+static bool get_extension(
+	SOCKET const socket,
+	DWORD const io_control_code,
+	GUID extension,
+	T& out)
 {
 	if (socket == INVALID_SOCKET)
 	{
@@ -117,7 +121,10 @@ static void set_function(T& object, T const value)
 }
 
 template<auto ReturnValue, typename R, typename... Ps>
-static void msw_init_function(SOCKET const socket, R(WINAPI*& function)(Ps...), GUID const& extension)
+static void msw_init_function(
+	SOCKET const socket,
+	R(WINAPI*& function)(Ps...),
+	GUID const& extension)
 {
 	R(WINAPI* new_function)(Ps...);
 
@@ -407,7 +414,7 @@ vsm::result<unique_rio_cq> win32::rio_create_completion_queue(
 
 	if (cq == RIO_INVALID_CQ)
 	{
-		return vsm::unexpected(posix::allio_error(get_last_socket_error()));
+		return vsm::unexpected(allio_error(posix::get_last_socket_error()));
 	}
 
 	return vsm_lazy(unique_rio_cq(cq));
@@ -440,7 +447,7 @@ vsm::result<RIO_RQ> win32::rio_create_request_queue(
 
 	if (rq == RIO_INVALID_RQ)
 	{
-		return vsm::unexpected(posix::allio_error(get_last_socket_error()));
+		return vsm::unexpected(allio_error(posix::get_last_socket_error()));
 	}
 
 	return rq;
@@ -455,7 +462,7 @@ vsm::result<unique_rio_buffer> win32::rio_register_buffer(
 
 	if (buffer_id == RIO_INVALID_BUFFERID)
 	{
-		return vsm::unexpected(posix::allio_error(get_last_socket_error()));
+		return vsm::unexpected(allio_error(posix::get_last_socket_error()));
 	}
 
 	return vsm_lazy(unique_rio_buffer(buffer_id));
