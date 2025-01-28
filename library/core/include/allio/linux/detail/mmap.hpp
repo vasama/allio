@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vsm/result.hpp>
 #include <vsm/standard.hpp>
 #include <vsm/unique_resource.hpp>
 
@@ -27,5 +28,8 @@ struct mmap_deleter
 
 template<typename T>
 using unique_mmap = vsm::unique_resource<mmap_view<T>, mmap_deleter>;
+
+using unique_void_mmap = unique_mmap<void>;
+using unique_byte_mmap = unique_mmap<std::byte>;
 
 } // namespace allio::detail

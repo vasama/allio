@@ -1,0 +1,23 @@
+{
+	"package": "allio.senders",
+	"version": "0.1",
+	"package_type": "header-library",
+	"requirements": [
+		{
+			"package": "allio.core",
+			"version": "0.1"
+		},
+		{
+			"package": "vsm.core",
+			"version": "0.1"
+		},
+		{
+			"package": "vsm.intrusive",
+			"version": "0.1"
+		},
+		{
+			"package": "stdexec",
+			"version": "0.0.20241218"
+		}
+	]
+}

@@ -1,9 +1,9 @@
 #pragma once
 
 #include <allio/handles/directory.hpp>
-#include <allio/nothrow/blocking.hpp>
+#include <allio/nothrow/traits.hpp>
 
-namespace allio::nothrow::blocking {
+namespace allio::nothrow {
 inline namespace directories {
 
 using directory_handle = traits_type::handle<directory_t>;
@@ -51,4 +51,4 @@ template<typename Path = path>
 }
 
 } // namespace this_process
-} // namespace allio::nothrow::blocking
+} // namespace allio::nothrow

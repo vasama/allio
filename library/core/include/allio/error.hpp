@@ -70,6 +70,7 @@ enum class error
 	// Storage
 	not_enough_memory,
 	no_buffer_space,
+	maximum_capacity_exceeded,
 
 	// Encoding
 	unsupported_encoding,
@@ -117,7 +118,7 @@ enum class error
 
 [[nodiscard]] inline std::error_condition make_error_condition(error const error)
 {
-	return make_error_code(error).default_error_condition();
+	return std::error_condition(static_cast<int>(error), detail::error_category_instance);
 }
 
 
@@ -154,12 +155,6 @@ void set_error_handler(error_handler* const handler) noexcept;
 
 template<>
 struct std::is_error_code_enum<allio::error>
-{
-	static constexpr bool value = true;
-};
-
-template<>
-struct std::is_error_condition_enum<allio::error>
 {
 	static constexpr bool value = true;
 };

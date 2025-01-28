@@ -7,7 +7,9 @@
 
 #include <allio/linux/detail/undef.i>
 
-class allio::detail::_io_uring_multiplexer::record_context
+namespace allio {
+
+class _io_uring_multiplexer::record_context
 {
 	static constexpr uint8_t link_flags = IOSQE_IO_LINK | IOSQE_IO_HARDLINK;
 
@@ -180,7 +182,13 @@ public:
 		m_multiplexer.m_sq_acquire = m_sq_acquire;
 
 		m_last_sqe = nullptr;
+
+		//TODO: Should this attempt kernel thread wake up?
 	}
 };
+
+using io_uring_record_context = _io_uring_multiplexer::record_context;
+
+} // namespace
 
 #include <allio/linux/detail/undef.i>

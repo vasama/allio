@@ -6,6 +6,8 @@
 
 namespace allio::linux {
 
+namespace io_uring = detail::io_uring;
+
 using detail::io_uring_multiplexer;
 
 } // namespace allio::linux

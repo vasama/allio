@@ -10,7 +10,7 @@
 using namespace allio;
 using namespace allio::detail;
 
-namespace io = nothrow::blocking;
+namespace io = nothrow;
 
 //TODO: Deduplicate with other copies in platform-specific files.
 static protection get_file_protection(native_handle<fs_object_t> const& h)

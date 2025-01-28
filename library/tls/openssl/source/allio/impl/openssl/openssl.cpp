@@ -19,7 +19,7 @@
 
 using namespace allio;
 using namespace allio::detail;
-namespace files = allio::nothrow::blocking::files;
+namespace files = allio::nothrow::files;
 
 namespace {
 

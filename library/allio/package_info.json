@@ -1,0 +1,23 @@
+{
+	"package": "allio",
+	"version": "0.1",
+	"package_type": "header-library",
+	"requirements": [
+		{
+			"package": "vsm.core",
+			"version": "0.1"
+		},
+		{
+			"package": "allio.core",
+			"version": "0.1"
+		},
+		{
+			"package": "allio.blocking",
+			"version": "0.1"
+		},
+		{
+			"package": "allio.senders",
+			"version": "0.1"
+		}
+	]
+}

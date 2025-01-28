@@ -35,7 +35,7 @@ struct allio_abi_object
 	uintptr_t handle_value;
 
 	/// @brief Platform specific information describing the object and how to poll it.
-	///        * Posix:   Bitmask of POLL* flags.
+	///        * Posix:   Poll event mask.
 	///        * Windows: not used.
 	uintptr_t object_flags;
 

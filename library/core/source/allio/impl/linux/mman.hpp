@@ -1,7 +1,7 @@
 #pragma once
 
-#include <allio/linux/detail/mmap.hpp>
 #include <allio/impl/linux/error.hpp>
+#include <allio/linux/detail/mmap.hpp>
 
 #include <vsm/lazy.hpp>
 

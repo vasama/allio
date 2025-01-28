@@ -37,7 +37,7 @@ if(OpenSSL_FOUND)
 			source/allio/test/socket.cpp
 
 		TEST_DEPENDENCIES
-			allio::defaults
+			allio::blocking
 	)
 	target_include_directories(allio_openssl
 		PRIVATE ../../core/source

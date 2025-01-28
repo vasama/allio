@@ -14,12 +14,12 @@ using namespace allio::linux;
 
 static vsm::result<int> get_urandom_fd()
 {
-	static auto const file = open_file(
+	static vsm::result<unique_handle> const file = open_file(
 		-1,
 		"/dev/urandom",
 		O_RDONLY | O_CLOEXEC);
 
-	return file.transform([](auto const& file)
+	return file.transform([](unique_handle const& file)
 	{
 		return file.get();
 	});

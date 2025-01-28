@@ -64,6 +64,7 @@ vsm_add_library(
 		source/allio/impl/byte_io_buffers.cpp
 		source/allio/impl/error_default.cpp
 		source/allio/impl/error.cpp
+		source/allio/impl/fd_tree.hpp
 		source/allio/impl/network.cpp
 		source/allio/impl/new.cpp
 		source/allio/impl/random.hpp
@@ -88,6 +89,7 @@ vsm_add_library(
 		source/allio/test/reverse_iterator.hpp
 
 		source/allio/test/byte_io_buffers.cpp
+		source/allio/test/fd_tree.cpp
 		source/allio/test/network.cpp
 		source/allio/test/path_view.cpp
 )

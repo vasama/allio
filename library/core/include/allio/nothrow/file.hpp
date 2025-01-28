@@ -1,9 +1,9 @@
 #pragma once
 
 #include <allio/handles/file.hpp>
-#include <allio/nothrow/blocking.hpp>
+#include <allio/nothrow/traits.hpp>
 
-namespace allio::nothrow::blocking {
+namespace allio::nothrow {
 inline namespace files {
 
 using file_handle = traits_type::handle<file_t>;
@@ -38,4 +38,4 @@ using file_handle = traits_type::handle<file_t>;
 }
 
 } // inline namespace files
-} // namespace allio::nothrow::blocking
+} // namespace allio::nothrow

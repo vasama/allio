@@ -2,7 +2,7 @@
 
 #include <allio/error.hpp>
 #include <allio/impl/error_encoding.hpp>
-#include <allio/impl/bounded_vector.hpp>
+#include <allio/impl/inplace_vector.hpp>
 
 using namespace allio;
 using namespace allio::win32;
@@ -42,17 +42,16 @@ page_level detail::get_default_page_level()
 
 std::span<page_level const> detail::get_supported_page_levels()
 {
-	using supported_page_levels = bounded_vector<page_level, 2>;
+	using supported_page_levels = inplace_vector<page_level, 2>;
 
 	static auto const value = []() -> supported_page_levels
 	{
 		supported_page_levels levels;
-
-		levels.try_push_back(get_default_page_level());
+		levels.unchecked_push_back(get_default_page_level());
 
 		if (size_t const large_page_size = GetLargePageMinimum())
 		{
-			levels.push_back(get_page_level(large_page_size));
+			levels.unchecked_push_back(get_page_level(large_page_size));
 			vsm_assert(levels[0] < levels[1]);
 		}
 

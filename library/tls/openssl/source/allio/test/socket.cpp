@@ -1,11 +1,10 @@
-#if 1
 #include <allio/openssl/listen_socket.hpp>
 #include <allio/openssl/socket.hpp>
 
-#include <allio/blocking.hpp>
+#include <allio/blocking/traits.hpp>
 #include <allio/senders.hpp>
-#include <allio/sync_wait.hpp>
-#include <allio/task.hpp>
+#include <allio/senders/sync_wait.hpp>
+#include <allio/senders/task.hpp>
 #include <allio/test/network.hpp>
 #include <allio/test/spawn.hpp>
 
@@ -111,5 +110,4 @@ TEST_CASE(
 		);
 	}());
 }
-#endif
 #endif

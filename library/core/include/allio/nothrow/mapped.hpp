@@ -5,7 +5,7 @@
 
 #include <vsm/concepts.hpp>
 
-namespace allio::nothrow::blocking {
+namespace allio::nothrow {
 inline namespace mapping {
 
 template<vsm::non_ref T>
@@ -32,4 +32,4 @@ template<vsm::non_ref T>
 }
 
 } // inline namespace mapping
-} // namespace allio::nothrow::blocking
+} // namespace allio::nothrow

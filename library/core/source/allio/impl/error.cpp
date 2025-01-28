@@ -40,6 +40,8 @@ std::string detail::error_category::message(int const code) const
 		return "The required heap memory could not be allocated.";
 	case error::no_buffer_space:
 		return "The size of the provided buffer was insufficient.";
+	case error::maximum_capacity_exceeded:
+		return "The maximum capacity of the container was exceeded.";
 
 	// Encoding
 	case error::unsupported_encoding:
@@ -130,6 +132,8 @@ std::error_condition detail::error_category::default_error_condition(int const c
 		return std::error_condition(std::errc::not_enough_memory);
 	case error::no_buffer_space:
 		return std::error_condition(std::errc::no_buffer_space);
+	case error::maximum_capacity_exceeded:
+		break;
 
 	// Encoding
 	case error::unsupported_encoding:

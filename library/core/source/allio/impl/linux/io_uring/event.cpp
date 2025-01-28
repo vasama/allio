@@ -34,7 +34,7 @@ static io_result<void> _submit(
 	// Evaluate the stepped deadline.
 	vsm_try(relative_deadline, s.absolute_deadline.step());
 
-	io_uring_multiplexer::record_context ctx(m, relative_deadline);
+	io_uring_record_context ctx(m, relative_deadline);
 	auto const [fd, fd_flags] = ctx.get_fd(c, h.platform_handle);
 
 	// Polling is required even in auto reset mode because the event is opened in non-blocking mode.

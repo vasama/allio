@@ -1,9 +1,9 @@
 #pragma once
 
 #include <allio/handles/section.hpp>
-#include <allio/nothrow/blocking.hpp>
+#include <allio/nothrow/traits.hpp>
 
-namespace allio::nothrow::blocking {
+namespace allio::nothrow {
 inline namespace section {
 
 using section_handle = traits_type::handle<section_t>;
@@ -24,4 +24,4 @@ using section_handle = traits_type::handle<section_t>;
 }
 
 } // inline namespace section
-} // namespace allio::nothrow::blocking
+} // namespace allio::nothrow

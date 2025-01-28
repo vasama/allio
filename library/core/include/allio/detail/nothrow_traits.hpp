@@ -37,10 +37,7 @@ struct nothrow_traits
 			return vsm::unexpected(r.error());
 		}
 	}
-};
 
-struct nothrow_blocking_traits : nothrow_traits
-{
 	template<object Object, producer Operation>
 	static vsm::result<handle<Object>> produce(io_parameters_t<Object, Operation> const& a)
 	{

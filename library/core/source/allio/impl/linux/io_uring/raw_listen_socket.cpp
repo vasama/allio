@@ -82,7 +82,7 @@ static io_result<accept_result_type> _submit_accept(
 {
 	posix::socket_address_union& addr = get_address(s.addr_storage);
 
-	io_uring_multiplexer::record_context ctx(m, a.deadline);
+	io_uring_record_context ctx(m, a.deadline);
 	auto const [fd, fd_flags] = ctx.get_fd(c, h.platform_handle);
 
 	vsm_try_ptr(sqe, ctx.push());

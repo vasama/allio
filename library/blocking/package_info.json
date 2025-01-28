@@ -1,0 +1,15 @@
+{
+	"package": "allio.blocking",
+	"version": "0.1",
+	"package_type": "static-library",
+	"requirements": [
+		{
+			"package": "allio.core",
+			"version": "0.1"
+		},
+		{
+			"package": "vsm.core",
+			"version": "0.1"
+		}
+	]
+}

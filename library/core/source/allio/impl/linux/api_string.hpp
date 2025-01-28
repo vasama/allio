@@ -203,7 +203,10 @@ inline vsm::result<char const*> make_api_c_string(
 	api_string_storage& storage,
 	any_string_view const string)
 {
-	return make_api_string(storage, string).transform([](auto const& s) { return s.data(); });
+	return make_api_string(storage, string).transform([](auto const& s)
+	{
+		return s.data();
+	});
 }
 
 } // namespace allio::linux

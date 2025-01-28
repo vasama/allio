@@ -5,10 +5,15 @@
 namespace allio {
 
 template<typename Timespec>
-Timespec make_timespec(deadline::duration const duration)
+[[nodiscard]] Timespec make_timespec(deadline::duration const duration)
 {
-	using tv_sec_type = std::chrono::duration<decltype(Timespec::tv_sec), std::chrono::seconds::period>;
-	using tv_nsec_type = std::chrono::duration<decltype(Timespec::tv_nsec), std::chrono::nanoseconds::period>;
+	using tv_sec_type = std::chrono::duration<
+		decltype(Timespec::tv_sec),
+		std::chrono::seconds::period>;
+
+	using tv_nsec_type = std::chrono::duration<
+		decltype(Timespec::tv_nsec),
+		std::chrono::nanoseconds::period>;
 
 	return Timespec
 	{
@@ -18,7 +23,7 @@ Timespec make_timespec(deadline::duration const duration)
 }
 
 template<typename Timespec>
-Timespec make_timespec(deadline const deadline)
+[[nodiscard]] Timespec make_timespec(deadline const deadline)
 {
 	vsm_assert(deadline.is_relative());
 	return make_timespec<Timespec>(deadline.relative());

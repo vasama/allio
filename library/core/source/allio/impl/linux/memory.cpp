@@ -1,7 +1,7 @@
 #include <allio/detail/memory.hpp>
 
 //#include <allio/directory.hpp>
-#include <allio/impl/bounded_vector.hpp>
+#include <allio/impl/inplace_vector.hpp>
 
 #include <unistd.h>
 
@@ -9,7 +9,7 @@ using namespace allio;
 using namespace allio::detail;
 
 template<size_t MaxSize>
-using supported_page_levels = bounded_vector<page_level, MaxSize>;
+using supported_page_levels = inplace_vector<page_level, MaxSize>;
 
 static vsm::result<supported_page_levels<2>> get_supported_huge_page_levels()
 {

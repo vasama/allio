@@ -151,10 +151,9 @@ private:
 		unique_handle completion_port;
 	};
 
-	// @brief The shared state owns the completion port object.
-	//        Multiple iocp_multiplexers can share the same completion port.
-	//        Completion port handles cannot be duplicated, so the sharing must
-	//        be implemented in user space.
+	/// @brief The shared state owns the completion port object. Multiple iocp_multiplexers can
+	///        share the same completion port. Completion port handles cannot be duplicated, so the
+	///        sharing must be implemented in user space.
 	vsm::intrusive_ptr<shared_state_t> m_shared_state;
 
 	/// @brief Non-owning copy of the completion port handle.

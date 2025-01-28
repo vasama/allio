@@ -5,12 +5,13 @@
 #include <allio/detail/io.hpp>
 #include <allio/detail/multiplexer.hpp>
 #include <allio/detail/unique_handle.hpp>
-#include <allio/linux/detail/unique_mmap.hpp>
+#include <allio/linux/detail/mmap.hpp>
 #include <allio/linux/timespec.hpp>
 
 #include <vsm/atomic.hpp>
 #include <vsm/flags.hpp>
 #include <vsm/intrusive/mpsc_queue.hpp>
+#include <vsm/partial.hpp>
 #include <vsm/result.hpp>
 #include <vsm/tag_ptr.hpp>
 
@@ -48,50 +49,45 @@ inline constexpr explicit_parameter<completion_queue_size_t> completion_queue_si
 
 } // namespace io_uring
 
-struct alignas(4) io_uring_slot {};
-
-struct _io_uring_multiplexer : io_uring_slot, externally_synchronized
+class io_uring_mmap_deleter
 {
+	static constexpr size_t borrow_value = static_cast<size_t>(-1);
+
+	size_t m_size;
+
+public:
+	explicit io_uring_mmap_deleter(size_t const size)
+		: m_size(size)
+	{
+	}
+
+	[[nodiscard]] static io_uring_mmap_deleter borrow()
+	{
+		return io_uring_mmap_deleter(borrow_value);
+	}
+
+	void operator()(void const* const addr) const
+	{
+		if (m_size != borrow_value)
+		{
+			close_mmap(const_cast<void*>(addr), m_size);
+		}
+	}
+};
+
+template<typename T>
+using unique_io_uring_mmap = std::unique_ptr<T, io_uring_mmap_deleter>;
+
+using unique_io_uring_void_mmap = unique_io_uring_mmap<void>;
+using unique_io_uring_byte_mmap = unique_io_uring_mmap<std::byte>;
+
+class _io_uring_multiplexer : public externally_synchronized
+{
+	vsm_partial(_io_uring_multiplexer_2);
+	vsm_partial_delete(_io_uring_multiplexer_2);
+
+public:
 	using poll_parameters = deadline_t;
-
-	/// Submission ring buffer.
-	///
-	/// Each index is a position in the submission ring buffer.
-	/// The indices prefixed with "k" are shared with the kernel.
-	///
-	/// Each index is limited to less than or equal to the next.
-	/// Wraparound is possible, but that does not matter.
-	/// Imagine instead that the indices have infinite precision.
-	///
-	/// @verbatim
-	/// |
-	/// | <- @ref m_k_sq_consume
-	/// |    One after the entry most recently read by the kernel.
-	/// |    That slot can now be reused for another entry.
-	/// |
-	/// | <- @ref m_k_sq_produce
-	/// |    One after the entry most recently submitted to the kernel.
-	/// |
-	/// | <- @ref m_sq_release
-	/// |    One after the entry most recently recorded, and which is now ready for submission.
-	/// |
-	/// | <- @ref m_sq_acquire
-	/// |    Free slot where a new entry can be recorded.
-	/// |
-	/// | <- @ref m_sq_consume
-	/// |    Cached copy of m_k_sq_consume.
-	/// |
-	/// | <- @ref m_k_sq_consume
-	/// |    The ring buffer wraps around.
-	/// V
-	/// @endverbatim
-
-	/// Completion queue ring buffer
-	///
-	/// @verbatim
-	/// |
-	/// V
-	/// @endverbatim
 
 	enum class user_data_tag : uintptr_t
 	{
@@ -123,6 +119,7 @@ struct _io_uring_multiplexer : io_uring_slot, externally_synchronized
 	using user_data_ptr = vsm::incomplete_tag_ptr<void, user_data_tag, user_data_tag::all>;
 
 	struct io_status_type;
+
 	using io_handler_type = basic_io_handler<io_status_type>;
 	using io_handler_ptr = vsm::tag_ptr<io_handler_type, io_handler_tag>;
 
@@ -193,7 +190,7 @@ struct _io_uring_multiplexer : io_uring_slot, externally_synchronized
 		friend vsm::intrusive::access;
 	};
 
-	class io_slot : public io_uring_slot
+	class alignas(4) io_slot
 	{
 		uint16_t m_offset = 0;
 		io_slot_flags m_flags = {};
@@ -224,29 +221,21 @@ struct _io_uring_multiplexer : io_uring_slot, externally_synchronized
 
 	struct io_status_type
 	{
-		io_uring_slot const* slot;
+		io_slot const* slot;
 		int32_t result;
 		uint32_t flags;
 	};
 
-
-	/// @brief Unique owner of the io_uring kernel object.
-	unique_handle const m_io_uring;
-
-	int m_registered_io_uring = -1;
-
-	/// @brief Unique owner of an eventfd used to wake the polling thread.
-	unique_handle m_wake_event;
-
+private:
 	/// @brief Unique owner of the mmapped region containing the submission queue indices.
-	unique_byte_mmap const m_sq_mmap;
+	unique_io_uring_byte_mmap const m_sq_mmap;
 
 	/// @brief Unique owner of the mmapped region containing the completion queue entries.
-	unique_byte_mmap const m_cq_mmap;
+	unique_io_uring_byte_mmap const m_cq_mmap;
 
 	/// @brief Ring of submission queue entries.
 	/// @note Written by user space, read by the kernel.
-	unique_void_mmap const m_sqes;
+	unique_io_uring_void_mmap const m_sqes;
 
 	/// @brief Ring of completion queue entries.
 	/// @note Written by the kernel, read by user space.
@@ -257,6 +246,8 @@ struct _io_uring_multiplexer : io_uring_slot, externally_synchronized
 	bool m_has_enter_ext_arg : 1 = false;
 	bool m_has_kernel_thread : 1 = false;
 	bool m_has_register_wake : 1 = false;
+	bool m_has_direct_update : 1 = false;
+
 
 	/// @brief Dynamic size of a single @ref io_uring_sqe.
 	uint8_t const m_sqe_size;
@@ -270,34 +261,8 @@ struct _io_uring_multiplexer : io_uring_slot, externally_synchronized
 	/// @brief Shift used for multiplication by @ref m_cqe_size.
 	uint8_t const m_cqe_multiply_shift;
 
+	/// @brief Either 0 or IOSQE_CQE_SKIP_SUCCESS depending on kernel support.
 	uint8_t const m_cqe_skip_success_flag;
-
-
-	/// @brief One past the newest submission queue entry produced by user space.
-	/// @note Written by user space, read by the kernel.
-	vsm::atomic_ref<uint32_t> const m_k_sq_produce;
-
-	/// @brief One past the newest submission queue entry consumed by the kernel.
-	/// @note The value always trails @ref m_k_sq_produce.
-	/// @note Written by the kernel, read by user space.
-	vsm::atomic_ref<uint32_t const> const m_k_sq_consume;
-
-	/// @brief Maps logical SQE index to physical index in @ref m_sqes.
-	/// @note Written by user space, read by user space and the kernel.
-	uint32_t* const m_k_sq_array;
-
-	/// @brief One past the newest completion queue entry produced by the kernel.
-	/// @note Written by the kernel, read by user space.
-	vsm::atomic_ref<uint32_t const> const m_k_cq_produce;
-
-	/// @brief One past the newest completion queue entry consumed by user space.
-	/// @note The value always trails @ref m_k_cq_produce.
-	/// @note Written by user space, read by the kernel.
-	vsm::atomic_ref<uint32_t> const m_k_cq_consume;
-
-	/// @brief Describes the io_uring dynamic state.
-	/// @note Written by the kernel, read by user space.
-	vsm::atomic_ref<uint32_t const> const m_k_flags;
 
 
 	/// @brief Size of the submission queue buffer.
@@ -308,7 +273,7 @@ struct _io_uring_multiplexer : io_uring_slot, externally_synchronized
 
 	uint32_t m_sq_consume;
 
-	/// @brief One past the SQE most recently
+	/// @brief One past the SQE most recently acquired for recording.
 	/// @note @ref m_sq_ready <= m_sq_acquire <= @ref m_sq_consume
 	uint32_t m_sq_acquire;
 
@@ -316,46 +281,14 @@ struct _io_uring_multiplexer : io_uring_slot, externally_synchronized
 	/// @note @ref m_k_sq_produce == m_sq_release <= @ref m_sq_ready
 	uint32_t m_sq_release;
 
+public:
+	[[nodiscard]] vsm::result<void> attach_fd(int fd, connector_type& c);
+	[[nodiscard]] vsm::result<void> detach_fd(int fd, connector_type& c);
 
-	/// @brief Size of the completion queue buffer.
-	uint32_t const m_cq_size;
-
-	uint32_t m_cq_produce;
-
-	/// @brief One past the CQE most recently consumed by user space.
-	/// @ref m_k_cq_consume == m_cq_consume <= @ref m_k_cq_produce
-	uint32_t m_cq_consume;
+	void cancel_io(operation_type& operation, user_data_ptr user_data);
 
 
-	vsm_gcc_diagnostic(push)
-
-	// TODO: Move _io_uring_multiplexer into multiplexer.cpp.
-	// GCC warns about the use of hardware_destructive_interference_size due to its ABI-breaking
-	// potential. Despite being located in a header, the members of this structure are not accessed
-	// by library user code.
-	vsm_gcc_diagnostic(ignored "-Winterference-size")
-
-	struct alignas(std::hardware_destructive_interference_size)
-	{
-		vsm::atomic<bool> wake_requested = false;
-		vsm::atomic<bool> cancel_pending = false;
-
-		vsm::intrusive::mpsc_queue<operation_type> cancel_queue;
-	}
-	m_shared;
-
-	vsm_gcc_diagnostic(pop)
-
-
-	explicit _io_uring_multiplexer(
-		io_uring_params const& setup,
-		unique_handle&& io_uring,
-		unique_byte_mmap&& sq_ring,
-		unique_byte_mmap&& cq_ring,
-		unique_void_mmap&& sq_data) noexcept;
-
-	~_io_uring_multiplexer();
-
+	class record_context;
 
 	class timeout
 	{
@@ -392,10 +325,7 @@ struct _io_uring_multiplexer : io_uring_slot, externally_synchronized
 		friend _io_uring_multiplexer;
 	};
 
-
-	class record_context;
-
-
+private:
 	template<typename T>
 	class ring_view
 	{
@@ -428,16 +358,6 @@ struct _io_uring_multiplexer : io_uring_slot, externally_synchronized
 		return ring_view<io_uring_sqe>(m_sqes.get(), m_sq_size - 1, m_sqe_multiply_shift);
 	}
 
-	[[nodiscard]] ring_view<io_uring_cqe const> get_cqes() const
-	{
-		return ring_view<io_uring_cqe const>(m_cqes, m_cq_size - 1, m_cqe_multiply_shift);
-	}
-
-
-	[[nodiscard]] vsm::result<void> attach_fd(int fd, connector_type& c);
-	[[nodiscard]] vsm::result<void> detach_fd(int fd, connector_type& c);
-
-
 	void enter_record_context()
 	{
 		vsm_assert(!m_in_record_context &&
@@ -452,41 +372,16 @@ struct _io_uring_multiplexer : io_uring_slot, externally_synchronized
 		m_in_record_context = false;
 	}
 
-	[[nodiscard]] bool flush_cancel_queue();
-
-	[[nodiscard]] bool has_available_sqes() const;
-
-	[[nodiscard]] bool has_pending_sqes() const;
-	[[nodiscard]] bool has_pending_cqes() const;
-
-	void release_sqes();
-	[[nodiscard]] bool acquire_cqes();
-
-	void reap_cqe(io_uring_cqe const& cqe);
-	[[nodiscard]] bool reap_all_cqes();
-
-	[[nodiscard]] vsm::result<void> commit();
-
-
-	void submit_async_cancel(user_data_ptr user_data);
-	void cancel_io_externally_synchronized(operation_type& operation, user_data_ptr user_data);
-	void cancel_io_internally_synchronized(operation_type& operation);
-	void cancel_io(operation_type& operation, user_data_ptr user_data);
-
-	void wake_poll_thread();
-	void wake_poll_thread_reset();
-
-	[[nodiscard]] bool is_kernel_thread_inactive() const;
-
-	[[nodiscard]] vsm::result<int> enter(
-		unsigned to_submit,
-		unsigned min_complete,
-		unsigned flags,
-		deadline deadline);
 
 	[[nodiscard]] vsm::result<void> wait_for_sqe(deadline deadline);
-
 	[[nodiscard]] vsm::result<bool> poll(poll_parameters const& args);
+
+protected:
+	explicit _io_uring_multiplexer(
+		io_uring_params const& setup
+		unique_io_uring_byte_mmap&& sq_ring,
+		unique_io_uring_byte_mmap&& cq_ring,
+		unique_io_uring_void_mmap&& sq_data) noexcept;
 };
 
 static_assert(std::is_default_constructible_v<_io_uring_multiplexer::io_slot>);
@@ -617,7 +512,6 @@ public:
 
 	using io_slot = _io_uring_multiplexer::io_slot;
 	using timeout = _io_uring_multiplexer::timeout;
-	using record_context = _io_uring_multiplexer::record_context;
 
 private:
 	explicit io_uring_multiplexer(std::unique_ptr<_io_uring_multiplexer> multiplexer) noexcept

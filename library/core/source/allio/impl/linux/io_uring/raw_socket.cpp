@@ -29,7 +29,7 @@ static io_result<void> _submit_connect(
 
 	posix::socket_address_union& addr = get_address(s.addr_storage);
 
-	io_uring_multiplexer::record_context ctx(m, a.deadline);
+	io_uring_record_context ctx(m, a.deadline);
 
 	vsm_try_ptr(sqe, ctx.push());
 
@@ -133,7 +133,7 @@ static io_result<size_t> _submit_recv(
 {
 	auto const buffers = get_io_buffers_unchecked(s.buffers_storage, a.buffers, layout);
 
-	io_uring_multiplexer::record_context ctx(m, a.deadline);
+	io_uring_record_context ctx(m, a.deadline);
 	auto const [fd, fd_flags] = ctx.get_fd(c, h.platform_handle);
 
 	vsm_try_ptr(sqe, ctx.push());
@@ -220,7 +220,7 @@ static io_result<size_t> _submit_send(
 {
 	auto const buffers = get_io_buffers_unchecked(s.buffers_storage, a.buffers, layout);
 
-	io_uring_multiplexer::record_context ctx(m, a.deadline);
+	io_uring_record_context ctx(m, a.deadline);
 	auto const [fd, fd_flags] = ctx.get_fd(c, h.platform_handle);
 
 	vsm_try_ptr(sqe, ctx.push());

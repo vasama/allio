@@ -4,8 +4,37 @@
 
 namespace allio::detail {
 
+template<handle Handle, typename Traits, typename UserTraits>
+struct _rebind_facade_traits
+{
+	using type = UserTraits;
+};
+
+template<detached_handle Handle, typename Traits>
+	requires requires { typename Traits::detached_traits; }
+struct _rebind_facade_traits<Handle, Traits, void>
+{
+	using type = typename Traits::detached_traits;
+};
+
+template<attached_handle Handle, typename Traits>
+	requires requires { typename Traits::attached_traits; }
+struct _rebind_facade_traits<Handle, Traits, void>
+{
+	using type = typename Traits::attached_traits;
+};
+
+template<handle Handle, typename Traits, typename UserTraits>
+using rebind_facade_traits = typename _rebind_facade_traits<Handle, Traits, UserTraits>::type;
+
 template<handle Handle, typename Traits>
 class basic_facade;
+
+template<typename Handle, typename InnerTraits, typename OuterTraits>
+class basic_facade<basic_facade<Handle, InnerTraits>, OuterTraits>
+{
+	static_assert(sizeof(Handle) == 0);
+};
 
 template<detached_handle Handle, typename Traits>
 class basic_facade<Handle, Traits>
@@ -14,10 +43,13 @@ class basic_facade<Handle, Traits>
 {
 	static_assert(!requires { typename Handle::facade_concept; });
 
-	template<typename OtherHandle>
-	using rebind = basic_facade<OtherHandle, Traits>;
+	template<typename OtherHandle, typename UserTraits>
+	using rebind = basic_facade<OtherHandle, rebind_facade_traits<OtherHandle, Traits, UserTraits>>;
 
 public:
+	using handle_type = Handle;
+	using traits_type = Traits;
+
 	using facade_concept = void;
 
 	template<object OtherObject>
@@ -34,32 +66,32 @@ public:
 	{
 	}
 
-	template<multiplexer_for<typename Handle::object_type> Multiplexer>
+	template<typename UserTraits = void, multiplexer_for<typename Handle::object_type> Multiplexer>
 	[[nodiscard]] auto via(Multiplexer& multiplexer) &&
 	{
-		return _via<multiplexer_handle_t<Multiplexer>>(multiplexer);
+		return _via<UserTraits, multiplexer_handle_t<Multiplexer>>(multiplexer);
 	}
 
-	template<typename MultiplexerHandle>
+	template<typename UserTraits = void, typename MultiplexerHandle>
 		requires multiplexer_handle_for<std::remove_cvref_t<MultiplexerHandle>, typename Handle::object_type>
 	[[nodiscard]] auto via(MultiplexerHandle&& multiplexer) &&
 	{
-		return _via<std::remove_cvref_t<MultiplexerHandle>>(vsm_forward(multiplexer));
+		return _via<UserTraits, std::remove_cvref_t<MultiplexerHandle>>(vsm_forward(multiplexer));
 	}
 
-	template<multiplexer_handle_for<typename Handle::object_type> MultiplexerHandle>
+	template<typename UserTraits = void, multiplexer_handle_for<typename Handle::object_type> MultiplexerHandle>
 	[[nodiscard]] auto via(std::convertible_to<MultiplexerHandle> auto&& multiplexer) &&
 	{
-		return _via<MultiplexerHandle>(vsm_forward(multiplexer));
+		return _via<UserTraits, MultiplexerHandle>(vsm_forward(multiplexer));
 	}
 
 private:
-	template<multiplexer_handle_for<typename Handle::object_type> MultiplexerHandle>
+	template<typename UserTraits = void, multiplexer_handle_for<typename Handle::object_type> MultiplexerHandle>
 	[[nodiscard]] auto _via(std::convertible_to<MultiplexerHandle> auto&& multiplexer)
 	{
-		using handle_type = typename Handle::template rebind_multiplexer<MultiplexerHandle>;
+		using new_handle_type = typename Handle::template rebind_multiplexer<MultiplexerHandle>;
 
-		auto r = rebind_handle<rebind<handle_type>>(
+		auto r = rebind_handle<rebind<new_handle_type, UserTraits>>(
 			vsm_move(*this),
 			vsm_forward(multiplexer));
 
@@ -115,10 +147,13 @@ class basic_facade<Handle, Traits>
 {
 	static_assert(!requires { typename Handle::facade_concept; });
 
-	template<typename OtherHandle>
-	using rebind = basic_facade<OtherHandle, Traits>;
+	template<typename OtherHandle, typename UserTraits>
+	using rebind = basic_facade<OtherHandle, rebind_facade_traits<OtherHandle, Traits, UserTraits>>;
 
 public:
+	using handle_type = Handle;
+	using traits_type = Traits;
+
 	using facade_concept = void;
 
 	template<object OtherObject>
@@ -135,10 +170,11 @@ public:
 	{
 	}
 
+	template<typename UserTraits = void>
 	[[nodiscard]] auto detach() &&
 	{
-		using handle_type = typename Handle::template rebind_multiplexer<void>;
-		auto r = rebind_handle<rebind<handle_type>>(vsm_move(*this));
+		using new_handle_type = typename Handle::template rebind_multiplexer<void>;
+		auto r = rebind_handle<rebind<new_handle_type, UserTraits>>(vsm_move(*this));
 
 		if constexpr (Traits::has_transform_result)
 		{

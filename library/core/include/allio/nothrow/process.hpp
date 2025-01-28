@@ -1,9 +1,9 @@
 #pragma once
 
 #include <allio/handles/process.hpp>
-#include <allio/nothrow/blocking.hpp>
+#include <allio/nothrow/traits.hpp>
 
-namespace allio::nothrow::blocking {
+namespace allio::nothrow {
 inline namespace processes {
 
 using process_handle = traits_type::handle<process_t>;
@@ -20,4 +20,4 @@ using namespace detail::_this_process;
 }
 
 } // namespace this_process
-} // namespace allio::nothrow::blocking
+} // namespace allio::nothrow

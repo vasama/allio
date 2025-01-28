@@ -2,7 +2,6 @@
 #include <allio/impl/win32/handles/process.hpp>
 
 #include <allio/detail/dynamic_buffer.hpp>
-#include <allio/impl/bounded_vector.hpp>
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/transcode.hpp>
 #include <allio/impl/win32/command_line.hpp>

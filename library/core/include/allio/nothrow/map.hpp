@@ -1,9 +1,9 @@
 #pragma once
 
 #include <allio/handles/map.hpp>
-#include <allio/nothrow/blocking.hpp>
+#include <allio/nothrow/traits.hpp>
 
-namespace allio::nothrow::blocking {
+namespace allio::nothrow {
 inline namespace mapping {
 
 using map_handle = traits_type::handle<map_t>;
@@ -39,4 +39,4 @@ using map_handle = traits_type::handle<map_t>;
 }
 
 } // inline namespace mapping
-} // namespace allio::nothrow::blocking
+} // namespace allio::nothrow

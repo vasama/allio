@@ -93,7 +93,7 @@ static io_result<receive_result> _submit_recv(
 		.msg_iovlen = buffers.buffers_size,
 	};
 
-	io_uring_multiplexer::record_context ctx(m, a.deadline);
+	io_uring_record_context ctx(m, a.deadline);
 	auto const [fd, fd_flags] = ctx.get_fd(c, h.platform_handle);
 
 	vsm_try_ptr(sqe, ctx.push());
@@ -180,7 +180,7 @@ static io_result<void> _submit_send(
 		.msg_iovlen = buffers.buffers_size,
 	};
 
-	io_uring_multiplexer::record_context ctx(m);
+	io_uring_record_context ctx(m);
 	auto const [fd, fd_flags] = ctx.get_fd(c, h.platform_handle);
 
 	vsm_try_ptr(sqe, ctx.push());
