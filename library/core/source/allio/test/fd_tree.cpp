@@ -21,7 +21,9 @@ TEST_CASE("fd_tree insertion and removal", "[fd_tree]")
 	}
 
 	auto& rng = Catch::sharedRng();
-	std::uniform_int_distribution<int> distribution(0, insertion_count - 1);
+	std::uniform_int_distribution<int> distribution(
+		0,
+		insertion_count - 1);
 
 	std::set<int> free_indices;
 	auto remove_at = [&](int const index)

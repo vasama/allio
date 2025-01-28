@@ -72,8 +72,6 @@ class fd_tree
 			map_handle_t,
 			(half_block_size - sizeof(size_t)) / sizeof(map_handle_t)>;
 
-		static_assert(sizeof(vector_type) <= half_block_size);
-
 		vector_type m_handles;
 
 	public:
@@ -108,6 +106,7 @@ class fd_tree
 			m_handles.clear();
 		}
 	};
+	static_assert(sizeof(block_array_t) <= half_block_size);
 
 	using block_pair = std::pair<void*, void*>;
 
