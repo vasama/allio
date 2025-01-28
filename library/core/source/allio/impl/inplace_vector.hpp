@@ -53,6 +53,11 @@ class inplace_vector : inplace_vector_storage<T, Capacity>
 public:
 	inplace_vector() = default;
 
+	[[nodiscard]] bool empty() const
+	{
+		return this->m_size == 0;
+	}
+
 	[[nodiscard]] size_t size() const
 	{
 		return this->m_size;
@@ -143,9 +148,6 @@ public:
 		this->set_size(this->m_size + 1);
 		return ptr;
 	}
-
-	template<std::ranges::range R>
-	void append_range(R&& range);
 
 	void clear()
 	{

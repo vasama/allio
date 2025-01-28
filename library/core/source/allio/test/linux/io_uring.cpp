@@ -1,6 +1,5 @@
+#include <allio/linux/detail/io_uring/mmap.hpp>
 #include <allio/impl/linux/io_uring.hpp>
-
-#include <allio/linux/detail/unique_mmap.hpp>
 
 #include <vsm/atomic.hpp>
 #include <vsm/numeric.hpp>
@@ -20,8 +19,12 @@ using namespace allio::linux;
 
 namespace {
 
+//TODO: Use blocking::map_handle instead.
 template<typename T>
-static vsm::result<unique_mmap<T>> mmap(int const fd, uint64_t const offset, size_t const size)
+static vsm::result<unique_io_uring_mmap<T>> mmap(
+	int const fd,
+	uint64_t const offset,
+	size_t const size)
 {
 	void* const addr = ::mmap(
 		nullptr,
@@ -36,7 +39,10 @@ static vsm::result<unique_mmap<T>> mmap(int const fd, uint64_t const offset, siz
 		return vsm::unexpected(get_last_error());
 	}
 
-	return vsm_lazy(unique_mmap<T>(reinterpret_cast<T*>(addr), mmap_deleter(size)));
+	return vsm::result<unique_io_uring_mmap<T>>(
+		vsm::result_value,
+		reinterpret_cast<T*>(addr),
+		io_uring_mmap_deleter(size));
 }
 
 static vsm::result<std::pair<unique_handle, unique_handle>> create_pipe_pair()
@@ -78,7 +84,7 @@ TEST_CASE("io_uring", "[io_uring]")
 		sqes_mmap.get(),
 		setup.sq_entries);
 
-	auto const get_k = [&](unique_mmap<std::byte> const& mmap, size_t const offset)
+	auto const get_k = [&](unique_io_uring_mmap<std::byte> const& mmap, size_t const offset)
 	{
 		return vsm::atomic_ref<uint32_t>(*reinterpret_cast<uint32_t*>(mmap.get() + offset));
 	};

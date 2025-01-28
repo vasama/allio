@@ -253,7 +253,6 @@ vsm_configure(
 		source/allio/impl/linux/stat.hpp
 		source/allio/impl/linux/timeout.hpp
 		source/allio/impl/linux/transcode.cpp
-		source/allio/impl/linux/unique_mmap.cpp
 		source/allio/impl/linux/version.cpp
 		source/allio/impl/linux/version.hpp
 		source/allio/impl/posix/socket.cpp

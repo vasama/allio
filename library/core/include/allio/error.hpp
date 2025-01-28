@@ -9,11 +9,11 @@
 
 namespace allio {
 
-void unrecoverable_error(std::error_code error);
+void unrecoverable_error(std::error_code error) noexcept;
 
 namespace detail {
 
-inline void unrecoverable(vsm::result<void> const& e)
+inline void unrecoverable(vsm::result<void> const& e) noexcept
 {
 	if (!e)
 	{
@@ -21,7 +21,7 @@ inline void unrecoverable(vsm::result<void> const& e)
 	}
 }
 
-decltype(auto) unrecoverable(auto&& r, auto&& default_value)
+decltype(auto) unrecoverable(auto&& r, auto&& default_value) noexcept
 {
 	if (r)
 	{

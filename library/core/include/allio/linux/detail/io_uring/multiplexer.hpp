@@ -5,7 +5,7 @@
 #include <allio/detail/io.hpp>
 #include <allio/detail/multiplexer.hpp>
 #include <allio/detail/unique_handle.hpp>
-#include <allio/linux/detail/mmap.hpp>
+#include <allio/linux/detail/io_uring/mmap.hpp>
 #include <allio/linux/timespec.hpp>
 
 #include <vsm/atomic.hpp>
@@ -49,42 +49,10 @@ inline constexpr explicit_parameter<completion_queue_size_t> completion_queue_si
 
 } // namespace io_uring
 
-class io_uring_mmap_deleter
-{
-	static constexpr size_t borrow_value = static_cast<size_t>(-1);
-
-	size_t m_size;
-
-public:
-	explicit io_uring_mmap_deleter(size_t const size)
-		: m_size(size)
-	{
-	}
-
-	[[nodiscard]] static io_uring_mmap_deleter borrow()
-	{
-		return io_uring_mmap_deleter(borrow_value);
-	}
-
-	void operator()(void const* const addr) const
-	{
-		if (m_size != borrow_value)
-		{
-			close_mmap(const_cast<void*>(addr), m_size);
-		}
-	}
-};
-
-template<typename T>
-using unique_io_uring_mmap = std::unique_ptr<T, io_uring_mmap_deleter>;
-
-using unique_io_uring_void_mmap = unique_io_uring_mmap<void>;
-using unique_io_uring_byte_mmap = unique_io_uring_mmap<std::byte>;
-
 class _io_uring_multiplexer : public externally_synchronized
 {
-	vsm_partial(_io_uring_multiplexer_2);
-	vsm_partial_delete(_io_uring_multiplexer_2);
+	vsm_partial(_io_uring_multiplexer);
+	vsm_partial_delete(_io_uring_multiplexer);
 
 public:
 	using poll_parameters = deadline_t;
@@ -242,6 +210,33 @@ private:
 	void const* const m_cqes;
 
 
+	/// @brief One past the newest submission queue entry produced by user space.
+	/// @note Written by user space, read by the kernel.
+	vsm::atomic_ref<uint32_t> const m_k_sq_produce;
+
+	/// @brief One past the newest submission queue entry consumed by the kernel.
+	/// @note The value always trails @ref m_k_sq_produce.
+	/// @note Written by the kernel, read by user space.
+	vsm::atomic_ref<uint32_t const> const m_k_sq_consume;
+
+	/// @brief Maps logical SQE index to physical index in @ref m_sqes.
+	/// @note Written by user space, read by user space and the kernel.
+	uint32_t* const m_k_sq_array;
+
+	/// @brief One past the newest completion queue entry produced by the kernel.
+	/// @note Written by the kernel, read by user space.
+	vsm::atomic_ref<uint32_t const> const m_k_cq_produce;
+
+	/// @brief One past the newest completion queue entry consumed by user space.
+	/// @note The value always trails @ref m_k_cq_produce.
+	/// @note Written by user space, read by the kernel.
+	vsm::atomic_ref<uint32_t> const m_k_cq_consume;
+
+	/// @brief Describes the io_uring dynamic state.
+	/// @note Written by the kernel, read by user space.
+	vsm::atomic_ref<uint32_t const> const m_k_flags;
+
+
 	bool m_in_record_context : 1 = false;
 	bool m_has_enter_ext_arg : 1 = false;
 	bool m_has_kernel_thread : 1 = false;
@@ -286,6 +281,8 @@ public:
 	[[nodiscard]] vsm::result<void> detach_fd(int fd, connector_type& c);
 
 	void cancel_io(operation_type& operation, user_data_ptr user_data);
+
+	[[nodiscard]] vsm::result<bool> poll(poll_parameters const& args);
 
 
 	class record_context;
@@ -374,11 +371,10 @@ private:
 
 
 	[[nodiscard]] vsm::result<void> wait_for_sqe(deadline deadline);
-	[[nodiscard]] vsm::result<bool> poll(poll_parameters const& args);
 
 protected:
 	explicit _io_uring_multiplexer(
-		io_uring_params const& setup
+		io_uring_params const& setup,
 		unique_io_uring_byte_mmap&& sq_ring,
 		unique_io_uring_byte_mmap&& cq_ring,
 		unique_io_uring_void_mmap&& sq_data) noexcept;

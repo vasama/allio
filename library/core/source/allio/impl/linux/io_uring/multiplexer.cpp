@@ -71,7 +71,10 @@ static uint8_t get_cqe_size(io_uring_params const& setup)
 }
 
 template<typename T = std::byte>
-static vsm::result<unique_mmap<T>> mmap(int const fd, uint64_t const offset, size_t const size)
+static vsm::result<unique_io_uring_mmap<T>> mmap(
+	int const fd,
+	uint64_t const offset,
+	size_t const size)
 {
 	void* const addr = ::mmap(
 		nullptr,
@@ -86,7 +89,10 @@ static vsm::result<unique_mmap<T>> mmap(int const fd, uint64_t const offset, siz
 		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
-	return vsm_lazy(unique_mmap<T>(reinterpret_cast<T*>(addr), mmap_deleter(size)));
+	return vsm::result<unique_io_uring_mmap<T>>(
+		vsm::result_value,
+		reinterpret_cast<T*>(addr),
+		io_uring_mmap_deleter(size));
 }
 
 static uint8_t get_cqe_skip_success_flag(io_uring_params const& setup)
@@ -130,8 +136,8 @@ public:
 
 } // namespace
 
-using _io_uring_multiplexer_impl = vsm::partial::private_class<_io_uring_multiplexer_2>;
-class _io_uring_multiplexer_2::private_class : public _io_uring_multiplexer_2
+using _io_uring_multiplexer_impl = vsm::partial::private_class<_io_uring_multiplexer>;
+class _io_uring_multiplexer::private_class : public _io_uring_multiplexer
 {
 	/// Submission ring buffer.
 	///
@@ -182,33 +188,6 @@ public:
 	unique_handle m_wake_event;
 
 
-	/// @brief One past the newest submission queue entry produced by user space.
-	/// @note Written by user space, read by the kernel.
-	vsm::atomic_ref<uint32_t> const m_k_sq_produce;
-
-	/// @brief One past the newest submission queue entry consumed by the kernel.
-	/// @note The value always trails @ref m_k_sq_produce.
-	/// @note Written by the kernel, read by user space.
-	vsm::atomic_ref<uint32_t const> const m_k_sq_consume;
-
-	/// @brief Maps logical SQE index to physical index in @ref m_sqes.
-	/// @note Written by user space, read by user space and the kernel.
-	uint32_t* const m_k_sq_array;
-
-	/// @brief One past the newest completion queue entry produced by the kernel.
-	/// @note Written by the kernel, read by user space.
-	vsm::atomic_ref<uint32_t const> const m_k_cq_produce;
-
-	/// @brief One past the newest completion queue entry consumed by user space.
-	/// @note The value always trails @ref m_k_cq_produce.
-	/// @note Written by user space, read by the kernel.
-	vsm::atomic_ref<uint32_t> const m_k_cq_consume;
-
-	/// @brief Describes the io_uring dynamic state.
-	/// @note Written by the kernel, read by user space.
-	vsm::atomic_ref<uint32_t const> const m_k_flags;
-
-
 	/// @brief Size of the completion queue buffer.
 	uint32_t const m_cq_size;
 
@@ -243,6 +222,7 @@ public:
 
 
 	explicit private_class(
+		int kernel_version,
 		io_uring_params const& setup,
 		unique_handle&& io_uring,
 		unique_io_uring_byte_mmap&& sq_ring,
@@ -275,7 +255,7 @@ public:
 		_io_uring_multiplexer_impl* m_multiplexer;
 
 	public:
-		explicit file_index_deleter(_io_uring_multiplexer_impl& multiplexer)
+		file_index_deleter(_io_uring_multiplexer_impl& multiplexer)
 			: m_multiplexer(&multiplexer)
 		{
 		}
@@ -289,10 +269,25 @@ public:
 
 	[[nodiscard]] vsm::result<unique_file_index> allocate_file_index()
 	{
-		return m_file_index_tree.allocate().transform([](int const file_index)
+		return m_file_index_tree.allocate().transform([&](int const file_index)
 		{
 			return unique_file_index(file_index, file_index_deleter(*this));
 		});
+	}
+
+	[[nodiscard]] vsm::result<void> set_registered_fd(int const file_index, int const fd)
+	{
+		io_uring_rsrc_update update =
+		{
+			.offset = vsm::truncating(file_index),
+			.data = reinterpret_cast<uintptr_t>(&fd),
+		};
+
+		return vsm::discard_value(io_uring_register(
+			m_io_uring.get(),
+			IORING_REGISTER_FILES_UPDATE,
+			&update,
+			/* nr_args: */ 1));
 	}
 
 
@@ -357,7 +352,7 @@ public:
 };
 
 _io_uring_multiplexer::_io_uring_multiplexer(
-	io_uring_params const& setup
+	io_uring_params const& setup,
 	unique_io_uring_byte_mmap&& sq_ring,
 	unique_io_uring_byte_mmap&& cq_ring,
 	unique_io_uring_void_mmap&& sq_data) noexcept
@@ -365,6 +360,13 @@ _io_uring_multiplexer::_io_uring_multiplexer(
 	, m_cq_mmap(vsm_move(cq_ring))
 	, m_sqes(vsm_move(sq_data))
 	, m_cqes(m_cq_mmap.get() + setup.cq_off.cqes)
+
+	, m_k_sq_produce(*get_kernel_uint32(m_sq_mmap, setup.sq_off.tail))
+	, m_k_sq_consume(*get_kernel_uint32(m_sq_mmap, setup.sq_off.head))
+	, m_k_sq_array(get_kernel_uint32(m_sq_mmap, setup.sq_off.array))
+	, m_k_cq_produce(*get_kernel_uint32(m_cq_mmap, setup.cq_off.tail))
+	, m_k_cq_consume(*get_kernel_uint32(m_cq_mmap, setup.cq_off.head))
+	, m_k_flags(*get_kernel_uint32(m_sq_mmap, setup.sq_off.flags))
 
 	, m_sqe_size(get_sqe_size(setup))
 	, m_cqe_size(get_cqe_size(setup))
@@ -380,7 +382,8 @@ _io_uring_multiplexer::_io_uring_multiplexer(
 {
 }
 
-_io_uring_multiplexer_impl::_io_uring_multiplexer_impl(
+_io_uring_multiplexer_impl::private_class(
+	int const kernel_version,
 	io_uring_params const& setup,
 	unique_handle&& io_uring,
 	unique_io_uring_byte_mmap&& sq_ring,
@@ -390,13 +393,6 @@ _io_uring_multiplexer_impl::_io_uring_multiplexer_impl(
 
 	, m_io_uring(vsm_move(io_uring))
 	, m_registered_io_uring(-1)
-
-	, m_k_sq_produce(*get_kernel_uint32(m_sq_mmap, setup.sq_off.tail))
-	, m_k_sq_consume(*get_kernel_uint32(m_sq_mmap, setup.sq_off.head))
-	, m_k_sq_array(get_kernel_uint32(m_sq_mmap, setup.sq_off.array))
-	, m_k_cq_produce(*get_kernel_uint32(m_cq_mmap, setup.cq_off.tail))
-	, m_k_cq_consume(*get_kernel_uint32(m_cq_mmap, setup.cq_off.head))
-	, m_k_flags(*get_kernel_uint32(m_sq_mmap, setup.sq_off.flags))
 
 	, m_cq_size(setup.cq_entries)
 	, m_cq_consume(m_k_cq_produce.load(std::memory_order_relaxed))
@@ -409,6 +405,11 @@ _io_uring_multiplexer_impl::_io_uring_multiplexer_impl(
 	if (setup.flags & IORING_SETUP_SQPOLL)
 	{
 		m_has_kernel_thread = true;
+	}
+
+	if (kernel_version >= KERNEL_VERSION(5, 12, 0))
+	{
+		m_has_direct_update = true;
 	}
 
 	for (uint32_t i = 0; i < m_sq_size; ++i)
@@ -488,8 +489,10 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 
 		if (args.kernel_thread != nullptr)
 		{
-			setup.wq_fd = static_cast<uint32_t>(
-				args.kernel_thread->m_multiplexer->m_io_uring.get());
+			auto* const that = static_cast<_io_uring_multiplexer_impl*>(
+				args.kernel_thread->m_multiplexer.get());
+
+			setup.wq_fd = static_cast<uint32_t>(that->m_io_uring.get());
 		}
 	}
 
@@ -522,9 +525,10 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 		{
 			if (setup.features & IORING_FEAT_SINGLE_MMAP)
 			{
-				return vsm_lazy(unique_io_uring_byte_mmap(
+				return vsm::result<unique_io_uring_byte_mmap>(
+					vsm::result_value,
 					sq_ring.get(),
-					mmap_deleter::borrow()));
+					io_uring_mmap_deleter::borrow());
 			}
 
 			return mmap(io_uring.get(), IORING_OFF_CQ_RING, cq_size);
@@ -545,6 +549,7 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 	int const kernel_version = get_kernel_version();
 
 	auto multiplexer = std::make_unique<_io_uring_multiplexer_impl>(
+		kernel_version,
 		setup,
 		vsm_move(io_uring),
 		vsm_move(rings.sq_ring),
@@ -598,6 +603,13 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 	return vsm::result<io_uring_multiplexer>(
 		vsm::result_value,
 		vsm_lazy(io_uring_multiplexer(vsm_move(multiplexer))));
+}
+
+void _io_uring_multiplexer::operator delete(
+	_io_uring_multiplexer* const self,
+	std::destroying_delete_t)
+{
+	vsm_qualified_delete(static_cast<_io_uring_multiplexer_impl*>(self));
 }
 
 
@@ -977,26 +989,18 @@ vsm::result<void> _io_uring_multiplexer::attach_fd(int const fd, connector_type&
 		return vsm::unexpected(allio_error(error::handle_is_null));
 	}
 
-	if (!m_has_direct_update)
+#if 0 //TODO: Enable file indices for manually attached handles.
+	if (m_has_direct_update)
 	{
-		return vsm::unexpected(allio_error(error::unsupported_operation));
+		vsm_try(file_index, self->allocate_file_index());
+		vsm_try_void(self->set_registered_fd(file_index.get(), fd));
+		c.file_index = file_index.release();
 	}
-
-	vsm_try(file_index, self->allocate_file_index());
-
-	io_uring_rsrc_update update =
+	else
+#endif
 	{
-		.offset = vsm::truncating(file_index.get()),
-		.data = reinterpret_cast<uintptr_t>(&fd),
-	};
-
-	vsm_try_discard(_io_uring_register(
-		self->m_io_uring.get(),
-		IORING_REGISTER_FILES_UPDATE,
-		&update,
-		/* nr_args: */ 1));
-
-	c.file_index = file_index.release();
+		c.file_index = -1;
+	}
 
 	return {};
 }
@@ -1008,6 +1012,12 @@ vsm::result<void> _io_uring_multiplexer::detach_fd(int const fd, connector_type&
 	if (fd == -1)
 	{
 		return vsm::unexpected(allio_error(error::handle_cannot_be_detached));
+	}
+
+	if (c.file_index != -1)
+	{
+		unrecoverable(self->set_registered_fd(c.file_index, -1));
+		self->m_file_index_tree.deallocate(c.file_index);
 	}
 
 	return {};

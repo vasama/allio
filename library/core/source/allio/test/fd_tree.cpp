@@ -9,7 +9,7 @@ using namespace allio;
 
 namespace {
 
-TEST_CASE("fd_tree")
+TEST_CASE("fd_tree insertion and removal", "[fd_tree]")
 {
 	static constexpr int insertion_count = 1'000'000;
 

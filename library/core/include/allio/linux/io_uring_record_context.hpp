@@ -9,7 +9,7 @@
 
 namespace allio {
 
-class _io_uring_multiplexer::record_context
+class detail::_io_uring_multiplexer::record_context
 {
 	static constexpr uint8_t link_flags = IOSQE_IO_LINK | IOSQE_IO_HARDLINK;
 
@@ -187,7 +187,7 @@ public:
 	}
 };
 
-using io_uring_record_context = _io_uring_multiplexer::record_context;
+using io_uring_record_context = detail::_io_uring_multiplexer::record_context;
 
 } // namespace
 

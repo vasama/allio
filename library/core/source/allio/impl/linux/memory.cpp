@@ -84,14 +84,17 @@ std::span<page_level const> detail::get_supported_page_levels()
 	static auto const value = []() -> supported_page_levels<3>
 	{
 		supported_page_levels<3> levels;
+		levels.unchecked_push_back(get_default_page_level());
+		vsm_assert(levels.size() == 1); //TODO: Debugging
 
-		levels.push_back(get_default_page_level());
-
-		if (auto r = get_supported_huge_page_levels())
+		if (auto const huge = get_supported_huge_page_levels(); huge && !huge->empty())
 		{
-			std::span const huge_levels = *r;
-			vsm_assert(huge_levels.front() != levels.front());
-			levels.append_range(huge_levels);
+			vsm_assert(huge->front() > levels.front());
+
+			for (page_level const huge_level : *huge)
+			{
+				levels.unchecked_push_back(huge_level);
+			}
 		}
 
 		return levels;

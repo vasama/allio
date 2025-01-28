@@ -25,7 +25,7 @@ using map_handle = traits_type::handle<map_t>;
 }
 
 [[nodiscard]] vsm::result<map_handle> map_file(
-	detail::handle_for<file_t> auto const& file,
+	detail::handle_for<detail::file_t> auto const& file,
 	auto&&... args)
 {
 	return detail::map_file<traits_type>(file, vsm_forward(args)...);
