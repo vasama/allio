@@ -16,10 +16,10 @@ class completion_storage
 	size_t m_completion_count = 0;
 
 public:
-	//TODO: check usages with max_completions != std::dynamic_extent
+	//TODO: check usages with max_completions != static_cast<size_t>(-1)
 	size_t remove(
 		detail::unique_handle const& completion_port,
-		size_t const max_completions = std::dynamic_extent)
+		size_t const max_completions = static_cast<size_t>(-1))
 	{
 		size_t const count = win32::remove_io_completions(
 			completion_port.get(),

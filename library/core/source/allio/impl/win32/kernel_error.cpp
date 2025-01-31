@@ -3,9 +3,47 @@
 #include <allio/impl/win32/kernel.hpp>
 
 #include <format>
+#include <memory>
 
 using namespace allio;
 using namespace allio::win32;
+
+static std::string get_win32_error_message(ULONG const error) noexcept
+{
+#if _MSVC_STL_UPDATE >= 202501L
+	return std::system_category().message(static_cast<int>(win32_error));
+#else
+	static constexpr DWORD flags =
+		FORMAT_MESSAGE_ALLOCATE_BUFFER |
+		FORMAT_MESSAGE_FROM_SYSTEM |
+		FORMAT_MESSAGE_IGNORE_INSERTS;
+
+	struct message_deleter
+	{
+		void operator()(void* const storage) const
+		{
+			LocalFree(storage);
+		}
+	};
+	std::unique_ptr<char, message_deleter> p_message;
+
+	DWORD const message_size = FormatMessageA(
+		flags,
+		/* lpSource: */ nullptr,
+		error,
+		/* dwLanguageId: */ 0x0409, // en-US
+		reinterpret_cast<char*>(static_cast<char**>(std::out_ptr(p_message))),
+		/* nSize: */ 0,
+		/* Arguments: */ nullptr);
+
+	if (message_size != 0)
+	{
+		return std::string(p_message.get(), message_size);
+	}
+#endif
+
+	return {};
+}
 
 char const* detail::kernel_error_category::name() const noexcept
 {
@@ -17,7 +55,10 @@ std::string detail::kernel_error_category::message(int const code) const
 	ULONG const win32_error = win32::RtlNtStatusToDosError(static_cast<NTSTATUS>(code));
 	if (win32_error != ERROR_MR_MID_NOT_FOUND)
 	{
-		return std::system_category().message(static_cast<int>(win32_error));
+		if (std::string message = get_win32_error_message(win32_error); !message.empty())
+		{
+			return message;
+		}
 	}
 
 	return std::format("NTSTATUS:{:08X}", static_cast<uint32_t>(code));

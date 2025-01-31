@@ -204,8 +204,7 @@ static vsm::result<directory_stream_pointer> query_directory_file(
 		return vsm::unexpected(allio_error(error::no_buffer_space));
 	}
 
-	IO_STATUS_BLOCK io_status_block;
-
+	thread_event::io_status_block_t io_status_block;
 	NTSTATUS status = query_directory_file_start(
 		handle,
 		event,

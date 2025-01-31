@@ -257,6 +257,7 @@ struct rebind_traits<U, basic_facade<H, T>>
 	}
 };
 
+#if 0
 template<typename H, typename T, typename U>
 struct rebind_traits<basic_facade<H, T>, U>
 {
@@ -266,6 +267,7 @@ struct rebind_traits<basic_facade<H, T>, U>
 		return rebind_handle<U>(vsm_forward(h2), vsm_forward(args)...);
 	}
 };
+#endif
 
 template<typename H1, typename T1, typename H2, typename T2>
 struct rebind_traits<basic_facade<H1, T1>, basic_facade<H2, T2>>

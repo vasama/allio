@@ -56,6 +56,18 @@ public:
 		throw_on_error(blocking_io<Operation>(h, a));
 		return h;
 	}
+
+	template<typename PreviousResult, typename Function>
+	static auto transform(PreviousResult&& previous_result, Function&& function)
+	{
+		return vsm_forward(function)(vsm_forward(previous_result));
+	}
+
+	template<typename PreviousResult, typename Function>
+	static auto and_then(PreviousResult&& previous_result, Function&& function)
+	{
+		return throw_on_error(vsm_forward(function)(vsm_forward(previous_result)));
+	}
 };
 
 } // namespace allio::detail

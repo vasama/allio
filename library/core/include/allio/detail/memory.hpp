@@ -43,13 +43,14 @@ enum class page_level : uint8_t
 	_16GiB                              = 34,
 };
 
-[[nodiscard]] inline page_level get_page_level(size_t const size)
+/// @pre @param size is a power of two greater than one.
+[[nodiscard]] inline constexpr page_level get_page_level(size_t const size)
 {
-	vsm_assert(size > 1 && (size & size - 1) == 0);
+	vsm_assert(size > 1 && std::has_single_bit(size)); //PRECONDITION
 	return static_cast<page_level>(std::countr_zero(size));
 }
 
-[[nodiscard]] inline size_t get_page_size(page_level const level)
+[[nodiscard]] inline constexpr size_t get_page_size(page_level const level)
 {
 	return static_cast<size_t>(1) << static_cast<uint8_t>(level);
 }
@@ -57,8 +58,8 @@ enum class page_level : uint8_t
 
 /// @return Array of paging levels supported by the platform.
 ///         The array is non-empty and sorted in ascending order.
-/// @note Support for a paging level does not guarantee that creating mappings at
-///       such a paging level will succeed, as additional privileges may be required.
+/// @note Support for a paging level does not guarantee that creating mappings at such a paging
+///       level will succeed, as additional privileges may be required.
 [[nodiscard]] std::span<page_level const> get_supported_page_levels();
 
 

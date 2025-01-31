@@ -4,12 +4,17 @@
 
 namespace allio::detail {
 
-struct nothrow_traits
+class nothrow_traits
 {
+public:
+	using detached_traits = nothrow_traits;
+
 	static constexpr bool has_transform_result = false;
 
+#if 0
 	template<typename T>
 	using result = vsm::result<T>;
+#endif
 
 	template<object Object, optional_multiplexer_handle_for<Object> MultiplexerHandle = void>
 	using handle = basic_facade<basic_handle<Object, MultiplexerHandle>, nothrow_traits>;
@@ -47,6 +52,18 @@ struct nothrow_traits
 			r = vsm::unexpected(r2.error());
 		}
 		return r;
+	}
+
+	template<typename PreviousResult, typename Function>
+	static auto transform(PreviousResult&& previous_result, Function&& function)
+	{
+		return vsm_forward(previous_result).transform(vsm_forward(function));
+	}
+
+	template<typename PreviousResult, typename Function>
+	static auto and_then(PreviousResult&& previous_result, Function&& function)
+	{
+		return vsm_forward(previous_result).and_then(vsm_forward(function));
 	}
 };
 

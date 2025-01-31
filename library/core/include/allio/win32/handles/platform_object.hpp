@@ -4,6 +4,7 @@
 
 namespace allio::detail {
 
+#if vsm_os_win32
 struct platform_object_t::impl_type : base_type::impl_type
 {
 	allio_handle_implementation_flags
@@ -26,5 +27,6 @@ struct platform_object_t::impl_type : base_type::impl_type
 		skip_handle_event_on_completion,
 	);
 };
+#endif
 
 } // namespace allio::detail

@@ -22,6 +22,7 @@ vsm_add_library(
 		source/allio/test/handles/file.cpp
 		source/allio/test/handles/map.cpp
 		#source/allio/test/handles/opaque_object.cpp
+		source/allio/test/handles/pipe.cpp
 		source/allio/test/handles/process.cpp
 		source/allio/test/handles/socket.cpp
 )

@@ -198,20 +198,21 @@ public:
 		native_platform_handle handle,
 		connector_type& c);
 
-	template<typename Object>
+	template<platform_object Object>
 	[[nodiscard]] vsm::result<void> attach_handle(
 		native_handle<Object> const& h,
 		async_connector<iocp_multiplexer, Object>& c)
 	{
-		return attach_platform_handle(h.platform_handle, c);
+		return _attach_handle(h, c);
 	}
 
-	template<typename Object>
+	template<platform_object Object>
 	[[nodiscard]] vsm::result<void> detach_handle(
 		native_handle<Object> const& h,
 		async_connector<iocp_multiplexer, Object>& c)
 	{
-		return detach_platform_handle(h.platform_handle, c);
+		using platform_object_native_handle [[maybe_unused]] = native_handle<platform_object_t>;
+		return detach_platform_handle(h.platform_object_native_handle::platform_handle, c);
 	}
 
 
@@ -297,6 +298,11 @@ private:
 
 	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(create_parameters const& args);
 	[[nodiscard]] static vsm::result<iocp_multiplexer> _create(iocp_multiplexer const& other);
+
+
+	[[nodiscard]] vsm::result<void> _attach_handle(
+		native_handle<platform_object_t> const& h,
+		connector_type& c);
 
 
 	[[nodiscard]] vsm::result<bool> _poll(poll_parameters const& args);

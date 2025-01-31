@@ -78,6 +78,18 @@ vsm::result<void> iocp_multiplexer::detach_platform_handle(
 		/* key_context: */ nullptr);
 }
 
+vsm::result<void> iocp_multiplexer::_attach_handle(
+	native_handle<platform_object_t> const& h,
+	connector_type& c)
+{
+	if (h.flags[platform_object_t::impl_type::flags::synchronous])
+	{
+		return vsm::unexpected(allio_error(error::handle_is_not_multiplexable));
+	}
+
+	return attach_platform_handle(h.platform_handle, c);
+}
+
 
 bool iocp_multiplexer::cancel_io(io_slot& slot, native_platform_handle const handle)
 {
@@ -99,10 +111,12 @@ bool iocp_multiplexer::cancel_io(io_slot& slot, native_platform_handle const han
 	}
 #endif
 
+	IO_STATUS_BLOCK io_status_block_cancel;
+
 	NTSTATUS const status = NtCancelIoFileEx(
 		unwrap_handle(handle),
 		reinterpret_cast<IO_STATUS_BLOCK*>(isb),
-		reinterpret_cast<IO_STATUS_BLOCK*>(isb));
+		&io_status_block_cancel);
 
 	if (NT_SUCCESS(status))
 	{

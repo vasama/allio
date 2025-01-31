@@ -59,6 +59,7 @@ enum class error
 
 	// Generic
 	unknown_failure,
+	invariant_violation,
 	unsupported_operation,
 	unsupported_input_format,
 	device_or_resource_busy,

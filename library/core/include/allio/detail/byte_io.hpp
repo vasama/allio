@@ -8,6 +8,12 @@
 
 namespace allio::detail {
 
+struct byte_io_limits
+{
+	size_t max_atomic_buffer_count;
+	size_t max_buffer_count;
+};
+
 struct file_offset_t
 {
 	fs_size offset;
@@ -117,7 +123,16 @@ struct random_write_t
 };
 
 template<typename Handle, typename Traits>
-struct stream_facade
+struct common_facade
+{
+	[[nodiscard]] byte_io_limits const& limits() const
+	{
+		return Handle::object_type::get_byte_io_limits(static_cast<Handle const&>(*this).native());
+	}
+};
+
+template<typename Handle, typename Traits>
+struct stream_facade : common_facade<Handle, Traits>
 {
 	[[nodiscard]] auto read_some(new_read_buffers const buffers, auto&&... args) const
 	{

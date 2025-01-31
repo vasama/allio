@@ -79,7 +79,8 @@ vsm::result<void> platform_object_t::close(
 	native_handle<platform_object_t>& h,
 	io_parameters_t<object_t, close_t> const&)
 {
-	if (!h.flags[impl_type::flags::pseudo_handle])
+	if (h.platform_handle != native_platform_handle::null &&
+		!h.flags[impl_type::flags::pseudo_handle])
 	{
 		close_platform_handle(unwrap_handle(h.platform_handle));
 	}

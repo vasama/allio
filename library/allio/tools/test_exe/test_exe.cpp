@@ -13,7 +13,7 @@
 
 #include <cstdio>
 
-#if _WIN32
+#if vsm_os_win32
 #include <fcntl.h>
 #include <io.h>
 #endif
@@ -41,7 +41,7 @@ static optional<string_view> parse(string_view argument, string_view const comma
 
 static void set_binary_mode(FILE* const file)
 {
-#if _WIN32
+#if vsm_os_win32
 	_setmode(_fileno(file), _O_BINARY);
 #endif
 }

@@ -32,31 +32,69 @@ template<typename ErrorCode>
 ErrorCode decode_error_code(uint32_t e);
 
 template<typename Encoding>
-consteval uint32_t encode_file_name(char const* const file_name)
+consteval uint32_t encode_file_name(
+	std::string_view const root_path,
+	std::string_view file_name)
 {
+#if vsm_os_win32
+	constexpr auto compare = [](
+		std::string_view const lhs,
+		std::string_view const rhs) -> std::strong_ordering
+	{
+		return std::lexicographical_compare_three_way(
+			lhs.begin(),
+			lhs.end(),
+			rhs.begin(),
+			rhs.end(),
+			[](char const lhs, char const rhs) -> std::strong_ordering
+			{
+				if ((lhs == '\\' || lhs == '/') && (rhs == '\\' || rhs == '/'))
+				{
+					return std::strong_ordering::equivalent;
+				}
+
+				return lhs <=> rhs;
+			});
+	};
+#else
+	constexpr auto compare = std::compare_three_way();
+#endif
+
+	if (compare(root_path, file_name.substr(0, root_path.size())) == 0)
+	{
+		file_name.remove_prefix(root_path.size());
+	}
+
 	constexpr char const* const* const beg = std::begin(Encoding::file_names);
 	constexpr char const* const* const end = std::end(Encoding::file_names);
 	static_assert(end - beg < 1 << file_bits);
 
 	auto const pos = std::lower_bound(
-		beg,
+		beg + 1, // Skip over the unknown file entry.
 		end,
 		file_name,
-		[](char const* const lhs, char const* const rhs)
+		[](std::string_view const lhs, std::string_view const rhs) -> bool
 		{
-			return std::string_view(lhs) < std::string_view(rhs);
+			return compare(lhs, rhs) < 0;
 		});
 
-	return static_cast<uint32_t>((pos + 1) - Encoding::file_names);
+	if (pos != end && compare(*pos, file_name) == 0)
+	{
+		return static_cast<uint32_t>(pos - beg);
+	}
+
+	return 0;
 }
 
 template<typename Encoding>
-consteval uint32_t encode_location(std::source_location const& location)
+consteval uint32_t encode_location(
+	std::string_view const root_path,
+	std::source_location const& location)
 {
 	if (location.line() < 1 << line_bits)
 	{
 		constexpr uint32_t line_range = static_cast<uint32_t>(1) << line_bits;
-		uint32_t const file = encode_file_name<Encoding>(location.file_name());
+		uint32_t const file = encode_file_name<Encoding>(root_path, location.file_name());
 		uint32_t const line = location.line() < line_range ? location.line() : 0;
 		return (line << file_bits | file) << code_bits;
 	}
@@ -77,12 +115,17 @@ template<typename Encoding, uint32_t Location, typename ErrorCode>
 }
 
 
-#define allio_error(...) ( \
+#ifdef __INTELLISENSE__
+#	define allio_error(...) (__VA_ARGS__)
+#else
+#	define allio_error(...) ( \
 		::allio::detail::ec::encode< \
 			allio_error_encoding, \
 			::allio::detail::ec::encode_location<allio_error_encoding>( \
+				allio_error_encoding_path "/", \
 				std::source_location::current()) \
 		>(__VA_ARGS__) \
 	)
+#endif
 
 } // namespace allio::detail::ec

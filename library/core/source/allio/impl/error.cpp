@@ -22,6 +22,8 @@ std::string detail::error_category::message(int const code) const
 		return "The operation completed successfully.";
 	case error::unknown_failure:
 		return "An unexpected failure occurred.";
+	case error::invariant_violation:
+		return "An internal invariant was violated.";
 	case error::unsupported_operation:
 		return "The requested operation is not supported.";
 	case error::unsupported_input_format:
@@ -112,26 +114,28 @@ std::error_condition detail::error_category::default_error_condition(int const c
 	{
 	// Generic
 	case error::none:
-		return std::error_condition(std::errc{});
+		return std::errc{};
 	case error::unknown_failure:
 		break;
+	case error::invariant_violation:
+		break;
 	case error::unsupported_operation:
-		return std::error_condition(std::errc::operation_not_supported);
+		return std::errc::operation_not_supported;
 	case error::unsupported_input_format:
-		return std::error_condition(std::errc::invalid_argument);
+		return std::errc::invalid_argument;
 	case error::device_or_resource_busy:
-		return std::error_condition(std::errc::device_or_resource_busy);
+		return std::errc::device_or_resource_busy;
 
 	// Arguments
 	case error::invalid_argument:
 	case error::argument_too_long:
-		return std::error_condition(std::errc::invalid_argument);
+		return std::errc::invalid_argument;
 
 	// Storage
 	case error::not_enough_memory:
-		return std::error_condition(std::errc::not_enough_memory);
+		return std::errc::not_enough_memory;
 	case error::no_buffer_space:
-		return std::error_condition(std::errc::no_buffer_space);
+		return std::errc::no_buffer_space;
 	case error::maximum_capacity_exceeded:
 		break;
 
@@ -155,9 +159,9 @@ std::error_condition detail::error_category::default_error_condition(int const c
 	case error::operation_pending:
 		break;
 	case error::operation_canceled:
-		return std::error_condition(std::errc::operation_canceled);
+		return std::errc::operation_canceled;
 	case error::operation_timed_out:
-		return std::error_condition(std::errc::timed_out);
+		return std::errc::timed_out;
 
 	// Byte I/O
 	case error::end_of_stream:
@@ -165,7 +169,7 @@ std::error_condition detail::error_category::default_error_condition(int const c
 
 	// Filesystem
 	case error::filename_too_long:
-		return std::error_condition(std::errc::filename_too_long);
+		return std::errc::filename_too_long;
 	case error::invalid_path:
 		break;
 	case error::invalid_current_directory:
@@ -177,7 +181,7 @@ std::error_condition detail::error_category::default_error_condition(int const c
 
 	// Memory
 	case error::invalid_address:
-		return std::error_condition(std::errc::bad_address);
+		return std::errc::bad_address;
 	case error::unsupported_page_level:
 		break;
 	case error::virtual_address_not_available:
@@ -189,7 +193,7 @@ std::error_condition detail::error_category::default_error_condition(int const c
 	case error::process_is_current_process:
 		break;
 	case error::process_arguments_too_long:
-		return std::error_condition(std::errc::argument_list_too_long);
+		return std::errc::argument_list_too_long;
 
 	// Sockets
 	case error::socket_already_bound:

@@ -20,7 +20,7 @@ struct decoded_error
 };
 
 template<typename Encoding, typename ErrorCode>
-decoded_error<ErrorCode> decode_error_code(int const e)
+decoded_error<ErrorCode> _decode_error_code(int const e)
 {
 	uint32_t encoded = static_cast<uint32_t>(e);
 
@@ -32,9 +32,9 @@ decoded_error<ErrorCode> decode_error_code(int const e)
 
 	return
 	{
-		.file = Encoding::file_names[file - 1],
+		.file = Encoding::file_names[file],
 		.line = static_cast<int>(line),
-		.code = static_cast<ErrorCode>(code),
+		.code = decode_error_code<ErrorCode>(code),
 	};
 }
 
@@ -47,16 +47,21 @@ char const* encoded_error_category<Encoding, ErrorCode>::name() const noexcept
 template<typename Encoding, typename ErrorCode>
 std::string encoded_error_category<Encoding, ErrorCode>::message(int const code) const
 {
-	auto const decoded = decode_error_code<Encoding, ErrorCode>(code);
+	auto const decoded = _decode_error_code<Encoding, ErrorCode>(code);
 	auto const message = make_error_code(decoded.code).message();
-	return std::format("{} [{}:{}]", message, decoded.file, decoded.line);
+
+	std::string_view const space = message.ends_with('\n')
+		? ""
+		: " ";
+
+	return std::format("{}{}[{}:{}]", message, space, decoded.file, decoded.line);
 }
 
 template<typename Encoding, typename ErrorCode>
 std::error_condition encoded_error_category<Encoding, ErrorCode>::default_error_condition(
 	int const code) const noexcept
 {
-	auto const decoded = decode_error_code<Encoding, ErrorCode>(code);
+	auto const decoded = _decode_error_code<Encoding, ErrorCode>(code);
 	return make_error_code(decoded.code).default_error_condition();
 }
 

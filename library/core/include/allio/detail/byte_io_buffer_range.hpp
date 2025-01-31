@@ -119,7 +119,7 @@ public:
 		new_io_buffer_iterator const& lhs,
 		new_io_buffer_iterator const& rhs)
 	{
-		return (rhs.m_ptr - lhs.m_ptr) / static_cast<ptrdiff_t>(sizeof(new_io_buffer));
+		return (lhs.m_ptr - rhs.m_ptr) / static_cast<ptrdiff_t>(sizeof(new_io_buffer));
 	}
 
 	[[nodiscard]] friend auto operator<=>(

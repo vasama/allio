@@ -129,6 +129,8 @@ TEST_CASE("wait packet can be used to wait for events", "[wait_packet][win32][ke
 
 TEST_CASE("wait packets do not support skipping the completion port on synchronous completion", "[wait_packet][win32][kernel]")
 {
+	//TODO: Test NtSetInformationObject
+
 	// The purpose of this test is to detect future support for this feature.
 
 	auto const wait_packet = create_wait_packet().value();

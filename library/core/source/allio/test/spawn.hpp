@@ -39,7 +39,7 @@ public:
 };
 
 template<typename Callable>
-static future<std::decay_t<std::invoke_result_t<Callable>>> spawn(Callable&& callable)
+[[nodiscard]] static future<std::decay_t<std::invoke_result_t<Callable>>> spawn(Callable&& callable)
 {
 	return future<std::decay_t<std::invoke_result_t<Callable>>>(
 		std::async(std::launch::async, vsm_forward(callable)));

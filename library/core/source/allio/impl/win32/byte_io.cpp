@@ -23,6 +23,12 @@ static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h,
 {
 	static constexpr bool is_random_access = requires { a.offset; };
 
+	if (a.deadline != deadline::never() &&
+		h.flags[platform_object_t::impl_type::flags::synchronous])
+	{
+		return vsm::unexpected(allio_error(error::unsupported_operation));
+	}
+
 	//TODO: Apply event based overlapped I/O to other synchronous I/O operations.
 	vsm_try(event, thread_event::get_for(h));
 
@@ -50,7 +56,7 @@ static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h,
 
 		vsm_try(relative_deadline, absolute_deadline.step());
 
-		IO_STATUS_BLOCK io_status_block;
+		thread_event::io_status_block_t io_status_block;
 		NTSTATUS status = Syscall(
 			handle,
 			event,
@@ -61,7 +67,7 @@ static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h,
 			const_cast<void*>(data),
 			max_transfer_size,
 			p_offset_integer,
-			/* Key: */ 0);
+			/* Key: */ nullptr);
 
 		if (status == STATUS_PENDING)
 		{
@@ -71,7 +77,7 @@ static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h,
 				relative_deadline);
 		}
 
-		if (!NT_SUCCESS(status))
+		if (!is_kernel_success(status))
 		{
 			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 		}
@@ -121,6 +127,7 @@ static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h,
 
 			if constexpr (is_random_access)
 			{
+				//TODO: Does this make sense? The completed I/O would have had to go past the max.
 				if (max_file_extent - transfer_size > static_cast<fs_size>(offset_integer.QuadPart))
 				{
 					goto outer_break;

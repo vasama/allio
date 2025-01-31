@@ -21,6 +21,11 @@ function(allio_add_error_encoding name target sources_target)
 		PROPERTY SOURCES
 	)
 
+	get_property(
+		sources_dir
+		TARGET "${sources_target}"
+		PROPERTY SOURCE_DIR)
+
 	set(sources_file_content "${sources}")
 	list(TRANSFORM sources_file_content APPEND "\n")
 	file(WRITE "${sources_file}" ${sources_file_content})
@@ -44,6 +49,7 @@ function(allio_add_error_encoding name target sources_target)
 	add_library("allio-ec-target-${name}" INTERFACE)
 
 	add_dependencies("${interface_target}" "${custom_target}")
+	target_compile_definitions("${interface_target}" INTERFACE "allio_error_encoding_path=\"${sources_dir}\"")
 	target_compile_definitions("${interface_target}" INTERFACE "allio_error_encoding=${encoding}")
 	target_include_directories("${interface_target}" INTERFACE "${include_dir}")
 

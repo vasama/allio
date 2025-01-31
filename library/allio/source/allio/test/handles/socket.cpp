@@ -86,12 +86,12 @@ TEST_CASE("Asynchronous stream sockets can exchange data", "[socket][async]")
 {
 	using namespace senders;
 
-	auto const endpoint = test::generate_endpoint();
-
 	auto multiplexer = default_multiplexer::create().value();
 
-	sync_wait(multiplexer, [&]() -> task<void>
+	sync_wait(multiplexer, []() -> task<void>
 	{
+		auto const endpoint = test::generate_endpoint();
+
 		// Make sure the listening socket is bound before the client attempts to connect.
 		auto const listen_socket = co_await raw_listen(endpoint);
 

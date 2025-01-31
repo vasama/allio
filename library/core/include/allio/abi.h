@@ -23,7 +23,7 @@ typedef allio_abi_result;
 
 /// @brief ABI stable native object type for asynchronous polling across ABI boundaries such as
 ///        dynamically linked library interfaces. Instead of exposing allio C++ types in your
-///        library interface, return an a pointer to allio_abi_object and wrap it in a
+///        library interface, return a pointer to allio_abi_object and wrap it in a
 ///        @ref opaque_handle before returning it to the user of your library.
 struct allio_abi_object
 {

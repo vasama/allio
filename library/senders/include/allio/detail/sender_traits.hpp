@@ -39,6 +39,21 @@ public:
 	{
 		return io_handle_sender<Object, Operation, handle_template<Object>::template type>(a);
 	}
+
+	template<typename PreviousResult, typename Function>
+	static auto transform(PreviousResult&& previous_sender, Function&& function)
+	{
+		return
+			vsm_forward(previous_sender) |
+			ex::then([function = vsm_forward(function)](auto&& previous_result) mutable
+			{
+				return vsm_move(function)(vsm_forward(previous_result));
+			});
+	}
+
+	//TODO: Implement sender_traits::and_then
+	template<typename PreviousResult, typename Function>
+	static auto and_then(PreviousResult&& previous_sender, Function&& function);
 };
 
 } // namespace allio::detail

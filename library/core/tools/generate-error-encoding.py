@@ -39,6 +39,7 @@ if __name__ == "__main__":
 	{{
 		static constexpr char const* file_names[] =
 		{{
+			"?",
 { make_string_literals(file_names) }
 		}};
 	}};

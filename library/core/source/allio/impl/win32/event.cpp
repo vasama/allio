@@ -15,6 +15,7 @@ vsm::result<detail::unique_handle> win32::create_event(
 {
 	vsm::result<unique_handle> r(vsm::result_value);
 
+	//TODO: Make inheritable if requested.
 	NTSTATUS const status = NtCreateEvent(
 		vsm::out_resource(*r),
 		EVENT_ALL_ACCESS,

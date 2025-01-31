@@ -22,25 +22,25 @@ using write_buffer = basic_buffer<std::byte const>;
 
 
 template<vsm::non_cvref T>
-read_buffer as_read_buffer(std::span<T> const span)
+[[nodiscard]] read_buffer as_read_buffer(std::span<T> const span)
 {
 	return read_buffer(reinterpret_cast<std::byte*>(span.data()), span.size_bytes());
 }
 
 template<vsm::non_cvref T>
-read_buffer as_read_buffer(T* const data, size_t const size)
+[[nodiscard]] read_buffer as_read_buffer(T* const data, size_t const size)
 {
 	return read_buffer(reinterpret_cast<std::byte*>(data), size * sizeof(T));
 }
 
 template<vsm::non_cvref T>
-write_buffer as_write_buffer(std::span<T const> const span)
+[[nodiscard]] write_buffer as_write_buffer(std::span<T const> const span)
 {
 	return write_buffer(reinterpret_cast<std::byte const*>(span.data()), span.size_bytes());
 }
 
 template<vsm::non_cvref T>
-write_buffer as_write_buffer(T const* const data, size_t const size)
+[[nodiscard]] write_buffer as_write_buffer(T const* const data, size_t const size)
 {
 	return write_buffer(reinterpret_cast<std::byte const*>(data), size * sizeof(T));
 }

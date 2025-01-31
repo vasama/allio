@@ -78,6 +78,7 @@ vsm_add_library(
 		source/allio/impl/handles/fs_object.hpp
 		source/allio/impl/handles/map.cpp
 		source/allio/impl/handles/opaque_object.cpp
+		source/allio/impl/handles/pipe.cpp
 
 	HEADER_DEPENDENCIES
 		vsm::core
@@ -178,10 +179,12 @@ vsm_configure(
 		source/allio/impl/win32/handles/section.cpp
 
 		# IOCP
+		source/allio/impl/win32/iocp/byte_io.cpp
 		source/allio/impl/win32/iocp/directory.cpp
 		source/allio/impl/win32/iocp/event.cpp
 		source/allio/impl/win32/iocp/file.cpp
 		source/allio/impl/win32/iocp/multiplexer.cpp
+		source/allio/impl/win32/iocp/pipe.cpp
 		source/allio/impl/win32/iocp/process.cpp
 		source/allio/impl/win32/iocp/raw_datagram_socket.cpp
 		source/allio/impl/win32/iocp/raw_listen_socket.cpp
@@ -199,8 +202,11 @@ vsm_configure(
 		#source/allio/test/win32/environment_block.cpp
 		#source/allio/test/win32/timer2.cpp
 		source/allio/test/win32/command_line.cpp
+		source/allio/test/win32/completion_port.cpp
+		source/allio/test/win32/completion_port.hpp
 		source/allio/test/win32/directory.cpp
 		source/allio/test/win32/kernel_path.cpp
+		source/allio/test/win32/pipe.cpp
 		source/allio/test/win32/wait_packet.cpp
 		source/allio/test/win32/wsa.cpp
 )

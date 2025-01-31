@@ -33,9 +33,28 @@ inline constexpr NTSTATUS STATUS_INVALID_ADDRESS                = static_cast<NT
 inline constexpr NTSTATUS STATUS_NOT_FOUND                      = static_cast<NTSTATUS>(0xC0000225);
 inline constexpr NTSTATUS STATUS_HANDLE_NOT_CLOSABLE            = static_cast<NTSTATUS>(0xC0000325);
 
-inline std::error_code get_kernel_error_code(NTSTATUS const status)
+
+[[nodiscard]] inline bool is_kernel_success(NTSTATUS const status)
 {
-	return NT_SUCCESS(status)
+	vsm_assert(status != STATUS_PENDING);
+
+	if (!NT_SUCCESS(status))
+	{
+		return false;
+	}
+
+	switch (status)
+	{
+	case STATUS_TIMEOUT:
+		return false;
+	}
+
+	return true;
+}
+
+[[nodiscard]] inline std::error_code get_kernel_error_code(NTSTATUS const status)
+{
+	return is_kernel_success(status)
 		? std::error_code()
 		: std::error_code(static_cast<kernel_error>(status));
 }
@@ -639,7 +658,7 @@ extern NTSTATUS(NTAPI* NtCreateNamedPipeFile)(
 	_In_opt_ PLARGE_INTEGER DefaultTimeout);
 
 
-inline TEB* NtCurrentTeb()
+[[nodiscard]] inline TEB* NtCurrentTeb()
 {
 #ifdef _WIN64
 	return reinterpret_cast<TEB*>(__readgsqword(0x30));
@@ -648,7 +667,7 @@ inline TEB* NtCurrentTeb()
 #endif
 }
 
-inline PEB* NtCurrentPeb()
+[[nodiscard]] inline PEB* NtCurrentPeb()
 {
 #ifdef _WIN64
 	return reinterpret_cast<PEB*>(__readgsqword(0x60));

@@ -128,9 +128,14 @@ public:
 
 	void close()
 	{
-		unrecoverable(blocking_io<close_t>(
-			m_native,
-			no_parameters_t()));
+		if (*this)
+		{
+			unrecoverable(blocking_io<close_t>(
+				m_native,
+				no_parameters_t()));
+
+			vsm_assert(!*this);
+		}
 	}
 
 	[[nodiscard]] native_type release()
@@ -256,6 +261,7 @@ public:
 	{
 	}
 
+	//TODO: Adopt should be noexcept
 	explicit basic_attached_handle(
 		adopt_handle_t,
 		std::convertible_to<MultiplexerHandle> auto&& multiplexer_handle,
@@ -323,6 +329,7 @@ public:
 			unrecoverable(blocking_io<close_t>(
 				m_native,
 				no_parameters_t()));
+
 			vsm_assert(!*this);
 		}
 	}
