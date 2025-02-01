@@ -17,6 +17,7 @@ using namespace allio::win32;
 	X(ntdll,        RtlSetCurrentDirectory_U,               STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtClose,                                STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtWaitForSingleObject,                  STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtWaitForMultipleObjects,               STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtQueryInformationFile,                 STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtSetInformationFile,                   STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtCreateFile,                           STATUS_NOT_SUPPORTED) \

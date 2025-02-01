@@ -36,7 +36,7 @@ struct opaque_object_t : object_t
 	template<typename Handle, typename Traits>
 	struct facade : base_type::facade<Handle, Traits>
 	{
-		[[nodiscard]] vsm::result<void> poll(auto&&... args)
+		[[nodiscard]] auto poll(auto&&... args) const
 		{
 			auto a = io_parameters_t<typename Handle::object_type, poll_t>{};
 			(set_argument(a, vsm_forward(args)), ...);

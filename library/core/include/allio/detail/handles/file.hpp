@@ -179,7 +179,7 @@ struct file_t : fs_object_t
 };
 
 
-fs_path get_null_device_path();
+[[nodiscard]] fs_path get_null_device_path();
 
 template<typename Traits>
 [[nodiscard]] auto open_file(fs_path const& path, auto&&... args)

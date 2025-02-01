@@ -1,6 +1,90 @@
-# Asynchronous Low Level I/O
+# ALLIO: Asynchronous Low Level I/O
+
+## Key Features
+
+* Both synchronous (blocking) and asynchronous I/O is supported.
+* Easy to use file I/O, including memory mapped files.
+* Sockets and other networking primitives with support for TLS.
+* Race-free filesystem access using directory handles.
+* A low level API for spawning and managing processes.
+* User friendly interfaces. Customizable with good defaults.
+* Can be used without exceptions or runtime type information.
+
+## Feature Showcase
+
+### Memory mapped file
+
+```CPP
+namespace io = allio::blocking; // blocking functions throw on error.
+
+io::mapped<char> mapping = io::map_file_as<char>(allio::path_view("./hello.txt"));
+std::print("{}", std::string_view(mapping));
+```
+
+### Memory mapped file without exceptions
+
+```CPP
+namespace io = allio::nothrow; // nothrow functions return std::expected.
+
+if (std::expected result = io::map_file_as<char>(allio::path_view("./hello.txt")))
+    std::print("{}", std::string_view(*result));
+else
+    std::print("error: {}\n", result.error());
+```
+
+### Blocking socket client
+
+```CPP
+namespace io = allio::blocking;
+using namespace allio::network_literals;
+
+auto socket = io::connect("192.168.0.7:50000"_ipv4);
+```
+
+### Echo server using C++26 `std::execution`
+
+```CPP
+namespace io = allio::senders; // senders functions return senders.
+namespace ex = std::execution;
+
+io::task<void> echo_server(allio::network_endpoint endpoint) {
+    io::listen_socket_handle listen_socket = co_await io::listen(endpoint);
+
+    ex::async_scope scope;
+    while (true) {
+        io::socket_handle socket = co_await listen_socket.accept();
+        scope.spawn(
+            handle_client(std::move(socket)) |
+            ex::upon_error([](auto e) { std::print("error: {}", e); }));
+    }
+}
+
+io::task<void> handle_client(io::socket_handle socket) {
+    for (std::byte buffer[1024];;) {
+        size_t size = co_await socket.read_some(as_read_buffer(buffer));
+        co_await socket.write(as_write_buffer(buffer, size));
+    }
+}
+```
+
+### Spawning a subprocess
+
+```CPP
+namespace io = allio::blocking;
+
+auto child_stdout = io::create_pipe(inheritable);
+
+io::process_handle process = io::create_process(
+    allio::path_view("/usr/bin/echo"),
+    process_arguments({ "hello" }),
+    redirect_stdout(child_stdout));
+
+if (auto exit_code = process.wait().get_exit_code())
+    std::print("error: exit_code = {}\n", exit_code);
+else
+    std::print("echo: {}", io::read_until_end<std::string>(child_stdout));
+```
+
+## Installation
 
 
-
-This library is heavily inspired by [LLFIO](https://github.com/ned14/llfio).
-Many thanks to Niall Douglas for creating LLFIO and for all the help.

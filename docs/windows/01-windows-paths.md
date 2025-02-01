@@ -77,7 +77,7 @@ Such paths are accepted by both Win32 and NT APIs and are always passed to the k
 As a general rule, ALLIO does not accept any paths which would be rejected by Win32 APIs, except when they would be rejected due to length restrictions related to `MAX_PATH`.
 On the other hand, ALLIO does reject some paths which would be accepted by Win32 APIs, when the Win32 behaviour can be considered harmful.
 
-This means that all files produced by ALLIO can also be opened using Win32 APIs, and vice versa, though to open certain files using ALLIO may require a .
+This means that all files produced by ALLIO can also be opened using Win32 APIs, and vice versa, though to open certain files using ALLIO may require using a different path type.
 
 ### Win32 Paths Rejected by ALLIO
 

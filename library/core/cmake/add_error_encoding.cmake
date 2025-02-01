@@ -1,3 +1,5 @@
+find_package(Python REQUIRED)
+
 function(allio_add_error_encoding name target sources_target)
 	set(sources_file "${CMAKE_CURRENT_BINARY_DIR}/allio-ec-${name}-sources.txt")
 	set(script_file "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate-error-encoding.py")
@@ -33,7 +35,7 @@ function(allio_add_error_encoding name target sources_target)
 	add_custom_command(
 		OUTPUT "${inline_file}"
 		COMMAND
-			python3 "\"${script_file}\""
+			Python::Interpreter "\"${script_file}\""
 			--encoding "${encoding}"
 			--sources "\"${sources_file}\""
 			--outfile "\"${inline_file}\""

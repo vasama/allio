@@ -420,6 +420,13 @@ enum _EVENT_TYPE
 }
 typedef EVENT_TYPE;
 
+enum _OBJECT_WAIT_TYPE
+{
+	WaitAllObject,
+	WaitAnyObject,
+}
+typedef OBJECT_WAIT_TYPE;
+
 
 extern ULONG(NTAPI* RtlNtStatusToDosError)(
 	_In_ NTSTATUS Status);
@@ -432,6 +439,13 @@ extern NTSTATUS(NTAPI* NtClose)(
 
 extern NTSTATUS(NTAPI* NtWaitForSingleObject)(
 	_In_ HANDLE Handle,
+	_In_ BOOLEAN Alertable,
+	_In_opt_ PLARGE_INTEGER Timeout);
+
+extern NTSTATUS(NTAPI* NtWaitForMultipleObjects)(
+	_In_ ULONG HandleCount,
+	_In_ HANDLE const* Handles,
+	_In_ OBJECT_WAIT_TYPE WaitType,
 	_In_ BOOLEAN Alertable,
 	_In_opt_ PLARGE_INTEGER Timeout);
 
