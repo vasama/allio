@@ -1,0 +1,19 @@
+{
+	"package": "allio.openssl",
+	"version": "0.1",
+	"package_type": "header-library",
+	"requirements": [
+		{
+			"package": "allio.core",
+			"version": "0.1"
+		},
+		{
+			"package": "vsm.intrusive",
+			"version": "0.1"
+		},
+		{
+			"package": "openssl",
+			"version": "3.3.2"
+		}
+	]
+}

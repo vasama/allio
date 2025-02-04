@@ -3,3 +3,4 @@
 * OpenSSL TLS implementation
 * File I/O stream interface.
 * Full byte I/O interfaces. (read_all, read_until, read_while, ...)
+* Registered buffer I/O.

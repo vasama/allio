@@ -235,7 +235,7 @@ struct file_name_information_deleter
 			static_cast<void*>(information),
 			file_name_information_buffer_size,
 			alignof(FILE_NAME_INFORMATION),
-			/* automatic: */ false);
+			allio_allocation_strategy_generic);
 	}
 };
 

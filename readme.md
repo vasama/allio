@@ -87,4 +87,35 @@ else
 
 ## Installation
 
+<details>
+<summary>Conan installation instructions</summary>
 
+#### Local recipes index
+
+The Conan recipes for ALLIO automatically generated at [vasama/conan-index](https://github.com/vasama/conan-index). To use the recipes locally, a Conan [local recipes index](https://docs.conan.io/2/tutorial/conan_repositories/setup_local_recipes_index.html) can be used:
+
+```
+git clone https://github.com/vasama/conan-index vasama-conan-index
+conan remote add local-vasama-conan-index ./vasama-conan-index
+```
+
+This is the recommended solution for any scenario where high availability and protection against supply chain attacks is important.
+
+The recipe index structure also makes it easy to host the packages on a private Artifactory instance if desired.
+
+#### vasama.org remote
+
+All recipes at [vasama/conan-index](https://github.com/vasama/conan-index) - including the ALLIO recipes - are also available at [conan.vasama.org](https://conan.vasama.org).
+
+```
+conan remote add vasama.org https://conan.vasama.org
+```
+
+This method should only be used for local development purposes and trying out the library. High availability of the remote cannot be guaranteed at this time.
+
+</details>
+
+<details>
+<summary>vcpkg installation instructions</summary>
+
+</details>

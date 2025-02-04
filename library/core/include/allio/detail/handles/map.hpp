@@ -209,7 +209,7 @@ struct shared_native_handle
 				static_cast<void*>(this),
 				sizeof(shared_native_handle),
 				alignof(shared_native_handle),
-				/* automatic: */ false);
+				allio_allocation_strategy_generic);
 		}
 	}
 };

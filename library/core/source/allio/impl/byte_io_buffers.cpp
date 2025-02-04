@@ -1,6 +1,7 @@
 #include <allio/byte_io_buffers.hpp>
 
 #include <allio/detail/byte_io_buffer_range.hpp>
+#include <allio/error.hpp>
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/new.hpp>
 
@@ -186,7 +187,7 @@ detail::new_io_buffers_storage::~new_io_buffers_storage()
 			m_storage,
 			data_offset + m_storage->size * sizeof(new_io_buffer),
 			alignof(storage_type),
-			/* automatic: */ false);
+			allio_allocation_strategy_generic);
 	}
 }
 
@@ -200,7 +201,7 @@ vsm::result<new_io_buffer*> detail::new_io_buffers_storage::resize(size_t const 
 		/* min_size: */ allocation_size,
 		/* max_size: */ allocation_size,
 		alignof(new_io_buffer),
-		/* automatic: */ false);
+		allio_allocation_strategy_generic);
 
 	if (allocation.storage == nullptr)
 	{

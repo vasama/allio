@@ -1,3 +1,3 @@
-# `std::execution`` - Senders and Receivers
+# `std::execution` - Senders and Receivers
 
 

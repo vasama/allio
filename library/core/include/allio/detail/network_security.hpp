@@ -24,8 +24,7 @@ vsm_flag_enum(tls_options);
 
 enum class tls_version : uint_least8_t
 {
-	default_value,
-	ssl_1,
+	ssl_1 = 1,
 	ssl_2,
 	ssl_3,
 	tls_1_0,
@@ -36,8 +35,7 @@ enum class tls_version : uint_least8_t
 
 enum class tls_verification : uint_least8_t
 {
-	default_value,
-	none,
+	none = 1,
 	optional,
 	required,
 };
@@ -133,14 +131,18 @@ inline constexpr explicit_parameter<tls_certificate_t> tls_certificate = {};
 struct tls_private_key_t : explicit_argument<tls_private_key_t, tls_secret> {};
 inline constexpr explicit_parameter<tls_private_key_t> tls_private_key = {};
 
+struct tls_peer_certificate_t : explicit_argument<tls_peer_certificate_t, tls_secret> {};
+inline constexpr explicit_parameter<tls_peer_certificate_t> tls_peer_certificate = {};
+
 
 struct security_context_parameters
 {
 	tls_options options = tls_options::use_system_certificates;
-	tls_version min_version = tls_version::default_value;
-	tls_verification verification = tls_verification::default_value;
+	tls_version min_version = {};
+	tls_verification verification = {};
 	tls_secret certificate;
 	tls_secret private_key;
+	tls_secret peer_certificate;
 
 	void set_argument(tls_min_version_t const value)
 	{
@@ -160,6 +162,11 @@ struct security_context_parameters
 	void set_argument(tls_private_key_t const& value)
 	{
 		private_key = value.value;
+	}
+
+	void set_argument(tls_peer_certificate_t const& value)
+	{
+		peer_certificate = value.value;
 	}
 };
 

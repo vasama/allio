@@ -30,7 +30,7 @@ TEST_CASE("Child process can be created", "[process]")
 {
 	using namespace blocking;
 
-	auto const process = create_process(
+	blocking::process_handle const process = create_process(
 		path_view(allio_detail_test_exe));
 
 	REQUIRE(process.wait().get_exit_code() == EXIT_SUCCESS);
