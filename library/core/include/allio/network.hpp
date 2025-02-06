@@ -165,48 +165,6 @@ struct ipv6_endpoint
 };
 
 
-class ip_address
-{
-	network_address_kind m_kind;
-	union
-	{
-		ipv4_address m_ipv4;
-		ipv6_address m_ipv6;
-	};
-
-public:
-	constexpr ip_address(ipv4_address const& address)
-		: m_kind(network_address_kind::ipv4)
-		, m_ipv4(address)
-	{
-	}
-
-	constexpr ip_address(ipv6_address const& address)
-		: m_kind(network_address_kind::ipv6)
-		, m_ipv6(address)
-	{
-	}
-
-
-	[[nodiscard]] constexpr network_address_kind kind() const
-	{
-		return m_kind;
-	}
-
-	[[nodiscard]] constexpr ipv4_address const& ipv4() const
-	{
-		vsm_assert(m_kind == network_address_kind::ipv4);
-		return m_ipv4;
-	}
-
-	[[nodiscard]] constexpr ipv6_address const& ipv6() const
-	{
-		vsm_assert(m_kind == network_address_kind::ipv6);
-		return m_ipv6;
-	}
-};
-
-
 struct null_endpoint_t {};
 inline constexpr null_endpoint_t null_endpoint = {};
 
@@ -300,20 +258,17 @@ public:
 };
 
 
-struct network_endpoint_t
-{
-	network_endpoint endpoint;
+#if 1 // NEW
+namespace detail {
 
-	void set_argument(network_endpoint const& value)
-	{
-		endpoint = value;
-	}
+class platform_network_endpoint_view
+{
+	void const* m_endpoint;
+
+public:
+
 };
 
-
-#if 1 // NEW
-
-namespace detail {
 
 class network_endpoint_buffer
 {
@@ -393,7 +348,6 @@ public:
 };
 
 } // namespace detail
-
 #endif // NEW
 
 } // namespace allio

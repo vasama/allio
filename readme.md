@@ -15,7 +15,7 @@
 ### Memory mapped file
 
 ```CPP
-namespace io = allio::blocking; // blocking functions throw on error.
+namespace io = allio::blocking; // allio::blocking functions throw on error.
 
 io::mapped<char> mapping = io::map_file_as<char>(allio::path_view("./hello.txt"));
 std::print("{}", std::string_view(mapping));
@@ -24,7 +24,7 @@ std::print("{}", std::string_view(mapping));
 ### Memory mapped file without exceptions
 
 ```CPP
-namespace io = allio::nothrow; // nothrow functions return std::expected.
+namespace io = allio::nothrow; // allio::nothrow functions return std::expected.
 
 if (std::expected result = io::map_file_as<char>(allio::path_view("./hello.txt")))
     std::print("{}", std::string_view(*result));
@@ -44,7 +44,7 @@ auto socket = io::connect("192.168.0.7:50000"_ipv4);
 ### Echo server using C++26 `std::execution`
 
 ```CPP
-namespace io = allio::senders; // senders functions return senders.
+namespace io = allio::senders; // allio::senders functions return senders.
 namespace ex = std::execution;
 
 io::task<void> echo_server(allio::network_endpoint endpoint) {

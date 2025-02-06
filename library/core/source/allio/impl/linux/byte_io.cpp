@@ -22,26 +22,54 @@ static vsm::result<size_t> do_byte_io_2(
 	auto const& a,
 	std::same_as<off_t> auto const... offset)
 {
+	static constexpr bool is_random_access = sizeof...(offset) != 0;
+
+	if (io_buffers_is_empty(a.buffers))
+	{
+		return 0;
+	}
+
 	new_io_buffers_storage storage;
 	vsm_try(buffers, get_io_buffers(storage, a.buffers, layout));
+	size_t transferred = 0;
 
-	ssize_t const r = Syscall(
-		unwrap_handle(h.platform_handle),
-		reinterpret_cast<iovec const*>(buffers.buffers_data),
-		vsm::saturating(buffers.buffers_size),
-		offset...);
-
-	if (r == -1)
+	while (true)
 	{
-		return vsm::unexpected(allio_error(get_last_error()));
+		ssize_t const r = Syscall(
+			unwrap_handle(h.platform_handle),
+			reinterpret_cast<iovec const*>(buffers.buffers_data),
+			vsm::saturating(buffers.buffers_size),
+			vsm::truncating(offset + transferred)...);
+
+		if (r == -1)
+		{
+			return vsm::unexpected(allio_error(get_last_error()));
+		}
+
+		if (r == 0)
+		{
+			return vsm::unexpected(allio_error(error::end_of_stream));
+		}
+
+		transferred += static_cast<size_t>(r);
+
+		if (vsm::no_flags(a.flags, io_flags::greedy_byte_io))
+		{
+			break;
+		}
+
+
+
+		if constexpr (is_random_access)
+		{
+			if (a.offset >= std::numeric_limits<off_t>::max() - transferred)
+			{
+				return vsm::unexpected(allio_error(error::invariant_violation));
+			}
+		}
 	}
 
-	if (r == 0 && !io_buffers_is_empty(a.buffers))
-	{
-		return vsm::unexpected(allio_error(error::end_of_stream));
-	}
-
-	return static_cast<size_t>(r);
+	return transferred;
 }
 
 template<auto Syscall>
@@ -49,7 +77,10 @@ static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h,
 {
 	if constexpr (requires { a.offset; })
 	{
-		vsm_try(offset, vsm::try_truncate<off_t>(a.offset, error::invalid_argument));
+		vsm_try(offset, vsm::try_truncate<off_t>(
+			a.offset,
+			allio_error(error::invalid_argument)));
+
 		return do_byte_io_2<Syscall>(h, a, offset);
 	}
 	else

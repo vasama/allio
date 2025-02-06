@@ -15,6 +15,7 @@ enum class io_flags : uint8_t
 	create_non_blocking                 = 1 << 1,
 	create_registered_io                = 1 << 2,
 	multishot                           = 1 << 3,
+	greedy_byte_io                      = 1 << 4,
 };
 vsm_flag_enum(io_flags);
 
