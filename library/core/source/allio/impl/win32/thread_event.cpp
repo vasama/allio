@@ -118,6 +118,15 @@ void thread_event::reset_event()
 			m_event,
 			/* PreviousState: */ nullptr);
 
-		vsm_assert(NT_SUCCESS(status));
+		if (NT_SUCCESS(status))
+		{
+			m_reset = false;
+		}
+		else
+		{
+			//TODO: Call unrecoverable_error instead.
+			//      Rename to unhandled_error and add a parameter describing severity.
+			std::terminate();
+		}
 	}
 }

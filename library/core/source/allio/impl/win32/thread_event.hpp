@@ -36,6 +36,10 @@ public:
 	{
 	}
 
+	thread_event(thread_event const&) = delete;
+	thread_event& operator=(thread_event const&) = delete;
+
+#if 0
 	thread_event(thread_event&& other) noexcept
 		: m_event(other.m_event)
 	{
@@ -51,6 +55,7 @@ public:
 
 		return *this;
 	}
+#endif
 
 	~thread_event()
 	{
@@ -86,6 +91,11 @@ public:
 	template<std::same_as<HANDLE> Handle>
 	[[nodiscard]] operator Handle() &
 	{
+		if (m_reset)
+		{
+			reset_event();
+		}
+	
 		m_reset = true;
 		return m_event;
 	}

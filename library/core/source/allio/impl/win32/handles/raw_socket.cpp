@@ -72,6 +72,18 @@ public:
 
 } // namespace
 
+byte_io_limits raw_socket_t::get_byte_io_limits(native_handle<raw_socket_t> const& h)
+{
+	static constexpr auto max_buffer_count = std::numeric_limits<DWORD>::max>();
+
+	return
+	{
+		//TODO: I/O functions should check this limit.
+		.max_buffer_count = max_buffer_count,
+		.max_atomic_buffer_count = max_buffer_count,
+	};
+}
+
 vsm::result<void> raw_socket_t::connect(
 	native_handle<raw_socket_t>& h,
 	io_parameters_t<raw_socket_t, connect_t> const& a)

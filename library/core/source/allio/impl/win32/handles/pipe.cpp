@@ -193,6 +193,16 @@ vsm::result<void> pipe_pair_t::create_pair(
 	return {};
 }
 
+byte_io_limits pipe_t::get_byte_io_limits(native_handle<pipe_t> const& h)
+{
+	return
+	{
+		//TODO: I/O functions should check this limit.
+		.max_buffer_count = static_cast<uint16_t>(-1),
+		.max_atomic_buffer_count = 1,
+	};
+}
+
 vsm::result<size_t> pipe_t::stream_read(
 	native_handle<pipe_t> const& h,
 	io_parameters_t<pipe_t, stream_read_t> const& a)

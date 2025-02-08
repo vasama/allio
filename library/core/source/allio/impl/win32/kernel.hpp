@@ -17,6 +17,7 @@ namespace allio::win32 {
 inline constexpr NTSTATUS STATUS_SUCCESS                        = 0;
 inline constexpr NTSTATUS STATUS_NO_MORE_FILES                  = static_cast<NTSTATUS>(0x80000006);
 inline constexpr NTSTATUS STATUS_INFO_LENGTH_MISMATCH           = static_cast<NTSTATUS>(0xC0000004);
+inline constexpr NTSTATUS STATUS_END_OF_FILE                    = static_cast<NTSTATUS>(0xC0000011);
 inline constexpr NTSTATUS STATUS_ACCESS_DENIED                  = static_cast<NTSTATUS>(0xC0000022);
 inline constexpr NTSTATUS STATUS_BUFFER_TOO_SMALL               = static_cast<NTSTATUS>(0xC0000023);
 inline constexpr NTSTATUS STATUS_OBJECT_TYPE_MISMATCH           = static_cast<NTSTATUS>(0xC0000024);

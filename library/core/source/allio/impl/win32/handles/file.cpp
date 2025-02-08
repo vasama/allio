@@ -16,6 +16,16 @@ fs_path detail::get_null_device_path()
 	return platform_path_view(L"\\??\\Device\\Null");
 }
 
+byte_io_limits file_t::get_byte_io_limits(native_handle<file_t> const& h)
+{
+	return
+	{
+		//TODO: I/O functions should check this limit.
+		.max_buffer_count = static_cast<uint16_t>(-1),
+		.max_atomic_buffer_count = 1,
+	};
+}
+
 vsm::result<void> file_t::open(
 	native_handle<file_t>& h,
 	io_parameters_t<file_t, open_t> const& a)

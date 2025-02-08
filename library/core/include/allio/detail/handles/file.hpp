@@ -105,6 +105,8 @@ struct file_t : fs_object_t
 		, random_write_t
 	>;
 
+	static byte_io_limits get_byte_io_limits(native_handle<pipe_t> const& h);
+
 	static vsm::result<void> open(
 		native_handle<file_t>& h,
 		io_parameters_t<file_t, open_t> const& args);

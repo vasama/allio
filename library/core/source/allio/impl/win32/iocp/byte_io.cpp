@@ -49,7 +49,7 @@ public:
 			return 0;
 		}
 
-		return transform_result([&]() -> io_result<void>
+		return transform_result(a, [&]() -> io_result<void>
 		{
 			m_state.absolute_deadline = a.deadline;
 
@@ -71,7 +71,7 @@ public:
 	{
 		vsm_assert(&status.slot == &m_state.io_status_block);
 
-		return transform_result([&]() -> io_result<void>
+		return transform_result(a, [&]() -> io_result<void>
 		{
 			size_t const transfer_size = m_state.io_status_block->Information;
 
@@ -122,6 +122,29 @@ private:
 		m_state.transferred += transfer_size;
 		++m_state.buffer_visit;
 
+		if (transfer_size != max_transfer_size)
+		{
+			if (vsm::any_flags(a.flags, io_flags::greedy_byte_io))
+			{
+				return {};
+			}
+			else
+			{
+				// This error is handled locally and should never propagate to the user.
+				return vsm::unexpected(allio_error(error::invariant_violation));
+			}
+		}
+
+		if (m_state.transferred == static_cast<size_t>(-1))
+		{
+			return vsm::unexpected(allio_error(error::io_size_out_of_range));
+		}
+
+		if (get_file_offset(a) >= max_file_extent - m_state.transferred)
+		{
+			return vsm::unexpected(allio_error(error::file_offset_out_of_range));
+		}
+
 		// All of these conditions are non-erroneous cases where some number of suboperations have
 		// succeeded but no further suboperations may be submitted.
 		if (transfer_size != max_transfer_size ||
@@ -170,7 +193,7 @@ private:
 
 				IO_STATUS_BLOCK& io_status_block = *m_state.io_status_block;
 
-				//TODO: Use STATUS_END_OF_FILE to detect end_of_stream.
+				//TODO: Should STATUS_END_OF_FILE ever be handled?
 				NTSTATUS const status = Syscall(
 					handle,
 					/* Event: */ NULL,
@@ -249,12 +272,13 @@ private:
 		return limit_2;
 	}
 
-	io_result<size_t> transform_result(io_result<void> const& result)
+	template<typename Arguments>
+	io_result<size_t> transform_result(Arguments const& a, io_result<void> const& result)
 	{
 		if (!result)
 		{
-			if (m_state.transferred == 0 ||
-				result.error().get_io_notify_status() == io_notify_status::submitted)
+			if (result.error().get_io_notify_status() == io_notify_status::submitted ||
+				m_state.transferred == 0 || vsm::any_flags(a.flags, io_flags::greedy_byte_io))
 			{
 				return vsm::unexpected(result.error());
 			}

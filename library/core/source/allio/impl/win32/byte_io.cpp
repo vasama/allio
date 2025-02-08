@@ -19,9 +19,15 @@ static constexpr fs_size max_file_extent =
 	static_cast<fs_size>(std::numeric_limits<LONGLONG>::max());
 
 template<auto const& Syscall>
-static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h, auto const& a)
+static vsm::result<void> do_byte_io_2(
+	native_handle<platform_object_t> const& h,
+	auto const& a,
+	size_t& transferred)
 {
 	static constexpr bool is_random_access = requires { a.offset; };
+
+	//TODO: The default on Windows should probably be overlapped, with synchronous I/O being an
+	//      opt-in, the same way non-blocking I/O is opt-in on POSIX.
 
 	if (a.deadline != deadline::never() &&
 		h.flags[platform_object_t::impl_type::flags::synchronous])
@@ -43,59 +49,23 @@ static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h,
 	{
 		vsm_try_assign(offset_integer.QuadPart, vsm::try_truncate<LONGLONG>(
 			a.offset,
-			error::file_offset_out_of_range));
+			allio_error(error::file_offset_out_of_range)));
 
 		p_offset_integer = &offset_integer;
 	}
 
-	auto const transfer_some = [&](
-		void const* const data,
-		ULONG const max_transfer_size) -> vsm::result<size_t>
-	{
-		vsm_assert(max_transfer_size != 0);
-
-		vsm_try(relative_deadline, absolute_deadline.step());
-
-		thread_event::io_status_block_t io_status_block;
-		NTSTATUS status = Syscall(
-			handle,
-			event,
-			/* ApcRoutine: */ nullptr,
-			/* ApcContext: */ nullptr,
-			&io_status_block,
-			// NtWriteFile takes void* which requires casting away the const.
-			const_cast<void*>(data),
-			max_transfer_size,
-			p_offset_integer,
-			/* Key: */ nullptr);
-
-		if (status == STATUS_PENDING)
-		{
-			status = event.wait_for_io(
-				handle,
-				io_status_block,
-				relative_deadline);
-		}
-
-		if (!is_kernel_success(status))
-		{
-			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
-		}
-
-		if (io_status_block.Information == 0)
-		{
-			return vsm::unexpected(allio_error(error::end_of_stream));
-		}
-
-		return io_status_block.Information;
-	};
-
 	new_io_buffer_layout const layout = a.buffers.get_layout();
-
-	size_t transferred = 0;
 	for (new_io_buffer const io_buffer : read_io_buffers(a.buffers.get_buffers()))
 	{
 		auto buffer = get_io_buffer_span<std::byte const>(io_buffer, layout);
+
+		if constexpr (is_random_access)
+		{
+			if (static_cast<fs_size>(offset_integer.QuadPart) > max_file_extent - buffer.size())
+			{
+				return vsm::unexpected(allio_error(error::file_offset_out_of_range));
+			}
+		}
 
 		while (!buffer.empty())
 		{
@@ -109,44 +79,78 @@ static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h,
 				max_transfer_size_dynamic,
 				static_cast<size_t>(std::numeric_limits<ULONG>::max())));
 
-			auto const r = transfer_some(buffer.data(), max_transfer_size);
+			vsm_try(relative_deadline, absolute_deadline.step());
 
-			if (!r)
+			thread_event::io_status_block_t io_status_block;
+			NTSTATUS status = Syscall(
+				handle,
+				event,
+				/* ApcRoutine: */ nullptr,
+				/* ApcContext: */ nullptr,
+				&io_status_block,
+				// NtWriteFile takes void* which requires casting away the const.
+				const_cast<std::byte*>(buffer.data()),
+				max_transfer_size,
+				p_offset_integer,
+				/* Key: */ nullptr);
+
+			if (status == STATUS_PENDING)
 			{
-				if (transferred != 0)
-				{
-					// The error is ignored if some data was already transferred.
-					goto outer_break;
-				}
-
-				return vsm::unexpected(r.error());
+				status = event.wait_for_io(
+					handle,
+					io_status_block,
+					relative_deadline);
 			}
 
-			size_t const transfer_size = *r;
+			if (!is_kernel_success(status))
+			{
+				return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
+			}
+
+			size_t const transfer_size = io_status_block.Information;
+
+			if (transfer_size == 0)
+			{
+				return vsm::unexpected(allio_error(error::end_of_stream));
+			}
+
 			transferred += transfer_size;
-
-			if constexpr (is_random_access)
-			{
-				//TODO: Does this make sense? The completed I/O would have had to go past the max.
-				if (max_file_extent - transfer_size > static_cast<fs_size>(offset_integer.QuadPart))
-				{
-					goto outer_break;
-				}
-
-				offset_integer.QuadPart += static_cast<LONGLONG>(transfer_size);
-			}
-
 			buffer = buffer.subspan(transfer_size);
 
 			if (transfer_size != max_transfer_size)
 			{
-				// Stop looping if the transferred amount is less than requested.
-				goto outer_break;
+				// If greedy I/O was requested, the loop is continued until the full transfer is
+				// completed, or an error is encountered.
+				if (vsm::no_flags(a.flags, io_flags::greedy_byte_io))
+				{
+					return {};
+				}
+			}
+
+			if constexpr (is_random_access)
+			{
+				offset_integer.QuadPart += static_cast<LONGLONG>(transfer_size);
 			}
 		}
 	}
 
-outer_break:
+	return {};
+}
+
+template<auto const& Syscall>
+static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h, auto const& a)
+{
+	size_t transferred = 0;
+
+	if (auto const r = do_byte_io_2<Syscall>(h, a, transferred); !r)
+	{
+		// The error is ignored if some data was transferred and greedy I/O was not requested.
+		if (transferred == 0 || vsm::any_flags(a.flags, io_flags::greedy_byte_io))
+		{
+			return vsm::unexpected(r.error());
+		}
+	}
+
 	return transferred;
 }
 
