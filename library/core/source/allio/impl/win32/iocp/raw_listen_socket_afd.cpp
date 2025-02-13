@@ -24,6 +24,11 @@ using listen_a = io_parameters_t<raw_listen_socket_t, listen_t>;
 
 io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s&, listen_a const& a, io_handler<M>&)
 {
+	if (vsm::any_flags(a.flags, io_flags::create_synchronous))
+	{
+		return vsm::unexpected(allio_error(error::invalid_argument));
+	}
+
 	vsm_try(addr, posix::socket_address::make(a.endpoint));
 	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_STREAM));
 
@@ -31,7 +36,7 @@ io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s&, listen_a const& a,
 		addr.addr.sa_family,
 		SOCK_STREAM,
 		protocol,
-		a.flags | io_flags::create_non_blocking));
+		a.flags));
 
 	vsm_try_void(posix::socket_listen(
 		socket.get(),

@@ -47,6 +47,7 @@ struct async_operation<iocp_multiplexer, pipe_t, byte_io::stream_write_t>
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 
+#if 0 //TODO: This is no longer needed. Handles are overlapped by default.
 template<>
 struct allio::detail::async_operation<
 	iocp_multiplexer,
@@ -64,5 +65,6 @@ struct allio::detail::async_operation<
 		return async_create_pipe_pair::submit(m, h, c, s, a, handler);
 	}
 };
+#endif
 
 } // namespace allio::detail

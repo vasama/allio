@@ -5,6 +5,7 @@
 namespace allio {
 
 using detail::inheritable;
+using detail::synchronous;
 using detail::non_blocking;
 
 } // namespace allio

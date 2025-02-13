@@ -11,7 +11,7 @@ struct raw_socket_t : socket_base_t<platform_object_t>
 
 	using security_context_type = void;
 
-	static byte_io_limits get_byte_io_limits(native_handle<pipe_t> const& h);
+	static byte_io_limits get_byte_io_limits(native_handle<raw_socket_t> const& h);
 
 	static vsm::result<void> connect(
 		native_handle<raw_socket_t>& h,

@@ -28,19 +28,33 @@ std::string posix::socket_error_category::message(int const code) const
 posix::socket_error_category const posix::socket_error_category::instance;
 
 
-static constexpr uint32_t error_encoding_offset = 10000;
+static constexpr uint32_t ec_wsa_offset             = 10000;
+static constexpr uint32_t ec_wsa_code_mask          = ec::code_mask >> 1;
+static constexpr uint32_t ec_wsa_flag               = ec_wsa_code_mask + 1;
+
 
 template<>
 uint32_t ec::encode_error_code(posix::socket_error const e)
 {
-	uint32_t const value = static_cast<uint32_t>(e) - error_encoding_offset;
-	return value <= ec::code_mask ? value : 0;
+	uint32_t value = static_cast<uint32_t>(e);
+	uint32_t flags = 0;
+
+	if (value >= ec_wsa_offset)
+	{
+		value -= ec_wsa_offset;
+		flags |= ec_wsa_flag;
+	}
+
+	return value > ec_wsa_code_mask
+		? 0
+		: value | flags;
 }
 
 template<>
 posix::socket_error ec::decode_error_code(uint32_t const e)
 {
-	return static_cast<posix::socket_error>(e + error_encoding_offset);
+	return static_cast<posix::socket_error>(
+		(e & ec_wsa_code_mask) + (e & ec_wsa_flag ? ec_wsa_offset : 0));
 }
 
 template class ec::encoded_error_category<allio_error_encoding, posix::socket_error>;
@@ -82,13 +96,13 @@ vsm::result<posix::socket_with_flags> posix::create_socket(
 		w_flags |= WSA_FLAG_NO_HANDLE_INHERIT;
 	}
 
-	if (vsm::any_flags(flags, io_flags::create_non_blocking))
+	if (vsm::any_flags(flags, io_flags::create_synchronous))
 	{
-		w_flags |= WSA_FLAG_OVERLAPPED;
+		h_flags |= platform_object_t::impl_type::flags::synchronous;
 	}
 	else
 	{
-		h_flags |= platform_object_t::impl_type::flags::synchronous;
+		w_flags |= WSA_FLAG_OVERLAPPED;
 	}
 
 	if (vsm::any_flags(flags, io_flags::create_registered_io))
@@ -102,9 +116,10 @@ vsm::result<posix::socket_with_flags> posix::create_socket(
 		protocol,
 		w_flags));
 
-	if (vsm::any_flags(flags, io_flags::create_non_blocking))
+	if (vsm::no_flags(flags, io_flags::create_synchronous))
 	{
-		h_flags |= set_file_completion_notification_modes(reinterpret_cast<HANDLE>(socket.get()));
+		h_flags |= set_file_completion_notification_modes(
+			reinterpret_cast<HANDLE>(socket.get()));
 	}
 
 	return vsm_lazy(socket_with_flags
@@ -114,6 +129,7 @@ vsm::result<posix::socket_with_flags> posix::create_socket(
 	});
 }
 
+#if 0 //TODO: This is never used?
 static vsm::result<posix::unique_socket> wsa_accept(
 	posix::socket_type const listen_socket,
 	posix::socket_address& addr)
@@ -141,6 +157,8 @@ vsm::result<posix::socket_with_flags> posix::socket_accept(
 	deadline const deadline,
 	io_flags const flags)
 {
+	//TODO: Check for create_synchronous. Accept overlapped handle. Probably requires using
+	///     WSAAcceptEx and waiting on an event?
 	if (vsm::any_flags(flags, io_flags::create_non_blocking | io_flags::create_registered_io))
 	{
 		return vsm::unexpected(allio_error(error::unsupported_operation));
@@ -173,6 +191,7 @@ vsm::result<posix::socket_with_flags> posix::socket_accept(
 		.flags = platform_object_t::impl_type::flags::synchronous,
 	});
 }
+#endif
 
 vsm::result<posix::socket_poll_mask> posix::socket_poll(
 	socket_type const socket,

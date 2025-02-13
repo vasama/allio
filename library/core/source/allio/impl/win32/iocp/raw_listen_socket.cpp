@@ -24,6 +24,11 @@ using listen_a = io_parameters_t<raw_listen_socket_t, listen_t>;
 
 io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s&, listen_a const& a, io_handler<M>&)
 {
+	if (vsm::any_flags(a.flags, io_flags::create_synchronous))
+	{
+		return vsm::unexpected(allio_error(error::invalid_argument));
+	}
+
 	vsm_try(addr, posix::socket_address::make(a.endpoint));
 	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_STREAM));
 
@@ -31,7 +36,7 @@ io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s&, listen_a const& a,
 		addr.addr.sa_family,
 		SOCK_STREAM,
 		protocol,
-		a.flags | io_flags::create_non_blocking));
+		a.flags));
 
 	vsm_try_void(posix::socket_listen(
 		socket.get(),
@@ -86,8 +91,19 @@ static io_result<accept_result_type> make_accept_result(
 	});
 }
 
-io_result<accept_result_type> accept_s::submit(M& m, H const& h, C const&, accept_s& s, accept_a const& a, io_handler<M>& handler)
+io_result<accept_result_type> accept_s::submit(
+	M& m,
+	H const& h,
+	C const&,
+	accept_s& s,
+	accept_a const& a,
+	io_handler<M>& handler)
 {
+	if (vsm::any_flags(a.flags, io_flags::create_synchronous))
+	{
+		return vsm::unexpected(allio_error(error::invalid_argument));
+	}
+
 	SOCKET const listen_socket = posix::unwrap_socket(h.platform_handle);
 	//TODO: Cache the address family.
 	vsm_try(listen_addr, posix::socket_address::get(listen_socket));
@@ -97,7 +113,7 @@ io_result<accept_result_type> accept_s::submit(M& m, H const& h, C const&, accep
 		listen_addr.addr.sa_family,
 		SOCK_STREAM,
 		protocol,
-		a.flags | io_flags::create_non_blocking));
+		a.flags));
 
 	s.socket = unique_wrapped_socket(posix::wrap_socket(socket.release()));
 	s.socket_flags = flags;

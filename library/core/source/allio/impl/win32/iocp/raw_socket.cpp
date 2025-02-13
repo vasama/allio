@@ -28,6 +28,11 @@ io_result<void> connect_s::submit(
 	connect_a const& a,
 	io_handler<M>& handler)
 {
+	if (vsm::any_flags(a.flags, io_flags::create_synchronous))
+	{
+		return vsm::unexpected(allio_error(error::invalid_argument));
+	}
+
 	vsm_try(addr, posix::socket_address::make(a.endpoint));
 	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_STREAM));
 
@@ -35,7 +40,7 @@ io_result<void> connect_s::submit(
 		addr.addr.sa_family,
 		SOCK_STREAM,
 		protocol,
-		a.flags | io_flags::create_non_blocking));
+		a.flags));
 
 	vsm_try_void(m.attach_platform_handle(posix::wrap_socket(socket.get()), c));
 
@@ -57,8 +62,8 @@ io_result<void> connect_s::submit(
 
 	s.overlapped.bind(handler);
 
-	// If using a multithreaded completion port, after this call
-	// another thread will race to complete this operation.
+	// If using a multithreaded completion port, after this call another thread will race to
+	// complete this operation.
 	vsm_try(already_connected, submit_socket_io(m, h, [&]()
 	{
 		return wsa_connect_ex(

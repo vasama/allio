@@ -13,6 +13,8 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::linux;
 
+static constexpr fs_size max_file_extent = std::numeric_limits<off_t>::max();
+
 //TODO: Detect the iovec layout automatically.
 static constexpr auto layout = new_io_buffer_layout::data_size;
 
@@ -62,7 +64,7 @@ static vsm::result<size_t> do_byte_io_2(
 
 		if constexpr (is_random_access)
 		{
-			if (a.offset >= std::numeric_limits<off_t>::max() - transferred)
+			if (a.offset >= max_file_extent - transferred)
 			{
 				return vsm::unexpected(allio_error(error::invariant_violation));
 			}

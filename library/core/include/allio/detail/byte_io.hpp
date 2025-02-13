@@ -150,7 +150,7 @@ struct stream_facade : common_facade<Handle, Traits>
 		return Traits::template observe<stream_write_t>(static_cast<Handle const&>(*this), a);
 	}
 
-	[[nodiscard]] auto read(new_read_buffers const buffers, auto&&... args) const
+	auto read(new_read_buffers const buffers, auto&&... args) const
 	{
 		io_parameters_t<typename Handle::object_type, stream_read_t> a = {};
 		a.flags |= io_flags::greedy_byte_io;
@@ -159,7 +159,7 @@ struct stream_facade : common_facade<Handle, Traits>
 		return Traits::template observe<stream_read_t>(static_cast<Handle const&>(*this), a);
 	}
 
-	[[nodiscard]] auto write(new_write_buffers const buffers, auto&&... args) const
+	auto write(new_write_buffers const buffers, auto&&... args) const
 	{
 		io_parameters_t<typename Handle::object_type, stream_write_t> a = {};
 		a.flags |= io_flags::greedy_byte_io;

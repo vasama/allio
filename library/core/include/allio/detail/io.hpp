@@ -190,9 +190,13 @@ struct blocking_io_t
 		{
 			return r;
 		}
-		else
+		else if (r)
 		{
 			return rebind_handle<result_type>(vsm_move(*r));
+		}
+		else
+		{
+			return vsm::unexpected(r.error());
 		}
 	}
 

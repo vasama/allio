@@ -1,6 +1,8 @@
 #include <allio/detail/handles/raw_listen_socket.hpp>
 
 #include <allio/impl/posix/socket.hpp>
+#include <allio/impl/win32/wsa_thread_event.hpp>
+#include <allio/impl/win32/wsa.hpp>
 
 #include <vsm/lazy.hpp>
 
@@ -8,94 +10,28 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-namespace {
-
-class wsa_thread_overlapped
-{
-	thread_event m_event;
-	OVERLAPPED m_overlapped;
-
-public:
-	static [[nodiscard]] vsm::result<wsa_thread_overlapped> get_for(
-		native_handle<platform_object_t> const& h)
-	{
-		vsm::result<wsa_thread_overlapped> r(vsm::result_value);
-		if (!h.flags[platform_object_t::impl_type::flags::synchronous])
-		{
-			if (auto r2 = thread_event::get())
-			{
-				r->m_event = vsm_move(*r2);
-			}
-			else
-			{
-				r = vsm::unexpected(r2.error());
-			}
-		}
-		return r;
-	}
-
-	[[nodiscard]] vsm::result<void> wait(
-		SOCKET const socket,
-		deadline const deadline,
-		DWORD* const transferred,
-		DWORD* const flags)
-	{
-		(void)m_event.wait_for_io(
-			(HANDLE)socket,
-			m_overlapped,
-			deadline);
-
-		if (!WSAGetOverlappedResult(
-			socket,
-			&m_overlapped,
-			transferred,
-			FALSE,
-			flags))
-		{
-			return vsm::unexpected(allio_error(get_last_socket_error()));
-		}
-
-		return {};
-	}
-
-	template<std::same_as<OVERLAPPED> Overlapped>
-	[[nodiscard]] operator Overlapped*() &
-	{
-		if (m_event)
-		{
-			m_overlapped.Pointer = nullptr;
-			m_overlapped.hEvent = m_event;
-			return &m_overlapped;
-		}
-
-		return nullptr;
-	}
-};
-
-} // namespace
-
 using accept_result_type = accept_result<basic_detached_handle<raw_socket_t>>;
 
 vsm::result<void> raw_listen_socket_t::listen(
 	native_handle<raw_listen_socket_t>& h,
 	io_parameters_t<raw_listen_socket_t, listen_t> const& a)
 {
-	vsm_try(addr, socket_address::make(a.endpoint));
-	vsm_try(protocol, choose_protocol(addr.addr.sa_family, SOCK_STREAM));
+	vsm_try(addr, posix::socket_address::make(a.endpoint));
+	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_STREAM));
 
-	vsm_try_bind((socket, flags), create_socket(
+	vsm_try_bind((socket, flags), posix::create_socket(
 		addr.addr.sa_family,
 		SOCK_STREAM,
 		protocol,
 		a.flags));
 
-	vsm_try_void(socket_listen(
+	vsm_try_void(posix::socket_listen(
 		socket.get(),
 		addr,
 		a.backlog));
 
 	h.flags = flags::not_null | flags;
-	h.platform_handle = wrap_socket(socket.release());
+	h.platform_handle = posix::wrap_socket(socket.release());
 
 	return {};
 }
@@ -104,32 +40,39 @@ vsm::result<accept_result_type> raw_listen_socket_t::accept(
 	native_handle<raw_listen_socket_t> const& h,
 	io_parameters_t<raw_listen_socket_t, accept_t> const& a)
 {
+	if (a.deadline != deadline::never() &&
+		h.flags[platform_object_t::impl_type::flags::synchronous])
+	{
+		return vsm::unexpected(allio_error(error::unsupported_operation));
+	}
+
+	SOCKET const listen_socket = posix::unwrap_socket(h.platform_handle);
+
 	wsa_accept_address_buffer wsa_addr;
 	posix::socket_address_union& addr = wsa_addr.remote;
 
-	vsm_try_bind((socket, flags), socket_accept(
-		unwrap_socket(h.platform_handle),
-		addr,
-		a.deadline,
-		a.flags));
+	posix::socket_with_flags socket_with_flags;
+	auto& [socket, flags] = socket_with_flags;
 
-	if (vsm::any_flags(a.flags, io_flags::create_non_blocking) || a.deadline != deadline::never())
+	if (a.deadline != deadline::never() ||
+		!h.flags[platform_object_t::impl_type::flags::synchronous] ||
+		vsm::no_flags(a.flags, io_flags::create_synchronous))
 	{
 		//TODO: Cache the address family.
 		vsm_try(listen_addr, posix::socket_address::get(listen_socket));
-		vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_STREAM));
+		vsm_try(protocol, posix::choose_protocol(listen_addr.addr.sa_family, SOCK_STREAM));
 
-		vsm_try_bind((socket, flags), posix::create_socket(
+		vsm_try_assign(socket_with_flags, posix::create_socket(
 			listen_addr.addr.sa_family,
 			SOCK_STREAM,
 			protocol,
 			a.flags));
 
-		vsm_try(overlapped, wsa_thread_overlapped::get());
+		vsm_try(overlapped, wsa_thread_overlapped::get_for(h));
 
 		DWORD transferred = static_cast<DWORD>(-1);
 		if (!win32::AcceptEx(
-			unwrap_socket(h.platform_handle),
+			listen_socket,
 			socket.get(),
 			/* lpOutputBuffer: */ &wsa_addr,
 			/* dwReceiveDataLength: */ 0,
@@ -140,15 +83,15 @@ vsm::result<accept_result_type> raw_listen_socket_t::accept(
 		{
 			if (int const e = WSAGetLastError(); e != WSA_IO_PENDING)
 			{
-				return vsm::unexpected(allio_error(static_cast<socket_error>(e)));
+				return vsm::unexpected(allio_error(static_cast<posix::socket_error>(e)));
 			}
 
-			DWORD flags;
+			DWORD accept_flags;
 			vsm_try_void(overlapped.wait(
-				socket,
+				socket.get(),
 				a.deadline,
 				&transferred,
-				&flags));
+				&accept_flags));
 		}
 		vsm_assert(transferred == 0);
 	}
@@ -156,24 +99,26 @@ vsm::result<accept_result_type> raw_listen_socket_t::accept(
 	{
 		int addr_size = sizeof(posix::socket_address_union);
 
-		SOCKET const socket = win32::WSAAccept(
-			unwrap_handle(h.platform_handle),
+		SOCKET const new_socket = win32::WSAAccept(
+			listen_socket,
 			&addr.addr,
 			&addr_size,
 			/* lpfnCondition: */ nullptr,
 			/* dwCallbackData: */ 0);
 
-		if (socket == SOCKET_ERROR)
+		if (new_socket == INVALID_SOCKET)
 		{
 			return vsm::unexpected(allio_error(posix::get_last_socket_error()));
 		}
+
+		socket.reset(new_socket);
 	}
 
 	auto const make_socket_handle = [&]()
 	{
 		native_handle<raw_socket_t> h = {};
 		h.flags = object_t::flags::not_null | flags;
-		h.platform_handle = wrap_socket(socket.release());
+		h.platform_handle = posix::wrap_socket(socket.release());
 		return basic_detached_handle<raw_socket_t>(adopt_handle, h);
 	};
 
@@ -185,9 +130,16 @@ vsm::result<accept_result_type> raw_listen_socket_t::accept(
 
 vsm::result<void> raw_listen_socket_t::close(
 	native_handle<raw_listen_socket_t>& h,
-	io_parameters_t<raw_listen_socket_t, close_t> const&)
+	io_parameters_t<raw_listen_socket_t, close_t> const& a)
 {
-	posix::close_socket(unwrap_socket(h.platform_handle));
-	h = {};
+	native_platform_handle const handle = h.platform_handle;
+	if (handle != native_platform_handle::null)
+	{
+		h.platform_handle = native_platform_handle::null;
+		posix::close_socket(posix::unwrap_socket(handle));
+	}
+
+	h.flags = handle_flags::none;
+
 	return {};
 }

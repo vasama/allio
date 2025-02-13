@@ -17,7 +17,7 @@ vsm::result<void> raw_socket_t::connect(
 	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_STREAM));
 
 	ULONG create_options = 0;
-	if (vsm::any_flags(a.flags, io_flags::create_non_blocking))
+	if (vsm::any_flags(a.flags, io_flags::create_synchronous))
 	{
 		create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
 	}

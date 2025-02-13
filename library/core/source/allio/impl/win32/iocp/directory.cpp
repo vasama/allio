@@ -13,11 +13,8 @@ using open_t = directory_t::open_t;
 using open_s = async_operation<iocp_multiplexer, directory_t, open_t>;
 using open_a = io_parameters_t<directory_t, open_t>;
 
-io_result<void> open_s::submit(M& m, H& h, C& c, open_s&, open_a const& a_ref, io_handler<M>&)
+io_result<void> open_s::submit(M& m, H& h, C& c, open_s&, open_a const& a, io_handler<M>&)
 {
-	open_t::params_type a = a_ref;
-	a.flags |= io_flags::create_non_blocking;
-
 	basic_detached_handle<directory_t> handle;
 	vsm_try_void(blocking_io<directory_t::open_t>(handle, a));
 	vsm_try_void(m.attach_platform_handle(handle.native().platform_handle, c));

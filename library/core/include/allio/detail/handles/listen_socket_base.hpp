@@ -89,8 +89,12 @@ struct accept_t
 {
 	using operation_concept = void;
 
-	struct params_type : io_flags_t, deadline_t
+	struct params_type
+		: io_flags_t
+		, deadline_t
 	{
+		using io_flags_t::set_argument;
+		using deadline_t::set_argument;
 	};
 
 	//template<object Object, optional_multiplexer_handle MultiplexerHandle>

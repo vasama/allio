@@ -22,6 +22,11 @@ using bind_a = io_parameters_t<raw_datagram_socket_t, bind_t>;
 
 io_result<void> bind_s::submit(M& m, H& h, C& c, bind_s&, bind_a const& a, io_handler<M>&)
 {
+	if (vsm::any_flags(a.flags, io_flags::create_synchronous))
+	{
+		return vsm::unexpected(allio_error(error::invalid_argument));
+	}
+
 	vsm_try(addr, posix::socket_address::make(a.endpoint));
 	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_DGRAM));
 
@@ -30,7 +35,7 @@ io_result<void> bind_s::submit(M& m, H& h, C& c, bind_s&, bind_a const& a, io_ha
 		//TODO: Add raw protocol support
 		SOCK_DGRAM,
 		protocol,
-		a.flags | io_flags::create_non_blocking));
+		a.flags));
 
 	vsm_try_void(socket_bind(socket.get(), addr));
 

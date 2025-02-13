@@ -62,7 +62,14 @@ vsm::result<void> raw_socket_t::close(
 	native_handle<raw_socket_t>& h,
 	io_parameters_t<raw_socket_t, close_t> const&)
 {
-	posix::close_socket(unwrap_socket(h.platform_handle));
-	h = {};
+	native_platform_handle const handle = h.platform_handle;
+	if (handle != native_platform_handle::null)
+	{
+		h.platform_handle = native_platform_handle::null;
+		posix::close_socket(posix::unwrap_socket(handle));
+	}
+
+	h.flags = handle_flags::none;
+
 	return {};
 }

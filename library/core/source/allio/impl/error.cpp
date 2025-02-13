@@ -72,6 +72,10 @@ std::string detail::error_category::message(int const code) const
 	// Byte I/O
 	case error::end_of_stream:
 		return "The end of the byte stream was reached.";
+	case error::too_many_io_buffers:
+		return "Too many byte I/O buffers were specified for the operation.";
+	case error::io_size_out_of_range:
+		return "The size of the requested operation is too large.";
 
 	// Filesystem
 	case error::filename_too_long:
@@ -165,6 +169,10 @@ std::error_condition detail::error_category::default_error_condition(int const c
 
 	// Byte I/O
 	case error::end_of_stream:
+		break;
+	case error::too_many_io_buffers:
+		break;
+	case error::io_size_out_of_range:
 		break;
 
 	// Filesystem

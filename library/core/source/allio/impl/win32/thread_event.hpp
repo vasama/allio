@@ -36,10 +36,6 @@ public:
 	{
 	}
 
-	thread_event(thread_event const&) = delete;
-	thread_event& operator=(thread_event const&) = delete;
-
-#if 0
 	thread_event(thread_event&& other) noexcept
 		: m_event(other.m_event)
 	{
@@ -48,14 +44,11 @@ public:
 
 	thread_event& operator=(thread_event&& other) & noexcept
 	{
-		reset_event();
-
-		m_event = other.m_event;
-		other.m_event = NULL;
-
+		thread_event local = vsm_move(other);
+		std::swap(m_event, local.m_event);
+		std::swap(m_reset, local.m_reset);
 		return *this;
 	}
-#endif
 
 	~thread_event()
 	{
@@ -91,13 +84,12 @@ public:
 	template<std::same_as<HANDLE> Handle>
 	[[nodiscard]] operator Handle() &
 	{
-		if (m_reset)
-		{
-			reset_event();
-		}
-	
+		reset_event();
 		m_reset = true;
-		return m_event;
+
+		// Set the low bit to tell Win32 API functions not to pass ApcContext to NT kernel APIs.
+		// This prevents completions from being queued on an IOCP if the handle is attached.
+		return reinterpret_cast<HANDLE>(reinterpret_cast<uintptr_t>(m_event) | 1);
 	}
 
 	[[nodiscard]] explicit operator bool() const

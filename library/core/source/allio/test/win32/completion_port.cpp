@@ -122,7 +122,7 @@ TEST_CASE("Synchronous I/O with attached overlapped handle", "[windows][iocp]")
 		/* auto_reset: */ true,
 		/* is_initially_signaled: */ false).value();
 
-	auto const [r, w] = nothrow::create_pipe(non_blocking).value();
+	auto const [r, w] = nothrow::create_pipe().value();
 	HANDLE const r_h = unwrap_handle(r.native().platform_handle);
 
 	set_completion_information(r_h, completion_port.get(), nullptr).value();
@@ -171,7 +171,7 @@ TEST_CASE("I/O Completion Port becomes signaled when the queue has completions",
 {
 	auto const completion_port = create_completion_port(1).value();
 
-	auto const [r, w] = nothrow::create_pipe(non_blocking).value();
+	auto const [r, w] = nothrow::create_pipe().value();
 	HANDLE const r_h = unwrap_handle(r.native().platform_handle);
 
 	set_completion_information(r_h, completion_port.get(), nullptr).value();
@@ -261,7 +261,7 @@ TEST_CASE("I/O Completion Port can be waited using a thread pool wait", "[window
 #else
 	auto const completion_port = create_completion_port(1).value();
 
-	auto const [r, w] = nothrow::create_pipe(non_blocking).value();
+	auto const [r, w] = nothrow::create_pipe().value();
 	HANDLE const r_h = unwrap_handle(r.native().platform_handle);
 
 	set_completion_information(r_h, completion_port.get(), nullptr).value();
@@ -323,7 +323,7 @@ TEST_CASE("I/O Completion Port can be waited using a wait packet", "[windows][io
 		STATUS_SUCCESS,
 		/* completion_information: */ 0).value());
 
-	auto const [r, w] = nothrow::create_pipe(non_blocking).value();
+	auto const [r, w] = nothrow::create_pipe().value();
 	HANDLE const r_h = unwrap_handle(r.native().platform_handle);
 
 	set_completion_information(r_h, completion_port_1.get(), nullptr).value();

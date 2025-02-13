@@ -12,16 +12,20 @@ enum class io_flags : uint8_t
 {
 	none                                = 0,
 	create_inheritable                  = 1 << 0,
-	create_non_blocking                 = 1 << 1,
-	create_registered_io                = 1 << 2,
-	multishot                           = 1 << 3,
-	greedy_byte_io                      = 1 << 4,
+	create_synchronous                  = 1 << 1,
+	create_non_blocking                 = 1 << 2,
+	create_registered_io                = 1 << 3,
+	multishot                           = 1 << 4,
+	greedy_byte_io                      = 1 << 5,
 };
 vsm_flag_enum(io_flags);
 
 
 struct inheritable_t : explicit_argument<inheritable_t, bool> {};
 inline constexpr explicit_parameter<inheritable_t> inheritable = {};
+
+struct synchronous_t : explicit_argument<synchronous_t, bool> {};
+inline constexpr explicit_parameter<synchronous_t> synchronous = {};
 
 struct non_blocking_t : explicit_argument<non_blocking_t, bool> {};
 inline constexpr explicit_parameter<non_blocking_t> non_blocking = {};
@@ -40,6 +44,19 @@ struct io_flags_t
 		if (value.value)
 		{
 			flags |= io_flags::create_inheritable;
+		}
+	}
+
+	void set_argument(explicit_parameter<synchronous_t>)
+	{
+		flags |= io_flags::create_synchronous;
+	}
+
+	void set_argument(synchronous_t const value)
+	{
+		if (value.value)
+		{
+			flags |= io_flags::create_synchronous;
 		}
 	}
 

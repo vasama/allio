@@ -3,6 +3,7 @@
 #include <allio/senders/raw_listen_socket.hpp>
 #include <allio/senders/raw_socket.hpp>
 
+#include <allio/handles/object.hpp>
 #include <allio/senders/sync_wait.hpp>
 #include <allio/senders/task.hpp>
 #include <allio/test/match_error.hpp>
@@ -103,6 +104,17 @@ TEST_CASE("Asynchronous stream sockets can exchange data", "[socket][async]")
 				// Accept client connection:
 				auto const& [socket, _] = co_await listen_socket.accept();
 
+#if 0 //TODO: IOCP implementation doesn't support timeouts yet.
+				// The socket has no data to read:
+				signed char unused_data;
+				REQUIRE_THROWS_MATCHES(
+					(void)co_await socket.read_some(
+						as_read_buffer(&unused_data, 1),
+						deadline::instant()),
+					std::system_error,
+					match_error(std::errc::timed_out));
+#endif
+
 				// Wait for a request from the client:
 				signed char request_data;
 				REQUIRE(co_await socket.read_some(as_read_buffer(&request_data, 1)) == 1);
@@ -123,6 +135,17 @@ TEST_CASE("Asynchronous stream sockets can exchange data", "[socket][async]")
 			{
 				// Connect to the server:
 				auto const socket = co_await raw_connect(endpoint);
+
+#if 0
+				// The socket has no data to read:
+				signed char unused_data;
+				REQUIRE_THROWS_MATCHES(
+					(void)co_await socket.read_some(
+						as_read_buffer(&unused_data, 1),
+						deadline::instant()),
+					std::system_error,
+					match_error(std::errc::timed_out));
+#endif
 
 				// Send a request to the server:
 				signed char const request_data = 42;

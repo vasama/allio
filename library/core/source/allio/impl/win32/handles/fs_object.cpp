@@ -25,7 +25,7 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 		.desired_access = SYNCHRONIZE,
 	};
 
-	if (vsm::no_flags(args.flags, io_flags::create_non_blocking))
+	if (vsm::any_flags(args.flags, io_flags::create_synchronous))
 	{
 		info.create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
 	}
@@ -282,7 +282,7 @@ static vsm::result<void, error_code_with_info<bool>> query_file_name_information
 	path_kind const kind,
 	FILE_NAME_INFORMATION* const information)
 {
-	vsm_assert(std::popcount(std::to_underlying(kind)) == 1); //PRECONDITION
+	vsm_assert(std::has_single_bit(std::to_underlying(kind))); //PRECONDITION
 
 
 	DWORD flags = FILE_NAME_NORMALIZED;

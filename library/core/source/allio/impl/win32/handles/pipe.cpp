@@ -75,7 +75,7 @@ static vsm::result<handle_with_flags> create_named_pipe_file(io_flags const flag
 	ULONG create_options = 0;
 	handle_flags h_flags = handle_flags::none;
 
-	if (vsm::no_flags(flags, io_flags::create_non_blocking))
+	if (vsm::any_flags(flags, io_flags::create_synchronous))
 	{
 		create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
 		h_flags |= platform_object_t::impl_type::flags::synchronous;
@@ -134,7 +134,7 @@ static vsm::result<handle_with_flags> create_pipe(
 	ULONG create_options = FILE_NON_DIRECTORY_FILE;
 	handle_flags h_flags = handle_flags::none;
 
-	if (vsm::no_flags(flags, io_flags::create_non_blocking))
+	if (vsm::any_flags(flags, io_flags::create_synchronous))
 	{
 		create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
 		h_flags |= platform_object_t::impl_type::flags::synchronous;

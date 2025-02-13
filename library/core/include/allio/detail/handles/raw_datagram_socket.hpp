@@ -13,7 +13,7 @@ struct raw_datagram_socket_t : datagram_socket_base_t<platform_object_t>
 
 	using security_context_type = void;
 
-	static byte_io_limits get_byte_io_limits(native_handle<pipe_t> const& h);
+	static byte_io_limits get_byte_io_limits(native_handle<raw_datagram_socket_t> const& h);
 
 	static vsm::result<void> bind(
 		native_handle<raw_datagram_socket_t>& h,

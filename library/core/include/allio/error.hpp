@@ -90,6 +90,7 @@ enum class error
 
 	// Byte I/O
 	end_of_stream,
+	too_many_io_buffers,
 	io_size_out_of_range,
 
 	// Filesystem

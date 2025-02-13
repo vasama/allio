@@ -19,6 +19,9 @@ struct connect_t
 		, deadline_t
 	{
 		network_endpoint endpoint;
+
+		using io_flags_t::set_argument;
+		using deadline_t::set_argument;
 	};
 
 	template<typename Object>
