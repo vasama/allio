@@ -25,9 +25,12 @@ typedef allio_abi_result;
 ///        dynamically linked library interfaces. Instead of exposing allio C++ types in your
 ///        library interface, return a pointer to allio_abi_object and wrap it in a
 ///        @ref opaque_handle before returning it to the user of your library.
-struct allio_abi_object
+struct allio_abi_object_v1
 {
 	uint32_t version;
+
+	/// @brief Pointer to the table of object functions.
+	struct allio_abi_object_functions_v1 const* functions;
 
 	/// @brief Platform specific pollable handle value.
 	///        * Posix:   file descriptor
@@ -38,14 +41,11 @@ struct allio_abi_object
 	///        * Posix:   Poll event mask.
 	///        * Windows: not used.
 	uintptr_t object_flags;
-
-	/// @brief Pointer to the table of object functions.
-	struct allio_abi_object_functions const* functions;
 }
-typedef allio_abi_object;
+typedef allio_abi_object_v1;
 
 /// @brief Table of functions available to the user of an opaque object.
-struct allio_abi_object_functions
+struct allio_abi_object_functions_v1
 {
 	/// @brief Close the object.
 	void(*close)(allio_abi_object* object);
@@ -57,7 +57,7 @@ struct allio_abi_object_functions
 	///                    * Windows: Not used.
 	allio_abi_result(*notify)(allio_abi_object* object, uintptr_t information);
 }
-typedef allio_abi_object_functions;
+typedef allio_abi_object_functions_v1;
 
 #ifdef __cplusplus
 } // extern "C"

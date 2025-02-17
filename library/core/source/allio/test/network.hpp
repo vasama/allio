@@ -15,7 +15,7 @@ namespace allio::test {
 
 // Use shared_ptr with the aliasing constructor to hide the storage used for the local_address
 // endpoint path.
-using endpoint_type = shared_object<network_endpoint>;
+using endpoint_type = shared_object<any_endpoint_view>;
 
 class endpoint_factory
 {
@@ -28,6 +28,26 @@ protected:
 	endpoint_factory(endpoint_factory const&) = default;
 	endpoint_factory& operator=(endpoint_factory const&) = default;
 	~endpoint_factory() = default;
+
+	template<typename Endpoint>
+	struct endpoint_storage
+	{
+		Endpoint endpoint;
+		any_endpoint_view view;
+
+		explicit endpoint_storage(auto&&... args)
+			: endpoint(vsm_forward(args)...)
+			, view(endpoint)
+		{
+		}
+	};
+
+	template<typename Endpoint>
+	endpoint_type make_endpoint_view(auto&&... args)
+	{
+		auto ptr = std::make_shared<endpoint_storage<Endpoint>>(vsm_forward(args)...);
+		return endpoint_type(std::shared_ptr<any_endpoint_view>(vsm_move(ptr), &ptr->view));
+	}
 };
 
 struct local_endpoint_factory final : endpoint_factory
@@ -41,24 +61,10 @@ struct local_endpoint_factory final : endpoint_factory
 
 	endpoint_type create_endpoint() override
 	{
-		struct storage
-		{
-			path endpoint_path;
-			network_endpoint endpoint;
-		};
-
 		auto const name = std::format("allio_{}.sock", next_id++);
 		auto file_path = std::filesystem::temp_directory_path() / name;
 		std::filesystem::remove(file_path);
-
-		auto ptr = std::make_shared<storage>(vsm_lazy(storage
-		{
-			.endpoint_path = path(vsm_move(file_path).string()),
-		}));
-
-		ptr->endpoint = local_address(ptr->endpoint_path);
-
-		return endpoint_type(std::shared_ptr<network_endpoint>(vsm_move(ptr), &ptr->endpoint));
+		return make_endpoint_view<path>(vsm_move(file_path).string());
 	}
 };
 
@@ -74,8 +80,7 @@ struct ipv4_endpoint_factory final : endpoint_factory
 	endpoint_type create_endpoint() override
 	{
 		vsm_assert(next_port != 0);
-		ipv4_endpoint const endpoint(ipv4_address::localhost, next_port++);
-		return endpoint_type(std::make_shared<network_endpoint>(endpoint));
+		return make_endpoint_view<ipv4_endpoint>(ipv4_address::localhost, next_port++);
 	}
 };
 
@@ -91,8 +96,7 @@ struct ipv6_endpoint_factory final : endpoint_factory
 	endpoint_type create_endpoint() override
 	{
 		vsm_assert(next_port != 0);
-		ipv6_endpoint const endpoint(ipv6_address::localhost, next_port++);
-		return endpoint_type(std::make_shared<network_endpoint>(endpoint));
+		return make_endpoint_view<ipv6_endpoint>(ipv6_address::localhost, next_port++);
 	}
 };
 

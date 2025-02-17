@@ -47,7 +47,7 @@ auto socket = io::connect("192.168.0.7:50000"_ipv4);
 namespace io = allio::senders; // allio::senders functions return senders.
 namespace ex = std::execution;
 
-io::task<void> echo_server(allio::network_endpoint endpoint) {
+io::task<void> echo_server(allio::any_endpoint_view endpoint) {
     io::listen_socket_handle listen_socket = co_await io::listen(endpoint);
 
     ex::async_scope scope;

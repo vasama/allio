@@ -64,7 +64,7 @@ struct listen_t
 	struct params_base : io_flags_t
 	{
 		uint32_t backlog;
-		network_endpoint endpoint;
+		any_endpoint_view endpoint;
 	};
 
 	template<typename Object>
@@ -149,7 +149,7 @@ template<typename T>
 concept listen_socket_object = requires (T const& t) { _listen_socket_object(t); };
 
 template<listen_socket_object Socket, typename Traits>
-[[nodiscard]] auto listen(network_endpoint const& endpoint, auto&&... args)
+[[nodiscard]] auto listen(any_endpoint_view const endpoint, auto&&... args)
 {
 	auto a = io_parameters_t<Socket, listen_t>{};
 	a.endpoint = endpoint;

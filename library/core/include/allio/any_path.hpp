@@ -3,13 +3,14 @@
 #include <allio/any_string.hpp>
 #include <allio/path_view.hpp>
 
-#include <vsm/lift.hpp>
-
 namespace allio {
 namespace detail {
 
 template<typename Path>
-concept _any_path = _any_string<decltype(get_path_string(std::declval<Path const&>()))>;
+using _path_string_type = decltype(get_path_string(std::declval<Path const&>()));
+
+template<typename Path>
+concept _any_path = _any_string<_path_string_type<Path>>;
 
 } // namespace detail
 
@@ -44,7 +45,10 @@ public:
 
 private:
 	template<typename Visitor, typename Char, std::same_as<null_terminated_t>... Tag>
-	[[nodiscard]] decltype(auto) _visitor(Visitor&& visitor, std::basic_string_view<Char> const string, Tag...) const
+	[[nodiscard]] decltype(auto) _visitor(
+		Visitor&& visitor,
+		std::basic_string_view<Char> const string,
+		Tag...) const
 	{
 		if constexpr (std::invocable<Visitor&&, basic_path_view<Char>, Tag...>)
 		{

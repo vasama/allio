@@ -8,7 +8,7 @@ inline namespace sockets {
 
 using raw_listen_socket_handle = traits_type::handle<raw_listen_socket_t>;
 
-[[nodiscard]] raw_listen_socket_handle raw_listen(network_endpoint const& endpoint, auto&&... args)
+[[nodiscard]] raw_listen_socket_handle raw_listen(any_endpoint_view const endpoint, auto&&... args)
 {
 	return detail::listen<raw_listen_socket_t, traits_type>(endpoint, vsm_forward(args)...);
 }

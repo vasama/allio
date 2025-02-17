@@ -1,7 +1,7 @@
 #pragma once
 
+#include <allio/any_path.hpp>
 #include <allio/detail/parameters.hpp>
-#include <allio/path_view.hpp>
 
 #include <vsm/assert.h>
 #include <vsm/int128.hpp>
@@ -41,11 +41,16 @@ template<std::integral T>
 enum class network_address_kind : uint8_t
 {
 	null,
-	local,
+	local, //TODO: Rename to file or path?
 	ipv4,
 	ipv6,
 };
 
+
+struct null_endpoint_t {};
+inline constexpr null_endpoint_t null_endpoint = {};
+
+//TODO: Rename to local_endpoint and use in any_endpoint_view, or get rid of.
 class local_address
 {
 	path_view m_path;
@@ -165,9 +170,6 @@ struct ipv6_endpoint
 };
 
 
-struct null_endpoint_t {};
-inline constexpr null_endpoint_t null_endpoint = {};
-
 class network_endpoint
 {
 	network_address_kind m_kind;
@@ -258,17 +260,183 @@ public:
 };
 
 
-#if 1 // NEW
-namespace detail {
-
-class platform_network_endpoint_view
+class platform_endpoint_view : std::span<std::byte const>
 {
-	void const* m_endpoint;
+	using span_type = std::span<std::byte const>;
 
 public:
+	template<no_cvref_of<platform_endpoint_view> First, typename... Rest>
+		requires std::constructible_from<span_type, First, Rest...>
+	explicit platform_endpoint_view(First&& first, Rest&&... rest)
+		: span_type(vsm_forward(first), vsm_forward(rest)...)
+	{
+	}
 
+	using span_type::data;
+	using span_type::size;
 };
 
+class any_endpoint_view
+{
+	struct local_t
+	{
+		explicit local_t() = default;
+	};
+
+	static constexpr uint32_t ctrl_bits = 32;
+
+	static constexpr uint32_t type_bits = 4;
+	static constexpr uint32_t type_mask = (static_cast<uint32_t>(1) << type_bits) - 1;
+
+	static constexpr uint32_t size_bits = ctrl_bits - type_bits;
+	static constexpr uint32_t size_mask = (static_cast<uint32_t>(1) << size_bits) - 1;
+
+	static constexpr uint32_t error_type                        = 0;
+	static constexpr uint32_t platform_type                     = 1;
+	static constexpr uint32_t generic_type_offset               = 2;
+
+	void const* m_data;
+	uint32_t m_ctrl;
+
+public:
+	any_endpoint_view(null_endpoint_t)
+	{
+	}
+
+	template<detail::_any_path Path>
+	any_endpoint_view(Path const& path)
+		: any_endpoint_view(local_t(), get_path_string(path))
+	{
+		static_assert(
+			std::is_same_v<typename Path::value_type, char>,
+			"Automatic transcoding of local addresses is not currently supported.");
+	}
+
+	any_endpoint_view(ipv4_endpoint const& endpoint)
+		: any_endpoint_view(
+			&endpoint,
+			sizeof(endpoint),
+			make_kind_ctrl(network_address_kind::ipv4))
+	{
+	}
+
+	any_endpoint_view(ipv6_endpoint const& endpoint)
+		: any_endpoint_view(
+			&endpoint,
+			sizeof(endpoint),
+			make_kind_ctrl(network_address_kind::ipv6))
+	{
+	}
+
+	any_endpoint_view(platform_endpoint_view const view)
+		: any_endpoint_view(
+			view.data(),
+			view.size(),
+			make_kind_ctrl(network_address_kind::local))
+	{
+	}
+
+	[[nodiscard]] bool is_generic_endpoint() const
+	{
+		return m_ctrl >> size_bits > extra_state_count;
+	}
+
+	[[nodiscard]] network_address_kind get_generic_kind() const
+	{
+		vsm_assert(is_generic_endpoint()); //PRECONDITION
+		return static_cast<network_address_kind>(m_ctrl >> size_bits);
+	}
+
+	template<std::same_as<path_view>>
+	[[nodiscard]] path_view get_generic_endpoint() const
+	{
+		vsm_assert(get_generic_kind() == network_address_kind::local); //PRECONDITION
+		return path_view(static_cast<char const*>(m_data), m_ctrl & size_mask);
+	}
+
+	template<std::same_as<ipv4_endpoint>>
+	[[nodiscard]] ipv4_endpoint const& get_generic_endpoint() const
+	{
+		vsm_assert(get_generic_kind() == network_address_kind::ipv4); //PRECONDITION
+		return *static_cast<ipv4_endpoint const*>(m_data);
+	}
+
+	template<std::same_as<ipv6_endpoint>>
+	[[nodiscard]] ipv6_endpoint const& get_generic_endpoint() const
+	{
+		vsm_assert(get_generic_kind() == network_address_kind::ipv6); //PRECONDITION
+		return *static_cast<ipv6_endpoint const*>(m_data);
+	}
+
+	[[nodiscard]] bool is_platform_endpoint() const
+	{
+		return m_ctrl >> size_bits == platform_type;
+	}
+
+	[[nodiscard]] platform_endpoint_view get_platform_endpoint() const
+	{
+		vsm_assert(is_platform_endpoint()); //PRECONDITION
+		return platform_endpoint_view(
+			static_cast<std::byte const*>(m_data),
+			m_ctrl & size_mask);
+	}
+
+private:
+	explicit any_endpoint_view(
+		void const* const data,
+		size_t const size,
+		uint32_t const ctrl)
+		: m_data(data)
+		, m_ctrl(size > size_mask ? 0 : ctrl | static_cast<uint32_t>(size))
+	{
+	}
+
+	explicit any_endpoint_view(local_t, std::string_view const path)
+		: any_endpoint_view(
+			path.data(),
+			path.size(),
+			make_kind_ctrl(network_address_kind::local))
+	{
+	}
+
+	static consteval uint32_t make_kind_type(network_address_kind const kind)
+	{
+		return static_cast<uint32_t>(kind) + generic_type_offset;
+	}
+
+	static consteval uint32_t make_kind_ctrl(network_address_kind const kind)
+	{
+		return make_kind_type(kind) << size_bits;
+	}
+
+	[[nodiscard]] decltype(auto) visit(auto&& visitor) const
+	{
+		switch (m_ctrl >> size_bits)
+		{
+		case platform_type:
+			return vsm_forward(visitor)(get_platform_endpoint());
+
+		case make_kind_type(network_address_kind::null):
+			return vsm_forward(visitor)(null_endpoint_t());
+
+		case make_kind_type(network_address_kind::local):
+			return vsm_forward(visitor)(get_local_endpoint());
+
+		case make_kind_type(network_address_kind::ipv4):
+			return vsm_forward(visitor)(get_generic_endpoint<ipv4_endpoint>());
+
+		case make_kind_type(network_address_kind::ipv6):
+			return vsm_forward(visitor)(get_generic_endpoint<ipv6_endpoint>());
+		}
+
+		//TODO: Rename the error tag to be more generic, move out of detail.
+		return vsm_forward(visitor)(detail::string_length_out_of_range_t());
+	}
+};
+
+
+#if 1 // NEW
+namespace detail {
 
 class network_endpoint_buffer
 {
@@ -307,43 +475,6 @@ public:
 	[[nodiscard]] static constexpr network_endpoint_format generic()
 	{
 		return network_endpoint_format(nullptr);
-	}
-};
-
-class network_endpoint_view
-{
-	static constexpr size_t generic_endpoint_value = static_cast<size_t>(-1);
-
-	void const* m_data;
-	size_t m_size;
-
-public:
-	explicit network_endpoint_view(network_endpoint const& endpoint)
-		: m_data(&endpoint)
-		, m_size(generic_endpoint_value)
-	{
-	}
-
-	[[nodiscard]] bool is_generic_endpoint() const
-	{
-		return m_size == generic_endpoint_value;
-	}
-
-	[[nodiscard]] bool is_raw_endpoint() const
-	{
-		return m_size != generic_endpoint_value;
-	}
-
-	[[nodiscard]] network_endpoint const& get_generic_endpoint() const
-	{
-		vsm_assert(is_generic_endpoint());
-		return *static_cast<network_endpoint const*>(m_data);
-	}
-
-	[[nodiscard]] std::span<std::byte const> get_raw_endpoint() const
-	{
-		vsm_assert(is_raw_endpoint());
-		return std::span<std::byte const>(static_cast<std::byte const*>(m_data), m_size);
 	}
 };
 

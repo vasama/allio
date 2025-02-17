@@ -1,7 +1,9 @@
 * Network endpoint redesign
 * Async file I/O implementation
 * OpenSSL TLS implementation
-* File I/O stream interface.
+* File I/O stream interface?
+  Maybe not necessary at this time...
+  Could build streaming on top using random I/O.
 * Full byte I/O interfaces. (read_all, read_until, read_while, ...)
 * Registered buffer I/O.
 * Split io_flags into separate general/create/byte-io flags. Maybe similar to handle_flags.

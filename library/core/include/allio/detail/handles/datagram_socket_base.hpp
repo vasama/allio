@@ -20,7 +20,7 @@ struct bind_t
 
 	struct params_base : io_flags_t
 	{
-		network_endpoint endpoint;
+		any_endpoint_view endpoint;
 	};
 
 	template<typename Object>
@@ -67,7 +67,7 @@ struct send_to_t
 
 	struct params_type
 	{
-		network_endpoint endpoint;
+		any_endpoint_view endpoint;
 		new_write_buffers buffers;
 	};
 
@@ -120,7 +120,7 @@ struct datagram_socket_base_t : BaseObject
 		}
 
 		[[nodiscard]] auto send_to(
-			network_endpoint const& endpoint,
+			any_endpoint_view const endpoint,
 			new_write_buffers const buffers,
 			auto&&... args) const
 		{
@@ -143,7 +143,7 @@ concept datagram_socket_object = requires (T const& t)
 };
 
 template<datagram_socket_object Socket, typename Traits>
-[[nodiscard]] auto bind(network_endpoint const& endpoint, auto&&... args)
+[[nodiscard]] auto bind(any_endpoint_view const endpoint, auto&&... args)
 {
 	auto a = io_parameters_t<Socket, bind_t>{};
 	a.endpoint = endpoint;

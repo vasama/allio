@@ -18,7 +18,7 @@ struct connect_t
 		: io_flags_t
 		, deadline_t
 	{
-		network_endpoint endpoint;
+		any_endpoint_view endpoint;
 
 		using io_flags_t::set_argument;
 		using deadline_t::set_argument;
@@ -91,7 +91,7 @@ template<typename T>
 concept socket_object = requires (T const& t) { _socket_object(t); };
 
 template<socket_object Socket, typename Traits>
-[[nodiscard]] auto connect(network_endpoint const& endpoint, auto&&... args)
+[[nodiscard]] auto connect(any_endpoint_view const endpoint, auto&&... args)
 {
 	auto a = io_parameters_t<Socket, connect_t>{};
 	a.endpoint = endpoint;

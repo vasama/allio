@@ -194,7 +194,6 @@ struct async_operation<M, openssl_listen_socket_t, accept_t>
 
 	native_handle<openssl_socket_t> _h;
 	vsm_no_unique_address async_connector_t<M, openssl_socket_t> _c;
-	network_endpoint _endpoint;
 
 	static vsm::result<void> _accept_completed(H const& h, S& s, auto&& r)
 	{
@@ -204,7 +203,6 @@ struct async_operation<M, openssl_listen_socket_t, accept_t>
 		auto [new_h, new_c] = r.socket.release();
 		static_cast<native_handle<raw_socket_t>&>(s._h) = vsm_move(new_h);
 		static_cast<async_connector_t<M, raw_socket_t>&>(s._c) = vsm_move(new_c);
-		s._endpoint = r.endpoint;
 
 		return {};
 	}

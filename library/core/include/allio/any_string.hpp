@@ -35,7 +35,10 @@ concept _any_string_range =
 	std::ranges::contiguous_range<Range> &&
 	_any_string<std::ranges::range_value_t<Range>>;
 
-struct string_length_out_of_range_t {};
+struct string_length_out_of_range_t
+{
+	explicit string_length_out_of_range_t() = default;
+};
 
 } // namespace detail
 
