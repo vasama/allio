@@ -26,9 +26,6 @@ static vsm::result<void> do_byte_io_2(
 {
 	static constexpr bool is_random_access = requires { a.offset; };
 
-	//TODO: The default on Windows should probably be overlapped, with synchronous I/O being an
-	//      opt-in, the same way non-blocking I/O is opt-in on POSIX.
-
 	if (a.deadline != deadline::never() &&
 		h.flags[platform_object_t::impl_type::flags::synchronous])
 	{

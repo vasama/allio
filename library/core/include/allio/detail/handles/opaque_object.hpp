@@ -48,7 +48,7 @@ struct opaque_object_t : object_t
 template<>
 struct native_handle<opaque_object_t> : native_handle<opaque_object_t::base_type>
 {
-	allio_abi_object* object;
+	allio_abi_object_v1* object;
 };
 
 

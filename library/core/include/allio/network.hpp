@@ -1,12 +1,17 @@
 #pragma once
 
 #include <allio/any_path.hpp>
+#include <allio/detail/aligned_storage_provider.hpp>
+#include <allio/detail/mutable_buffer.hpp>
 #include <allio/detail/parameters.hpp>
 
+#include <vsm/array.hpp>
 #include <vsm/assert.h>
+#include <vsm/exceptions.hpp>
 #include <vsm/int128.hpp>
 #include <vsm/result.hpp>
 #include <vsm/standard/bit.hpp>
+#include <vsm/standard/memory.hpp>
 #include <vsm/utility.hpp>
 
 #include <bit>
@@ -125,23 +130,25 @@ using ipv6_zone_t = uint32_t;
 
 class ipv6_address
 {
+	using addr_type = vsm::array<uint32_t, 4>;
+
 public:
 	using uint_type = vsm::uint128_t;
 
 private:
-	uint_type m_addr;
+	addr_type m_addr;
 
 public:
 	ipv6_address() = default;
 
 	explicit constexpr ipv6_address(uint_type const integer)
-		: m_addr(integer)
+		: m_addr(std::bit_cast<addr_type>(integer))
 	{
 	}
 
 	[[nodiscard]] constexpr uint_type integer() const
 	{
-		return m_addr;
+		return std::bit_cast<uint_type>(m_addr);
 	}
 
 
@@ -176,7 +183,6 @@ class network_endpoint
 	union
 	{
 		null_endpoint_t m_null;
-		local_address m_local;
 		ipv4_endpoint m_ipv4;
 		ipv6_endpoint m_ipv6;
 	};
@@ -191,12 +197,6 @@ public:
 	constexpr network_endpoint(null_endpoint_t)
 		: m_kind(network_address_kind::null)
 		, m_null{}
-	{
-	}
-
-	constexpr network_endpoint(local_address const& address)
-		: m_kind(network_address_kind::local)
-		, m_local(address)
 	{
 	}
 
@@ -222,12 +222,6 @@ public:
 		return m_kind == network_address_kind::null;
 	}
 
-	[[nodiscard]] constexpr local_address const& local() const
-	{
-		vsm_assert(m_kind == network_address_kind::local);
-		return m_local;
-	}
-
 	[[nodiscard]] constexpr ipv4_endpoint const& ipv4() const
 	{
 		vsm_assert(m_kind == network_address_kind::ipv4);
@@ -247,9 +241,6 @@ public:
 		case network_address_kind::null:
 			return vsm_forward(visitor)(null_endpoint_t());
 
-		case network_address_kind::local:
-			return vsm_forward(visitor)(m_local);
-
 		case network_address_kind::ipv4:
 			return vsm_forward(visitor)(m_ipv4);
 
@@ -260,20 +251,39 @@ public:
 };
 
 
-class platform_endpoint_view : std::span<std::byte const>
+inline constexpr size_t platform_endpoint_alignment = 4;
+
+class platform_endpoint_view
 {
-	using span_type = std::span<std::byte const>;
+	void const* m_data;
+	size_t m_size;
 
 public:
-	template<no_cvref_of<platform_endpoint_view> First, typename... Rest>
-		requires std::constructible_from<span_type, First, Rest...>
-	explicit platform_endpoint_view(First&& first, Rest&&... rest)
-		: span_type(vsm_forward(first), vsm_forward(rest)...)
+	template<vsm::no_cvref_of<platform_endpoint_view> Range>
+		requires
+			std::ranges::contiguous_range<Range> &&
+			vsm::byte_type<vsm::remove_cv_t<std::ranges::range_value_t<Range>>>
+	explicit platform_endpoint_view(Range const& range)
+		: platform_endpoint_view(std::ranges::data(range), std::ranges::size(range))
 	{
 	}
 
-	using span_type::data;
-	using span_type::size;
+	explicit platform_endpoint_view(void const* const data, size_t const size)
+		: m_data(data)
+		, m_size(size)
+	{
+		vsm_assert(vsm::is_sufficiently_aligned<platform_endpoint_alignment>(data)); //PRECONDITION
+	}
+
+	[[nodiscard]] void const* data() const
+	{
+		return m_data;
+	}
+
+	[[nodiscard]] size_t size() const
+	{
+		return m_size;
+	}
 };
 
 class any_endpoint_view
@@ -298,8 +308,30 @@ class any_endpoint_view
 	void const* m_data;
 	uint32_t m_ctrl;
 
+
+	static consteval uint32_t make_kind_type(network_address_kind const kind)
+	{
+		return static_cast<uint32_t>(kind) + generic_type_offset;
+	}
+
+	static consteval uint32_t make_kind_ctrl(uint32_t const type)
+	{
+		return type << size_bits;
+	}
+
+	static consteval uint32_t make_kind_ctrl(network_address_kind const kind)
+	{
+		return make_kind_ctrl(make_kind_type(kind));
+	}
+
 public:
+	any_endpoint_view()
+		: any_endpoint_view(nullptr, 0, make_kind_ctrl(error_type))
+	{
+	}
+
 	any_endpoint_view(null_endpoint_t)
+		: any_endpoint_view(nullptr, 0, make_kind_ctrl(network_address_kind::null))
 	{
 	}
 
@@ -332,19 +364,19 @@ public:
 		: any_endpoint_view(
 			view.data(),
 			view.size(),
-			make_kind_ctrl(network_address_kind::local))
+			make_kind_ctrl(platform_type))
 	{
 	}
 
 	[[nodiscard]] bool is_generic_endpoint() const
 	{
-		return m_ctrl >> size_bits > extra_state_count;
+		return m_ctrl >> size_bits > generic_type_offset;
 	}
 
 	[[nodiscard]] network_address_kind get_generic_kind() const
 	{
 		vsm_assert(is_generic_endpoint()); //PRECONDITION
-		return static_cast<network_address_kind>(m_ctrl >> size_bits);
+		return static_cast<network_address_kind>((m_ctrl >> size_bits) - generic_type_offset);
 	}
 
 	template<std::same_as<path_view>>
@@ -381,6 +413,30 @@ public:
 			m_ctrl & size_mask);
 	}
 
+	[[nodiscard]] decltype(auto) visit(auto&& visitor) const
+	{
+		switch (m_ctrl >> size_bits)
+		{
+		case platform_type:
+			return vsm_forward(visitor)(get_platform_endpoint());
+
+		case make_kind_type(network_address_kind::null):
+			return vsm_forward(visitor)(null_endpoint_t());
+
+		case make_kind_type(network_address_kind::local):
+			return vsm_forward(visitor)(get_generic_endpoint<path_view>());
+
+		case make_kind_type(network_address_kind::ipv4):
+			return vsm_forward(visitor)(get_generic_endpoint<ipv4_endpoint>());
+
+		case make_kind_type(network_address_kind::ipv6):
+			return vsm_forward(visitor)(get_generic_endpoint<ipv6_endpoint>());
+		}
+
+		//TODO: Rename the error tag to be more generic, move out of detail.
+		return vsm_forward(visitor)(detail::string_length_out_of_range_t());
+	}
+
 private:
 	explicit any_endpoint_view(
 		void const* const data,
@@ -398,87 +454,137 @@ private:
 			make_kind_ctrl(network_address_kind::local))
 	{
 	}
-
-	static consteval uint32_t make_kind_type(network_address_kind const kind)
-	{
-		return static_cast<uint32_t>(kind) + generic_type_offset;
-	}
-
-	static consteval uint32_t make_kind_ctrl(network_address_kind const kind)
-	{
-		return make_kind_type(kind) << size_bits;
-	}
-
-	[[nodiscard]] decltype(auto) visit(auto&& visitor) const
-	{
-		switch (m_ctrl >> size_bits)
-		{
-		case platform_type:
-			return vsm_forward(visitor)(get_platform_endpoint());
-
-		case make_kind_type(network_address_kind::null):
-			return vsm_forward(visitor)(null_endpoint_t());
-
-		case make_kind_type(network_address_kind::local):
-			return vsm_forward(visitor)(get_local_endpoint());
-
-		case make_kind_type(network_address_kind::ipv4):
-			return vsm_forward(visitor)(get_generic_endpoint<ipv4_endpoint>());
-
-		case make_kind_type(network_address_kind::ipv6):
-			return vsm_forward(visitor)(get_generic_endpoint<ipv6_endpoint>());
-		}
-
-		//TODO: Rename the error tag to be more generic, move out of detail.
-		return vsm_forward(visitor)(detail::string_length_out_of_range_t());
-	}
 };
 
 
-#if 1 // NEW
+#if 0
+template<detail::resizable_container Container>
+	requires vsm::byte_type<typename Container::value_type>
+class basic_platform_endpoint
+{
+	Container m_container;
+
+public:
+
+private:
+	friend vsm::result<vsm::allocation> tag_invoke(
+		detail::get_storage_t,
+		basic_platform_endpoint& endpoint,
+		size_t const min_size,
+		size_t const max_size,
+		std::align_val_t const min_alignment)
+	{
+		
+	}
+};
+
+//TODO: Use custom default container type with small storage optimisation.
+class platform_endpoint = basic_platform_endpoint<std::vector<unsigned char>>;
+#endif
+
+
 namespace detail {
 
-class network_endpoint_buffer
+class _platform_endpoint_buffer
 {
-};
-
-class network_endpoint_format_functions
-{
-public:
-	virtual vsm::result<void> generic_to_raw(
-		network_endpoint const& endpoint,
-		network_endpoint_buffer const& buffer) = 0;
-
-	virtual vsm::result<void> raw_to_generic(
-		std::span<std::byte const> endpoint,
-		network_endpoint& out_endpoint) = 0;
-
 protected:
-	network_endpoint_format_functions() = default;
-	network_endpoint_format_functions(network_endpoint_format_functions const&) = default;
-	network_endpoint_format_functions& operator=(network_endpoint_format_functions const&) = default;
-	~network_endpoint_format_functions() = default;
-};
+	size_t m_size;
 
-class network_endpoint_format
-{
-	[[maybe_unused]] //TODO: Temporary workaround
-	network_endpoint_format_functions const* m_functions;
+	// The size of this buffer is enough to store any single socket address. Additionally on Windows
+	// it is enough for accepting connections on an ipv4 or ipv6 listen socket, but not on a local
+	// (unix) listen socket. Accepting a local connection on Windows using this type requires
+	// dynamic allocation.
+	alignas(platform_endpoint_alignment) std::byte m_data[120];
 
-public:
-	explicit constexpr network_endpoint_format(
-		network_endpoint_format_functions const* const functions)
-		: m_functions(functions)
+
+	_platform_endpoint_buffer()
+		: m_size(sizeof(m_data))
 	{
 	}
 
-	[[nodiscard]] static constexpr network_endpoint_format generic()
+	void set_dynamic_storage(void* const dynamic_storage)
 	{
-		return network_endpoint_format(nullptr);
+		std::memcpy(m_data, &dynamic_storage, sizeof(dynamic_storage));
+	}
+
+	[[nodiscard]] void* get_dynamic_storage() const
+	{
+		void* dynamic_storage;
+		std::memcpy(&dynamic_storage, m_data, sizeof(dynamic_storage));
+		return dynamic_storage;
 	}
 };
 
 } // namespace detail
-#endif // NEW
+
+template<typename Allocator>
+class basic_endpoint_storage final : detail::_platform_endpoint_buffer
+{
+	vsm_no_unique_address Allocator m_allocator;
+
+public:
+	basic_endpoint_storage()
+		requires std::is_default_constructible_v<Allocator> = default;
+
+	template<vsm::any_cvref_of<Allocator> AllocatorArgument>
+	explicit basic_endpoint_storage(AllocatorArgument&& allocator)
+		: m_allocator(allocator)
+	{
+	}
+
+	basic_endpoint_storage(basic_endpoint_storage const&) = delete;
+	basic_endpoint_storage& operator=(basic_endpoint_storage const&) = delete;
+
+	~basic_endpoint_storage()
+	{
+		if (m_size != sizeof(m_data))
+		{
+			m_allocator.deallocate(get_dynamic_storage(), m_size);
+		}
+	}
+
+
+	[[nodiscard]] vsm::result<void*> resize(size_t const size)
+	{
+		if (size > m_size)
+		{
+			vsm_try(storage, allocate(size));
+
+			if (m_size > sizeof(m_data))
+			{
+				m_allocator.deallocate(get_dynamic_storage(), m_size);
+			}
+
+			set_dynamic_storage(storage);
+			m_size = size;
+
+			return storage;
+		}
+
+		if (m_size > sizeof(m_data))
+		{
+			return get_dynamic_storage();
+		}
+
+		return m_data;
+	}
+
+private:
+	[[nodiscard]] vsm::result<void*> allocate(size_t const size) noexcept
+	{
+		vsm_except_try
+		{
+			return m_allocator.allocate(size);
+		}
+		vsm_except_catch (std::bad_alloc const&)
+		{
+			return vsm::unexpected(error::not_enough_memory);
+		}
+	}
+};
+
+using endpoint_storage = basic_endpoint_storage<std::allocator<std::byte>>;
+
+using any_endpoint_storage_provider = detail::any_aligned_storage_provider;
 
 } // namespace allio

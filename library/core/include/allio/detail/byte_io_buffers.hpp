@@ -1,5 +1,7 @@
 #pragma once
 
+#include <allio/detail/aligned_storage_provider.hpp>
+
 #include <vsm/assert.h>
 #include <vsm/concepts.hpp>
 #include <vsm/flags.hpp>
@@ -296,14 +298,9 @@ public:
 
 
 [[nodiscard]] vsm::result<new_io_buffers_view> get_io_buffers(
-	new_io_buffers_storage& storage,
 	new_io_buffers_base const& buffers,
-	new_io_buffer_layout required_layout);
-
-[[nodiscard]] new_io_buffers_view get_io_buffers_unchecked(
-	new_io_buffers_storage const& storage,
-	new_io_buffers_base const& buffers,
-	new_io_buffer_layout required_layout);
+	new_io_buffer_layout required_layout,
+	any_aligned_storage_provider storage_provider);
 
 [[nodiscard]] bool io_buffers_is_empty(new_io_buffers_base buffers);
 

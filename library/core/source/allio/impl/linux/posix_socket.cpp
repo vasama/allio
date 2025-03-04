@@ -62,6 +62,7 @@ vsm::result<socket_with_flags> posix::socket_accept(
 		accept_flags |= SOCK_NONBLOCK;
 	}
 
+	//TODO: Set this from the outside.
 	addr.size = sizeof(socket_address_union);
 	socket_type const socket = accept4(
 		listen_socket,

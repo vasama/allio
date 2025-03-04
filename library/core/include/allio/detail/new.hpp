@@ -99,18 +99,26 @@ template<vsm::non_cvref T = void>
 }
 
 
+template<vsm::non_cvref T>
+void delete_object(T* const object)
+{
+	vsm_assert(object != nullptr); //PRECONDITION
+
+	object->~T();
+
+	detail::release_storage(
+		object,
+		sizeof(T),
+		alignof(T),
+		allio_allocation_strategy_generic);
+}
+
 struct object_deleter
 {
 	template<vsm::non_cvref T>
 	vsm_static_operator void operator()(T* const object) vsm_static_operator_const
 	{
-		object->~T();
-
-		detail::release_storage(
-			object,
-			sizeof(T),
-			alignof(T),
-			allio_allocation_strategy_generic);
+		detail::delete_object(object);
 	}
 };
 

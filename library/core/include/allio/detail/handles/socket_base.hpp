@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/byte_io.hpp>
+#include <allio/detail/handles/common_socket_base.hpp>
 #include <allio/detail/deadline.hpp>
 #include <allio/detail/handles/socket_params.hpp>
 #include <allio/detail/object.hpp>
@@ -58,9 +59,9 @@ struct disconnect_t
 };
 
 template<object BaseObject>
-struct socket_base_t : BaseObject
+struct socket_base_t : common_socket_base_t<BaseObject>
 {
-	using base_type = BaseObject;
+	using base_type = common_socket_base_t<BaseObject>;
 
 	using connect_t = detail::connect_t;
 	using disconnect_t = detail::disconnect_t;

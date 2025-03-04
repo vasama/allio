@@ -1,5 +1,6 @@
 #include <allio/win32/detail/iocp/raw_socket.hpp>
 
+#include <allio/impl/io_extension.hpp>
 #include <allio/impl/posix/socket.hpp>
 #include <allio/impl/win32/iocp/raw_socket.hpp>
 #include <allio/impl/win32/kernel.hpp>
@@ -33,11 +34,14 @@ io_result<void> connect_s::submit(
 		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
-	vsm_try(addr, posix::socket_address::make(a.endpoint));
-	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_STREAM));
+	io_extension_allocator extension = initialize_extension(s);
+
+	//TODO: Check the lifetime requirements of the socket address.
+	vsm_try(addr, posix::get_socket_address(a.endpoint, extension));
+	vsm_try(protocol, posix::choose_protocol(addr.addr->sa_family, SOCK_STREAM));
 
 	vsm_try_bind((socket, flags), posix::create_socket(
-		addr.addr.sa_family,
+		addr.addr->sa_family,
 		SOCK_STREAM,
 		protocol,
 		a.flags));
@@ -48,9 +52,9 @@ io_result<void> connect_s::submit(
 	{
 		posix::socket_address_union bind_addr;
 		memset(&bind_addr, 0, sizeof(bind_addr));
-		bind_addr.addr.sa_family = addr.addr.sa_family;
+		bind_addr.addr.sa_family = addr.addr->sa_family;
 
-		vsm_try_void(socket_bind(socket.get(), bind_addr, addr.size));
+		vsm_try_void(posix::socket_bind(socket.get(), &bind_addr.addr, addr.size));
 	}
 
 	s.socket = unique_wrapped_socket(posix::wrap_socket(socket.release()));
@@ -92,6 +96,8 @@ io_result<void> connect_s::notify(
 	io_handler<M>& handler,
 	M::io_status_type const status)
 {
+	io_extension_allocator const extension = acquire_extension(s);
+
 	vsm_assert(&status.slot == &s.overlapped);
 
 	if (!NT_SUCCESS(status.status))
@@ -150,7 +156,9 @@ io_result<size_t> read_s::submit(
 	read_a const& a,
 	io_handler<M>& handler)
 {
-	vsm_try(wsa_buffers, get_wsa_buffers(s.buffers, a.buffers));
+	io_extension_allocator extension = initialize_extension(s);
+
+	vsm_try(wsa_buffers, get_wsa_buffers(a.buffers, extension));
 
 	DWORD transferred;
 	DWORD flags = 0;
@@ -167,8 +175,8 @@ io_result<size_t> read_s::submit(
 	{
 		if (win32::WSARecv(
 			posix::unwrap_socket(h.platform_handle),
-			static_cast<WSABUF*>(const_cast<void*>(wsa_buffers.buffers_data)),
-			vsm::saturating(wsa_buffers.buffers_size),
+			const_cast<WSABUF*>(wsa_buffers.data()),
+			vsm::saturating(wsa_buffers.size()),
 			&transferred,
 			&flags,
 			&overlapped,
@@ -197,6 +205,8 @@ io_result<size_t> read_s::notify(
 	io_handler<M>& handler,
 	M::io_status_type const status)
 {
+	io_extension_allocator const extension = acquire_extension(s);
+
 	vsm_assert(&status.slot == &s.overlapped);
 
 	if (!NT_SUCCESS(status.status))
@@ -225,7 +235,9 @@ io_result<size_t> write_s::submit(
 	write_a const& a,
 	io_handler<M>& handler)
 {
-	vsm_try(wsa_buffers, get_wsa_buffers(s.buffers, a.buffers));
+	io_extension_allocator extension = initialize_extension(s);
+
+	vsm_try(wsa_buffers, get_wsa_buffers(a.buffers, extension));
 
 	DWORD transferred;
 
@@ -241,8 +253,8 @@ io_result<size_t> write_s::submit(
 	{
 		if (win32::WSASend(
 			posix::unwrap_socket(h.platform_handle),
-			static_cast<WSABUF*>(const_cast<void*>(wsa_buffers.buffers_data)),
-			vsm::saturating(wsa_buffers.buffers_size),
+			const_cast<WSABUF*>(wsa_buffers.data()),
+			vsm::saturating(wsa_buffers.size()),
 			&transferred,
 			/* dwFlags: */ 0,
 			&overlapped,
@@ -270,6 +282,8 @@ io_result<size_t> write_s::notify(
 	io_handler<M>& handler,
 	M::io_status_type const status)
 {
+	io_extension_allocator const extension = acquire_extension(s);
+
 	vsm_assert(&status.slot == &s.overlapped);
 
 	if (!NT_SUCCESS(status.status))

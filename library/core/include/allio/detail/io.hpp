@@ -547,4 +547,9 @@ struct async_operation<Multiplexer, Object, Operation>
 	}
 };
 
+struct async_extension
+{
+	void* extension;
+};
+
 } // namespace allio::detail

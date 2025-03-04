@@ -2,12 +2,13 @@
 #include <allio/impl/win32/completion_port.hpp>
 #include <allio/impl/win32/event.hpp>
 #include <allio/impl/win32/wsa.hpp>
+#include <allio/nothrow/event.hpp>
+#include <allio/test/filesystem.hpp>
 #include <allio/test/spawn.hpp>
 
 #include <catch2/catch_all.hpp>
 
 using namespace allio;
-using namespace allio::posix;
 using namespace allio::win32;
 
 vsm_clang_diagnostic(ignored "-Wold-style-cast")
@@ -65,12 +66,14 @@ TEST_CASE("WSA supports unix stream sockets", "[windows][wsa][socket]")
 
 TEST_CASE("WSA asynchronous connect and accept", "[windows][wsa][socket][async]")
 {
-	auto const addr = socket_address::make(ipv4_endpoint(ipv4_address::localhost, 51234)).value();
+	posix::socket_address_storage address_storage;
+	auto const endpoint = ipv4_endpoint(ipv4_address::localhost, 51234);
+	auto const addr = posix::get_socket_address(endpoint, address_storage).value();
 
 	auto const create_socket = [&]()
 	{
 		return posix::create_socket(
-			addr.addr.sa_family,
+			addr.addr->sa_family,
 			SOCK_STREAM,
 			IPPROTO_TCP,
 			io_flags::create_non_blocking).value().socket;
@@ -91,10 +94,15 @@ TEST_CASE("WSA asynchronous connect and accept", "[windows][wsa][socket][async]"
 	posix::socket_listen(listen_socket.get(), addr, 0).value();
 
 	auto const server_socket = create_socket();
-	wsa_accept_address_buffer accept_addr;
+	wsa_accept_address_storage accept_addr;
 
 	OVERLAPPED accept_overlapped = {};
-	REQUIRE(WSA_IO_PENDING == wsa_accept_ex(listen_socket.get(), server_socket.get(), accept_addr, accept_overlapped));
+	REQUIRE(wsa_accept_ex(
+		listen_socket.get(),
+		server_socket.get(),
+		&accept_addr,
+		sizeof(accept_addr.local),
+		accept_overlapped) == WSA_IO_PENDING);
 
 
 	// Connect
@@ -110,13 +118,13 @@ TEST_CASE("WSA asynchronous connect and accept", "[windows][wsa][socket][async]"
 	{
 		posix::socket_address_union bind_addr;
 		memset(&bind_addr, 0, sizeof(bind_addr));
-		bind_addr.addr.sa_family = addr.addr.sa_family;
+		bind_addr.addr.sa_family = addr.addr->sa_family;
 
-		socket_bind(client_socket.get(), bind_addr, addr.size).value();
+		posix::socket_bind(client_socket.get(), &bind_addr.addr, addr.size).value();
 	}
 
 	OVERLAPPED connect_overlapped = {};
-	REQUIRE(WSA_IO_PENDING == wsa_connect_ex(client_socket.get(), addr, connect_overlapped));
+	REQUIRE(wsa_connect_ex(client_socket.get(), addr, connect_overlapped) == WSA_IO_PENDING);
 
 
 	/* Handle completions */
@@ -142,6 +150,96 @@ TEST_CASE("WSA asynchronous connect and accept", "[windows][wsa][socket][async]"
 	}
 }
 
+TEST_CASE("WSA asynchronous unix connect and accept", "[windows][wsa][socket][async]")
+{
+	posix::socket_address_storage address_storage;
+	path const path = test::get_temp_path();
+	auto const addr = posix::get_socket_address(path_view(path), address_storage).value();
+
+	auto const create_socket = [&]()
+	{
+		return posix::create_socket(
+			addr.addr->sa_family,
+			SOCK_STREAM,
+			0,
+			io_flags::create_non_blocking).value().socket;
+	};
+
+
+	DWORD bytes_transferred;
+
+
+	// Accept
+
+	auto const listen_socket = create_socket();
+	posix::socket_listen(listen_socket.get(), addr, 1).value();
+
+	auto const server_socket = create_socket();
+	wsa_accept_address_storage::storage_type accept_addr;
+
+	auto accept_event = nothrow::event(manual_reset_event).value();
+	OVERLAPPED accept_overlapped =
+	{
+		.hEvent = unwrap_handle(accept_event.native().platform_handle),
+	};
+
+	REQUIRE(!win32::AcceptEx(
+		listen_socket.get(),
+		server_socket.get(),
+		&accept_addr,
+		0,
+		0,
+		sizeof(accept_addr),
+		&bytes_transferred,
+		&accept_overlapped));
+
+	REQUIRE(WSAGetLastError() == ERROR_IO_PENDING);
+
+
+	// Connect
+
+	auto const client_socket = create_socket();
+
+	// The socket must be bound before calling ConnectEx.
+	{
+		posix::socket_address_union bind_addr;
+		memset(&bind_addr, 0, sizeof(bind_addr));
+		bind_addr.addr.sa_family = addr.addr->sa_family;
+
+		posix::socket_bind(client_socket.get(), &bind_addr.addr, addr.size).value();
+	}
+
+	auto connect_event = nothrow::event(manual_reset_event).value();
+	OVERLAPPED connect_overlapped =
+	{
+		.hEvent = unwrap_handle(connect_event.native().platform_handle),
+	};
+
+	REQUIRE(wsa_connect_ex(client_socket.get(), addr, connect_overlapped) == WSA_IO_PENDING);
+
+
+
+	accept_event.wait().value();
+	connect_event.wait().value();
+
+
+	DWORD completion_flags = 0;
+
+	REQUIRE(WSAGetOverlappedResult(
+		listen_socket.get(),
+		&accept_overlapped,
+		&bytes_transferred,
+		/* fWait: */ false,
+		&completion_flags));
+
+	REQUIRE(WSAGetOverlappedResult(
+		client_socket.get(),
+		&connect_overlapped,
+		&bytes_transferred,
+		/* fWait: */ false,
+		&completion_flags));
+}
+
 
 /* Datagram sockets */
 
@@ -164,14 +262,15 @@ TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][datagram_soc
 
 	auto const receive_socket = create_socket();
 
-	auto const addr = socket_address::make(
-		ipv4_endpoint(ipv4_address::localhost, 51234)).value();
+	posix::socket_address_storage address_storage;
+	auto const endpoint = ipv4_endpoint(ipv4_address::localhost, 51234);
+	auto const addr = posix::get_socket_address(endpoint, address_storage).value();
 
 	socket_bind(receive_socket.get(), addr).value();
 
 	signed char receive_buffer = 0;
-	socket_address receive_addr;
-	receive_addr.size = sizeof(socket_address_union);
+	posix::socket_address receive_addr;
+	receive_addr.size = sizeof(posix::socket_address_union);
 
 	auto receive_future = test::spawn([&]()
 	{
@@ -194,7 +293,7 @@ TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][datagram_soc
 			reinterpret_cast<char*>(&send_buffer),
 			1,
 			0,
-			&addr.addr,
+			addr.addr,
 			addr.size);
 		REQUIRE(r == 1);
 	}
@@ -205,12 +304,14 @@ TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][datagram_soc
 
 TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram_socket][async]")
 {
-	auto const addr = socket_address::make(ipv4_endpoint(ipv4_address::localhost, 51234)).value();
+	posix::socket_address_storage address_storage;
+	auto const endpoint = ipv4_endpoint(ipv4_address::localhost, 51234);
+	auto const addr = posix::get_socket_address(endpoint, address_storage).value();
 
 	auto const create_socket = [&]()
 	{
 		return posix::create_socket(
-			addr.addr.sa_family,
+			addr.addr->sa_family,
 			SOCK_DGRAM,
 			IPPROTO_UDP,
 			io_flags::create_non_blocking).value().socket;
@@ -231,8 +332,8 @@ TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram
 
 	signed char receive_value = 0;
 
-	socket_address receive_addr;
-	receive_addr.size = sizeof(socket_address_union);
+	posix::socket_address receive_addr;
+	receive_addr.size = sizeof(posix::socket_address_union);
 
 	OVERLAPPED receive_overlapped = {};
 	{
@@ -286,7 +387,7 @@ TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram
 			1,
 			&transferred,
 			/* dwFlags: */ 0,
-			&addr.addr,
+			addr.addr,
 			addr.size,
 			&send_overlapped,
 			/* lpCompletionRoutine: */ nullptr);
@@ -365,12 +466,14 @@ public:
 
 TEST_CASE("WSA RIO", "[windows][wsa][rio]")
 {
-	auto const addr = socket_address::make(ipv4_endpoint(ipv4_address::localhost, 51234)).value();
+	posix::socket_address_storage address_storage;
+	auto const endpoint = ipv4_endpoint(ipv4_address::localhost, 51234);
+	auto const addr = posix::get_socket_address(endpoint, address_storage).value();
 
 	auto const create_socket = [&]()
 	{
 		return posix::create_socket(
-			addr.addr.sa_family,
+			addr.addr->sa_family,
 			SOCK_STREAM,
 			IPPROTO_TCP,
 			io_flags::create_non_blocking | io_flags::create_registered_io).value().socket;
@@ -379,8 +482,8 @@ TEST_CASE("WSA RIO", "[windows][wsa][rio]")
 	auto const completion_port = create_completion_port(1).value();
 
 
-	unique_socket server_socket;
-	unique_socket client_socket;
+	posix::unique_socket server_socket;
+	posix::unique_socket client_socket;
 	{
 		auto const listen_socket = create_socket();
 
@@ -392,13 +495,14 @@ TEST_CASE("WSA RIO", "[windows][wsa][rio]")
 		posix::socket_listen(listen_socket.get(), addr, 0).value();
 
 		server_socket = create_socket();
-		wsa_accept_address_buffer accept_addr;
+		wsa_accept_address_storage accept_addr;
 
 		OVERLAPPED accept_overlapped = {};
 		REQUIRE(wsa_accept_ex(
 			listen_socket.get(),
 			server_socket.get(),
-			accept_addr,
+			&accept_addr,
+			sizeof(accept_addr.local),
 			accept_overlapped) == WSA_IO_PENDING);
 
 
@@ -413,9 +517,9 @@ TEST_CASE("WSA RIO", "[windows][wsa][rio]")
 		{
 			posix::socket_address_union bind_addr;
 			memset(&bind_addr, 0, sizeof(bind_addr));
-			bind_addr.addr.sa_family = addr.addr.sa_family;
+			bind_addr.addr.sa_family = addr.addr->sa_family;
 
-			socket_bind(client_socket.get(), bind_addr, addr.size).value();
+			posix::socket_bind(client_socket.get(), &bind_addr.addr, addr.size).value();
 		}
 
 		OVERLAPPED connect_overlapped = {};

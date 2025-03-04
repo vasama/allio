@@ -15,7 +15,8 @@ struct async_connector<io_uring_multiplexer, raw_listen_socket_t>
 
 template<>
 struct async_operation<io_uring_multiplexer, raw_listen_socket_t, listen_t>
-	: io_uring_multiplexer::operation_type
+	: async_extension
+	, io_uring_multiplexer::operation_type
 {
 	using M = io_uring_multiplexer;
 	using H = native_handle<raw_listen_socket_t>;
@@ -30,7 +31,8 @@ struct async_operation<io_uring_multiplexer, raw_listen_socket_t, listen_t>
 
 template<>
 struct async_operation<io_uring_multiplexer, raw_listen_socket_t, accept_t>
-	: io_uring_multiplexer::operation_type
+	: async_extension
+	, io_uring_multiplexer::operation_type
 {
 	using M = io_uring_multiplexer;
 	using H = native_handle<raw_listen_socket_t> const;
@@ -41,7 +43,6 @@ struct async_operation<io_uring_multiplexer, raw_listen_socket_t, accept_t>
 		raw_listen_socket_t::socket_object_type,
 		basic_multiplexer_handle<M>>>;
 
-	socket_address_storage addr_storage;
 	int32_t addr_size;
 
 	static io_result<R> submit(M& m, H const& h, C const& c, S& s, A const& a, io_handler<M>& handler);
@@ -51,7 +52,8 @@ struct async_operation<io_uring_multiplexer, raw_listen_socket_t, accept_t>
 
 template<>
 struct async_operation<io_uring_multiplexer, raw_listen_socket_t, close_t>
-	: io_uring_multiplexer::operation_type
+	: async_extension
+	, io_uring_multiplexer::operation_type
 {
 	using M = io_uring_multiplexer;
 	using H = native_handle<raw_listen_socket_t>;

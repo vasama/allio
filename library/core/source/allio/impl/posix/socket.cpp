@@ -19,13 +19,191 @@ static To ipv6_network_byte_order(From const& addr)
 		uint64_t h;
 		uint64_t l;
 	};
+
 	auto const data = std::bit_cast<ipv6_data>(addr);
+
 	return std::bit_cast<To>(ipv6_data
 	{
 		.h = network_byte_order(data.l),
 		.l = network_byte_order(data.h),
 	});
 }
+
+static vsm::result<socket_address_size_type> set_socket_address(
+	sockaddr_un& addr,
+	path_view const path)
+{
+	std::string_view const string = path.string();
+
+	if (string.size() > unix_socket_max_path)
+	{
+		return vsm::unexpected(allio_error(error::filename_too_long));
+	}
+
+	addr.sun_family = AF_UNIX;
+	memcpy(addr.sun_path, string.data(), string.size());
+	size_t addr_size = offsetof(sockaddr_un, sun_path) + string.size();
+
+	if (string.size() < unix_socket_max_path)
+	{
+		addr.sun_path[string.size()] = '\0';
+		addr_size += 1;
+	}
+
+	return static_cast<socket_address_size_type>(addr_size);
+}
+
+static vsm::result<socket_address_size_type> set_socket_address(
+	sockaddr_in& addr,
+	ipv4_endpoint const& endpoint)
+{
+	addr.sin_family = AF_INET;
+	addr.sin_port = network_byte_order(endpoint.port);
+	addr.sin_addr.s_addr = network_byte_order(endpoint.address.integer());
+	memset(addr.sin_zero, 0, sizeof(addr.sin_zero));
+	return static_cast<socket_address_size_type>(sizeof(addr));
+}
+
+static vsm::result<socket_address_size_type> set_socket_address(
+	sockaddr_in6& addr,
+	ipv6_endpoint const& endpoint)
+{
+	addr.sin6_family = AF_INET6;
+	addr.sin6_port = network_byte_order(endpoint.port);
+	addr.sin6_flowinfo = 0;
+	addr.sin6_addr = ipv6_network_byte_order<in6_addr>(endpoint.address);
+	addr.sin6_scope_id = network_byte_order(endpoint.zone);
+	return static_cast<socket_address_size_type>(sizeof(addr));
+}
+
+
+[[nodiscard]] vsm::result<vsm::allocation> get_socket_address_storage(
+	size_t const size,
+	any_endpoint_storage_provider const primary_storage_provider,
+	any_endpoint_storage_provider const secondary_storage_provider)
+{
+	vsm_assert(secondary_storage_provider); //PRECONDITION
+
+	if (primary_storage_provider)
+	{
+		return primary_storage_provider.get_storage(
+			size,
+			std::align_val_t(alignof(socket_address_union)));
+	}
+
+	return secondary_storage_provider.get_storage(
+		size,
+		std::align_val_t(alignof(socket_address_union)));
+}
+
+template<typename SocketAddress>
+static vsm::result<sockaddr_buffer> _new_socket_address(
+	any_endpoint_storage_provider storage_provider)
+{
+	vsm_try(storage, storage_provider.get_storage(sizeof(SocketAddress)));
+	auto* const addr = ::new (storage) basic_socket_address<SocketAddress>;
+
+	return sockaddr_buffer
+	{
+		.size = addr->size,
+		.addr = reinterpret_cast<sockaddr*>(addr),
+	};
+}
+
+vsm::result<sockaddr_buffer> new_socket_address(
+	network_address_kind const kind,
+	any_endpoint_storage_provider storage_provider)
+{
+	switch (kind)
+	{
+	case network_address_kind::local:
+		return _new_socket_address<sockaddr_un>(storage_provider);
+
+	case network_address_kind::ipv4:
+		return _new_socket_address<sockaddr_in>(storage_provider);
+
+	case network_address_kind::ipv6:
+		return _new_socket_address<sockaddr_in6>(storage_provider);
+
+	default:
+		return vsm::unexpected(allio_error(error::unsupported_operation));
+	}
+}
+
+
+template<typename SocketAddress>
+static vsm::result<sockaddr_view> get_socket_address_2(
+	auto const& endpoint,
+	any_endpoint_storage_provider storage_provider)
+{
+	vsm_try(storage, storage_provider.get_storage(sizeof(SocketAddress)));
+	auto* const addr = ::new (storage) basic_socket_address<SocketAddress>;
+	vsm_try_assign(addr->size, set_socket_address(*addr, endpoint));
+
+	return sockaddr_view
+	{
+		.size = addr->size,
+		.addr = reinterpret_cast<sockaddr*>(static_cast<SocketAddress*>(addr)),
+	};
+}
+
+static vsm::result<sockaddr_view> get_socket_address_1(
+	null_endpoint_t,
+	any_endpoint_storage_provider storage_provider)
+{
+	return vsm::unexpected(allio_error(error::unsupported_operation));
+}
+
+static vsm::result<sockaddr_view> get_socket_address_1(
+	path_view const path,
+	any_endpoint_storage_provider storage_provider)
+{
+	return get_socket_address_2<sockaddr_un>(path, storage_provider);
+}
+
+static vsm::result<sockaddr_view> get_socket_address_1(
+	ipv4_endpoint const& endpoint,
+	any_endpoint_storage_provider storage_provider)
+{
+	return get_socket_address_2<sockaddr_in>(endpoint, storage_provider);
+}
+
+static vsm::result<sockaddr_view> get_socket_address_1(
+	ipv6_endpoint const& endpoint,
+	any_endpoint_storage_provider storage_provider)
+{
+	return get_socket_address_2<sockaddr_in6>(endpoint, storage_provider);
+}
+
+static vsm::result<sockaddr_view> get_socket_address_1(
+	platform_endpoint_view const view,
+	any_endpoint_storage_provider storage_provider)
+{
+	return sockaddr_view
+	{
+		.size = vsm::saturating(view.size()),
+		.addr = reinterpret_cast<sockaddr const*>(view.data()),
+	};
+}
+
+static vsm::result<sockaddr_view> get_socket_address_1(
+	detail::string_length_out_of_range_t,
+	any_endpoint_storage_provider storage_provider)
+{
+	//TODO: Maybe there is a more appropriate error code to use here?
+	return vsm::unexpected(allio_error(error::invalid_argument));
+}
+
+vsm::result<sockaddr_view> posix::get_socket_address(
+	any_endpoint_view const endpoint,
+	any_endpoint_storage_provider storage_provider)
+{
+	return endpoint.visit([&](auto const& endpoint)
+	{
+		return get_socket_address_1(endpoint, storage_provider);
+	});
+}
+
 
 network_endpoint socket_address_union::get_network_endpoint() const
 {
@@ -53,8 +231,9 @@ network_endpoint socket_address_union::get_network_endpoint() const
 	return {};
 }
 
+#if 0
 vsm::result<socket_address_size_type> socket_address::make(
-	network_endpoint const& endpoint,
+	any_endpoint_view const endpoint,
 	socket_address_union& addr)
 {
 	socket_address_size_type addr_size = 0;
@@ -114,6 +293,7 @@ vsm::result<socket_address> socket_address::make(network_endpoint const& endpoin
 	vsm_try_assign(r->size, make(endpoint, *r));
 	return r;
 }
+#endif
 
 vsm::result<socket_address> socket_address::get(socket_type const socket)
 {
@@ -131,7 +311,7 @@ vsm::result<socket_address> socket_address::get(socket_type const socket)
 
 vsm::result<void> posix::socket_listen(
 	socket_type const socket,
-	socket_address const& addr,
+	sockaddr_view const addr,
 	uint32_t const _backlog)
 {
 	int const backlog = _backlog == 0
@@ -151,12 +331,12 @@ vsm::result<void> posix::socket_listen(
 
 static vsm::result<void> socket_connect_with_timeout(
 	socket_type const socket,
-	socket_address const& addr,
+	sockaddr_view const addr,
 	deadline const deadline)
 {
 	vsm_try_void(socket_set_non_blocking(socket, true));
 
-	if (::connect(socket, &addr.addr, addr.size) == socket_error_value)
+	if (::connect(socket, addr.addr, addr.size) == socket_error_value)
 	{
 		switch (socket_error const error = get_last_socket_error())
 		{
@@ -195,10 +375,10 @@ static vsm::result<void> socket_connect_with_timeout(
 			}
 
 			// If connecting failed, use recv to get the reason for the connect failure.
-			char dummy_buffer;
+			char dummy_buffer[1];
 			std::make_signed_t<size_t> const recv_result = recv(
 				socket,
-				&dummy_buffer,
+				dummy_buffer,
 				/* len: */ 1,
 				/* flags: */ 0);
 			vsm_assert(recv_result == socket_error_value);
@@ -223,7 +403,7 @@ static vsm::result<void> socket_connect_with_timeout(
 
 vsm::result<void> posix::socket_connect(
 	socket_type const socket,
-	socket_address const& addr,
+	sockaddr_view const addr,
 	deadline const deadline)
 {
 	if (deadline != deadline::never())
@@ -231,7 +411,7 @@ vsm::result<void> posix::socket_connect(
 		return socket_connect_with_timeout(socket, addr, deadline);
 	}
 
-	if (::connect(socket, &addr.addr, addr.size) == socket_error_value)
+	if (::connect(socket, addr.addr, addr.size) == socket_error_value)
 	{
 		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}

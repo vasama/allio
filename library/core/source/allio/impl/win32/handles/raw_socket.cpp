@@ -32,11 +32,12 @@ vsm::result<void> raw_socket_t::connect(
 		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
-	vsm_try(addr, posix::socket_address::make(a.endpoint));
-	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_STREAM));
+	posix::socket_address_storage address_storage;
+	vsm_try(addr, posix::get_socket_address(a.endpoint, address_storage));
+	vsm_try(protocol, posix::choose_protocol(addr.addr->sa_family, SOCK_STREAM));
 
 	vsm_try_bind((socket, flags), posix::create_socket(
-		addr.addr.sa_family,
+		addr.addr->sa_family,
 		SOCK_STREAM,
 		protocol,
 		a.flags));
@@ -50,15 +51,15 @@ vsm::result<void> raw_socket_t::connect(
 		{
 			posix::socket_address_union bind_addr;
 			memset(&bind_addr, 0, sizeof(bind_addr));
-			bind_addr.addr.sa_family = addr.addr.sa_family;
+			bind_addr.addr.sa_family = addr.addr->sa_family;
 
-			vsm_try_void(socket_bind(socket.get(), bind_addr, addr.size));
+			vsm_try_void(posix::socket_bind(socket.get(), &bind_addr.addr, addr.size));
 		}
 
 		DWORD transferred = static_cast<DWORD>(-1);
 		if (!win32::ConnectEx(
 			socket.get(),
-			&addr.addr,
+			addr.addr,
 			addr.size,
 			/* lpSendBuffer: */ nullptr,
 			/* dwSendDataLength: */ 0,
@@ -81,7 +82,7 @@ vsm::result<void> raw_socket_t::connect(
 	}
 	else
 	{
-		if (::connect(socket.get(), &addr.addr, addr.size) == SOCKET_ERROR)
+		if (::connect(socket.get(), addr.addr, addr.size) == SOCKET_ERROR)
 		{
 			return vsm::unexpected(allio_error(posix::get_last_socket_error()));
 		}
@@ -97,6 +98,8 @@ vsm::result<size_t> raw_socket_t::stream_read(
 	native_handle<raw_socket_t> const& h,
 	io_parameters_t<raw_socket_t, stream_read_t> const& a)
 {
+	//TODO: Unify buffer count checks with check_wsa_buffers_size everywhere.
+	//      Convert buffer count saturation to truncation.
 	if (a.buffers.get_buffers_size() > max_buffer_count)
 	{
 		return vsm::unexpected(allio_error(error::too_many_io_buffers));
@@ -110,8 +113,8 @@ vsm::result<size_t> raw_socket_t::stream_read(
 
 	SOCKET const socket = posix::unwrap_socket(h.platform_handle);
 
-	wsa_buffers_storage<64> buffers_storage;
-	vsm_try(wsa_buffers, get_wsa_buffers(buffers_storage, a.buffers));
+	automatic_wsa_buffer_storage buffer_storage;
+	vsm_try(wsa_buffers, get_wsa_buffers(a.buffers, buffer_storage));
 
 	vsm_try(overlapped, wsa_thread_overlapped::get_for(h));
 
@@ -121,8 +124,8 @@ vsm::result<size_t> raw_socket_t::stream_read(
 	if (win32::WSARecv(
 		socket,
 		// This function is not const correct, so a const_cast is required.
-		reinterpret_cast<WSABUF*>(const_cast<void*>(wsa_buffers.buffers_data)),
-		vsm::saturating(wsa_buffers.buffers_size),
+		const_cast<WSABUF*>(wsa_buffers.data()),
+		vsm::saturating(wsa_buffers.size()),
 		&transferred,
 		&flags,
 		overlapped,
@@ -165,8 +168,8 @@ vsm::result<size_t> raw_socket_t::stream_write(
 
 	SOCKET const socket = posix::unwrap_socket(h.platform_handle);
 
-	wsa_buffers_storage<64> buffers_storage;
-	vsm_try(wsa_buffers, get_wsa_buffers(buffers_storage, a.buffers));
+	automatic_wsa_buffer_storage buffer_storage;
+	vsm_try(wsa_buffers, get_wsa_buffers(a.buffers, buffer_storage));
 
 	vsm_try(overlapped, wsa_thread_overlapped::get_for(h));
 
@@ -176,8 +179,8 @@ vsm::result<size_t> raw_socket_t::stream_write(
 	if (win32::WSASend(
 		socket,
 		// This function is not const correct, so a const_cast is required.
-		reinterpret_cast<WSABUF*>(const_cast<void*>(wsa_buffers.buffers_data)),
-		vsm::saturating(wsa_buffers.buffers_size),
+		const_cast<WSABUF*>(wsa_buffers.data()),
+		vsm::saturating(wsa_buffers.size()),
 		&transferred,
 		flags,
 		overlapped,

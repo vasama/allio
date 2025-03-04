@@ -48,14 +48,14 @@ typedef allio_abi_object_v1;
 struct allio_abi_object_functions_v1
 {
 	/// @brief Close the object.
-	void(*close)(allio_abi_object* object);
+	void(*close)(allio_abi_object_v1* object);
 
 	/// @brief Notify the object of poll completion. The user of an opaque object should invoke this
 	///        function when polling the object completes successfully.
 	/// @param information Platform specific poll result information.
 	///                    * Posix:   Poll event mask.
 	///                    * Windows: Not used.
-	allio_abi_result(*notify)(allio_abi_object* object, uintptr_t information);
+	allio_abi_result(*notify)(allio_abi_object_v1* object, uintptr_t information);
 }
 typedef allio_abi_object_functions_v1;
 

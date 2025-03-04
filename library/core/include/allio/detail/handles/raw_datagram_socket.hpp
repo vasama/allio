@@ -1,15 +1,15 @@
 #pragma once
 
 #include <allio/detail/handles/datagram_socket_base.hpp>
-#include <allio/detail/handles/platform_object.hpp>
+#include <allio/detail/handles/raw_common_socket_base.hpp>
 
 #include <vsm/platform.h>
 
 namespace allio::detail {
 
-struct raw_datagram_socket_t : datagram_socket_base_t<platform_object_t>
+struct raw_datagram_socket_t : datagram_socket_base_t<raw_common_socket_base_t>
 {
-	using base_type = datagram_socket_base_t<platform_object_t>;
+	using base_type = datagram_socket_base_t<raw_common_socket_base_t>;
 
 	using security_context_type = void;
 

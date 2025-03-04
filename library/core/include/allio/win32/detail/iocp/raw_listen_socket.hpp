@@ -15,7 +15,8 @@ struct async_connector<iocp_multiplexer, raw_listen_socket_t>
 
 template<>
 struct async_operation<iocp_multiplexer, raw_listen_socket_t, listen_t>
-	: iocp_multiplexer::operation_type
+	: async_extension
+	, iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
 	using H = native_handle<raw_listen_socket_t>;
@@ -30,7 +31,8 @@ struct async_operation<iocp_multiplexer, raw_listen_socket_t, listen_t>
 
 template<>
 struct async_operation<iocp_multiplexer, raw_listen_socket_t, accept_t>
-	: iocp_multiplexer::operation_type
+	: async_extension
+	, iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
 	using H = native_handle<raw_listen_socket_t> const;
@@ -41,7 +43,6 @@ struct async_operation<iocp_multiplexer, raw_listen_socket_t, accept_t>
 
 	unique_wrapped_socket socket;
 	handle_flags socket_flags;
-	wsa_address_storage<256> address_storage;
 	iocp_multiplexer::overlapped overlapped;
 
 	static io_result<R> submit(M& m, H const& h, C const& c, S& s, A const& a, io_handler<M>& handler);
@@ -51,7 +52,8 @@ struct async_operation<iocp_multiplexer, raw_listen_socket_t, accept_t>
 
 template<>
 struct async_operation<iocp_multiplexer, raw_listen_socket_t, close_t>
-	: iocp_multiplexer::operation_type
+	: async_extension
+	, iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
 	using H = native_handle<raw_listen_socket_t>;

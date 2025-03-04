@@ -12,8 +12,8 @@ using namespace allio::posix;
 using namespace allio::win32;
 
 static_assert(
-	offsetof(wsa_accept_address_buffer, local) == 0 &&
-	offsetof(wsa_accept_address_buffer, remote) == sizeof(wsa_accept_address_buffer::local),
+	offsetof(wsa_accept_address_storage, local) == 0 &&
+	offsetof(wsa_accept_address_storage, remote) == sizeof(wsa_accept_address_storage::local),
 	"AcceptEx writes the local and remote addresses into the same buffer, one after the other.");
 
 
@@ -265,17 +265,18 @@ allio_rio_functions(allio_x_entry)
 DWORD win32::wsa_accept_ex(
 	SOCKET const listen_socket,
 	SOCKET const accept_socket,
-	wsa_accept_address_buffer& address,
+	void* const addr_pair_storage,
+	DWORD const addr_storage_size,
 	OVERLAPPED& overlapped)
 {
 	DWORD transferred = static_cast<DWORD>(-1);
 	if (!win32::AcceptEx(
 		listen_socket,
 		accept_socket,
-		/* lpOutputBuffer: */ &address,
+		addr_pair_storage,
 		/* dwReceiveDataLength: */ 0,
-		sizeof(address.local),
-		sizeof(address.remote),
+		addr_storage_size,
+		addr_storage_size,
 		&transferred,
 		&overlapped))
 	{
@@ -287,13 +288,13 @@ DWORD win32::wsa_accept_ex(
 
 DWORD win32::wsa_connect_ex(
 	SOCKET const socket,
-	socket_address const& addr,
+	sockaddr_view const addr,
 	OVERLAPPED& overlapped)
 {
 	DWORD transferred = static_cast<DWORD>(-1);
 	if (!win32::ConnectEx(
 		socket,
-		&addr.addr,
+		addr.addr,
 		addr.size,
 		/* lpSendBuffer: */ nullptr,
 		/* dwSendDataLength: */ 0,

@@ -16,7 +16,8 @@ struct async_connector<iocp_multiplexer, raw_socket_t>
 
 template<>
 struct async_operation<iocp_multiplexer, raw_socket_t, connect_t>
-	: iocp_multiplexer::operation_type
+	: async_extension
+	, iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
 	using H = native_handle<raw_socket_t>;
@@ -35,7 +36,8 @@ struct async_operation<iocp_multiplexer, raw_socket_t, connect_t>
 
 template<>
 struct async_operation<iocp_multiplexer, raw_socket_t, byte_io::stream_read_t>
-	: iocp_multiplexer::operation_type
+	: async_extension
+	, iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
 	using H = native_handle<raw_socket_t>;
@@ -53,7 +55,8 @@ struct async_operation<iocp_multiplexer, raw_socket_t, byte_io::stream_read_t>
 
 template<>
 struct async_operation<iocp_multiplexer, raw_socket_t, byte_io::stream_write_t>
-	: iocp_multiplexer::operation_type
+	: async_extension
+	, iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
 	using H = native_handle<raw_socket_t>;
@@ -71,7 +74,8 @@ struct async_operation<iocp_multiplexer, raw_socket_t, byte_io::stream_write_t>
 
 template<>
 struct async_operation<iocp_multiplexer, raw_socket_t, close_t>
-	: iocp_multiplexer::operation_type
+	: async_extension
+	, iocp_multiplexer::operation_type
 {
 	using M = iocp_multiplexer;
 	using H = native_handle<raw_socket_t>;

@@ -12,7 +12,7 @@ template<typename SocketHandle>
 struct accept_result
 {
 	SocketHandle socket;
-	network_endpoint endpoint;
+	any_endpoint_view endpoint;
 
 	template<typename OtherSocketHandle>
 	[[deprecated]] friend vsm::result<accept_result<OtherSocketHandle>> tag_invoke(
@@ -93,12 +93,11 @@ struct accept_t
 		: io_flags_t
 		, deadline_t
 	{
+		any_endpoint_storage_provider endpoint_storage;
+
 		using io_flags_t::set_argument;
 		using deadline_t::set_argument;
 	};
-
-	//template<object Object, optional_multiplexer_handle MultiplexerHandle>
-	//using result_type_template = accept_result<basic_handle<typename Object::socket_object_type, MultiplexerHandle>>;
 
 	template<handle Handle>
 	using result_type_template = accept_result<
@@ -106,7 +105,8 @@ struct accept_t
 			typename Handle::object_type::socket_object_type>>;
 
 	template<object Object>
-	static vsm::result<accept_result<basic_detached_handle<typename Object::socket_object_type>>> blocking_io(
+	static vsm::result<accept_result<basic_detached_handle<typename Object::socket_object_type>>>
+	blocking_io(
 		native_handle<Object> const& h,
 		io_parameters_t<Object, accept_t> const& args)
 		requires requires { Object::accept(h, args); }
@@ -116,9 +116,9 @@ struct accept_t
 };
 
 template<object BaseObject>
-struct listen_socket_base_t : BaseObject
+struct listen_socket_base_t : common_socket_base_t<BaseObject>
 {
-	using base_type = BaseObject;
+	using base_type = common_socket_base_t<BaseObject>;
 
 	using listen_t = detail::listen_t;
 	using accept_t = detail::accept_t;

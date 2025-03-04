@@ -1,5 +1,7 @@
 #include <allio/win32/detail/iocp/raw_datagram_socket.hpp>
 
+#include <allio/impl/io_extension.hpp>
+#include <allio/impl/posix/handles/raw_common_socket.hpp>
 #include <allio/impl/posix/socket.hpp>
 #include <allio/impl/win32/iocp/raw_socket.hpp>
 #include <allio/impl/win32/kernel.hpp>
@@ -27,11 +29,12 @@ io_result<void> bind_s::submit(M& m, H& h, C& c, bind_s&, bind_a const& a, io_ha
 		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
-	vsm_try(addr, posix::socket_address::make(a.endpoint));
-	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_DGRAM));
+	posix::socket_address_storage address_storage;
+	vsm_try(addr, posix::get_socket_address(a.endpoint, address_storage));
+	vsm_try(protocol, posix::choose_protocol(addr.addr->sa_family, SOCK_DGRAM));
 
 	vsm_try_bind((socket, flags), posix::create_socket(
-		addr.addr.sa_family,
+		addr.addr->sa_family,
 		//TODO: Add raw protocol support
 		SOCK_DGRAM,
 		protocol,
@@ -39,9 +42,7 @@ io_result<void> bind_s::submit(M& m, H& h, C& c, bind_s&, bind_a const& a, io_ha
 
 	vsm_try_void(socket_bind(socket.get(), addr));
 
-	vsm_try_void(m.attach_platform_handle(
-		posix::wrap_socket(socket.get()),
-		c));
+	vsm_try_void(m.attach_platform_handle(posix::wrap_socket(socket.get()), c));
 
 	h.flags = object_t::flags::not_null | flags;
 	h.platform_handle = posix::wrap_socket(socket.release());
@@ -49,7 +50,13 @@ io_result<void> bind_s::submit(M& m, H& h, C& c, bind_s&, bind_a const& a, io_ha
 	return {};
 }
 
-io_result<void> bind_s::notify(M&, H&, C&, bind_s&, bind_a const&, io_handler<M>&, M::io_status_type)
+io_result<void> bind_s::notify(
+	M&,
+	H&,
+	C&,
+	bind_s&,
+	bind_a const&,
+	io_handler<M>&, M::io_status_type)
 {
 	vsm_unreachable();
 }
@@ -80,11 +87,19 @@ using send_t = raw_datagram_socket_t::send_to_t;
 using send_s = async_operation_t<M, raw_datagram_socket_t, send_t>;
 using send_a = io_parameters_t<raw_datagram_socket_t, send_t>;
 
-io_result<void> send_s::submit(M& m, H const& h, C const&, send_s& s, send_a const& a, io_handler<M>& handler)
+io_result<void> send_s::submit(
+	M& m,
+	H const& h,
+	C const&,
+	send_s& s,
+	send_a const& a,
+	io_handler<M>& handler)
 {
+	io_extension_allocator extension = initialize_extension(s);
+
 	vsm_try_void(check_wsa_buffers_size<DWORD>(a.buffers));
-	vsm_try(addr, posix::socket_address::make(a.endpoint));
-	vsm_try(wsa_buffers, get_wsa_buffers(s.buffers, a.buffers));
+	vsm_try(addr, posix::get_socket_address(a.endpoint, extension));
+	vsm_try(wsa_buffers, get_wsa_buffers(a.buffers, extension));
 
 	DWORD transferred;
 
@@ -98,11 +113,12 @@ io_result<void> send_s::submit(M& m, H const& h, C const&, send_s& s, send_a con
 	{
 		if (win32::WSASendTo(
 			posix::unwrap_socket(h.platform_handle),
-			static_cast<WSABUF*>(const_cast<void*>(wsa_buffers.buffers_data)),
-			vsm::truncating(wsa_buffers.buffers_size),
+			// This function is not const-correct.
+			const_cast<WSABUF*>(wsa_buffers.data()),
+			vsm::truncating(wsa_buffers.size()),
 			&transferred,
 			/* dwFlags: */ 0,
-			&addr.addr,
+			addr.addr,
 			addr.size,
 			&overlapped,
 			/* lpCompletionRoutine: */ nullptr) == SOCKET_ERROR)
@@ -118,11 +134,21 @@ io_result<void> send_s::submit(M& m, H const& h, C const&, send_s& s, send_a con
 		return {};
 	}
 
+	extension.release();
 	return vsm::unexpected(io_notify_status::submitted);
 }
 
-io_result<void> send_s::notify(M&, H const& h, C const&, send_s& s, send_a const& a, io_handler<M>& handler, M::io_status_type const status)
+io_result<void> send_s::notify(
+	M&,
+	H const& h,
+	C const&,
+	send_s& s,
+	send_a const& a,
+	io_handler<M>& handler,
+	M::io_status_type const status)
 {
+	io_extension_allocator const extension = acquire_extension(s);
+
 	vsm_assert(&status.slot == &s.overlapped);
 
 	if (!NT_SUCCESS(status.status))
@@ -146,10 +172,35 @@ using recv_t = raw_datagram_socket_t::receive_from_t;
 using recv_s = async_operation_t<M, raw_datagram_socket_t, recv_t>;
 using recv_a = io_parameters_t<raw_datagram_socket_t, recv_t>;
 
-io_result<receive_result> recv_s::submit(M& m, H const& h, C const&, recv_s& s, recv_a const& a, io_handler<M>& handler)
+io_result<receive_result> recv_s::submit(
+	M& m,
+	H const& h,
+	C const&,
+	recv_s& s,
+	recv_a const& a,
+	io_handler<M>& handler)
 {
+	io_extension_allocator extension = initialize_extension(s);
+
 	vsm_try_void(check_wsa_buffers_size<DWORD>(a.buffers));
-	vsm_try(wsa_buffers, get_wsa_buffers(s.buffers, a.buffers));
+	vsm_try(wsa_buffers, get_wsa_buffers(a.buffers, extension));
+
+	int const address_family = posix::get_address_family(h.flags);
+	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
+
+	sockaddr* addr = nullptr;
+	posix::socket_address_size_type* addr_size = nullptr;
+
+	if (a.endpoint_storage)
+	{
+		vsm_try(addr_storage, a.endpoint_storage.get_storage(
+			max_address_size,
+			std::align_val_t(alignof(posix::socket_address_union))));
+
+		s.addr_size = vsm::truncating(addr_storage.size);
+		addr = static_cast<sockaddr*>(addr_storage.storage);
+		addr_size = &s.addr_size;
+	}
 
 	DWORD transferred;
 	DWORD flags = 0;
@@ -158,21 +209,18 @@ io_result<receive_result> recv_s::submit(M& m, H const& h, C const&, recv_s& s, 
 	overlapped.Pointer = nullptr;
 	overlapped.hEvent = NULL;
 
-	auto& addr_buffer = new_wsa_address_buffer<posix::socket_address>(s.address_storage);
-	addr_buffer.size = sizeof(posix::socket_address_union);
-
 	s.overlapped.bind(handler);
 
 	vsm_try(already_completed, submit_socket_io(m, h, [&]() -> DWORD
 	{
 		if (win32::WSARecvFrom(
 			posix::unwrap_socket(h.platform_handle),
-			static_cast<WSABUF*>(const_cast<void*>(wsa_buffers.buffers_data)),
-			vsm::truncating(wsa_buffers.buffers_size),
+			const_cast<WSABUF*>(wsa_buffers.data()),
+			vsm::truncating(wsa_buffers.size()),
 			&transferred,
 			&flags,
-			&addr_buffer.addr,
-			&addr_buffer.size,
+			addr,
+			addr_size,
 			&overlapped,
 			/* lpCompletionRoutine: */ nullptr) == SOCKET_ERROR)
 		{
@@ -186,15 +234,25 @@ io_result<receive_result> recv_s::submit(M& m, H const& h, C const&, recv_s& s, 
 		return vsm_lazy(receive_result
 		{
 			.size = transferred,
-			.endpoint = addr_buffer.get_network_endpoint(),
+			.endpoint = platform_endpoint_view(addr, addr_size ? *addr_size : 0),
 		});
 	}
 
+	extension.release();
 	return vsm::unexpected(io_notify_status::submitted);
 }
 
-io_result<receive_result> recv_s::notify(M&, H const& h, C const&, recv_s& s, recv_a const&, io_handler<M>& handler, M::io_status_type const status)
+io_result<receive_result> recv_s::notify(
+	M&,
+	H const& h,
+	C const&,
+	recv_s& s,
+	recv_a const&,
+	io_handler<M>& handler,
+	M::io_status_type const status)
 {
+	io_extension_allocator const extension = acquire_extension(s);
+
 	vsm_assert(&status.slot == &s.overlapped);
 
 	if (!NT_SUCCESS(status.status))
@@ -205,12 +263,10 @@ io_result<receive_result> recv_s::notify(M&, H const& h, C const&, recv_s& s, re
 	size_t const transferred = get_transfer_result(h, s.overlapped);
 	vsm_assert(transferred != 0);
 
-	auto& addr_buffer = get_wsa_address_buffer<posix::socket_address>(s.address_storage);
-
 	return vsm_lazy(receive_result
 	{
 		.size = transferred,
-		.endpoint = addr_buffer.get_network_endpoint(),
+		.endpoint = null_endpoint, //TODO: Fix this
 	});
 }
 

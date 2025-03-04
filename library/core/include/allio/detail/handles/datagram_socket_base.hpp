@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/byte_io.hpp>
+#include <allio/detail/handles/common_socket_base.hpp>
 #include <allio/detail/deadline.hpp>
 #include <allio/detail/handles/socket_params.hpp>
 #include <allio/detail/object.hpp>
@@ -11,7 +12,7 @@ namespace allio::detail {
 struct receive_result
 {
 	size_t size;
-	network_endpoint endpoint;
+	any_endpoint_view endpoint;
 };
 
 struct bind_t
@@ -47,6 +48,7 @@ struct receive_from_t
 	struct params_type : deadline_t
 	{
 		new_read_buffers buffers;
+		any_endpoint_storage_provider endpoint_storage;
 	};
 
 	using result_type = receive_result;
@@ -84,9 +86,9 @@ struct send_to_t
 };
 
 template<object BaseObject>
-struct datagram_socket_base_t : BaseObject
+struct datagram_socket_base_t : common_socket_base_t<BaseObject>
 {
-	using base_type = BaseObject;
+	using base_type = common_socket_base_t<BaseObject>;
 
 	using bind_t = detail::bind_t;
 	using receive_from_t = detail::receive_from_t;

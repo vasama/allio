@@ -15,7 +15,8 @@ struct async_connector<io_uring_multiplexer, raw_socket_t>
 
 template<>
 struct async_operation<io_uring_multiplexer, raw_socket_t, connect_t>
-	: io_uring_multiplexer::operation_type
+	: async_extension
+	, io_uring_multiplexer::operation_type
 {
 	using M = io_uring_multiplexer;
 	using H = native_handle<raw_socket_t>;
@@ -24,11 +25,7 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, connect_t>
 	using A = io_parameters_t<raw_socket_t, connect_t>;
 
 	unique_handle socket;
-	socket_address_storage addr_storage;
 	M::timeout timeout;
-
-	//TODO: Get rid of this once the address rework is done.
-	uint32_t addr_size;
 
 	static io_result<void> submit(M& m, H& h, C& c, S& s, A const& args, io_handler<M>& handler);
 	static io_result<void> notify(M& m, H& h, C& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);
@@ -37,7 +34,8 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, connect_t>
 
 template<>
 struct async_operation<io_uring_multiplexer, raw_socket_t, byte_io::stream_read_t>
-	: io_uring_multiplexer::operation_type
+	: async_extension
+	, io_uring_multiplexer::operation_type
 {
 	using M = io_uring_multiplexer;
 	using H = native_handle<raw_socket_t>;
@@ -45,7 +43,6 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, byte_io::stream_read_
 	using S = async_operation_t<M, raw_socket_t, byte_io::stream_read_t>;
 	using A = io_parameters_t<raw_socket_t, byte_io::stream_read_t>;
 
-	new_io_buffers_storage buffers_storage;
 	M::timeout timeout;
 
 	static io_result<size_t> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
@@ -55,7 +52,8 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, byte_io::stream_read_
 
 template<>
 struct async_operation<io_uring_multiplexer, raw_socket_t, byte_io::stream_write_t>
-	: io_uring_multiplexer::operation_type
+	: async_extension
+	, io_uring_multiplexer::operation_type
 {
 	using M = io_uring_multiplexer;
 	using H = native_handle<raw_socket_t>;
@@ -63,7 +61,6 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, byte_io::stream_write
 	using S = async_operation_t<M, raw_socket_t, byte_io::stream_write_t>;
 	using A = io_parameters_t<raw_socket_t, byte_io::stream_write_t>;
 
-	new_io_buffers_storage buffers_storage;
 	M::timeout timeout;
 
 	static io_result<size_t> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
@@ -73,7 +70,8 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, byte_io::stream_write
 
 template<>
 struct async_operation<io_uring_multiplexer, raw_socket_t, close_t>
-	: io_uring_multiplexer::operation_type
+	: async_extension
+	, io_uring_multiplexer::operation_type
 {
 	using M = io_uring_multiplexer;
 	using H = native_handle<raw_socket_t>;

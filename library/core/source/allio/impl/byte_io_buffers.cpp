@@ -92,16 +92,16 @@ static new_io_buffer read_io_buffer(void const* const src_buffer)
 template<new_io_buffer_layout SrcLayout, new_io_buffer_layout DstLayout>
 	requires (SrcLayout == DstLayout)
 static vsm::result<void const*> swizzle_buffers_1(
-	new_io_buffers_storage& storage,
-	new_io_buffers_view const src_buffers)
+	new_io_buffers_view const src_buffers,
+	any_aligned_storage_provider const storage_provider)
 {
 	vsm_unreachable();
 }
 
 template<new_io_buffer_layout SrcLayout, new_io_buffer_layout DstLayout>
 static vsm::result<void const*> swizzle_buffers_1(
-	new_io_buffers_storage& storage,
-	new_io_buffers_view const src_buffers)
+	new_io_buffers_view const src_buffers,
+	any_aligned_storage_provider const storage_provider)
 {
 	static constexpr bool swizzle = is_size_data(SrcLayout) != is_size_data(DstLayout);
 	static constexpr bool truncate = is_size_le32(DstLayout) && !is_size_le32(SrcLayout);
@@ -112,7 +112,11 @@ static vsm::result<void const*> swizzle_buffers_1(
 	new_io_buffer* out_buffers_data;
 	if constexpr (swizzle)
 	{
-		vsm_try_assign(out_buffers_data, storage.resize(src_buffers.buffers_size));
+		vsm_try(storage, storage_provider.get_storage(
+			src_buffers.buffers_size,
+			std::align_val_t(alignof(new_io_buffer))));
+
+		out_buffers_data = static_cast<new_io_buffer*>(storage);
 		dst_buffers_data = out_buffers_data;
 	}
 
@@ -137,6 +141,8 @@ static vsm::result<void const*> swizzle_buffers_1(
 			dst_buffer->m0 = src_buffer.m1;
 			dst_buffer->m1 = src_buffer.m0;
 
+			//TODO: Have another look at io buffer swizzling on big-endian platforms.
+
 #if 0
 			// Non-little-endian architectures require a transforming the bytes of the size member
 			// when truncating. On little-endian architectures, the low-address bytes contain the
@@ -154,10 +160,10 @@ static vsm::result<void const*> swizzle_buffers_1(
 }
 
 static vsm::result<void const*> swizzle_buffers(
-	new_io_buffers_storage& storage,
 	new_io_buffers_view const src_buffers,
 	new_io_buffer_layout const src_layout,
-	new_io_buffer_layout const dst_layout)
+	new_io_buffer_layout const dst_layout,
+	any_aligned_storage_provider const storage_provider)
 {
 	auto const lambda = [&]<new_io_buffer_layout... Layouts>(
 		layout_constant<Layouts>...) -> vsm::result<void const*>
@@ -168,7 +174,7 @@ static vsm::result<void const*> swizzle_buffers(
 		}
 		else
 		{
-			return swizzle_buffers_1<Layouts...>(storage, src_buffers);
+			return swizzle_buffers_1<Layouts...>(src_buffers, storage_provider);
 		}
 	};
 
@@ -214,9 +220,9 @@ vsm::result<new_io_buffer*> detail::new_io_buffers_storage::resize(size_t const 
 }
 
 vsm::result<new_io_buffers_view> detail::get_io_buffers(
-	new_io_buffers_storage& storage,
 	new_io_buffers_base const& buffers,
-	new_io_buffer_layout const required_layout)
+	new_io_buffer_layout const required_layout,
+	any_aligned_storage_provider const storage_provider)
 {
 	auto const buffers_layout = buffers.get_layout();
 	auto const buffers_view = buffers.get_buffers();
@@ -227,31 +233,16 @@ vsm::result<new_io_buffers_view> detail::get_io_buffers(
 	}
 
 	vsm_try(swizzled_buffers, swizzle_buffers(
-		storage,
 		buffers_view,
 		buffers_layout,
-		required_layout));
+		required_layout,
+		storage_provider));
 
 	return new_io_buffers_view
 	{
 		.buffers_data = swizzled_buffers,
 		.buffers_size = buffers_view.buffers_size,
 	};
-}
-
-new_io_buffers_view detail::get_io_buffers_unchecked(
-	new_io_buffers_storage const& storage,
-	new_io_buffers_base const& buffers,
-	new_io_buffer_layout const required_layout)
-{
-	auto const buffers_layout = buffers.get_layout();
-
-	if (buffers_layout == required_layout)
-	{
-		return buffers.get_buffers();
-	}
-
-	return storage.get_buffers_view();
 }
 
 bool detail::io_buffers_is_empty(new_io_buffers_base const buffers)

@@ -1,13 +1,13 @@
 #pragma once
 
-#include <allio/detail/handles/platform_object.hpp>
+#include <allio/detail/handles/raw_common_socket_base.hpp>
 #include <allio/detail/handles/socket_base.hpp>
 
 namespace allio::detail {
 
-struct raw_socket_t : socket_base_t<platform_object_t>
+struct raw_socket_t : socket_base_t<raw_common_socket_base_t>
 {
-	using base_type = socket_base_t<platform_object_t>;
+	using base_type = socket_base_t<raw_common_socket_base_t>;
 
 	using security_context_type = void;
 

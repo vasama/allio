@@ -6,15 +6,9 @@
 
 namespace allio::detail {
 
-struct raw_listen_socket_t : listen_socket_base_t<platform_object_t>
+struct raw_listen_socket_t : listen_socket_base_t<raw_common_socket_base_t>
 {
-	using base_type = listen_socket_base_t<platform_object_t>;
-
-	allio_handle_flags
-	(
-		address_kind_0,
-		address_kind_1,
-	);
+	using base_type = listen_socket_base_t<raw_common_socket_base_t>;
 
 	using socket_object_type = raw_socket_t;
 	using security_context_type = void;
