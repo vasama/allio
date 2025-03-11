@@ -45,12 +45,11 @@ struct async_operation<io_uring_multiplexer, raw_datagram_socket_t, receive_from
 	using C = async_connector_t<M, raw_datagram_socket_t>;
 	using S = async_operation_t<M, raw_datagram_socket_t, receive_from_t>;
 	using A = io_parameters_t<raw_datagram_socket_t, receive_from_t>;
-	using R = receive_result;
 
 	datagram_header_storage header_storage;
 
-	static io_result<R> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
-	static io_result<R> notify(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);
+	static io_result<size_t> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
+	static io_result<size_t> notify(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 

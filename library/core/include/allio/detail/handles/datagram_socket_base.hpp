@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/byte_io.hpp>
+#include <allio/detail/any_endpoint_buffer.hpp>
 #include <allio/detail/handles/common_socket_base.hpp>
 #include <allio/detail/deadline.hpp>
 #include <allio/detail/handles/socket_params.hpp>
@@ -8,12 +9,6 @@
 #include <allio/network.hpp>
 
 namespace allio::detail {
-
-struct receive_result
-{
-	size_t size;
-	any_endpoint_view endpoint;
-};
 
 struct bind_t
 {
@@ -48,13 +43,20 @@ struct receive_from_t
 	struct params_type : deadline_t
 	{
 		new_read_buffers buffers;
-		any_endpoint_storage_provider endpoint_storage;
+		any_endpoint_buffer endpoint;
+
+		using deadline_t::set_argument;
+
+		void set_argument(any_endpoint_buffer const value)
+		{
+			endpoint = value;
+		}
 	};
 
-	using result_type = receive_result;
+	using result_type = size_t;
 
 	template<object Object>
-	static vsm::result<receive_result> blocking_io(
+	static vsm::result<size_t> blocking_io(
 		native_handle<Object> const& h,
 		io_parameters_t<Object, receive_from_t> const& a)
 		requires requires { Object::receive_from(h, a); }
@@ -67,7 +69,7 @@ struct send_to_t
 {
 	using operation_concept = void;
 
-	struct params_type
+	struct params_type : deadline_t
 	{
 		any_endpoint_view endpoint;
 		new_write_buffers buffers;

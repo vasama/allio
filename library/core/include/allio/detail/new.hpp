@@ -12,27 +12,6 @@
 
 namespace allio::detail {
 
-using allocation = allio_allocation;
-
-[[nodiscard]] vsm_always_inline inline allocation acquire_storage(
-	size_t const min_size,
-	size_t const max_size,
-	size_t const alignment,
-	allio_allocation_strategy const strategy)
-{
-	return allio_acquire_storage(min_size, max_size, alignment, strategy);
-}
-
-vsm_always_inline inline void release_storage(
-	void* const storage,
-	size_t const size_hint,
-	size_t const alignment,
-	allio_allocation_strategy const strategy)
-{
-	return allio_release_storage(storage, size_hint, alignment, strategy);
-}
-
-
 template<typename T>
 inline constexpr size_t new_size_for = sizeof(T);
 
@@ -59,7 +38,7 @@ public:
 	template<typename T>
 	void operator()(T* const storage) const
 	{
-		detail::release_storage(
+		::allio_release_storage(
 			static_cast<void*>(storage),
 			m_size,
 			new_alignment_for<T>,
@@ -77,7 +56,7 @@ using unique_storage_ptr = std::unique_ptr<T, storage_deleter>;
 
 template<vsm::non_cvref T = void>
 	requires std::is_void_v<T> || (std::is_object_v<T> && !std::is_array_v<T>)
-[[nodiscard]] vsm::result<unique_storage_ptr<T>> allocate_unique(size_t const size)
+[[nodiscard]] vsm::result<unique_storage_ptr<T>> allocate_unique(size_t const size = 1)
 {
 	auto r = _allocate_unique(size, new_alignment_for<T>, new_size_for<T>);
 
@@ -106,7 +85,7 @@ void delete_object(T* const object)
 
 	object->~T();
 
-	detail::release_storage(
+	::allio_release_storage(
 		object,
 		sizeof(T),
 		alignof(T),

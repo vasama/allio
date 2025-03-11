@@ -1,4 +1,4 @@
-#include <allio/byte_io_buffers.hpp>
+#include <allio/impl/byte_io_buffers.hpp>
 
 #include <allio/detail/byte_io_buffer_range.hpp>
 #include <allio/error.hpp>
@@ -93,7 +93,7 @@ template<new_io_buffer_layout SrcLayout, new_io_buffer_layout DstLayout>
 	requires (SrcLayout == DstLayout)
 static vsm::result<void const*> swizzle_buffers_1(
 	new_io_buffers_view const src_buffers,
-	any_aligned_storage_provider const storage_provider)
+	storage_provider_ref const storage_provider)
 {
 	vsm_unreachable();
 }
@@ -101,7 +101,7 @@ static vsm::result<void const*> swizzle_buffers_1(
 template<new_io_buffer_layout SrcLayout, new_io_buffer_layout DstLayout>
 static vsm::result<void const*> swizzle_buffers_1(
 	new_io_buffers_view const src_buffers,
-	any_aligned_storage_provider const storage_provider)
+	storage_provider_ref const storage_provider)
 {
 	static constexpr bool swizzle = is_size_data(SrcLayout) != is_size_data(DstLayout);
 	static constexpr bool truncate = is_size_le32(DstLayout) && !is_size_le32(SrcLayout);
@@ -113,7 +113,7 @@ static vsm::result<void const*> swizzle_buffers_1(
 	if constexpr (swizzle)
 	{
 		vsm_try(storage, storage_provider.get_storage(
-			src_buffers.buffers_size,
+			src_buffers.buffers_size * sizeof(new_io_buffer),
 			std::align_val_t(alignof(new_io_buffer))));
 
 		out_buffers_data = static_cast<new_io_buffer*>(storage);
@@ -163,7 +163,7 @@ static vsm::result<void const*> swizzle_buffers(
 	new_io_buffers_view const src_buffers,
 	new_io_buffer_layout const src_layout,
 	new_io_buffer_layout const dst_layout,
-	any_aligned_storage_provider const storage_provider)
+	storage_provider_ref const storage_provider)
 {
 	auto const lambda = [&]<new_io_buffer_layout... Layouts>(
 		layout_constant<Layouts>...) -> vsm::result<void const*>
@@ -183,13 +183,14 @@ static vsm::result<void const*> swizzle_buffers(
 
 } // namespace
 
+#if 0
 detail::new_io_buffers_storage::~new_io_buffers_storage()
 {
 	static constexpr size_t data_offset = offsetof(storage_type, data);
 
 	if (m_storage != nullptr)
 	{
-		detail::release_storage(
+		allio_release_storage(
 			m_storage,
 			data_offset + m_storage->size * sizeof(new_io_buffer),
 			alignof(storage_type),
@@ -203,7 +204,7 @@ vsm::result<new_io_buffer*> detail::new_io_buffers_storage::resize(size_t const 
 
 	size_t const allocation_size = data_offset + size * sizeof(new_io_buffer);
 
-	auto const allocation = detail::acquire_storage(
+	auto const allocation = allio_acquire_storage(
 		/* min_size: */ allocation_size,
 		/* max_size: */ allocation_size,
 		alignof(new_io_buffer),
@@ -218,11 +219,12 @@ vsm::result<new_io_buffer*> detail::new_io_buffers_storage::resize(size_t const 
 
 	return m_storage->data;
 }
+#endif
 
-vsm::result<new_io_buffers_view> detail::get_io_buffers(
+vsm::result<new_io_buffers_view> allio::get_io_buffers(
 	new_io_buffers_base const& buffers,
 	new_io_buffer_layout const required_layout,
-	any_aligned_storage_provider const storage_provider)
+	storage_provider_ref const storage_provider)
 {
 	auto const buffers_layout = buffers.get_layout();
 	auto const buffers_view = buffers.get_buffers();
@@ -245,7 +247,7 @@ vsm::result<new_io_buffers_view> detail::get_io_buffers(
 	};
 }
 
-bool detail::io_buffers_is_empty(new_io_buffers_base const buffers)
+bool allio::io_buffers_is_empty(new_io_buffers_base const buffers)
 {
 	auto const lambda = [&]<new_io_buffer_layout Layout>(layout_constant<Layout>)
 	{
@@ -262,7 +264,7 @@ bool detail::io_buffers_is_empty(new_io_buffers_base const buffers)
 	return with_constant_layouts(lambda, buffers.get_layout());
 }
 
-size_t detail::get_io_buffers_size(new_io_buffers_base const buffers)
+size_t allio::get_io_buffers_size(new_io_buffers_base const buffers)
 {
 	auto const lambda = [&]<new_io_buffer_layout Layout>(layout_constant<Layout>)
 	{

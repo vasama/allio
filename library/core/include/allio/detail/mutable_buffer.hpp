@@ -13,6 +13,7 @@
 
 #include <bit>
 
+#if 0
 namespace allio::detail {
 
 //TODO: Rename buffer to container
@@ -153,6 +154,7 @@ template<typename Container>
 concept indirectly_resizable_buffer = resizable_buffer<mutable_buffer_from_t<Container>>;
 
 } // namespace allio::detail
+#endif
 
 namespace allio::detail {
 
@@ -204,22 +206,29 @@ struct resize_container_t
 {
 	template<mutable_contiguous_container Container>
 	friend vsm::result<size_t> tag_invoke(
-		resize_buffer_t,
+		resize_container_t,
 		Container& container,
 		size_t const min_size,
 		size_t const max_size) noexcept
 	{
 		vsm_except_try
 		{
-			if (container.size() < min_size)
+			if (container.size() > max_size)
 			{
-				container.resize(min_size);
+				container.resize(max_size);
 			}
-
-			if (min_size < max_size && container.size() < container.capacity())
+			else
 			{
-				// Resize the container further, up to min(max_size, capacity).
-				container.resize(std::min(max_size, container.capacity()));
+				if (container.size() < min_size)
+				{
+					container.resize(min_size);
+				}
+
+				if (min_size < max_size && container.size() < container.capacity())
+				{
+					// Resize the container further, up to min(max_size, capacity).
+					container.resize(std::min(max_size, container.capacity()));
+				}
 			}
 		}
 		vsm_except_catch (std::bad_alloc const&)
@@ -231,7 +240,7 @@ struct resize_container_t
 	}
 
 	template<typename Container>
-		requires vsm::tag_invocable<resize_container_t, Container&, size_t>
+		requires vsm::tag_invocable<resize_container_t, Container&, size_t, size_t>
 	[[nodiscard]] vsm_static_operator vsm::result<size_t> operator()(
 		Container& container,
 		size_t const size) vsm_static_operator_const noexcept
@@ -247,7 +256,7 @@ struct resize_container_t
 	}
 
 	template<typename Container>
-		requires vsm::tag_invocable<resize_container_t, Container&, size_t>
+		requires vsm::tag_invocable<resize_container_t, Container&, size_t, size_t>
 	[[nodiscard]] vsm_static_operator vsm::result<size_t> operator()(
 		Container& container,
 		size_t const min_size,

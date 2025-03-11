@@ -39,7 +39,7 @@ struct async_operation<iocp_multiplexer, raw_listen_socket_t, accept_t>
 	using C = async_connector_t<M, raw_listen_socket_t> const;
 	using S = async_operation_t<M, raw_listen_socket_t, accept_t>;
 	using A = io_parameters_t<raw_listen_socket_t, accept_t>;
-	using R = accept_result<basic_attached_handle<raw_socket_t, basic_multiplexer_handle<M>>>;
+	using R = basic_attached_handle<raw_socket_t, basic_multiplexer_handle<M>>;
 
 	unique_wrapped_socket socket;
 	handle_flags socket_flags;

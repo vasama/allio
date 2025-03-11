@@ -112,7 +112,7 @@ public:
 			}
 		}
 
-		//TODO: * Use acquire_storage/release_storage.
+		//TODO: * Use allio_acquire_storage/allio_release_storage.
 		//      * Use RAII to manage the storage during construction.
 		void* const block = operator new(min_storage_size, std::nothrow);
 		if (block == nullptr)

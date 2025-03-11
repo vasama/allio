@@ -395,7 +395,7 @@ public:
 	using io_status_type = _io_uring_multiplexer::io_status_type;
 
 private:
-	//TODO: Use acquire_storage/release_storage.
+	//TODO: Use allio_acquire_storage/allio_release_storage.
 	std::unique_ptr<_io_uring_multiplexer> m_multiplexer;
 
 

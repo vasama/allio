@@ -28,7 +28,7 @@ TEST_CASE("Blocking stream sockets can exchange data", "[socket][blocking]")
 		return raw_connect(endpoint);
 	});
 
-	auto const server_socket = listen_socket.accept().socket;
+	auto const server_socket = listen_socket.accept();
 	auto client_socket = connect_future.get();
 
 	// The server socket has no data to read:
@@ -101,8 +101,10 @@ TEST_CASE("Asynchronous stream sockets can exchange data", "[socket][async]")
 			// Server
 			[&]() -> task<void>
 			{
+				platform_endpoint peer_endpoint;
+
 				// Accept client connection:
-				auto const& [socket, _] = co_await listen_socket.accept();
+				auto const socket = co_await listen_socket.accept(peer_endpoint);
 
 #if 0 //TODO: IOCP implementation doesn't support timeouts yet.
 				// The socket has no data to read:

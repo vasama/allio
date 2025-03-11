@@ -9,7 +9,7 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-using accept_result_type = accept_result<basic_detached_handle<raw_socket_t>>;
+using socket_handle_type = basic_detached_handle<raw_socket_t>;
 
 vsm::result<void> raw_listen_socket_t::listen(
 	native_handle<raw_listen_socket_t>& h,
@@ -84,7 +84,7 @@ vsm::result<void> raw_listen_socket_t::listen(
 	return {};
 }
 
-vsm::result<accept_result_type> raw_listen_socket_t::accept(
+vsm::result<socket_handle_type> raw_listen_socket_t::accept(
 	native_handle<raw_listen_socket_t> const& h,
 	io_parameters_t<raw_listen_socket_t, accept_t> const& a)
 {
@@ -187,16 +187,17 @@ vsm::result<accept_result_type> raw_listen_socket_t::accept(
 		h_flags |= set_file_completion_notification_modes(handle.get());
 	}
 
-	auto const make_socket_handle = [&]()
-	{
-		native_handle<raw_socket_t> h = {};
-		h.flags = object_t::flags::not_null | h_flags;
-		h.platform_handle = wrap_handle(handle.release());
-		return basic_detached_handle<raw_socket_t>(adopt_handle, h);
-	};
-
-	return vsm::result<accept_result_type>(
-		vsm::result_value,
-		vsm_lazy(make_socket_handle()),
-		addr.get_network_endpoint());
+	return vsm_lazy(socket_handle_type(
+		adopt_handle,
+		native_handle<raw_socket_t>
+		{
+			native_handle<platform_object_t>
+			{
+				native_handle<object_t>
+				{
+					object_t::flags::not_null | h_flags,
+				},
+				wrap_handle(handle.release())
+			},
+		}));
 }

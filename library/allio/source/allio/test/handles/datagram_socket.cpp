@@ -25,7 +25,6 @@ static bool is_supported_address_kind(network_address_kind const kind)
 	}
 #endif
 
-
 	return true;
 }
 
@@ -59,9 +58,9 @@ TEST_CASE("Blocking datagram sockets can exchange data", "[datagram_socket][bloc
 
 	// Data can be received through the server socket:
 	static_cast<volatile signed char&>(value) = 0;
-	auto const r = server_socket.receive_from(as_read_buffer(&value, 1));
+	size_t const size = server_socket.receive_from(as_read_buffer(&value, 1));
 
-	REQUIRE(r.size == 1);
+	REQUIRE(size == 1);
 	REQUIRE(value == 42);
 
 	// The server socket has no data available to read:
@@ -97,15 +96,18 @@ TEST_CASE("Asynchronous datagram sockets can exchange data", "[datagram_socket][
 			[&]() -> task<void>
 			{
 				auto& socket = server_socket;
+				platform_endpoint peer_endpoint;
 
 				// Wait for a request from the client
 				signed char request_data;
-				auto const [size, endpoint] = co_await socket.receive_from(as_read_buffer(&request_data, 1));
+				size_t const size = co_await socket.receive_from(
+					as_read_buffer(&request_data, 1),
+					peer_endpoint);
 				REQUIRE(size == 1);
 
 				// Send a reply to the client
 				signed char const reply_data = -request_data;
-				co_await socket.send_to(endpoint, as_write_buffer(&reply_data, 1));
+				co_await socket.send_to(peer_endpoint, as_write_buffer(&reply_data, 1));
 			}(),
 
 			// Client
@@ -117,8 +119,9 @@ TEST_CASE("Asynchronous datagram sockets can exchange data", "[datagram_socket][
 				signed char const request_data = 42;
 				co_await socket.send_to(server_endpoint, as_write_buffer(&request_data, 1));
 
+				// Wait for a reply from the server
 				signed char reply_data;
-				auto const [size, endpoint] = co_await socket.receive_from(as_read_buffer(&reply_data, 1));
+				size_t const size = co_await socket.receive_from(as_read_buffer(&reply_data, 1));
 				REQUIRE(size == 1);
 
 				REQUIRE(reply_data == -42);

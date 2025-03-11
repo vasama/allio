@@ -1,10 +1,8 @@
 #pragma once
 
-#include <allio/win32/detail/wsa.hpp>
-
-#include <allio/detail/automatic_storage.hpp>
 #include <allio/detail/byte_io_buffers.hpp>
 #include <allio/impl/posix/socket.hpp>
+#include <allio/impl/storage_provider.hpp>
 
 #include <vsm/lazy.hpp>
 #include <vsm/result.hpp>
@@ -53,6 +51,7 @@ extern LPFN_RIORESIZECOMPLETIONQUEUE RIOResizeCompletionQueue;
 extern LPFN_RIORESIZEREQUESTQUEUE RIOResizeRequestQueue;
 
 
+#if 0
 using detail::wsa_address_storage;
 
 template<typename AddressBuffer, size_t Size>
@@ -68,6 +67,7 @@ AddressBuffer& get_wsa_address_buffer(wsa_address_storage<Size>& storage)
 {
 	return *std::launder(reinterpret_cast<AddressBuffer*>(storage.storage));
 }
+#endif
 
 
 #if 0
@@ -148,7 +148,7 @@ vsm::result<void> check_wsa_buffers_size(detail::new_io_buffers_base const& buff
 template<vsm::any_cv_of<std::byte> T>
 [[nodiscard]] vsm::result<std::span<WSABUF const>> get_wsa_buffers(
 	detail::new_io_buffers<T> const buffers,
-	detail::any_aligned_storage_provider const storage_provider)
+	storage_provider_ref const storage_provider)
 {
 	vsm_try(wsa_buffers, get_io_buffers(buffers, wsa_buffer_layout, storage_provider));
 
@@ -157,44 +157,38 @@ template<vsm::any_cv_of<std::byte> T>
 		wsa_buffers.buffers_size);
 }
 
-using automatic_wsa_buffer_storage = detail::automatic_storage<16 * sizeof(WSABUF)>;
+using dynamic_wsa_buffer_storage = dynamic_storage_provider<16 * sizeof(WSABUF)>;
 
 
-struct wsa_accept_address_storage
+class wsa_accept_address_storage : public posix::socket_address_union
 {
-	class storage_type : public posix::socket_address_union
+	[[maybe_unused]] std::byte m_dummy_buffer[16];
+
+public:
+	[[nodiscard]] posix::socket_address_union& address()
 	{
-		// AcceptEx requires an extra 16 bytes.
-		[[maybe_unused]] std::byte m_dummy_buffer[16];
+		return *this;
+	}
 
-	public:
-		[[nodiscard]] posix::socket_address_union& address()
-		{
-			return *this;
-		}
-
-		[[nodiscard]] posix::socket_address_union const& address() const
-		{
-			return *this;
-		}
-	};
-
-	storage_type local;
-	storage_type remote;
+	[[nodiscard]] posix::socket_address_union const& address() const
+	{
+		return *this;
+	}
 };
 
 
 DWORD wsa_accept_ex(
 	SOCKET listen_socket,
 	SOCKET accept_socket,
-	void* addr_storage_pair,
-	DWORD addr_storage_size,
-	OVERLAPPED& overlapped);
+	PVOID address_storage,
+	DWORD address_Storage_size,
+	LPOVERLAPPED overlapped);
 
 DWORD wsa_connect_ex(
 	SOCKET socket,
-	posix::sockaddr_view addr,
-	OVERLAPPED& overlapped);
+	sockaddr const* address,
+	posix::socket_address_size_type address_size,
+	LPOVERLAPPED overlapped);
 
 DWORD wsa_send_msg(
 	SOCKET socket,

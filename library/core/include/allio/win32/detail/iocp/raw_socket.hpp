@@ -2,7 +2,6 @@
 
 #include <allio/detail/handles/raw_socket.hpp>
 #include <allio/win32/detail/iocp/multiplexer.hpp>
-#include <allio/win32/detail/wsa.hpp>
 
 #include <allio/detail/unique_socket.hpp>
 
@@ -45,7 +44,6 @@ struct async_operation<iocp_multiplexer, raw_socket_t, byte_io::stream_read_t>
 	using S = async_operation_t<M, raw_socket_t, byte_io::stream_read_t>;
 	using A = io_parameters_t<raw_socket_t, byte_io::stream_read_t>;
 
-	wsa_buffers_storage<8> buffers;
 	iocp_multiplexer::overlapped overlapped;
 
 	static io_result<size_t> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
@@ -64,7 +62,6 @@ struct async_operation<iocp_multiplexer, raw_socket_t, byte_io::stream_write_t>
 	using S = async_operation_t<M, raw_socket_t, byte_io::stream_write_t>;
 	using A = io_parameters_t<raw_socket_t, byte_io::stream_write_t>;
 
-	wsa_buffers_storage<8> buffers;
 	iocp_multiplexer::overlapped overlapped;
 
 	static io_result<size_t> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);

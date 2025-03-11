@@ -50,10 +50,7 @@ struct openssl_listen_socket_t : listen_socket_base_t<object_t>
 				h,
 				a));
 
-			return vsm::result<accept_result<basic_detached_handle<openssl_socket_t>>>(
-				vsm::result_value,
-				*rebind_handle<basic_detached_handle<openssl_socket_t>>(vsm_move(r.socket)),
-				r.endpoint);
+			return rebind_handle<basic_detached_handle<openssl_socket_t>>(vsm_move(r.socket));
 		}
 		else
 		{
@@ -185,7 +182,7 @@ struct async_operation<M, openssl_listen_socket_t, accept_t>
 	using C = async_connector_t<M, openssl_listen_socket_t> const;
 	using S = async_operation_t<M, openssl_listen_socket_t, accept_t>;
 	using A = io_parameters_t<openssl_listen_socket_t, accept_t>;
-	using R = accept_result<basic_attached_handle<openssl_socket_t, multiplexer_handle_t<M>>>;
+	using R = basic_attached_handle<openssl_socket_t, multiplexer_handle_t<M>>;
 
 	using _raw_accept = async_operation_t<M, raw_listen_socket_t, accept_t>;
 	using _raw_close = typename _base::template _raw_close<raw_socket_t>;

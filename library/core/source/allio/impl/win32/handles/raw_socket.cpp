@@ -1,5 +1,7 @@
 #include <allio/detail/handles/raw_socket.hpp>
 
+#include <allio/impl/byte_io_buffers.hpp>
+#include <allio/impl/posix/handles/raw_common_socket.hpp>
 #include <allio/impl/posix/socket.hpp>
 #include <allio/impl/win32/wsa_thread_event.hpp>
 #include <allio/impl/win32/wsa.hpp>
@@ -10,13 +12,12 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-static constexpr auto max_buffer_count = std::numeric_limits<DWORD>::max();
-
 byte_io_limits raw_socket_t::get_byte_io_limits(native_handle<raw_socket_t> const& h)
 {
+	static constexpr auto max_buffer_count = std::numeric_limits<DWORD>::max();
+
 	return
 	{
-		//TODO: I/O functions should check this limit.
 		.max_buffer_count = max_buffer_count,
 		.max_atomic_buffer_count = max_buffer_count,
 	};
@@ -56,6 +57,27 @@ vsm::result<void> raw_socket_t::connect(
 			vsm_try_void(posix::socket_bind(socket.get(), &bind_addr.addr, addr.size));
 		}
 
+		DWORD const e = wsa_connect_ex(
+			socket.get(),
+			addr.addr,
+			addr.size,
+			overlapped);
+
+		if (e != WSA_IO_PENDING)
+		{
+			return vsm::unexpected(allio_error(static_cast<posix::socket_error>(e)));
+		}
+
+		DWORD transferred;
+		DWORD dummy_flags;
+
+		vsm_try_void(overlapped.wait(
+			socket.get(),
+			a.deadline,
+			&transferred,
+			&dummy_flags));
+
+#if 0
 		DWORD transferred = static_cast<DWORD>(-1);
 		if (!win32::ConnectEx(
 			socket.get(),
@@ -79,6 +101,7 @@ vsm::result<void> raw_socket_t::connect(
 				&connect_flags));
 		}
 		vsm_assert(transferred == 0);
+#endif
 	}
 	else
 	{
@@ -88,7 +111,7 @@ vsm::result<void> raw_socket_t::connect(
 		}
 	}
 
-	h.flags = flags::not_null | flags;
+	h.flags = flags::not_null | posix::set_address_family(addr.addr->sa_family) | flags;
 	h.platform_handle = posix::wrap_socket(socket.release());
 
 	return {};
@@ -98,22 +121,17 @@ vsm::result<size_t> raw_socket_t::stream_read(
 	native_handle<raw_socket_t> const& h,
 	io_parameters_t<raw_socket_t, stream_read_t> const& a)
 {
-	//TODO: Unify buffer count checks with check_wsa_buffers_size everywhere.
-	//      Convert buffer count saturation to truncation.
-	if (a.buffers.get_buffers_size() > max_buffer_count)
-	{
-		return vsm::unexpected(allio_error(error::too_many_io_buffers));
-	}
-
 	if (a.deadline != deadline::never() &&
 		h.flags[platform_object_t::impl_type::flags::synchronous])
 	{
 		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
+	vsm_try_void(check_wsa_buffers_size<DWORD>(a.buffers));
+
 	SOCKET const socket = posix::unwrap_socket(h.platform_handle);
 
-	automatic_wsa_buffer_storage buffer_storage;
+	dynamic_wsa_buffer_storage buffer_storage;
 	vsm_try(wsa_buffers, get_wsa_buffers(a.buffers, buffer_storage));
 
 	vsm_try(overlapped, wsa_thread_overlapped::get_for(h));
@@ -125,7 +143,7 @@ vsm::result<size_t> raw_socket_t::stream_read(
 		socket,
 		// This function is not const correct, so a const_cast is required.
 		const_cast<WSABUF*>(wsa_buffers.data()),
-		vsm::saturating(wsa_buffers.size()),
+		vsm::truncating(wsa_buffers.size()),
 		&transferred,
 		&flags,
 		overlapped,
@@ -155,20 +173,17 @@ vsm::result<size_t> raw_socket_t::stream_write(
 	native_handle<raw_socket_t> const& h,
 	io_parameters_t<raw_socket_t, stream_write_t> const& a)
 {
-	if (a.buffers.get_buffers_size() > max_buffer_count)
-	{
-		return vsm::unexpected(allio_error(error::too_many_io_buffers));
-	}
-
 	if (a.deadline != deadline::never() &&
 		h.flags[platform_object_t::impl_type::flags::synchronous])
 	{
 		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
+	vsm_try_void(check_wsa_buffers_size<DWORD>(a.buffers));
+
 	SOCKET const socket = posix::unwrap_socket(h.platform_handle);
 
-	automatic_wsa_buffer_storage buffer_storage;
+	dynamic_wsa_buffer_storage buffer_storage;
 	vsm_try(wsa_buffers, get_wsa_buffers(a.buffers, buffer_storage));
 
 	vsm_try(overlapped, wsa_thread_overlapped::get_for(h));
@@ -180,7 +195,7 @@ vsm::result<size_t> raw_socket_t::stream_write(
 		socket,
 		// This function is not const correct, so a const_cast is required.
 		const_cast<WSABUF*>(wsa_buffers.data()),
-		vsm::saturating(wsa_buffers.size()),
+		vsm::truncating(wsa_buffers.size()),
 		&transferred,
 		flags,
 		overlapped,

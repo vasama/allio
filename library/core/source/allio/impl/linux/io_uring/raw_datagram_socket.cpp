@@ -75,7 +75,7 @@ using recv_t = receive_from_t;
 using recv_s = async_operation_t<M, raw_datagram_socket_t, recv_t>;
 using recv_a = io_parameters_t<raw_datagram_socket_t, recv_t>;
 
-static io_result<receive_result> _submit_recv(
+static io_result<size_t> _submit_recv(
 	M& m,
 	H const& h,
 	C const& c,
@@ -112,7 +112,7 @@ static io_result<receive_result> _submit_recv(
 	return vsm::unexpected(io_notify_status::submitted);
 }
 
-io_result<receive_result> recv_s::submit(
+io_result<size_t> recv_s::submit(
 	M& m,
 	H const& h,
 	C const& c,
@@ -127,7 +127,7 @@ io_result<receive_result> recv_s::submit(
 	return _submit_recv(m, h, c, s, a);
 }
 
-io_result<receive_result> recv_s::notify(
+io_result<size_t> recv_s::notify(
 	M& m,
 	H const& h,
 	C const& c,
@@ -146,7 +146,7 @@ io_result<receive_result> recv_s::notify(
 
 	posix::socket_address_union& addr = get_address(s.address_storage);
 
-	return io_result<receive_result>(
+	return io_result<size_t>(
 		vsm::result_value,
 		static_cast<size_t>(status.result),
 		addr.get_network_endpoint());

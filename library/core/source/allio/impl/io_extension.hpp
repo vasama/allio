@@ -1,9 +1,10 @@
 #pragma once
 
 #include <allio/detail/io.hpp>
-#include <allio/detail/mutable_buffer.hpp>
 #include <allio/detail/new.hpp>
 #include <allio/impl/error_encoding.hpp>
+
+#include <vsm/allocator.hpp>
 
 namespace allio::detail {
 
@@ -33,13 +34,13 @@ protected:
 	async_extension* m_extension;
 
 public:
-	io_extension_base(initialize_extension extension)
+	io_extension_base(initialize_extension const extension)
 		: m_extension(&extension.extension)
 	{
 		m_extension->extension = nullptr;
 	}
 
-	io_extension_base(acquire_extension extension)
+	io_extension_base(acquire_extension const extension)
 		: m_extension(&extension.extension)
 	{
 	}
@@ -66,7 +67,8 @@ class io_extension_allocator : public io_extension_base
 	{
 		block_t* next;
 		size_t size;
-		alignas(std::max_align_t) unsigned char data[];
+
+		alignas(std::max_align_t) unsigned char storage[];
 
 		explicit block_t(size_t const size)
 			: next(nullptr)
@@ -83,58 +85,52 @@ public:
 		if (m_extension != nullptr && m_extension->extension != nullptr)
 		{
 			block_t* head = static_cast<block_t*>(m_extension->extension);
-			m_extension->extension = nullptr;
 
-			while (block_t* const block = std::exchange(head, head->next))
+			do
 			{
-				release_storage(
+				block_t* const block = std::exchange(head, head->next);
+
+				allio_release_storage(
 					block,
 					block->size,
-					alignof(std::max_align_t),
+					alignof(block_t),
 					allio_allocation_strategy_generic);
 			}
+			while (head != nullptr);
 		}
 	}
 
 
-	[[nodiscard]] vsm::allocation allocate(
+	[[nodiscard]] vsm::result<vsm::allocation> get_storage(
 		size_t const min_size,
 		size_t const max_size,
-		size_t const alignment = alignof(std::max_align_t)) const
+		std::align_val_t const min_alignment) const
 	{
+		static constexpr size_t storage_offset = offsetof(block_t, storage);
+
 		vsm_assert(m_extension != nullptr); //PRECONDITION
 
-		auto const allocation = acquire_storage(
-			offsetof(block_t, data) + min_size,
-			offsetof(block_t, data) + max_size,
-			alignof(std::max_align_t),
+		if (static_cast<size_t>(min_alignment) > alignof(std::max_align_t))
+		{
+			return vsm::unexpected(allio_error(error::insufficient_alignment));
+		}
+
+		auto const allocation = allio_acquire_storage(
+			storage_offset + min_size,
+			storage_offset + max_size,
+			alignof(block_t),
 			allio_allocation_strategy_generic);
 
 		if (allocation.storage == nullptr)
 		{
-			return { nullptr };
+			return vsm::unexpected(allio_error(error::not_enough_memory));
 		}
 
 		block_t* const block = ::new (allocation.storage) block_t(allocation.size);
 		block->next = static_cast<block_t*>(m_extension->extension);
 		m_extension->extension = block;
 
-		return { allocation.storage, allocation.size };
-	}
-
-	void deallocate(vsm::allocation) const
-	{
-	}
-
-private:
-	friend vsm::result<vsm::allocation> tag_invoke(
-		get_storage_t,
-		io_extension_allocator& list,
-		size_t const min_size,
-		size_t const max_size,
-		std::align_val_t const min_alignment)
-	{
-		return list.allocate(min_size, max_size, static_cast<size_t>(min_alignment));
+		return vsm::allocation(block->storage, allocation.size - storage_offset);
 	}
 };
 
@@ -186,6 +182,11 @@ public:
 		vsm_assert(m_extension != nullptr); //PRECONDITION
 		vsm_assert(m_extension->extension != nullptr); //PRECONDITION
 		return static_cast<T*>(m_extension->extension);
+	}
+
+	[[nodiscard]] T* operator->() const
+	{
+		return get();
 	}
 };
 

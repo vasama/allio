@@ -39,6 +39,7 @@ void allio_release_storage(
 	operator delete(storage, static_cast<std::align_val_t>(alignment), std::nothrow);
 }
 
+//TODO: Move out into a separate TU
 [[nodiscard]] vsm::result<unique_storage_ptr<void>> detail::_allocate_unique(
 	size_t size,
 	size_t const alignment,
@@ -54,7 +55,7 @@ void allio_release_storage(
 		size = size * element_size;
 	}
 
-	auto const allocation = detail::acquire_storage(
+	auto const allocation = allio_acquire_storage(
 		/* min_size: */ size,
 		/* max_size: */ static_cast<size_t>(-1),
 		alignment,

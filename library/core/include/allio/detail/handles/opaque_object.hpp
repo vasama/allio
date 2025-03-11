@@ -117,7 +117,7 @@ template<typename Implementation, typename... Args>
 	requires std::constructible_from<Implementation, Args...>
 vsm::result<basic_detached_handle<opaque_object_t>> make_opaque_object(Args&&... args)
 {
-	//TODO: Use acquire_storage
+	//TODO: Use allio_acquire_storage
 	auto const object = new (std::nothrow) opaque_object_wrapper<Implementation>(
 		vsm_forward(args)...);
 

@@ -1,6 +1,6 @@
 #include <allio/impl/posix/socket.hpp>
 
-#include <allio/detail/dynamic_buffer.hpp>
+#include <allio/impl/byte_io_buffers.hpp>
 #include <allio/impl/error_encoding_impl.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
@@ -242,7 +242,7 @@ vsm::result<size_t> posix::socket_scatter_read(
 	socket_type const socket,
 	new_read_buffers const buffers)
 {
-	automatic_wsa_buffer_storage buffer_storage;
+	dynamic_wsa_buffer_storage buffer_storage;
 	vsm_try(wsa_buffers, get_wsa_buffers(buffers, buffer_storage));
 
 	DWORD flags = 0;
@@ -274,7 +274,7 @@ vsm::result<size_t> posix::socket_gather_write(
 	socket_type const socket,
 	new_write_buffers const buffers)
 {
-	automatic_wsa_buffer_storage buffer_storage;
+	dynamic_wsa_buffer_storage buffer_storage;
 	vsm_try(wsa_buffers, get_wsa_buffers(buffers, buffer_storage));
 
 	DWORD transferred;
@@ -297,12 +297,13 @@ vsm::result<size_t> posix::socket_gather_write(
 
 vsm::result<size_t> posix::socket_receive_from(
 	socket_type const socket,
-	sockaddr_buffer const addr,
+	sockaddr* const addr,
+	socket_address_size_type* const addr_size,
 	new_read_buffers const buffers)
 {
 	vsm_try_void(check_wsa_buffers_size<DWORD>(buffers));
 
-	automatic_wsa_buffer_storage buffer_storage;
+	dynamic_wsa_buffer_storage buffer_storage;
 	vsm_try(wsa_buffers, get_wsa_buffers(buffers, buffer_storage));
 
 	DWORD transferred;
@@ -314,8 +315,8 @@ vsm::result<size_t> posix::socket_receive_from(
 		vsm::truncating(wsa_buffers.size()),
 		&transferred,
 		&flags,
-		addr.addr,
-		&addr.size,
+		addr,
+		addr_size,
 		/* lpOverlapped: */ nullptr,
 		/* lpCompletionRoutine: */ nullptr) == SOCKET_ERROR)
 	{
@@ -328,12 +329,12 @@ vsm::result<size_t> posix::socket_receive_from(
 
 vsm::result<void> posix::socket_send_to(
 	socket_type const socket,
-	sockaddr_view const addr,
+	socket_address_view const addr,
 	new_write_buffers const buffers)
 {
 	vsm_try_void(check_wsa_buffers_size<DWORD>(buffers));
 
-	automatic_wsa_buffer_storage buffer_storage;
+	dynamic_wsa_buffer_storage buffer_storage;
 	vsm_try(wsa_buffers, get_wsa_buffers(buffers, buffer_storage));
 
 	DWORD transferred;

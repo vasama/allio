@@ -6,12 +6,13 @@
 #include <allio/impl/win32/wsa.hpp>
 
 #include <vsm/lazy.hpp>
+#include <vsm/numeric.hpp>
 
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-using accept_result_type = accept_result<basic_detached_handle<raw_socket_t>>;
+using socket_handle_type = basic_detached_handle<raw_socket_t>;
 
 vsm::result<void> raw_listen_socket_t::listen(
 	native_handle<raw_listen_socket_t>& h,
@@ -38,7 +39,7 @@ vsm::result<void> raw_listen_socket_t::listen(
 	return {};
 }
 
-vsm::result<accept_result_type> raw_listen_socket_t::accept(
+vsm::result<socket_handle_type> raw_listen_socket_t::accept(
 	native_handle<raw_listen_socket_t> const& h,
 	io_parameters_t<raw_listen_socket_t, accept_t> const& a)
 {
@@ -52,43 +53,70 @@ vsm::result<accept_result_type> raw_listen_socket_t::accept(
 
 	int const address_family = posix::get_address_family(h.flags);
 	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
+	size_t const min_address_storage_size = max_address_size + 16;
+	vsm_assert(min_address_storage_size <= sizeof(wsa_accept_address_storage));
 
-	void* user_addr_storage = nullptr;
-	if (a.endpoint_storage)
+	void* user_address_storage = nullptr;
+	if (a.endpoint)
 	{
-		vsm_try_assign(user_addr_storage, a.endpoint_storage.get_storage(
+		vsm_try_assign(user_address_storage, a.endpoint.resize(
+			max_address_size,
 			max_address_size,
 			std::align_val_t(alignof(posix::socket_address_union))));
 	}
 
-	wsa_accept_address_storage wsa_addr;
-	posix::socket_address_union& addr = wsa_addr.remote;
+	wsa_accept_address_storage local_address_storage;
+	void* const address_storage = user_address_storage
+		? user_address_storage
+		: &local_address_storage;
 
 	posix::socket_with_flags socket_with_flags;
-	auto& [socket, flags] = socket_with_flags;
+	auto& [socket, socket_flags] = socket_with_flags;
 
 	if (a.deadline != deadline::never() ||
 		!h.flags[platform_object_t::impl_type::flags::synchronous] ||
 		vsm::no_flags(a.flags, io_flags::create_synchronous))
 	{
-		vsm_try(protocol, posix::choose_protocol(address_family, SOCK_STREAM));
-
 		vsm_try_assign(socket_with_flags, posix::create_socket(
 			address_family,
 			SOCK_STREAM,
-			protocol,
+			*posix::choose_protocol(address_family, SOCK_STREAM),
 			a.flags));
 
 		vsm_try(overlapped, wsa_thread_overlapped::get_for(h));
 
+		DWORD const e = wsa_accept_ex(
+			listen_socket,
+			socket.get(),
+			&local_address_storage,
+			vsm::truncating(min_address_storage_size),
+			overlapped);
+
+		if (e == WSA_IO_PENDING)
+		{
+			DWORD transferred;
+			DWORD dummy_flags;
+
+			vsm_try_void(overlapped.wait(
+				socket.get(),
+				a.deadline,
+				&transferred,
+				&dummy_flags));
+		}
+		else if (e != 0)
+		{
+			return vsm::unexpected(allio_error(static_cast<posix::socket_error>(e)));
+		}
+
+#if 0
 		DWORD transferred = static_cast<DWORD>(-1);
 		if (!win32::AcceptEx(
 			listen_socket,
 			socket.get(),
-			/* lpOutputBuffer: */ &wsa_addr,
+			/* lpOutputBuffer: */ &local_address_storage,
 			/* dwReceiveDataLength: */ 0,
-			sizeof(wsa_addr.local),
-			sizeof(wsa_addr.remote),
+			/* dwLocalAddressLength: */ 0,
+			vsm::truncating(min_address_storage_size),
 			&transferred,
 			overlapped))
 		{
@@ -105,14 +133,20 @@ vsm::result<accept_result_type> raw_listen_socket_t::accept(
 				&accept_flags));
 		}
 		vsm_assert(transferred == 0);
+#endif
+
+		if (user_address_storage != nullptr)
+		{
+			std::memcpy(user_address_storage, &local_address_storage, max_address_size);
+		}
 	}
 	else
 	{
-		int addr_size = sizeof(posix::socket_address_union);
+		int addr_size = vsm::truncating(max_address_size);
 
 		SOCKET const new_socket = win32::WSAAccept(
 			listen_socket,
-			&addr.addr,
+			static_cast<sockaddr*>(address_storage),
 			&addr_size,
 			/* lpfnCondition: */ nullptr,
 			/* dwCallbackData: */ 0);
@@ -123,33 +157,24 @@ vsm::result<accept_result_type> raw_listen_socket_t::accept(
 		}
 
 		socket.reset(new_socket);
+		socket_flags = platform_object_t::impl_type::flags::synchronous;
 	}
 
-	auto const make_socket_handle = [&]()
-	{
-		native_handle<raw_socket_t> h = {};
-		h.flags = object_t::flags::not_null | flags;
-		h.platform_handle = posix::wrap_socket(socket.release());
-		return basic_detached_handle<raw_socket_t>(adopt_handle, h);
-	};
+	socket_flags |= posix::set_address_family(address_family);
 
-	auto const get_endpoint = [&]() -> any_endpoint_view
-	{
-		if (user_addr_storage)
+	return vsm_lazy(socket_handle_type(
+		adopt_handle,
+		native_handle<raw_socket_t>
 		{
-			std::memcpy(user_addr_storage, &wsa_addr.remote.addr, max_address_size);
-			return platform_endpoint_view(user_addr_storage, max_address_size);
-		}
-		else
-		{
-			return null_endpoint;
-		}
-	};
-
-	return vsm::result<accept_result_type>(
-		vsm::result_value,
-		vsm_lazy(make_socket_handle()),
-		get_endpoint());
+			native_handle<platform_object_t>
+			{
+				native_handle<object_t>
+				{
+					object_t::flags::not_null | socket_flags,
+				},
+				posix::wrap_socket(socket.release()),
+			},
+		}));
 }
 
 vsm::result<void> raw_listen_socket_t::close(

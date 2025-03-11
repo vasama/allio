@@ -58,4 +58,9 @@ namespace allio::posix {
 	}
 }
 
+[[nodiscard]] inline network_address_kind get_address_kind(detail::handle_flags const flags)
+{
+	return get_address_kind(get_address_family(flags));
+}
+
 } // namespace allio::posix

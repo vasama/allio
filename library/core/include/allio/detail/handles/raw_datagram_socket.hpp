@@ -19,7 +19,7 @@ struct raw_datagram_socket_t : datagram_socket_base_t<raw_common_socket_base_t>
 		native_handle<raw_datagram_socket_t>& h,
 		io_parameters_t<raw_datagram_socket_t, bind_t> const& args);
 
-	static vsm::result<receive_result> receive_from(
+	static vsm::result<size_t> receive_from(
 		native_handle<raw_datagram_socket_t> const& h,
 		io_parameters_t<raw_datagram_socket_t, receive_from_t> const& args);
 

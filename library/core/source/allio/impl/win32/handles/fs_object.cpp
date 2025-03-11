@@ -231,7 +231,7 @@ struct file_name_information_deleter
 	vsm_static_operator void operator()(
 		FILE_NAME_INFORMATION* const information) vsm_static_operator_const
 	{
-		release_storage(
+		allio_release_storage(
 			static_cast<void*>(information),
 			file_name_information_buffer_size,
 			alignof(FILE_NAME_INFORMATION),

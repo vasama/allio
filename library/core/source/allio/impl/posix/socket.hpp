@@ -4,9 +4,9 @@
 #include <allio/error.hpp>
 #include <allio/deadline.hpp>
 #include <allio/detail/handle_flags.hpp>
-#include <allio/detail/mutable_buffer.hpp>
 #include <allio/detail/object.hpp>
 #include <allio/detail/platform.hpp>
+#include <allio/impl/storage_provider.hpp>
 #include <allio/network.hpp>
 
 #include <vsm/assert.h>
@@ -25,6 +25,12 @@
 
 namespace allio::posix {
 
+struct socket_address_view
+{
+	sockaddr const* addr;
+	socket_address_size_type size;
+};
+
 struct socket_address_union
 {
 	union
@@ -38,47 +44,43 @@ struct socket_address_union
 	[[nodiscard]] network_endpoint get_network_endpoint() const;
 };
 
-class socket_address_storage
-{
-	alignas(std::max_align_t) unsigned char m_storage[sizeof(socket_address_union)];
-
-	friend vsm::result<vsm::allocation> tag_invoke(
-		detail::get_storage_t,
-		socket_address_storage& storage,
-		size_t const min_size,
-		size_t const max_size,
-		std::align_val_t const min_alignment)
-	{
-		vsm_assert(min_size <= sizeof(storage.m_storage)); //PRECONDITION
-		vsm_assert(static_cast<size_t>(min_alignment) <= alignof(std::max_align_t)); //PRECONDITION
-		return vsm::allocation{ storage.m_storage, sizeof(storage.m_storage) };
-	}
-};
-
-struct sockaddr_view
+struct socket_address_size_wrapper
 {
 	socket_address_size_type size;
-	sockaddr const* addr;
 };
 
-struct sockaddr_buffer
+template<typename SocketAddress>
+struct basic_socket_address : socket_address_size_wrapper, SocketAddress
 {
-	socket_address_size_type& size;
-	sockaddr* addr;
 };
 
-[[nodiscard]] vsm::result<vsm::allocation> get_socket_address_storage(
-	size_t size,
-	any_endpoint_storage_provider primary_storage_provider,
-	any_endpoint_storage_provider secondary_storage_provider);
+struct socket_address : basic_socket_address<socket_address_union>
+{
+	[[nodiscard]] operator socket_address_view() const
+	{
+		return { &addr, size };
+	}
 
-[[nodiscard]] vsm::result<sockaddr_buffer> new_socket_address(
-	network_address_kind kind,
-	any_endpoint_storage_provider storage_provider);
 
-[[nodiscard]] vsm::result<sockaddr_view> get_socket_address(
+	[[nodiscard]] vsm::result<socket_address_view> get(any_endpoint_view endpoint);
+
+#if 0
+	[[nodiscard]] static vsm::result<socket_address_size_type> set(
+		any_endpoint_view endpoint,
+		socket_address_union& address_union);
+
+	[[nodiscard]] static vsm::result<socket_address> make(any_endpoint_view endpoint);
+#endif
+
+	[[nodiscard]] static vsm::result<socket_address> get(socket_type const socket);
+};
+
+
+using socket_address_storage = inplace_storage_provider<basic_socket_address<socket_address_union>>;
+
+[[nodiscard]] vsm::result<socket_address_view> get_socket_address(
 	any_endpoint_view endpoint,
-	any_endpoint_storage_provider storage_provider);
+	storage_provider_ref storage_provider);
 
 
 inline size_t get_max_socket_address_size(int const address_family)
@@ -166,47 +168,6 @@ inline network_address_kind get_address_kind(int const address_family)
 }
 
 
-struct socket_address_size_wrapper
-{
-	socket_address_size_type size;
-};
-
-template<typename SocketAddress>
-struct basic_socket_address
-	: socket_address_size_wrapper
-	, SocketAddress
-{
-};
-
-
-
-struct socket_address : basic_socket_address<socket_address_union>
-{
-	[[nodiscard]] operator sockaddr_view() const
-	{
-		return { size, &addr };
-	}
-
-	[[nodiscard]] operator sockaddr_buffer() &
-	{
-		return { size, &addr };
-	}
-
-
-	[[nodiscard]] vsm::result<sockaddr_view> get(any_endpoint_view endpoint);
-
-#if 0
-	[[nodiscard]] static vsm::result<socket_address_size_type> set(
-		any_endpoint_view endpoint,
-		socket_address_union& address_union);
-
-	[[nodiscard]] static vsm::result<socket_address> make(any_endpoint_view endpoint);
-#endif
-
-	[[nodiscard]] static vsm::result<socket_address> get(socket_type const socket);
-};
-
-
 struct socket_with_flags
 {
 	unique_socket socket;
@@ -258,25 +219,28 @@ inline vsm::result<void> socket_bind(
 
 inline vsm::result<void> socket_bind(
 	socket_type const socket,
-	sockaddr_view const addr)
+	socket_address_view const addr)
 {
 	return socket_bind(socket, addr.addr, addr.size);
 }
 
 vsm::result<void> socket_listen(
 	socket_type socket,
-	sockaddr_view addr,
+	socket_address_view addr,
 	uint32_t backlog);
 
+#if 0
 vsm::result<socket_with_flags> socket_accept(
 	socket_type listen_socket,
-	sockaddr_buffer addr,
+	sockaddr* addr,
+	socket_address_size_type* addr_size,
 	deadline deadline,
 	detail::io_flags flags);
+#endif
 
 vsm::result<void> socket_connect(
 	socket_type socket,
-	sockaddr_view addr,
+	socket_address_view addr,
 	deadline deadline);
 
 vsm::result<socket_poll_mask> socket_poll(
@@ -313,12 +277,13 @@ vsm::result<size_t> socket_gather_write(
 
 vsm::result<size_t> socket_receive_from(
 	socket_type socket,
-	sockaddr_buffer addr,
+	sockaddr* addr,
+	socket_address_size_type* addr_size,
 	detail::new_read_buffers buffers);
 
 vsm::result<void> socket_send_to(
 	socket_type socket,
-	sockaddr_view addr,
+	socket_address_view addr,
 	detail::new_write_buffers buffers);
 
 } // namespace allio::posix

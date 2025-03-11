@@ -1,6 +1,8 @@
 #include <allio/win32/detail/iocp/raw_socket.hpp>
 
+#include <allio/impl/byte_io_buffers.hpp>
 #include <allio/impl/io_extension.hpp>
+#include <allio/impl/posix/handles/raw_common_socket.hpp>
 #include <allio/impl/posix/socket.hpp>
 #include <allio/impl/win32/iocp/raw_socket.hpp>
 #include <allio/impl/win32/kernel.hpp>
@@ -58,7 +60,7 @@ io_result<void> connect_s::submit(
 	}
 
 	s.socket = unique_wrapped_socket(posix::wrap_socket(socket.release()));
-	s.socket_flags = flags;
+	s.socket_flags = flags | posix::set_address_family(addr.addr->sa_family);
 
 	OVERLAPPED& overlapped = *s.overlapped;
 	overlapped.Pointer = nullptr;
@@ -68,15 +70,36 @@ io_result<void> connect_s::submit(
 
 	// If using a multithreaded completion port, after this call another thread will race to
 	// complete this operation.
-	vsm_try(already_connected, submit_socket_io(m, h, [&]()
+	vsm_try(already_completed, submit_socket_io(m, h, [&]()
 	{
 		return wsa_connect_ex(
 			posix::unwrap_socket(s.socket.get()),
-			addr,
-			overlapped);
+			addr.addr,
+			addr.size,
+			&overlapped);
 	}));
 
-	if (already_connected)
+#if 0
+		DWORD transferred = static_cast<DWORD>(-1);
+		bool const result = win32::ConnectEx(
+			posix::unwrap_socket(s.socket.get()),
+			addr.addr,
+			addr.size,
+			/* lpSendBuffer: */ nullptr,
+			/* dwSendDataLength: */ 0,
+			&transferred,
+			&overlapped);
+
+		if (!result)
+		{
+			return static_cast<DWORD>(WSAGetLastError());
+		}
+
+		vsm_assert(transferred == 0);
+		return 0;
+#endif
+
+	if (already_completed)
 	{
 		h.flags = object_t::flags::not_null | s.socket_flags;
 		h.platform_handle = s.socket.release();
@@ -84,6 +107,7 @@ io_result<void> connect_s::submit(
 		return {};
 	}
 
+	extension.release();
 	return vsm::unexpected(io_notify_status::submitted);
 }
 
@@ -193,6 +217,7 @@ io_result<size_t> read_s::submit(
 		return get_read_transferred(a, transferred);
 	}
 
+	extension.release();
 	return vsm::unexpected(io_notify_status::submitted);
 }
 
@@ -270,6 +295,7 @@ io_result<size_t> write_s::submit(
 		return transferred;
 	}
 
+	extension.release();
 	return vsm::unexpected(io_notify_status::submitted);
 }
 

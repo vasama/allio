@@ -1,5 +1,6 @@
 #include <allio/win32/detail/iocp/raw_datagram_socket.hpp>
 
+#include <allio/impl/byte_io_buffers.hpp>
 #include <allio/impl/io_extension.hpp>
 #include <allio/impl/posix/handles/raw_common_socket.hpp>
 #include <allio/impl/posix/socket.hpp>
@@ -44,7 +45,7 @@ io_result<void> bind_s::submit(M& m, H& h, C& c, bind_s&, bind_a const& a, io_ha
 
 	vsm_try_void(m.attach_platform_handle(posix::wrap_socket(socket.get()), c));
 
-	h.flags = object_t::flags::not_null | flags;
+	h.flags = object_t::flags::not_null | posix::set_address_family(addr.addr->sa_family) | flags;
 	h.platform_handle = posix::wrap_socket(socket.release());
 
 	return {};
@@ -172,7 +173,7 @@ using recv_t = raw_datagram_socket_t::receive_from_t;
 using recv_s = async_operation_t<M, raw_datagram_socket_t, recv_t>;
 using recv_a = io_parameters_t<raw_datagram_socket_t, recv_t>;
 
-io_result<receive_result> recv_s::submit(
+io_result<size_t> recv_s::submit(
 	M& m,
 	H const& h,
 	C const&,
@@ -188,28 +189,40 @@ io_result<receive_result> recv_s::submit(
 	int const address_family = posix::get_address_family(h.flags);
 	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
 
-	sockaddr* addr = nullptr;
-	posix::socket_address_size_type* addr_size = nullptr;
+	void* address_storage = nullptr;
+	posix::socket_address_size_type* address_size = nullptr;
 
-	if (a.endpoint_storage)
+	if (a.endpoint)
 	{
-		vsm_try(addr_storage, a.endpoint_storage.get_storage(
-			max_address_size,
-			std::align_val_t(alignof(posix::socket_address_union))));
+		if (a.endpoint.is_platform_endpoint())
+		{
+			vsm_try_assign(address_storage, a.endpoint.resize(
+				max_address_size,
+				max_address_size,
+				std::align_val_t(alignof(posix::socket_address_union))));
 
-		s.addr_size = vsm::truncating(addr_storage.size);
-		addr = static_cast<sockaddr*>(addr_storage.storage);
-		addr_size = &s.addr_size;
+			s.address_size = vsm::truncating(max_address_size);
+			address_size = &s.address_size;
+		}
+		else if (a.endpoint.kind() != posix::get_address_kind(address_family))
+		{
+			return vsm::unexpected(allio_error(error::invalid_argument));
+		}
+		else
+		{
+			//TODO: Implement typed endpoint buffer usage.
+			return vsm::unexpected(allio_error(error::unsupported_operation));
+		}
 	}
-
-	DWORD transferred;
-	DWORD flags = 0;
 
 	OVERLAPPED& overlapped = *s.overlapped;
 	overlapped.Pointer = nullptr;
 	overlapped.hEvent = NULL;
 
 	s.overlapped.bind(handler);
+
+	DWORD transferred;
+	DWORD flags = 0;
 
 	vsm_try(already_completed, submit_socket_io(m, h, [&]() -> DWORD
 	{
@@ -219,8 +232,8 @@ io_result<receive_result> recv_s::submit(
 			vsm::truncating(wsa_buffers.size()),
 			&transferred,
 			&flags,
-			addr,
-			addr_size,
+			static_cast<sockaddr*>(address_storage),
+			address_size,
 			&overlapped,
 			/* lpCompletionRoutine: */ nullptr) == SOCKET_ERROR)
 		{
@@ -231,18 +244,14 @@ io_result<receive_result> recv_s::submit(
 
 	if (already_completed)
 	{
-		return vsm_lazy(receive_result
-		{
-			.size = transferred,
-			.endpoint = platform_endpoint_view(addr, addr_size ? *addr_size : 0),
-		});
+		return transferred;
 	}
 
 	extension.release();
 	return vsm::unexpected(io_notify_status::submitted);
 }
 
-io_result<receive_result> recv_s::notify(
+io_result<size_t> recv_s::notify(
 	M&,
 	H const& h,
 	C const&,
@@ -263,11 +272,7 @@ io_result<receive_result> recv_s::notify(
 	size_t const transferred = get_transfer_result(h, s.overlapped);
 	vsm_assert(transferred != 0);
 
-	return vsm_lazy(receive_result
-	{
-		.size = transferred,
-		.endpoint = null_endpoint, //TODO: Fix this
-	});
+	return transferred;
 }
 
 void recv_s::cancel(M&, H const& h, C const&, recv_s& s)

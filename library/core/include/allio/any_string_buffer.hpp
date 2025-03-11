@@ -16,11 +16,11 @@ namespace detail {
 
 template<typename String>
 concept _any_mutable_string =
-	mutable_buffer<String> &&
+	mutable_contiguous_container<String> &&
 	character<typename std::remove_cvref_t<String>::value_type>;
 
 template<typename String>
-concept any_mutable_string = _any_mutable_string<mutable_buffer_from_t<String>>;
+concept any_mutable_string = _any_mutable_string<mutable_range_from_t<String>>;
 
 template<typename String, typename Char>
 concept _mutable_string_of =
@@ -28,7 +28,7 @@ concept _mutable_string_of =
 	std::is_same_v<typename std::remove_cvref_t<String>::value_type, Char>;
 
 template<typename String, typename Char>
-concept mutable_string_of = _mutable_string_of<mutable_buffer_from_t<String>, Char>;
+concept mutable_string_of = _mutable_string_of<mutable_range_from_t<String>, Char>;
 
 
 struct _string_buffer
@@ -68,13 +68,13 @@ struct _string_buffer
 	{
 	}
 
-	template<mutable_buffer Container>
+	template<mutable_contiguous_range Container>
 	explicit _string_buffer(Container&& container)
 		: _string_buffer(container.data(), container.size())
 	{
 	}
 
-	template<resizable_buffer Container>
+	template<resizable_container Container>
 	explicit _string_buffer(Container&& container)
 		: m_data(&container)
 		, m_ctrl(type_mask_for<typename std::remove_cvref_t<Container>::value_type>)
@@ -117,7 +117,7 @@ struct _string_buffer
 		size_t const max_size)
 	{
 		auto& container = *static_cast<vsm::remove_ref_t<Container>*>(self.m_data);
-		vsm_try_discard(resize_buffer(container, min_size, max_size));
+		vsm_try_discard(resize_container(container, min_size, max_size));
 		return buffer{ container.data(), container.size() };
 	}
 };
@@ -159,13 +159,13 @@ public:
 
 	template<detail::mutable_string_of<Char> String>
 	string_buffer(String& string)
-		: _string_buffer(detail::get_mutable_buffer(string))
+		: _string_buffer(detail::get_mutable_range(string))
 	{
 	}
 
 	template<detail::mutable_string_of<Char> String>
 	string_buffer(String const& string)
-		: _string_buffer(detail::get_mutable_buffer(string))
+		: _string_buffer(detail::get_mutable_range(string))
 	{
 	}
 
@@ -204,14 +204,14 @@ public:
 
 	template<detail::any_mutable_string String>
 	any_string_buffer(String& string)
-		: _string_buffer(detail::get_mutable_buffer(string))
+		: _string_buffer(detail::get_mutable_range(string))
 	{
 	}
 
 	template<typename String>
 		requires detail::any_mutable_string<String const>
 	any_string_buffer(String const& string)
-		: _string_buffer(detail::get_mutable_buffer(string))
+		: _string_buffer(detail::get_mutable_range(string))
 	{
 	}
 

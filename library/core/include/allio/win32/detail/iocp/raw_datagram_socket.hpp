@@ -2,7 +2,6 @@
 
 #include <allio/detail/handles/raw_datagram_socket.hpp>
 #include <allio/win32/detail/iocp/multiplexer.hpp>
-#include <allio/win32/detail/wsa.hpp>
 
 namespace allio::detail {
 
@@ -38,13 +37,12 @@ struct async_operation<iocp_multiplexer, raw_datagram_socket_t, receive_from_t>
 	using C = async_connector_t<M, raw_datagram_socket_t> const;
 	using S = async_operation_t<M, raw_datagram_socket_t, receive_from_t>;
 	using A = io_parameters_t<raw_datagram_socket_t, receive_from_t>;
-	using R = receive_result;
 
 	iocp_multiplexer::overlapped overlapped;
-	int addr_size;
+	int address_size;
 
-	static io_result<R> submit(M& m, H& h, C& c, S& s, A const& args, io_handler<M>& handler);
-	static io_result<R> notify(M& m, H& h, C& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);
+	static io_result<size_t> submit(M& m, H& h, C& c, S& s, A const& args, io_handler<M>& handler);
+	static io_result<size_t> notify(M& m, H& h, C& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 

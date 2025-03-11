@@ -72,6 +72,7 @@ enum class error
 	not_enough_memory,
 	no_buffer_space,
 	maximum_capacity_exceeded,
+	insufficient_alignment,
 
 	// Encoding
 	unsupported_encoding,

@@ -101,8 +101,8 @@ TEST_CASE("WSA asynchronous connect and accept", "[windows][wsa][socket][async]"
 		listen_socket.get(),
 		server_socket.get(),
 		&accept_addr,
-		sizeof(accept_addr.local),
-		accept_overlapped) == WSA_IO_PENDING);
+		sizeof(accept_addr),
+		&accept_overlapped) == WSA_IO_PENDING);
 
 
 	// Connect
@@ -124,7 +124,11 @@ TEST_CASE("WSA asynchronous connect and accept", "[windows][wsa][socket][async]"
 	}
 
 	OVERLAPPED connect_overlapped = {};
-	REQUIRE(wsa_connect_ex(client_socket.get(), addr, connect_overlapped) == WSA_IO_PENDING);
+	REQUIRE(wsa_connect_ex(
+		client_socket.get(),
+		addr.addr,
+		addr.size,
+		&connect_overlapped) == WSA_IO_PENDING);
 
 
 	/* Handle completions */
@@ -175,7 +179,7 @@ TEST_CASE("WSA asynchronous unix connect and accept", "[windows][wsa][socket][as
 	posix::socket_listen(listen_socket.get(), addr, 1).value();
 
 	auto const server_socket = create_socket();
-	wsa_accept_address_storage::storage_type accept_addr;
+	wsa_accept_address_storage accept_addr;
 
 	auto accept_event = nothrow::event(manual_reset_event).value();
 	OVERLAPPED accept_overlapped =
@@ -215,7 +219,11 @@ TEST_CASE("WSA asynchronous unix connect and accept", "[windows][wsa][socket][as
 		.hEvent = unwrap_handle(connect_event.native().platform_handle),
 	};
 
-	REQUIRE(wsa_connect_ex(client_socket.get(), addr, connect_overlapped) == WSA_IO_PENDING);
+	REQUIRE(wsa_connect_ex(
+		client_socket.get(),
+		addr.addr,
+		addr.size,
+		&connect_overlapped) == WSA_IO_PENDING);
 
 
 
@@ -502,8 +510,8 @@ TEST_CASE("WSA RIO", "[windows][wsa][rio]")
 			listen_socket.get(),
 			server_socket.get(),
 			&accept_addr,
-			sizeof(accept_addr.local),
-			accept_overlapped) == WSA_IO_PENDING);
+			sizeof(accept_addr),
+			&accept_overlapped) == WSA_IO_PENDING);
 
 
 		client_socket = create_socket();
@@ -525,8 +533,9 @@ TEST_CASE("WSA RIO", "[windows][wsa][rio]")
 		OVERLAPPED connect_overlapped = {};
 		REQUIRE(wsa_connect_ex(
 			client_socket.get(),
-			addr,
-			connect_overlapped) == WSA_IO_PENDING);
+			addr.addr,
+			addr.size,
+			&connect_overlapped) == WSA_IO_PENDING);
 
 		completion_storage<2> completions;
 		REQUIRE(completions.remove(completion_port, 1) == 1);

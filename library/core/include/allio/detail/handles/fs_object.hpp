@@ -312,10 +312,10 @@ struct fs_object_t : platform_object_t
 		{
 			vsm::result<Path> r(vsm::result_value);
 			vsm_try(size, _read_current_path(
-				//TODO: Move the get_mutable_buffer call into the any_path_buffer constructor.
-				any_path_buffer(detail::get_mutable_buffer(*r)),
+				//TODO: Move the get_mutable_range call into the any_path_buffer constructor.
+				any_path_buffer(detail::get_mutable_range(*r)),
 				vsm_forward(args)...));
-			vsm_assert(detail::get_mutable_buffer(*r).size() == size);
+			vsm_assert(detail::get_mutable_range(*r).size() == size);
 			return r;
 		}
 	};

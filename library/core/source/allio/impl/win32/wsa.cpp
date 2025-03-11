@@ -8,14 +8,7 @@
 #pragma comment(lib, "ws2_32.lib")
 
 using namespace allio;
-using namespace allio::posix;
 using namespace allio::win32;
-
-static_assert(
-	offsetof(wsa_accept_address_storage, local) == 0 &&
-	offsetof(wsa_accept_address_storage, remote) == sizeof(wsa_accept_address_storage::local),
-	"AcceptEx writes the local and remote addresses into the same buffer, one after the other.");
-
 
 #define allio_msw_functions(X) \
 	X(AcceptEx,                         FALSE,              WSAID_ACCEPTEX) \
@@ -265,20 +258,20 @@ allio_rio_functions(allio_x_entry)
 DWORD win32::wsa_accept_ex(
 	SOCKET const listen_socket,
 	SOCKET const accept_socket,
-	void* const addr_pair_storage,
-	DWORD const addr_storage_size,
-	OVERLAPPED& overlapped)
+	PVOID const address_storage,
+	DWORD const address_storage_size,
+	LPOVERLAPPED const overlapped)
 {
 	DWORD transferred = static_cast<DWORD>(-1);
 	if (!win32::AcceptEx(
 		listen_socket,
 		accept_socket,
-		addr_pair_storage,
+		address_storage,
 		/* dwReceiveDataLength: */ 0,
-		addr_storage_size,
-		addr_storage_size,
+		/* dwLocalAddressLength: */ 0,
+		address_storage_size,
 		&transferred,
-		&overlapped))
+		overlapped))
 	{
 		return static_cast<DWORD>(WSAGetLastError());
 	}
@@ -288,18 +281,19 @@ DWORD win32::wsa_accept_ex(
 
 DWORD win32::wsa_connect_ex(
 	SOCKET const socket,
-	sockaddr_view const addr,
-	OVERLAPPED& overlapped)
+	sockaddr const* address,
+	posix::socket_address_size_type const address_size,
+	LPOVERLAPPED const overlapped)
 {
 	DWORD transferred = static_cast<DWORD>(-1);
 	if (!win32::ConnectEx(
 		socket,
-		addr.addr,
-		addr.size,
+		address,
+		address_size,
 		/* lpSendBuffer: */ nullptr,
 		/* dwSendDataLength: */ 0,
 		&transferred,
-		&overlapped))
+		overlapped))
 	{
 		return static_cast<DWORD>(WSAGetLastError());
 	}
@@ -320,7 +314,7 @@ static DWORD wsa_send_msg(
 		/* dwFlags: */ 0,
 		transferred,
 		overlapped,
-		/* lpCompletionRoutine: */ nullptr) == socket_error_value)
+		/* lpCompletionRoutine: */ nullptr) == SOCKET_ERROR)
 	{
 		return static_cast<DWORD>(WSAGetLastError());
 	}
@@ -338,7 +332,7 @@ static DWORD wsa_recv_msg(
 		message,
 		transferred,
 		overlapped,
-		/* lpCompletionRoutine: */ nullptr) == socket_error_value)
+		/* lpCompletionRoutine: */ nullptr) == SOCKET_ERROR)
 	{
 		return static_cast<DWORD>(WSAGetLastError());
 	}

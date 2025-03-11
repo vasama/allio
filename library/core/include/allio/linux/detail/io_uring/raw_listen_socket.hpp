@@ -39,9 +39,9 @@ struct async_operation<io_uring_multiplexer, raw_listen_socket_t, accept_t>
 	using C = async_connector_t<M, raw_listen_socket_t> const;
 	using S = async_operation_t<M, raw_listen_socket_t, accept_t>;
 	using A = io_parameters_t<raw_listen_socket_t, accept_t>;
-	using R = accept_result<basic_attached_handle<
+	using R = basic_attached_handle<
 		raw_listen_socket_t::socket_object_type,
-		basic_multiplexer_handle<M>>>;
+		basic_multiplexer_handle<M>>;
 
 	int32_t addr_size;
 

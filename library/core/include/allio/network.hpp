@@ -1,7 +1,6 @@
 #pragma once
 
 #include <allio/any_path.hpp>
-#include <allio/detail/aligned_storage_provider.hpp>
 #include <allio/detail/mutable_buffer.hpp>
 #include <allio/detail/parameters.hpp>
 
@@ -19,6 +18,7 @@
 #include <compare>
 #include <concepts>
 #include <optional>
+#include <ranges>
 #include <string_view>
 
 #include <cstdint>
@@ -251,7 +251,17 @@ public:
 };
 
 
+namespace detail {
+
 inline constexpr size_t platform_endpoint_alignment = 4;
+
+template<typename T>
+concept _platform_endpoint = requires
+{
+	typename vsm::remove_cvref_t<T>::is_platform_endpoint;
+};
+
+} // namespace detail
 
 class platform_endpoint_view
 {
@@ -259,6 +269,8 @@ class platform_endpoint_view
 	size_t m_size;
 
 public:
+	using is_platform_endpoint = void;
+
 	template<vsm::no_cvref_of<platform_endpoint_view> Range>
 		requires
 			std::ranges::contiguous_range<Range> &&
@@ -272,7 +284,8 @@ public:
 		: m_data(data)
 		, m_size(size)
 	{
-		vsm_assert(vsm::is_sufficiently_aligned<platform_endpoint_alignment>(data)); //PRECONDITION
+		vsm_assert(vsm::is_sufficiently_aligned<detail::platform_endpoint_alignment>(
+			data)); //PRECONDITION
 	}
 
 	[[nodiscard]] void const* data() const
@@ -368,6 +381,18 @@ public:
 	{
 	}
 
+	template<std::ranges::contiguous_range Range>
+		requires vsm::byte_type<std::ranges::range_value_t<Range>>
+	explicit(!detail::_platform_endpoint<Range>)
+	any_endpoint_view(Range&& range)
+		: any_endpoint_view(
+			std::ranges::data(range),
+			std::ranges::size(range),
+			make_kind_ctrl(platform_type))
+	{
+	}
+
+
 	[[nodiscard]] bool is_generic_endpoint() const
 	{
 		return m_ctrl >> size_bits > generic_type_offset;
@@ -434,7 +459,7 @@ public:
 		}
 
 		//TODO: Rename the error tag to be more generic, move out of detail.
-		return vsm_forward(visitor)(detail::string_length_out_of_range_t());
+		return vsm_forward(visitor)(std::error_code(error::invalid_argument));
 	}
 
 private:
@@ -457,134 +482,99 @@ private:
 };
 
 
-#if 0
-template<detail::resizable_container Container>
-	requires vsm::byte_type<typename Container::value_type>
-class basic_platform_endpoint
-{
-	Container m_container;
-
-public:
-
-private:
-	friend vsm::result<vsm::allocation> tag_invoke(
-		detail::get_storage_t,
-		basic_platform_endpoint& endpoint,
-		size_t const min_size,
-		size_t const max_size,
-		std::align_val_t const min_alignment)
-	{
-		
-	}
-};
-
-//TODO: Use custom default container type with small storage optimisation.
-class platform_endpoint = basic_platform_endpoint<std::vector<unsigned char>>;
-#endif
-
-
 namespace detail {
 
-class _platform_endpoint_buffer
+class platform_endpoint_container
 {
-protected:
-	size_t m_size;
+	// Enough to store any single socket address with an additional 16 bytes of space required by
+	// asynchronous accept on Windows.
+	static constexpr size_t storage_padding_size = vsm_os_win32 ? 16 : 0;
+	static constexpr size_t local_storage_size = 112 + storage_padding_size;
 
-	// The size of this buffer is enough to store any single socket address. Additionally on Windows
-	// it is enough for accepting connections on an ipv4 or ipv6 listen socket, but not on a local
-	// (unix) listen socket. Accepting a local connection on Windows using this type requires
-	// dynamic allocation.
-	alignas(platform_endpoint_alignment) std::byte m_data[120];
-
-
-	_platform_endpoint_buffer()
-		: m_size(sizeof(m_data))
+	size_t m_size = local_storage_size;
+	union
 	{
+		alignas(detail::platform_endpoint_alignment) std::byte m_data[local_storage_size];
+		std::byte* m_data_ptr;
+	};
+
+public:
+	using value_type                    = std::byte;
+	using size_type                     = size_t;
+	using difference_type               = ptrdiff_t;
+	using reference                     = value_type&;
+	using const_reference               = value_type const&;
+	using pointer                       = value_type*;
+	using const_pointer                 = value_type const*;
+	using iterator                      = value_type*;
+	using const_iterator                = value_type const*;
+
+	platform_endpoint_container() = default;
+
+	[[nodiscard]] bool empty() const
+	{
+		return false;
 	}
 
-	void set_dynamic_storage(void* const dynamic_storage)
+	[[nodiscard]] size_t size() const
 	{
-		std::memcpy(m_data, &dynamic_storage, sizeof(dynamic_storage));
+		return m_size;
 	}
 
-	[[nodiscard]] void* get_dynamic_storage() const
+	[[nodiscard]] std::byte* data()
 	{
-		void* dynamic_storage;
-		std::memcpy(&dynamic_storage, m_data, sizeof(dynamic_storage));
-		return dynamic_storage;
+		return m_size > local_storage_size ? m_data_ptr : m_data;
 	}
+
+	[[nodiscard]] std::byte const* data() const
+	{
+		return m_size > local_storage_size ? m_data_ptr : m_data;
+	}
+
+	[[nodiscard]] iterator begin()
+	{
+		return data();
+	}
+
+	[[nodiscard]] const_iterator begin() const
+	{
+		return data();
+	}
+
+	[[nodiscard]] iterator end()
+	{
+		return data() + m_size;
+	}
+
+	[[nodiscard]] const_iterator end() const
+	{
+		return data() + m_size;
+	}
+
+private:
+	[[nodiscard]] vsm::result<size_t> tag_invoke(
+		resize_container_t,
+		platform_endpoint_container& self,
+		size_t const min_size,
+		size_t const max_size)
+	{
+		return self._resize(min_size, max_size);
+	}
+
+	[[nodiscard]] vsm::result<size_t> _resize(size_t min_size, size_t max_size);
 };
 
 } // namespace detail
 
-template<typename Allocator>
-class basic_endpoint_storage final : detail::_platform_endpoint_buffer
+template<typename Container>
+class basic_platform_endpoint : public Container
 {
-	vsm_no_unique_address Allocator m_allocator;
-
 public:
-	basic_endpoint_storage()
-		requires std::is_default_constructible_v<Allocator> = default;
+	using is_platform_endpoint = void;
 
-	template<vsm::any_cvref_of<Allocator> AllocatorArgument>
-	explicit basic_endpoint_storage(AllocatorArgument&& allocator)
-		: m_allocator(allocator)
-	{
-	}
-
-	basic_endpoint_storage(basic_endpoint_storage const&) = delete;
-	basic_endpoint_storage& operator=(basic_endpoint_storage const&) = delete;
-
-	~basic_endpoint_storage()
-	{
-		if (m_size != sizeof(m_data))
-		{
-			m_allocator.deallocate(get_dynamic_storage(), m_size);
-		}
-	}
-
-
-	[[nodiscard]] vsm::result<void*> resize(size_t const size)
-	{
-		if (size > m_size)
-		{
-			vsm_try(storage, allocate(size));
-
-			if (m_size > sizeof(m_data))
-			{
-				m_allocator.deallocate(get_dynamic_storage(), m_size);
-			}
-
-			set_dynamic_storage(storage);
-			m_size = size;
-
-			return storage;
-		}
-
-		if (m_size > sizeof(m_data))
-		{
-			return get_dynamic_storage();
-		}
-
-		return m_data;
-	}
-
-private:
-	[[nodiscard]] vsm::result<void*> allocate(size_t const size) noexcept
-	{
-		vsm_except_try
-		{
-			return m_allocator.allocate(size);
-		}
-		vsm_except_catch (std::bad_alloc const&)
-		{
-			return vsm::unexpected(error::not_enough_memory);
-		}
-	}
+	using Container::Container;
 };
 
-using endpoint_storage = basic_endpoint_storage<std::allocator<std::byte>>;
-
-using any_endpoint_storage_provider = detail::any_aligned_storage_provider;
+using platform_endpoint = basic_platform_endpoint<detail::platform_endpoint_container>;
 
 } // namespace allio

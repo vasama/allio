@@ -161,7 +161,7 @@ vsm_configure(
 		source/allio/impl/win32/wsa.hpp
 
 		# Handles
-		source/allio/impl/posix/handles/raw_datagram_socket.cpp
+		source/allio/impl/win32/handles/raw_datagram_socket.cpp
 		source/allio/impl/win32/handles/directory.cpp
 		source/allio/impl/win32/handles/event.cpp
 		source/allio/impl/win32/handles/file.cpp

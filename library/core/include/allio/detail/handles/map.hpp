@@ -205,7 +205,7 @@ struct shared_native_handle
 				h,
 				no_parameters_t()));
 
-			detail::release_storage(
+			allio_release_storage(
 				static_cast<void*>(this),
 				sizeof(shared_native_handle),
 				alignof(shared_native_handle),

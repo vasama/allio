@@ -16,7 +16,6 @@ using H = native_handle<raw_listen_socket_t>;
 using C = async_connector_t<M, raw_listen_socket_t>;
 
 using socket_handle_type = basic_attached_handle<raw_socket_t, basic_multiplexer_handle<M>>;
-using accept_result_type = accept_result<socket_handle_type>;
 
 
 using listen_s = async_operation_t<M, raw_listen_socket_t, listen_t>;
@@ -73,7 +72,7 @@ void listen_s::cancel(M&, H const&, C const&, listen_s&)
 using accept_s = async_operation_t<M, raw_listen_socket_t, accept_t>;
 using accept_a = io_parameters_t<raw_listen_socket_t, accept_t>;
 
-static io_result<accept_result_type> _submit_accept(
+static io_result<socket_handle_type> _submit_accept(
 	M& m,
 	H const& h,
 	C const& c,
@@ -105,7 +104,7 @@ static io_result<accept_result_type> _submit_accept(
 	return vsm::unexpected(io_notify_status::submitted);
 }
 
-io_result<accept_result_type> accept_s::submit(
+io_result<socket_handle_type> accept_s::submit(
 	M& m,
 	H const& h,
 	C const& c,
@@ -120,7 +119,7 @@ io_result<accept_result_type> accept_s::submit(
 	return _submit_accept(m, h, c, s, a);
 }
 
-io_result<accept_result_type> accept_s::notify(
+io_result<socket_handle_type> accept_s::notify(
 	M& m,
 	H const& h,
 	C const& c,
@@ -142,26 +141,22 @@ io_result<accept_result_type> accept_s::notify(
 	socket_handle_type::connector_type socket_c;
 	vsm_try_void(m.attach_fd(socket.get(), socket_c));
 
-	return vsm_lazy(accept_result_type
-	{
-		socket_handle_type(
-			adopt_handle,
-			m,
-			native_handle<raw_socket_t>
+	return vsm_lazy(socket_handle_type(
+		adopt_handle,
+		m,
+		native_handle<raw_socket_t>
+		{
+			native_handle<platform_object_t>
 			{
-				native_handle<platform_object_t>
+				native_handle<object_t>
 				{
-					native_handle<object_t>
-					{
-						object_t::flags::not_null,
-					},
-					wrap_handle(socket.release()),
+					object_t::flags::not_null,
 				},
+				wrap_handle(socket.release()),
 			},
-			vsm_move(socket_c)
-		),
-		get_address(s.addr_storage).get_network_endpoint(),
-	});
+		},
+		vsm_move(socket_c)
+	));
 }
 
 void accept_s::cancel(M& m, H const& h, C const&, S& s)

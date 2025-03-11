@@ -44,6 +44,8 @@ std::string detail::error_category::message(int const code) const
 		return "The size of the provided buffer was insufficient.";
 	case error::maximum_capacity_exceeded:
 		return "The maximum capacity of the container was exceeded.";
+	case error::insufficient_alignment:
+		return "The minimum alignment requirements were not met.";
 
 	// Encoding
 	case error::unsupported_encoding:
@@ -141,6 +143,8 @@ std::error_condition detail::error_category::default_error_condition(int const c
 	case error::no_buffer_space:
 		return std::errc::no_buffer_space;
 	case error::maximum_capacity_exceeded:
+		break;
+	case error::insufficient_alignment:
 		break;
 
 	// Encoding

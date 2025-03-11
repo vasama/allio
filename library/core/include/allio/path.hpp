@@ -403,7 +403,7 @@ private:
 		return static_cast<vsm::copy_cvref_t<Self&&, string_type>>(self);
 	}
 
-	friend string_type& tag_invoke(detail::get_mutable_buffer_t, basic_path_adaptor& self)
+	friend string_type& tag_invoke(detail::get_mutable_range_t, basic_path_adaptor& self)
 	{
 		return static_cast<string_type&>(self);
 	}
