@@ -18,10 +18,13 @@ using namespace allio::win32;
 static constexpr fs_size max_file_extent =
 	static_cast<fs_size>(std::numeric_limits<LONGLONG>::max());
 
-template<auto const& Syscall>
+template<vsm::any_cv_of<std::byte> T>
+static auto is_read_buffer(io_buffers<T> const&) -> std::bool_constant<vsm::non_cv<T>>;
+
+template<auto const& Syscall, typename Arguments>
 static vsm::result<void> do_byte_io_2(
 	native_handle<platform_object_t> const& h,
-	auto const& a,
+	Arguments const& a,
 	size_t& transferred)
 {
 	static constexpr bool is_random_access = requires { a.offset; };
@@ -101,6 +104,16 @@ static vsm::result<void> do_byte_io_2(
 
 			if (!is_kernel_success(status))
 			{
+				if constexpr (decltype(is_read_buffer(a.buffers))::value)
+				{
+					if (status == STATUS_PIPE_BROKEN)
+					{
+						// For uniformity between Windows and POSIX, broken pipe on read is
+						// transformed into end_of_stream.
+						return vsm::unexpected(allio_error(error::end_of_stream));
+					}
+				}
+
 				return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 			}
 

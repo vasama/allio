@@ -15,6 +15,9 @@ namespace {
 static constexpr fs_size max_file_extent =
 	static_cast<fs_size>(std::numeric_limits<LONGLONG>::max());
 
+template<vsm::any_cv_of<std::byte> T>
+static auto is_read_buffer(io_buffers<T> const&) -> std::bool_constant<vsm::non_cv<T>>;
+
 template<auto const& Syscall>
 class iocp_byte_io
 {
@@ -214,6 +217,16 @@ private:
 
 				if (!NT_SUCCESS(status))
 				{
+					if constexpr (decltype(is_read_buffer(a.buffers))::value)
+					{
+						if (status == STATUS_PIPE_BROKEN)
+						{
+							// For uniformity between Windows and POSIX, broken pipe on read is
+							// transformed into end_of_stream.
+							return vsm::unexpected(allio_error(error::end_of_stream));
+						}
+					}
+
 					return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 				}
 
