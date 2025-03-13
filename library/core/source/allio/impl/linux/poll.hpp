@@ -14,7 +14,10 @@
 
 namespace allio::linux {
 
-inline vsm::result<short> poll(int const fd, short const events, deadline const deadline)
+[[nodiscard]] inline vsm::result<short> poll(
+	int const fd,
+	short const events,
+	deadline const deadline)
 {
 	vsm_assert(events != 0); //PRECONDITION
 

@@ -180,8 +180,9 @@ io_result<size_t> read_s::submit(
 	read_a const& a,
 	io_handler<M>& handler)
 {
-	io_extension_allocator extension = initialize_extension(s);
+	vsm_try(check_wsa_buffers_size<DWORD>(a.buffers));
 
+	io_extension_allocator extension = initialize_extension(s);
 	vsm_try(wsa_buffers, get_wsa_buffers(a.buffers, extension));
 
 	DWORD transferred;
@@ -200,7 +201,7 @@ io_result<size_t> read_s::submit(
 		if (win32::WSARecv(
 			posix::unwrap_socket(h.platform_handle),
 			const_cast<WSABUF*>(wsa_buffers.data()),
-			vsm::saturating(wsa_buffers.size()),
+			vsm::truncating(wsa_buffers.size()),
 			&transferred,
 			&flags,
 			&overlapped,
@@ -260,8 +261,9 @@ io_result<size_t> write_s::submit(
 	write_a const& a,
 	io_handler<M>& handler)
 {
-	io_extension_allocator extension = initialize_extension(s);
+	vsm_try(check_wsa_buffers_size<DWORD>(a.buffers));
 
+	io_extension_allocator extension = initialize_extension(s);
 	vsm_try(wsa_buffers, get_wsa_buffers(a.buffers, extension));
 
 	DWORD transferred;
@@ -279,7 +281,7 @@ io_result<size_t> write_s::submit(
 		if (win32::WSASend(
 			posix::unwrap_socket(h.platform_handle),
 			const_cast<WSABUF*>(wsa_buffers.data()),
-			vsm::saturating(wsa_buffers.size()),
+			vsm::truncating(wsa_buffers.size()),
 			&transferred,
 			/* dwFlags: */ 0,
 			&overlapped,

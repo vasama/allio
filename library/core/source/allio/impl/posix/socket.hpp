@@ -83,7 +83,7 @@ using socket_address_storage = inplace_storage_provider<basic_socket_address<soc
 	storage_provider_ref storage_provider);
 
 
-inline size_t get_max_socket_address_size(int const address_family)
+[[nodiscard]] inline size_t get_max_socket_address_size(int const address_family)
 {
 	switch (address_family)
 	{
@@ -101,14 +101,14 @@ inline size_t get_max_socket_address_size(int const address_family)
 	return 0;
 }
 
-inline size_t get_socket_address_size(sockaddr_un const& addr, size_t const size)
+[[nodiscard]] inline size_t get_socket_address_size(sockaddr_un const& addr, size_t const size)
 {
 	static constexpr size_t path_offset = offsetof(sockaddr_un, sun_path);
 	size_t const path_size = strnlen(addr.sun_path, size - path_offset);
 	return std::min(size, std::min(sizeof(sockaddr_un), path_offset + path_size + 1));
 }
 
-inline size_t get_socket_address_size(sockaddr const& addr, size_t const size)
+[[nodiscard]] inline size_t get_socket_address_size(sockaddr const& addr, size_t const size)
 {
 	vsm_assert(size >= offsetof(sockaddr, sa_family) + sizeof(addr.sa_family)); //PRECONDITION
 
@@ -129,7 +129,7 @@ inline size_t get_socket_address_size(sockaddr const& addr, size_t const size)
 	return 0;
 }
 
-inline vsm::result<int> get_address_family(network_address_kind const address_kind)
+[[nodiscard]] inline vsm::result<int> get_address_family(network_address_kind const address_kind)
 {
 	switch (address_kind)
 	{
@@ -147,7 +147,7 @@ inline vsm::result<int> get_address_family(network_address_kind const address_ki
 	}
 }
 
-inline network_address_kind get_address_kind(int const address_family)
+[[nodiscard]] inline network_address_kind get_address_kind(int const address_family)
 {
 	switch (address_family)
 	{
@@ -174,7 +174,7 @@ struct socket_with_flags
 	detail::handle_flags flags;
 };
 
-inline vsm::result<int> choose_protocol(int const address_family, int const type)
+[[nodiscard]] inline vsm::result<int> choose_protocol(int const address_family, int const type)
 {
 	switch (address_family)
 	{
@@ -199,13 +199,13 @@ inline vsm::result<int> choose_protocol(int const address_family, int const type
 }
 
 
-vsm::result<socket_with_flags> create_socket(
+[[nodiscard]] vsm::result<socket_with_flags> create_socket(
 	int address_family,
 	int type,
 	int protocol,
 	detail::io_flags flags);
 
-inline vsm::result<void> socket_bind(
+[[nodiscard]] inline vsm::result<void> socket_bind(
 	socket_type const socket,
 	sockaddr const* const addr,
 	socket_address_size_type const size)
@@ -217,38 +217,36 @@ inline vsm::result<void> socket_bind(
 	return {};
 }
 
-inline vsm::result<void> socket_bind(
+[[nodiscard]] inline vsm::result<void> socket_bind(
 	socket_type const socket,
 	socket_address_view const addr)
 {
 	return socket_bind(socket, addr.addr, addr.size);
 }
 
-vsm::result<void> socket_listen(
+[[nodiscard]] vsm::result<void> socket_listen(
 	socket_type socket,
 	socket_address_view addr,
 	uint32_t backlog);
 
-#if 0
-vsm::result<socket_with_flags> socket_accept(
+[[nodiscard]] vsm::result<socket_with_flags> socket_accept(
 	socket_type listen_socket,
 	sockaddr* addr,
 	socket_address_size_type* addr_size,
 	deadline deadline,
 	detail::io_flags flags);
-#endif
 
-vsm::result<void> socket_connect(
+[[nodiscard]] vsm::result<void> socket_connect(
 	socket_type socket,
 	socket_address_view addr,
 	deadline deadline);
 
-vsm::result<socket_poll_mask> socket_poll(
+[[nodiscard]] vsm::result<socket_poll_mask> socket_poll(
 	socket_type socket,
 	socket_poll_mask mask,
 	deadline deadline);
 
-inline vsm::result<void> socket_poll_or_timeout(
+[[nodiscard]] inline vsm::result<void> socket_poll_or_timeout(
 	socket_type const socket,
 	socket_poll_mask const mask,
 	deadline const deadline)
@@ -263,25 +261,25 @@ inline vsm::result<void> socket_poll_or_timeout(
 	return {};
 }
 
-vsm::result<void> socket_set_non_blocking(
+[[nodiscard]] vsm::result<void> socket_set_non_blocking(
 	socket_type socket,
 	bool non_blocking);
 
-vsm::result<size_t> socket_scatter_read(
+[[nodiscard]] vsm::result<size_t> socket_scatter_read(
 	socket_type socket,
 	detail::new_read_buffers buffers);
 
-vsm::result<size_t> socket_gather_write(
+[[nodiscard]] vsm::result<size_t> socket_gather_write(
 	socket_type socket,
 	detail::new_write_buffers buffers);
 
-vsm::result<size_t> socket_receive_from(
+[[nodiscard]] vsm::result<size_t> socket_receive_from(
 	socket_type socket,
 	sockaddr* addr,
 	socket_address_size_type* addr_size,
 	detail::new_read_buffers buffers);
 
-vsm::result<void> socket_send_to(
+[[nodiscard]] vsm::result<void> socket_send_to(
 	socket_type socket,
 	socket_address_view addr,
 	detail::new_write_buffers buffers);

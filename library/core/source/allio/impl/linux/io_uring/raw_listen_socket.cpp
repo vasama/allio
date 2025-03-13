@@ -1,6 +1,8 @@
 #include <allio/linux/detail/io_uring/raw_listen_socket.hpp>
 
-#include <allio/impl/linux/socket.hpp>
+#include <allio/impl/linux/error.hpp>
+#include <allio/impl/posix/handles/raw_common_socket.hpp>
+#include <allio/impl/posix/socket.hpp>
 #include <allio/linux/io_uring_record_context.hpp>
 
 #include <vsm/lazy.hpp>
@@ -25,11 +27,12 @@ io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s&, listen_a const& a,
 {
 	//TODO: In kernel 6.11 and above, use IORING_OP_SOCKET, IORING_OP_BIND, IORING_OP_LISTEN.
 
-	vsm_try(addr, posix::socket_address::make(a.endpoint));
-	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_STREAM));
+	posix::socket_address_storage address_storage;
+	vsm_try(addr, posix::get_socket_address(a.endpoint, address_storage));
+	vsm_try(protocol, posix::choose_protocol(addr.addr->sa_family, SOCK_STREAM));
 
 	vsm_try_bind((socket, flags), posix::create_socket(
-		addr.addr.sa_family,
+		addr.addr->sa_family,
 		SOCK_STREAM,
 		protocol,
 		a.flags));
@@ -50,7 +53,9 @@ io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s&, listen_a const& a,
 		{
 			native_handle<object_t>
 			{
-				raw_listen_socket_t::flags::not_null | flags,
+				raw_listen_socket_t::flags::not_null
+					| flags
+					| posix::set_address_family(addr.addr->sa_family),
 			},
 			posix::wrap_socket(socket.release()),
 		}
@@ -72,14 +77,57 @@ void listen_s::cancel(M&, H const&, C const&, listen_s&)
 using accept_s = async_operation_t<M, raw_listen_socket_t, accept_t>;
 using accept_a = io_parameters_t<raw_listen_socket_t, accept_t>;
 
-static io_result<socket_handle_type> _submit_accept(
+io_result<socket_handle_type> accept_s::submit(
 	M& m,
 	H const& h,
 	C const& c,
 	accept_s& s,
-	accept_a const& a)
+	accept_a const& a,
+	io_handler<M>& handler)
 {
-	posix::socket_address_union& addr = get_address(s.addr_storage);
+	static_assert(std::is_same_v<
+		decltype(accept_s::address_size),
+		posix::socket_address_size_type>);
+
+	int const address_family = posix::get_address_family(h.flags);
+	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
+
+	io_extension_allocator extension = initialize_extension(s);
+
+	void* address_storage = nullptr;
+	if (a.endpoint)
+	{
+		if (a.endpoint.is_platform_endpoint())
+		{
+			vsm_try_assign(address_storage, a.endpoint.resize(
+				max_address_size,
+				max_address_size,
+				std::align_val_t(alignof(posix::socket_address_union))));
+		}
+		else if (a.endpoint.kind() != posix::get_address_kind(address_family))
+		{
+			return vsm::unexpected(allio_error(error::invalid_argument));
+		}
+		else
+		{
+			//TODO: Implement typed endpoint buffer usage.
+			return vsm::unexpected(allio_error(error::unsupported_operation));
+		}
+	}
+
+	s.socket_flags = posix::set_address_family(address_family);
+	uint32_t accept_flags = 0;
+
+	if (vsm::no_flags(a.flags, io_flags::create_inheritable))
+	{
+		accept_flags |= SOCK_CLOEXEC;
+	}
+
+	if (vsm::any_flags(a.flags, io_flags::create_non_blocking))
+	{
+		accept_flags |= SOCK_NONBLOCK;
+		//TODO: Set non-blocking handle flag
+	}
 
 	io_uring_record_context ctx(m, a.deadline);
 	auto const [fd, fd_flags] = ctx.get_fd(c, h.platform_handle);
@@ -91,32 +139,17 @@ static io_result<socket_handle_type> _submit_accept(
 		.opcode = IORING_OP_ACCEPT,
 		.flags = fd_flags,
 		.fd = fd,
-		.addr2 = reinterpret_cast<uintptr_t>(&s.addr_size),
-		.addr = reinterpret_cast<uintptr_t>(&addr),
-		.accept_flags = vsm::any_flags(a.flags, io_flags::create_inheritable)
-			? static_cast<uint32_t>(0)
-			: static_cast<uint32_t>(SOCK_CLOEXEC),
+		.addr2 = reinterpret_cast<uintptr_t>(&s.address_size),
+		.addr = reinterpret_cast<uintptr_t>(address_storage),
+		.accept_flags = accept_flags,
 		.user_data = ctx.get_user_data(s),
 	};
 
+	s.set_handler(handler);
 	ctx.commit();
+	extension.release();
 
 	return vsm::unexpected(io_notify_status::submitted);
-}
-
-io_result<socket_handle_type> accept_s::submit(
-	M& m,
-	H const& h,
-	C const& c,
-	accept_s& s,
-	accept_a const& a,
-	io_handler<M>& handler)
-{
-	(void)new_address(s.addr_storage);
-	s.addr_size = sizeof(posix::socket_address_union);
-
-	s.set_handler(handler);
-	return _submit_accept(m, h, c, s, a);
 }
 
 io_result<socket_handle_type> accept_s::notify(
@@ -128,6 +161,8 @@ io_result<socket_handle_type> accept_s::notify(
 	io_handler<M>&,
 	M::io_status_type const status)
 {
+	io_extension_allocator const extension = acquire_extension(s);
+
 	// This operation uses no io_slots.
 	vsm_assert(status.slot == nullptr);
 
@@ -150,7 +185,7 @@ io_result<socket_handle_type> accept_s::notify(
 			{
 				native_handle<object_t>
 				{
-					object_t::flags::not_null,
+					object_t::flags::not_null | s.socket_flags,
 				},
 				wrap_handle(socket.release()),
 			},

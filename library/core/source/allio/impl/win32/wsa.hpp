@@ -147,7 +147,7 @@ vsm::result<void> check_wsa_buffers_size(detail::new_io_buffers_base const& buff
 
 template<vsm::any_cv_of<std::byte> T>
 [[nodiscard]] vsm::result<std::span<WSABUF const>> get_wsa_buffers(
-	detail::new_io_buffers<T> const buffers,
+	detail::new_io_buffers<T> const& buffers,
 	storage_provider_ref const storage_provider)
 {
 	vsm_try(wsa_buffers, get_io_buffers(buffers, wsa_buffer_layout, storage_provider));

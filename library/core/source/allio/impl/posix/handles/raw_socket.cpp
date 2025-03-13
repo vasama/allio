@@ -1,5 +1,6 @@
 #include <allio/detail/handles/raw_socket.hpp>
 
+#include <allio/impl/posix/handles/raw_common_socket.hpp>
 #include <allio/impl/posix/socket.hpp>
 
 using namespace allio;
@@ -10,11 +11,12 @@ vsm::result<void> raw_socket_t::connect(
 	native_handle<raw_socket_t>& h,
 	io_parameters_t<raw_socket_t, connect_t> const& a)
 {
-	vsm_try(addr, socket_address::make(a.endpoint));
-	vsm_try(protocol, choose_protocol(addr.addr.sa_family, SOCK_STREAM));
+	posix::socket_address_storage address_storage;
+	vsm_try(addr, posix::get_socket_address(a.endpoint, address_storage));
+	vsm_try(protocol, choose_protocol(addr.addr->sa_family, SOCK_STREAM));
 
 	vsm_try_bind((socket, flags), create_socket(
-		addr.addr.sa_family,
+		addr.addr->sa_family,
 		SOCK_STREAM,
 		protocol,
 		a.flags));
@@ -24,7 +26,7 @@ vsm::result<void> raw_socket_t::connect(
 		addr,
 		a.deadline));
 
-	h.flags = flags::not_null | flags;
+	h.flags = flags::not_null | set_address_family(addr.addr->sa_family) | flags;
 	h.platform_handle = wrap_socket(socket.release());
 
 	return {};

@@ -3,8 +3,6 @@
 #include <allio/detail/handles/raw_socket.hpp>
 #include <allio/linux/detail/io_uring/multiplexer.hpp>
 
-#include <allio/linux/detail/socket.hpp>
-
 namespace allio::detail {
 
 template<>
@@ -25,6 +23,7 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, connect_t>
 	using A = io_parameters_t<raw_socket_t, connect_t>;
 
 	unique_handle socket;
+	handle_flags socket_flags;
 	M::timeout timeout;
 
 	static io_result<void> submit(M& m, H& h, C& c, S& s, A const& args, io_handler<M>& handler);

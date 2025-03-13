@@ -73,7 +73,7 @@ consteval uint32_t encode_file_name(
 		beg + 1, // Skip over the unknown file entry.
 		end,
 		file_name,
-		[](std::string_view const lhs, std::string_view const rhs) -> bool
+		[&](std::string_view const lhs, std::string_view const rhs) -> bool
 		{
 			return compare(lhs, rhs) < 0;
 		});

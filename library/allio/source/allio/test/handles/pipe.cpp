@@ -32,13 +32,15 @@ TEST_CASE("Blocking pipe pair can send and receive data", "[pipe][blocking]")
 		r.read_some(as_read_buffer(r_buffer, 1), timeout),
 		std::system_error,
 		match_error(std::errc::timed_out));
-	
+
 	unsigned char w_buffer = 42;
 	REQUIRE(w.write_some(as_write_buffer(&w_buffer, 1)) == 1);
 
 	REQUIRE(r.read_some(as_read_buffer(r_buffer, 2)) == 1);
 	REQUIRE(r_buffer[0] == 42);
 }
+
+//TODO: Add greedy write tests.
 
 TEST_CASE("Blocking pipe pair can read data greedily", "[pipe][blocking]")
 {
@@ -95,8 +97,8 @@ TEST_CASE("Blocking pipe pair partial greedy read fails", "[pipe][blocking]")
 	}
 
 	auto const expected_error = timeout != deadline::never()
-		? std::errc::timed_out
-		: std::errc::broken_pipe;
+		? std::error_condition(std::errc::timed_out)
+		: make_error_condition(error::end_of_stream);
 
 	REQUIRE_THROWS_MATCHES(
 		r_future.get(),
@@ -134,5 +136,7 @@ TEST_CASE("Asynchronous pipe pair can send and receive data", "[pipe][senders][a
 		);
 	}());
 }
+
+//TODO: Add async greedy I/O tests.
 
 } // namespace

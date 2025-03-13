@@ -1,8 +1,10 @@
 #include <allio/linux/detail/io_uring/raw_datagram_socket.hpp>
 
 #include <allio/impl/linux/byte_io.hpp>
-#include <allio/impl/linux/socket.hpp>
+#include <allio/impl/posix/handles/raw_common_socket.hpp>
 #include <allio/linux/io_uring_record_context.hpp>
+
+#include <vsm/numeric.hpp>
 
 #include <allio/linux/detail/undef.i>
 
@@ -29,11 +31,12 @@ io_result<void> bind_s::submit(M& m, H& h, C& c, bind_s&, bind_a const& a, io_ha
 {
 	//TODO: In kernel 6.11 and above, use IORING_OP_SOCKET, IORING_OP_BIND.
 
-	vsm_try(addr, posix::socket_address::make(a.endpoint));
-	vsm_try(protocol, posix::choose_protocol(addr.addr.sa_family, SOCK_DGRAM));
+	posix::socket_address_storage address_storage;
+	vsm_try(addr, posix::get_socket_address(a.endpoint, address_storage));
+	vsm_try(protocol, posix::choose_protocol(addr.addr->sa_family, SOCK_DGRAM));
 
 	vsm_try_bind((socket, flags), posix::create_socket(
-		addr.addr.sa_family,
+		addr.addr->sa_family,
 		//TODO: Add raw protocol support
 		SOCK_DGRAM,
 		protocol,
@@ -48,7 +51,9 @@ io_result<void> bind_s::submit(M& m, H& h, C& c, bind_s&, bind_a const& a, io_ha
 		{
 			native_handle<object_t>
 			{
-				object_t::flags::not_null | flags,
+				object_t::flags::not_null
+					| flags
+					| posix::set_address_family(addr.addr->sa_family),
 			},
 			posix::wrap_socket(socket.release()),
 		}
@@ -67,117 +72,31 @@ void bind_s::cancel(M&, H const&, C const&, bind_s&)
 }
 
 
-//TODO: Detect the iovec layout automatically.
-static constexpr auto layout = new_io_buffer_layout::data_size;
-
-
-using recv_t = receive_from_t;
-using recv_s = async_operation_t<M, raw_datagram_socket_t, recv_t>;
-using recv_a = io_parameters_t<raw_datagram_socket_t, recv_t>;
-
-static io_result<size_t> _submit_recv(
-	M& m,
-	H const& h,
-	C const& c,
-	recv_s& s,
-	recv_a const& a)
-{
-	auto const buffers = get_io_buffers_unchecked(s.buffers_storage, a.buffers, layout);
-
-	msghdr& header = new_msghdr(s.header_storage) =
-	{
-		.msg_name = &get_address(s.address_storage).addr,
-		.msg_namelen = sizeof(posix::socket_address_union),
-		// msghdr::msg_iov seems to be non-const-correct.
-		.msg_iov = const_cast<iovec*>(reinterpret_cast<iovec const*>(buffers.buffers_data)),
-		.msg_iovlen = buffers.buffers_size,
-	};
-
-	io_uring_record_context ctx(m, a.deadline);
-	auto const [fd, fd_flags] = ctx.get_fd(c, h.platform_handle);
-
-	vsm_try_ptr(sqe, ctx.push());
-
-	sqe =
-	{
-		.opcode = IORING_OP_RECVMSG,
-		.flags = fd_flags,
-		.fd = fd,
-		.addr = reinterpret_cast<uintptr_t>(&header),
-		.user_data = ctx.get_user_data(s),
-	};
-
-	ctx.commit();
-
-	return vsm::unexpected(io_notify_status::submitted);
-}
-
-io_result<size_t> recv_s::submit(
-	M& m,
-	H const& h,
-	C const& c,
-	recv_s& s,
-	recv_a const& a,
-	io_handler<M>& handler)
-{
-	(void)new_address(s.address_storage);
-	vsm_try_discard(get_io_buffers(s.buffers_storage, a.buffers, layout));
-
-	s.set_handler(handler);
-	return _submit_recv(m, h, c, s, a);
-}
-
-io_result<size_t> recv_s::notify(
-	M& m,
-	H const& h,
-	C const& c,
-	recv_s& s,
-	recv_a const& a,
-	io_handler<M>&,
-	M::io_status_type const status)
-{
-	// This operation uses no io_slots.
-	vsm_assert(status.slot == nullptr);
-
-	if (status.result < 0)
-	{
-		return vsm::unexpected(allio_error(static_cast<system_error>(-status.result)));
-	}
-
-	posix::socket_address_union& addr = get_address(s.address_storage);
-
-	return io_result<size_t>(
-		vsm::result_value,
-		static_cast<size_t>(status.result),
-		addr.get_network_endpoint());
-}
-
-void recv_s::cancel(M&, H const& h, C const&, recv_s& s)
-{
-	//TODO: Cancel
-}
-
-
 using send_t = send_to_t;
 using send_s = async_operation_t<M, raw_datagram_socket_t, send_t>;
 using send_a = io_parameters_t<raw_datagram_socket_t, send_t>;
 
-static io_result<void> _submit_send(
+io_result<void> send_s::submit(
 	M& m,
 	H const& h,
 	C const& c,
 	send_s& s,
-	send_a const& a)
+	send_a const& a,
+	io_handler<M>& handler)
 {
-	auto const buffers = get_io_buffers_unchecked(s.buffers_storage, a.buffers, layout);
+	vsm_try_void(check_io_vectors_size(a.buffers));
+
+	io_extension_allocator extension = initialize_extension(s);
+	vsm_try(addr, posix::get_socket_address(a.endpoint, extension));
+	vsm_try(io_vectors, get_io_vectors(a.buffers, extension));
 
 	msghdr& header = new_msghdr(s.header_storage) =
 	{
-		.msg_name = &get_address(s.address_storage).addr,
-		.msg_namelen = s.addr_size,
+		.msg_name = const_cast<sockaddr*>(addr.addr),
+		.msg_namelen = addr.size,
 		// msghdr::msg_iov seems to be non-const-correct.
-		.msg_iov = const_cast<iovec*>(reinterpret_cast<iovec const*>(buffers.buffers_data)),
-		.msg_iovlen = buffers.buffers_size,
+		.msg_iov = const_cast<iovec*>(io_vectors.data()),
+		.msg_iovlen = io_vectors.size(),
 	};
 
 	io_uring_record_context ctx(m);
@@ -194,25 +113,11 @@ static io_result<void> _submit_send(
 		.user_data = ctx.get_user_data(s),
 	};
 
+	s.set_handler(handler);
 	ctx.commit();
+	extension.release();
 
 	return vsm::unexpected(io_notify_status::submitted);
-}
-
-io_result<void> send_s::submit(
-	M& m,
-	H const& h,
-	C const& c,
-	send_s& s,
-	send_a const& a,
-	io_handler<M>& handler)
-{
-	posix::socket_address_union& addr = new_address(s.address_storage);
-	vsm_try_assign(s.addr_size, posix::socket_address::make(a.endpoint, addr));
-	vsm_try_discard(get_io_buffers(s.buffers_storage, a.buffers, layout));
-
-	s.set_handler(handler);
-	return _submit_send(m, h, c, s, a);
 }
 
 io_result<void> send_s::notify(
@@ -224,6 +129,8 @@ io_result<void> send_s::notify(
 	io_handler<M>&,
 	M::io_status_type const status)
 {
+	io_extension_allocator const extension = acquire_extension(s);
+
 	// This operation uses no io_slots.
 	vsm_assert(status.slot == nullptr);
 
@@ -241,4 +148,104 @@ io_result<void> send_s::notify(
 void send_s::cancel(M& m, H const&, C const&, send_s& s)
 {
 	(void)m.cancel_io(s);
+}
+
+
+using recv_t = receive_from_t;
+using recv_s = async_operation_t<M, raw_datagram_socket_t, recv_t>;
+using recv_a = io_parameters_t<raw_datagram_socket_t, recv_t>;
+
+io_result<size_t> recv_s::submit(
+	M& m,
+	H const& h,
+	C const& c,
+	recv_s& s,
+	recv_a const& a,
+	io_handler<M>& handler)
+{
+	vsm_try_void(check_io_vectors_size(a.buffers));
+
+	int const address_family = posix::get_address_family(h.flags);
+	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
+
+	io_extension_allocator extension = initialize_extension(s);
+
+	void* address_storage = nullptr;
+	if (a.endpoint)
+	{
+		if (a.endpoint.is_platform_endpoint())
+		{
+			vsm_try_assign(address_storage, a.endpoint.resize(
+				max_address_size,
+				max_address_size,
+				std::align_val_t(alignof(posix::socket_address_union))));
+		}
+		else if (a.endpoint.kind() != posix::get_address_kind(address_family))
+		{
+			return vsm::unexpected(allio_error(error::invalid_argument));
+		}
+		else
+		{
+			//TODO: Implement typed endpoint buffer usage.
+			return vsm::unexpected(allio_error(error::unsupported_operation));
+		}
+	}
+
+	vsm_try(io_vectors, get_io_vectors(a.buffers, extension));
+
+	msghdr& header = new_msghdr(s.header_storage) =
+	{
+		.msg_name = address_storage,
+		.msg_namelen = vsm::truncating(max_address_size),
+		// msghdr::msg_iov seems to be non-const-correct.
+		.msg_iov = const_cast<iovec*>(io_vectors.data()),
+		.msg_iovlen = io_vectors.size(),
+	};
+
+	io_uring_record_context ctx(m, a.deadline);
+	auto const [fd, fd_flags] = ctx.get_fd(c, h.platform_handle);
+
+	vsm_try_ptr(sqe, ctx.push());
+
+	sqe =
+	{
+		.opcode = IORING_OP_RECVMSG,
+		.flags = fd_flags,
+		.fd = fd,
+		.addr = reinterpret_cast<uintptr_t>(&header),
+		.user_data = ctx.get_user_data(s),
+	};
+
+	s.set_handler(handler);
+	ctx.commit();
+	extension.release();
+
+	return vsm::unexpected(io_notify_status::submitted);
+}
+
+io_result<size_t> recv_s::notify(
+	M& m,
+	H const& h,
+	C const& c,
+	recv_s& s,
+	recv_a const& a,
+	io_handler<M>&,
+	M::io_status_type const status)
+{
+	io_extension_allocator const extension = acquire_extension(s);
+
+	// This operation uses no io_slots.
+	vsm_assert(status.slot == nullptr);
+
+	if (status.result < 0)
+	{
+		return vsm::unexpected(allio_error(static_cast<system_error>(-status.result)));
+	}
+
+	return static_cast<size_t>(status.result);
+}
+
+void recv_s::cancel(M&, H const& h, C const&, recv_s& s)
+{
+	//TODO: Cancel
 }

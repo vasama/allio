@@ -19,7 +19,6 @@ using M = iocp_multiplexer;
 using H = native_handle<raw_datagram_socket_t>;
 using C = async_connector_t<M, raw_datagram_socket_t>;
 
-using bind_t = raw_datagram_socket_t::bind_t;
 using bind_s = async_operation_t<M, raw_datagram_socket_t, bind_t>;
 using bind_a = io_parameters_t<raw_datagram_socket_t, bind_t>;
 
@@ -42,11 +41,21 @@ io_result<void> bind_s::submit(M& m, H& h, C& c, bind_s&, bind_a const& a, io_ha
 		a.flags));
 
 	vsm_try_void(socket_bind(socket.get(), addr));
-
 	vsm_try_void(m.attach_platform_handle(posix::wrap_socket(socket.get()), c));
 
-	h.flags = object_t::flags::not_null | posix::set_address_family(addr.addr->sa_family) | flags;
-	h.platform_handle = posix::wrap_socket(socket.release());
+	h = H
+	{
+		native_handle<platform_object_t>
+		{
+			native_handle<object_t>
+			{
+				object_t::flags::not_null
+					| flags
+					| posix::set_address_family(addr.addr->sa_family),
+			},
+			posix::wrap_socket(socket.release()),
+		},
+	};
 
 	return {};
 }
@@ -96,9 +105,10 @@ io_result<void> send_s::submit(
 	send_a const& a,
 	io_handler<M>& handler)
 {
+	vsm_try_void(check_wsa_buffers_size<DWORD>(a.buffers));
+
 	io_extension_allocator extension = initialize_extension(s);
 
-	vsm_try_void(check_wsa_buffers_size<DWORD>(a.buffers));
 	vsm_try(addr, posix::get_socket_address(a.endpoint, extension));
 	vsm_try(wsa_buffers, get_wsa_buffers(a.buffers, extension));
 
@@ -181,9 +191,14 @@ io_result<size_t> recv_s::submit(
 	recv_a const& a,
 	io_handler<M>& handler)
 {
-	io_extension_allocator extension = initialize_extension(s);
+	static_assert(std::is_same_v<
+		decltype(recv_s::address_size),
+		posix::socket_address_size_type>);
 
 	vsm_try_void(check_wsa_buffers_size<DWORD>(a.buffers));
+
+	io_extension_allocator extension = initialize_extension(s);
+
 	vsm_try(wsa_buffers, get_wsa_buffers(a.buffers, extension));
 
 	int const address_family = posix::get_address_family(h.flags);

@@ -24,7 +24,7 @@ vsm::result<void> raw_datagram_socket_t::bind(
 
 	vsm_try_void(posix::socket_bind(socket.get(), addr));
 
-	h.flags = flags::not_null | flags;
+	h.flags = flags::not_null | posix::set_address_family(addr.addr->sa_family) | flags;
 	h.platform_handle = posix::wrap_socket(socket.release());
 
 	return {};
@@ -72,7 +72,8 @@ vsm::result<size_t> raw_datagram_socket_t::receive_from(
 
 	vsm_try(transferred, posix::socket_receive_from(
 		socket,
-		posix::sockaddr_buffer(address_size, static_cast<sockaddr*>(address_storage)),
+		static_cast<sockaddr*>(address_storage),
+		&address_size,
 		a.buffers));
 
 	return transferred;

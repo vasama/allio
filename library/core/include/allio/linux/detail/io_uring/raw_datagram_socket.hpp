@@ -5,7 +5,6 @@
 
 #include <allio/detail/byte_io_buffers.hpp>
 #include <allio/detail/unique_socket.hpp>
-#include <allio/linux/detail/socket.hpp>
 
 namespace allio::detail {
 

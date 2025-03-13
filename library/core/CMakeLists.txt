@@ -283,9 +283,11 @@ vsm_configure(
 		source/allio/impl/posix/handles/raw_socket.cpp
 
 		# io_uring
+		source/allio/impl/linux/io_uring/byte_io.cpp
 		#source/allio/impl/linux/io_uring/process.cpp
 		source/allio/impl/linux/io_uring/event.cpp
 		source/allio/impl/linux/io_uring/multiplexer.cpp
+		source/allio/impl/linux/io_uring/pipe.cpp
 		source/allio/impl/linux/io_uring/raw_datagram_socket.cpp
 		source/allio/impl/linux/io_uring/raw_listen_socket.cpp
 		source/allio/impl/linux/io_uring/raw_socket.cpp

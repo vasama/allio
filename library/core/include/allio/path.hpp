@@ -9,12 +9,14 @@
 namespace allio {
 
 template<typename Char, typename String>
-class basic_path_adaptor : String
+class basic_path_adaptor
 {
 	static_assert(std::is_same_v<Char, typename String::value_type>);
 
 	using path_view_type = basic_path_view<Char>;
 	using string_view_type = std::basic_string_view<Char>;
+
+	String m_string;
 
 public:
 	using string_type = String;
@@ -67,63 +69,66 @@ public:
 	basic_path_adaptor() = default;
 
 	constexpr basic_path_adaptor(path_view_type const path)
-		: string_type(path.string())
+		: m_string(path.string())
 	{
 	}
 
 	explicit constexpr basic_path_adaptor(string_view_type const string)
-		: string_type(string)
+		: m_string(string)
 	{
 	}
 
 	explicit constexpr basic_path_adaptor(string_type&& string)
-		: string_type(static_cast<string_type&&>(string))
+		: m_string(static_cast<string_type&&>(string))
 	{
 	}
 
 	explicit constexpr basic_path_adaptor(string_type const& string)
-		: string_type(string)
+		: m_string(string)
 	{
 	}
 
-	constexpr basic_path_adaptor(Char const* const c_str)
-		: string_type(c_str)
+	explicit basic_path_adaptor(decltype(nullptr)) = delete;
+
+	explicit constexpr basic_path_adaptor(Char const* const c_str)
+		: m_string(c_str)
 	{
 	}
 
 	explicit constexpr basic_path_adaptor(Char const* const data, size_t const size)
-		: string_type(data, size)
+		: m_string(data, size)
 	{
 	}
 
 	template<std::input_iterator Iterator, std::sentinel_for<Iterator> Sentinel>
 	explicit constexpr basic_path_adaptor(Iterator const iterator, Sentinel const sentinel)
 		//requires std::is_same_v<std::iterator_value_t<Iterator>, Char>
-		: string_type(iterator, sentinel)
+		: m_string(iterator, sentinel)
 	{
 	}
 
 	template<std::ranges::input_range Range>
 	explicit constexpr basic_path_adaptor(Range&& range)
 		//requires std::is_same_v<std::ranges::range_value_t<Range>, Char>
-		: string_type(static_cast<Range&&>(range))
+		: m_string(static_cast<Range&&>(range))
 	{
 	}
 
-	basic_path_adaptor(decltype(nullptr)) = delete;
 
-
-	using string_type::empty;
+	[[nodiscard]] constexpr bool empty() const
+	{
+		return m_string.empty();
+	}
 
 
 	[[nodiscard]] constexpr string_type& string()
 	{
-		return *this;
+		return m_string;
 	}
 
 	[[nodiscard]] constexpr string_type const& string() const
 	{
-		return *this;
+		return m_string;
 	}
 
 
@@ -191,7 +196,7 @@ public:
 
 	constexpr void remove_trailing_separators()
 	{
-		string_type::resize(without_trailing_separators().string().size());
+		m_string.resize(without_trailing_separators().string().size());
 	}
 
 
@@ -218,7 +223,7 @@ public:
 	[[nodiscard]] constexpr basic_path_adaptor lexically_normal() const
 	{
 		basic_path_adaptor result;
-		result.resize(string_type::size()); //TODO: use resize_for_overwrite or equivalent.
+		result.resize(m_string.size()); //TODO: use resize_for_overwrite or equivalent.
 		result.resize(copy_lexically_normal(result.data()).string().size());
 		return result;
 	}
@@ -226,7 +231,7 @@ public:
 	[[nodiscard]] constexpr basic_path_adaptor lexically_relative(path_view_type const base) const
 	{
 		basic_path_adaptor result;
-		result.resize(string_type::size()); //TODO: use resize_for_overwrite or equivalent.
+		result.resize(m_string.size()); //TODO: use resize_for_overwrite or equivalent.
 		result.resize(copy_lexically_relative(base, result.data()).string().size());
 		return result;
 	}
@@ -234,7 +239,7 @@ public:
 	[[nodiscard]] constexpr basic_path_adaptor lexically_proximate(path_view_type const base) const
 	{
 		basic_path_adaptor result;
-		result.resize(string_type::size()); //TODO: use resize_for_overwrite or equivalent.
+		result.resize(m_string.size()); //TODO: use resize_for_overwrite or equivalent.
 		result.resize(copy_lexically_proximate(base, result.data()).string().size());
 		return result;
 	}
@@ -384,7 +389,7 @@ public:
 private:
 	constexpr path_view_type view() const
 	{
-		return path_view_type(string_type::data(), string_type::size());
+		return path_view_type(m_string.data(), m_string.size());
 	}
 
 	static constexpr basic_path_adaptor combine(path_view_type const lhs, path_view_type const rhs)
@@ -400,12 +405,12 @@ private:
 	template<vsm::any_cvref_of<basic_path_adaptor> Self>
 	friend string_view_type tag_invoke(get_path_string_t, Self&& self)
 	{
-		return static_cast<vsm::copy_cvref_t<Self&&, string_type>>(self);
+		return static_cast<vsm::copy_cvref_t<Self&&, string_type>>(self.m_string);
 	}
 
 	friend string_type& tag_invoke(detail::get_mutable_range_t, basic_path_adaptor& self)
 	{
-		return static_cast<string_type&>(self);
+		return static_cast<string_type&>(self.m_string);
 	}
 };
 

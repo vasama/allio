@@ -6,6 +6,17 @@
 
 namespace allio::posix {
 
+#if 0
+[[nodiscard]] inline detail::handle_flags get_address_family_flags(detail::handle_flags const flags)
+{
+	constexpr detail::handle_flags address_family_flags =
+		detail::handle_flags(detail::raw_common_socket_base_t::flags::address_family_0) |
+		detail::handle_flags(detail::raw_common_socket_base_t::flags::address_family_1);
+
+	return flags & address_family_flags;
+}
+#endif
+
 [[nodiscard]] inline detail::handle_flags set_address_family(int const address_family)
 {
 	detail::handle_flags flags = detail::handle_flags::none;
@@ -14,6 +25,7 @@ namespace allio::posix {
 	{
 	default:
 		vsm_assert(address_family == AF_UNSPEC); //PRECONDITION
+		break;
 
 	case AF_UNIX:
 		flags |= detail::raw_common_socket_base_t::flags::address_family_0;

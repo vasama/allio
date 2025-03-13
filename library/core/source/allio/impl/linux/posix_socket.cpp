@@ -1,16 +1,19 @@
 #include <allio/impl/posix/socket.hpp>
 
 #include <allio/impl/linux/timeout.hpp>
+#include <allio/impl/linux/byte_io.hpp>
 
 #include <vsm/lazy.hpp>
 #include <vsm/numeric.hpp>
 
 #include <fcntl.h>
-#include <sys/uio.h>
+
+#include <allio/linux/detail/undef.i>
 
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::posix;
+using namespace allio::linux;
 
 vsm::result<socket_with_flags> posix::create_socket(
 	int const address_family,
@@ -41,7 +44,8 @@ vsm::result<socket_with_flags> posix::create_socket(
 
 vsm::result<socket_with_flags> posix::socket_accept(
 	socket_type const listen_socket,
-	socket_address& addr,
+	sockaddr* const addr,
+	socket_address_size_type* const addr_size,
 	deadline const deadline,
 	io_flags const flags)
 {
@@ -62,12 +66,10 @@ vsm::result<socket_with_flags> posix::socket_accept(
 		accept_flags |= SOCK_NONBLOCK;
 	}
 
-	//TODO: Set this from the outside.
-	addr.size = sizeof(socket_address_union);
 	socket_type const socket = accept4(
 		listen_socket,
-		&addr.addr,
-		&addr.size,
+		addr,
+		addr_size,
 		accept_flags);
 
 	if (socket == socket_error_value)
@@ -144,8 +146,8 @@ vsm::result<size_t> posix::socket_scatter_read(
 	socket_type const socket,
 	new_read_buffers const buffers)
 {
-	new_io_buffers_storage storage;
-	vsm_try(transformed_buffers, get_io_buffers(storage, buffers, layout));
+	dynamic_io_vector_storage storage;
+	vsm_try(transformed_buffers, get_io_buffers(buffers, layout, storage));
 
 	ssize_t const r = readv(
 		socket,
@@ -169,8 +171,8 @@ vsm::result<size_t> posix::socket_gather_write(
 	socket_type const socket,
 	new_write_buffers const buffers)
 {
-	new_io_buffers_storage storage;
-	vsm_try(transformed_buffers, get_io_buffers(storage, buffers, layout));
+	dynamic_io_vector_storage storage;
+	vsm_try(transformed_buffers, get_io_buffers(buffers, layout, storage));
 
 	ssize_t const r = writev(
 		socket,
@@ -187,17 +189,18 @@ vsm::result<size_t> posix::socket_gather_write(
 
 vsm::result<size_t> posix::socket_receive_from(
 	socket_type const socket,
-	socket_address& addr,
+	sockaddr* const addr,
+	socket_address_size_type* const addr_size,
 	new_read_buffers const buffers)
 {
-	new_io_buffers_storage storage;
-	vsm_try(transformed_buffers, get_io_buffers(storage, buffers, layout));
+	dynamic_io_vector_storage storage;
+	vsm_try(transformed_buffers, get_io_buffers(buffers, layout, storage));
 	auto const vectors = reinterpret_cast<iovec const*>(transformed_buffers.buffers_data);
 
 	msghdr message =
 	{
-		.msg_name = &addr.addr,
-		.msg_namelen = sizeof(socket_address_union),
+		.msg_name = addr,
+		.msg_namelen = *addr_size,
 		// msghdr::msg_iov seems to be non-const-correct.
 		.msg_iov = const_cast<iovec*>(vectors),
 		.msg_iovlen = transformed_buffers.buffers_size,
@@ -213,22 +216,22 @@ vsm::result<size_t> posix::socket_receive_from(
 		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
 
-	addr.size = message.msg_namelen;
+	*addr_size = message.msg_namelen;
 	return static_cast<size_t>(r);
 }
 
 vsm::result<void> posix::socket_send_to(
 	socket_type const socket,
-	socket_address const& addr,
+	socket_address_view const addr,
 	new_write_buffers const buffers)
 {
-	new_io_buffers_storage storage;
-	vsm_try(transformed_buffers, get_io_buffers(storage, buffers, layout));
+	dynamic_io_vector_storage storage;
+	vsm_try(transformed_buffers, get_io_buffers(buffers, layout, storage));
 	auto const vectors = reinterpret_cast<iovec const*>(transformed_buffers.buffers_data);
 
 	msghdr const message =
 	{
-		.msg_name = &const_cast<socket_address&>(addr).addr,
+		.msg_name = const_cast<sockaddr*>(addr.addr),
 		.msg_namelen = addr.size,
 		// msghdr::msg_iov seems to be non-const-correct.
 		.msg_iov = const_cast<iovec*>(vectors),
