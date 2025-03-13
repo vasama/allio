@@ -128,12 +128,12 @@ vsm::result<wsa_buffer_span> make_wsa_buffers(
 }
 #endif
 
-inline constexpr detail::new_io_buffer_layout wsa_buffer_layout =
-	detail::new_io_buffer_layout::size_data |
-	detail::new_io_buffer_layout::size_le32;
+inline constexpr detail::io_buffer_layout wsa_buffer_layout =
+	detail::io_buffer_layout::size_data |
+	detail::io_buffer_layout::size_le32;
 
 template<std::unsigned_integral SizeT>
-vsm::result<void> check_wsa_buffers_size(detail::new_io_buffers_base const& buffers)
+vsm::result<void> check_wsa_buffers_size(detail::io_buffers_base const& buffers)
 {
 	if (buffers.was_truncated() ||
 		buffers.get_buffers_size() > std::numeric_limits<SizeT>::max())
@@ -147,7 +147,7 @@ vsm::result<void> check_wsa_buffers_size(detail::new_io_buffers_base const& buff
 
 template<vsm::any_cv_of<std::byte> T>
 [[nodiscard]] vsm::result<std::span<WSABUF const>> get_wsa_buffers(
-	detail::new_io_buffers<T> const& buffers,
+	detail::io_buffers<T> const& buffers,
 	storage_provider_ref const storage_provider)
 {
 	vsm_try(wsa_buffers, get_io_buffers(buffers, wsa_buffer_layout, storage_provider));

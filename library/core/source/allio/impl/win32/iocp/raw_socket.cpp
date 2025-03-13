@@ -180,7 +180,7 @@ io_result<size_t> read_s::submit(
 	read_a const& a,
 	io_handler<M>& handler)
 {
-	vsm_try(check_wsa_buffers_size<DWORD>(a.buffers));
+	vsm_try_void(check_wsa_buffers_size<DWORD>(a.buffers));
 
 	io_extension_allocator extension = initialize_extension(s);
 	vsm_try(wsa_buffers, get_wsa_buffers(a.buffers, extension));
@@ -261,7 +261,7 @@ io_result<size_t> write_s::submit(
 	write_a const& a,
 	io_handler<M>& handler)
 {
-	vsm_try(check_wsa_buffers_size<DWORD>(a.buffers));
+	vsm_try_void(check_wsa_buffers_size<DWORD>(a.buffers));
 
 	io_extension_allocator extension = initialize_extension(s);
 	vsm_try(wsa_buffers, get_wsa_buffers(a.buffers, extension));

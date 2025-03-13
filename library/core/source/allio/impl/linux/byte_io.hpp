@@ -13,19 +13,19 @@
 
 namespace allio::linux {
 
-static_assert(sizeof(detail::new_io_buffer) == sizeof(iovec));
-static_assert(alignof(detail::new_io_buffer) == alignof(iovec));
+static_assert(sizeof(detail::io_buffer) == sizeof(iovec));
+static_assert(alignof(detail::io_buffer) == alignof(iovec));
 
-static_assert(sizeof(detail::new_io_buffer::m0) == sizeof(iovec::iov_base));
-static_assert(sizeof(detail::new_io_buffer::m1) == sizeof(iovec::iov_len));
+static_assert(sizeof(detail::io_buffer::m0) == sizeof(iovec::iov_base));
+static_assert(sizeof(detail::io_buffer::m1) == sizeof(iovec::iov_len));
 
-static_assert(offsetof(detail::new_io_buffer, m0) == offsetof(iovec, iov_base));
-static_assert(offsetof(detail::new_io_buffer, m1) == offsetof(iovec, iov_len));
+static_assert(offsetof(detail::io_buffer, m0) == offsetof(iovec, iov_base));
+static_assert(offsetof(detail::io_buffer, m1) == offsetof(iovec, iov_len));
 
 //TODO: Detect the iovec layout automatically.
-static constexpr auto io_vector_layout = detail::new_io_buffer_layout::data_size;
+static constexpr auto io_vector_layout = detail::io_buffer_layout::data_size;
 
-inline vsm::result<void> check_io_vectors_size(detail::new_io_buffers_base const& buffers)
+inline vsm::result<void> check_io_vectors_size(detail::io_buffers_base const& buffers)
 {
 	if (buffers.was_truncated() || buffers.get_buffers_size() > IOV_MAX)
 	{
@@ -38,7 +38,7 @@ inline vsm::result<void> check_io_vectors_size(detail::new_io_buffers_base const
 
 template<vsm::any_cv_of<std::byte> T>
 [[nodiscard]] vsm::result<std::span<iovec const>> get_io_vectors(
-	detail::new_io_buffers<T> const& buffers,
+	detail::io_buffers<T> const& buffers,
 	storage_provider_ref const storage_provider)
 {
 	vsm_try(io_vectors, get_io_buffers(buffers, io_vector_layout, storage_provider));

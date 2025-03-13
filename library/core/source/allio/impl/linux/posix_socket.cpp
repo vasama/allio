@@ -140,7 +140,7 @@ vsm::result<void> posix::socket_set_non_blocking(
 }
 
 //TODO: Detect the iovec layout automatically.
-static constexpr auto layout = new_io_buffer_layout::data_size;
+static constexpr auto layout = io_buffer_layout::data_size;
 
 vsm::result<size_t> posix::socket_scatter_read(
 	socket_type const socket,

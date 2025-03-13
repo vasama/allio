@@ -20,8 +20,8 @@ class iocp_byte_io
 {
 	iocp_byte_io_state& m_state;
 
-	new_io_buffer_layout m_buffers_layout;
-	new_io_buffer_range m_buffers;
+	io_buffer_layout m_buffers_layout;
+	io_buffer_range m_buffers;
 
 public:
 	explicit iocp_byte_io(iocp_byte_io_state& state)

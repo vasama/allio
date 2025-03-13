@@ -51,8 +51,8 @@ static vsm::result<void> do_byte_io_2(
 		p_offset_integer = &offset_integer;
 	}
 
-	new_io_buffer_layout const layout = a.buffers.get_layout();
-	for (new_io_buffer const io_buffer : read_io_buffers(a.buffers.get_buffers()))
+	io_buffer_layout const layout = a.buffers.get_layout();
+	for (io_buffer const io_buffer : read_io_buffers(a.buffers.get_buffers()))
 	{
 		auto buffer = get_io_buffer_span<std::byte const>(io_buffer, layout);
 

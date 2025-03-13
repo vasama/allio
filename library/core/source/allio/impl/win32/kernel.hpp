@@ -31,6 +31,7 @@ inline constexpr NTSTATUS STATUS_NOT_SUPPORTED                  = static_cast<NT
 inline constexpr NTSTATUS STATUS_PROCESS_IS_TERMINATING         = static_cast<NTSTATUS>(0xC000010A);
 inline constexpr NTSTATUS STATUS_CANCELLED                      = static_cast<NTSTATUS>(0xC0000120);
 inline constexpr NTSTATUS STATUS_INVALID_ADDRESS                = static_cast<NTSTATUS>(0xC0000141);
+inline constexpr NTSTATUS STATUS_PIPE_BROKEN                    = static_cast<NTSTATUS>(0xC000014B);
 inline constexpr NTSTATUS STATUS_NOT_FOUND                      = static_cast<NTSTATUS>(0xC0000225);
 inline constexpr NTSTATUS STATUS_HANDLE_NOT_CLOSABLE            = static_cast<NTSTATUS>(0xC0000325);
 

@@ -12,24 +12,24 @@ using namespace allio::detail;
 
 namespace {
 
-template<new_io_buffer_layout Layout>
-using layout_constant = std::integral_constant<new_io_buffer_layout, Layout>;
+template<io_buffer_layout Layout>
+using layout_constant = std::integral_constant<io_buffer_layout, Layout>;
 
-template<new_io_buffer_layout... Layouts>
+template<io_buffer_layout... Layouts>
 static auto with_constant_layouts(auto const& lambda)
 {
 	return lambda(layout_constant<Layouts>()...);
 }
 
-template<new_io_buffer_layout... Layouts, std::same_as<new_io_buffer_layout>... Rest>
+template<io_buffer_layout... Layouts, std::same_as<io_buffer_layout>... Rest>
 static auto with_constant_layouts(
 	auto const& lambda,
-	new_io_buffer_layout const layout,
+	io_buffer_layout const layout,
 	Rest const... rest)
 {
 	//TODO: Eliminate extra branches on platforms where size_data and size_le32 are not relevant.
 
-	using enum new_io_buffer_layout;
+	using enum io_buffer_layout;
 
 	switch (layout)
 	{
@@ -59,17 +59,17 @@ static auto with_constant_layouts(
 }
 
 
-static constexpr bool is_size_data(new_io_buffer_layout const layout)
+static constexpr bool is_size_data(io_buffer_layout const layout)
 {
-	return vsm::any_flags(layout, new_io_buffer_layout::size_data);
+	return vsm::any_flags(layout, io_buffer_layout::size_data);
 }
 
-static constexpr bool is_size_le32(new_io_buffer_layout const layout)
+static constexpr bool is_size_le32(io_buffer_layout const layout)
 {
-	return vsm::any_flags(layout, new_io_buffer_layout::size_le32);
+	return vsm::any_flags(layout, io_buffer_layout::size_le32);
 }
 
-template<new_io_buffer_layout Layout, vsm::any_cv_of<new_io_buffer> Buffer>
+template<io_buffer_layout Layout, vsm::any_cv_of<io_buffer> Buffer>
 static vsm::copy_cv_t<Buffer, size_t>& get_size(Buffer& buffer)
 {
 	if constexpr (is_size_data(Layout))
@@ -82,25 +82,25 @@ static vsm::copy_cv_t<Buffer, size_t>& get_size(Buffer& buffer)
 	}
 }
 
-static new_io_buffer read_io_buffer(void const* const src_buffer)
+static io_buffer read_io_buffer(void const* const src_buffer)
 {
-	new_io_buffer dst_buffer;
-	std::memcpy(&dst_buffer, src_buffer, sizeof(new_io_buffer));
+	io_buffer dst_buffer;
+	std::memcpy(&dst_buffer, src_buffer, sizeof(io_buffer));
 	return dst_buffer;
 }
 
-template<new_io_buffer_layout SrcLayout, new_io_buffer_layout DstLayout>
+template<io_buffer_layout SrcLayout, io_buffer_layout DstLayout>
 	requires (SrcLayout == DstLayout)
 static vsm::result<void const*> swizzle_buffers_1(
-	new_io_buffers_view const src_buffers,
+	io_buffers_view const src_buffers,
 	storage_provider_ref const storage_provider)
 {
 	vsm_unreachable();
 }
 
-template<new_io_buffer_layout SrcLayout, new_io_buffer_layout DstLayout>
+template<io_buffer_layout SrcLayout, io_buffer_layout DstLayout>
 static vsm::result<void const*> swizzle_buffers_1(
-	new_io_buffers_view const src_buffers,
+	io_buffers_view const src_buffers,
 	storage_provider_ref const storage_provider)
 {
 	static constexpr bool swizzle = is_size_data(SrcLayout) != is_size_data(DstLayout);
@@ -109,21 +109,21 @@ static vsm::result<void const*> swizzle_buffers_1(
 	auto src_buffers_data = static_cast<unsigned char const*>(src_buffers.buffers_data);
 	auto dst_buffers_data = src_buffers.buffers_data;
 
-	new_io_buffer* out_buffers_data;
+	io_buffer* out_buffers_data;
 	if constexpr (swizzle)
 	{
 		vsm_try(storage, storage_provider.get_storage(
-			src_buffers.buffers_size * sizeof(new_io_buffer),
-			std::align_val_t(alignof(new_io_buffer))));
+			src_buffers.buffers_size * sizeof(io_buffer),
+			std::align_val_t(alignof(io_buffer))));
 
-		out_buffers_data = static_cast<new_io_buffer*>(storage);
+		out_buffers_data = static_cast<io_buffer*>(storage);
 		dst_buffers_data = out_buffers_data;
 	}
 
 	for (size_t i = 0; i < src_buffers.buffers_size; ++i)
 	{
 		auto const src_buffer = read_io_buffer(src_buffers_data);
-		src_buffers_data += sizeof(new_io_buffer);
+		src_buffers_data += sizeof(io_buffer);
 
 		if constexpr (truncate)
 		{
@@ -136,7 +136,7 @@ static vsm::result<void const*> swizzle_buffers_1(
 
 		if constexpr (swizzle)
 		{
-			auto const dst_buffer = new (out_buffers_data++) new_io_buffer;
+			auto const dst_buffer = new (out_buffers_data++) io_buffer;
 
 			dst_buffer->m0 = src_buffer.m1;
 			dst_buffer->m1 = src_buffer.m0;
@@ -160,12 +160,12 @@ static vsm::result<void const*> swizzle_buffers_1(
 }
 
 static vsm::result<void const*> swizzle_buffers(
-	new_io_buffers_view const src_buffers,
-	new_io_buffer_layout const src_layout,
-	new_io_buffer_layout const dst_layout,
+	io_buffers_view const src_buffers,
+	io_buffer_layout const src_layout,
+	io_buffer_layout const dst_layout,
 	storage_provider_ref const storage_provider)
 {
-	auto const lambda = [&]<new_io_buffer_layout... Layouts>(
+	auto const lambda = [&]<io_buffer_layout... Layouts>(
 		layout_constant<Layouts>...) -> vsm::result<void const*>
 	{
 		if constexpr (vsm::all_same_v<layout_constant<Layouts>...>)
@@ -184,7 +184,7 @@ static vsm::result<void const*> swizzle_buffers(
 } // namespace
 
 #if 0
-detail::new_io_buffers_storage::~new_io_buffers_storage()
+detail::io_buffers_storage::~io_buffers_storage()
 {
 	static constexpr size_t data_offset = offsetof(storage_type, data);
 
@@ -192,22 +192,22 @@ detail::new_io_buffers_storage::~new_io_buffers_storage()
 	{
 		allio_release_storage(
 			m_storage,
-			data_offset + m_storage->size * sizeof(new_io_buffer),
+			data_offset + m_storage->size * sizeof(io_buffer),
 			alignof(storage_type),
 			allio_allocation_strategy_generic);
 	}
 }
 
-vsm::result<new_io_buffer*> detail::new_io_buffers_storage::resize(size_t const size) &
+vsm::result<io_buffer*> detail::io_buffers_storage::resize(size_t const size) &
 {
 	static constexpr size_t data_offset = offsetof(storage_type, data);
 
-	size_t const allocation_size = data_offset + size * sizeof(new_io_buffer);
+	size_t const allocation_size = data_offset + size * sizeof(io_buffer);
 
 	auto const allocation = allio_acquire_storage(
 		/* min_size: */ allocation_size,
 		/* max_size: */ allocation_size,
-		alignof(new_io_buffer),
+		alignof(io_buffer),
 		allio_allocation_strategy_generic);
 
 	if (allocation.storage == nullptr)
@@ -221,9 +221,9 @@ vsm::result<new_io_buffer*> detail::new_io_buffers_storage::resize(size_t const 
 }
 #endif
 
-vsm::result<new_io_buffers_view> allio::get_io_buffers(
-	new_io_buffers_base const& buffers,
-	new_io_buffer_layout const required_layout,
+vsm::result<io_buffers_view> allio::get_io_buffers(
+	io_buffers_base const& buffers,
+	io_buffer_layout const required_layout,
 	storage_provider_ref const storage_provider)
 {
 	auto const buffers_layout = buffers.get_layout();
@@ -240,18 +240,18 @@ vsm::result<new_io_buffers_view> allio::get_io_buffers(
 		required_layout,
 		storage_provider));
 
-	return new_io_buffers_view
+	return io_buffers_view
 	{
 		.buffers_data = swizzled_buffers,
 		.buffers_size = buffers_view.buffers_size,
 	};
 }
 
-bool allio::io_buffers_is_empty(new_io_buffers_base const buffers)
+bool allio::io_buffers_is_empty(io_buffers_base const buffers)
 {
-	auto const lambda = [&]<new_io_buffer_layout Layout>(layout_constant<Layout>)
+	auto const lambda = [&]<io_buffer_layout Layout>(layout_constant<Layout>)
 	{
-		for (new_io_buffer const buffer : read_io_buffers(buffers.get_buffers()))
+		for (io_buffer const buffer : read_io_buffers(buffers.get_buffers()))
 		{
 			if (get_size<Layout>(buffer) != 0)
 			{
@@ -264,12 +264,12 @@ bool allio::io_buffers_is_empty(new_io_buffers_base const buffers)
 	return with_constant_layouts(lambda, buffers.get_layout());
 }
 
-size_t allio::get_io_buffers_size(new_io_buffers_base const buffers)
+size_t allio::get_io_buffers_size(io_buffers_base const buffers)
 {
-	auto const lambda = [&]<new_io_buffer_layout Layout>(layout_constant<Layout>)
+	auto const lambda = [&]<io_buffer_layout Layout>(layout_constant<Layout>)
 	{
 		size_t size = 0;
-		for (new_io_buffer const buffer : read_io_buffers(buffers.get_buffers()))
+		for (io_buffer const buffer : read_io_buffers(buffers.get_buffers()))
 		{
 			size += get_size<Layout>(buffer);
 		}
