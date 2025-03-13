@@ -13,7 +13,7 @@ class any_endpoint_buffer
 {
 	static constexpr size_t min_static_alignment = 4;
 
-	enum class tag_t
+	enum class tag_type
 	{
 		byte_span,
 		container,
@@ -26,7 +26,7 @@ class any_endpoint_buffer
 		size_t max_size,
 		std::align_val_t min_alignment);
 
-	vsm::incomplete_tag_ptr<void, tag_t, tag_t::typed_ptr> m_data;
+	vsm::incomplete_tag_ptr<void, tag_type, tag_type::typed_ptr> m_data;
 
 	union
 	{
@@ -60,7 +60,7 @@ public:
 		requires vsm::byte_type<typename Container::value_type>
 	explicit(!_platform_endpoint<Container>)
 	any_endpoint_buffer(Container& container)
-		: m_data(std::addressof(container), tag_t::container)
+		: m_data(std::addressof(container), tag_type::container)
 		, m_resize_container(_resize_container<Container>)
 	{
 	}
@@ -72,14 +72,14 @@ public:
 
 	[[nodiscard]] network_address_kind kind() const
 	{
-		return m_data.tag() == tag_t::typed_ptr
+		return m_data.tag() == tag_type::typed_ptr
 			? m_kind
 			: network_address_kind::null;
 	}
 
 	[[nodiscard]] bool is_platform_endpoint() const
 	{
-		return m_data.tag() != tag_t::typed_ptr;
+		return m_data.tag() != tag_type::typed_ptr;
 	}
 
 	[[nodiscard]] vsm::result<vsm::allocation> resize(
@@ -89,7 +89,7 @@ public:
 	{
 		vsm_assert(is_platform_endpoint()); //PRECONDITION
 
-		if (m_data.tag() == tag_t::container)
+		if (m_data.tag() == tag_type::container)
 		{
 			return m_resize_container(m_data.ptr(), min_size, max_size, min_alignment);
 		}
