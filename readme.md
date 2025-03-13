@@ -26,10 +26,10 @@ std::print("{}", std::string_view(mapping));
 ```CPP
 namespace io = allio::nothrow; // allio::nothrow functions return std::expected.
 
-if (std::expected result = io::map_file_as<char>(allio::path_view("./hello.txt")))
-    std::print("{}", std::string_view(*result));
-else
-    std::print("error: {}\n", result.error());
+std::expected mapping = io::map_file_as<char>(allio::path_view("./hello.txt"));
+if (!mapping)
+    return std::unexpected(mapping.error());
+std::print("{}", std::string_view(*mapping));
 ```
 
 ### Blocking socket client
@@ -73,16 +73,15 @@ io::task<void> handle_client(io::socket_handle socket) {
 namespace io = allio::blocking;
 
 auto child_stdout = io::create_pipe(inheritable);
-
 io::process_handle process = io::create_process(
     allio::path_view("/usr/bin/echo"),
-    process_arguments({ "hello" }),
-    redirect_stdout(child_stdout));
+    allio::process_arguments({ "hello" }),
+    allio::redirect_stdout(child_stdout));
 
-if (auto exit_code = process.wait().get_exit_code())
-    std::print("error: exit_code = {}\n", exit_code);
+if (auto exit_code = process.wait().get_exit_code(); exit_code != 0)
+    std::print("exit_code = {}\n", exit_code);
 else
-    std::print("echo: {}", io::read_until_end<std::string>(child_stdout));
+    std::print("{}\n", io::read_until_end<std::string>(child_stdout));
 ```
 
 ## Installation
@@ -92,7 +91,7 @@ else
 
 #### Local recipes index
 
-The Conan recipes for ALLIO automatically generated at [vasama/conan-index](https://github.com/vasama/conan-index). To use the recipes locally, a Conan [local recipes index](https://docs.conan.io/2/tutorial/conan_repositories/setup_local_recipes_index.html) can be used:
+Conan recipes for ALLIO are automatically generated at [vasama/conan-index](https://github.com/vasama/conan-index). To use the recipes locally, a Conan [local recipes index](https://docs.conan.io/2/tutorial/conan_repositories/setup_local_recipes_index.html) can be used:
 
 ```
 git clone https://github.com/vasama/conan-index vasama-conan-index
