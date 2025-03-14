@@ -2,6 +2,6 @@
 
 namespace allio {
 
-using platform_path = basic_path<wchar_t>;
+using platform_path_char_type = char;
 
 } // namespace allio

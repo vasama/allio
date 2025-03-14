@@ -35,7 +35,7 @@ struct async_operation<iocp_multiplexer, directory_t, directory_t::read_t>
 	using C = async_connector_t<M, directory_t> const;
 	using S = async_operation_t<M, directory_t, directory_t::read_t>;
 	using A = io_parameters_t<directory_t, directory_t::read_t>;
-	using R = directory_stream_view;
+	using R = basic_directory_stream_view<void>;
 
 	iocp_multiplexer::io_status_block io_status_block;
 

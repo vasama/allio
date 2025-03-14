@@ -4,32 +4,11 @@
 #include <allio/detail/dynamic_buffer.hpp>
 #include <allio/detail/facade.hpp>
 #include <allio/detail/handles/fs_object.hpp>
+#include <allio/path_char.hpp>
 
 #include <vsm/arrow.hpp>
 
 namespace allio::detail {
-
-//TODO: Template on error traits
-struct directory_entry
-{
-	fs_entry_type type;
-	fs_node_id node_id;
-	any_string_view name;
-
-	vsm::result<size_t> get_name(any_string_buffer buffer) const;
-
-	template<typename String = std::string>
-	vsm::result<String> get_name() const
-	{
-		vsm::result<String> r(vsm::result_value);
-		if (auto const r2 = get_name(*r); !r2)
-		{
-			r = vsm::unexpected(r2.error());
-		}
-		return r;
-	}
-};
-
 
 enum class directory_stream_position : size_t
 {
@@ -65,88 +44,153 @@ enum class directory_stream_pointer : uintptr_t
 			reinterpret_cast<std::byte const*>(pointer) - stream);
 }
 
-[[nodiscard]] directory_entry get_directory_entry(
+[[nodiscard]] directory_stream_pointer next_directory_entry(directory_stream_pointer pointer);
+
+[[nodiscard]] fs_entry_type get_directory_entry_type(directory_stream_pointer pointer);
+
+[[nodiscard]] std::basic_string_view<platform_path_char_type> get_directory_entry_name(
 	directory_stream_pointer pointer);
 
-[[nodiscard]] directory_stream_pointer next_directory_entry(
-	directory_stream_pointer pointer);
+[[nodiscard]] vsm::result<size_t> copy_directory_entry_name(
+	directory_stream_pointer pointer,
+	any_string_buffer buffer);
 
+template<typename String>
+[[nodiscard]] vsm::result<String> copy_directory_entry_name(directory_stream_pointer const pointer)
+{
+	vsm::result<String> r(vsm::result_value);
+	if (auto const r2 = detail::copy_directory_entry_name(pointer, *r); !r2)
+	{
+		r = vsm::unexpected(r2.error());
+	}
+	return r;
+}
 
-class directory_entry_view
+template<typename Traits>
+class basic_directory_entry_view;
+
+template<>
+class basic_directory_entry_view<void>
 {
 	directory_stream_pointer m_pointer;
 
 public:
-	explicit directory_entry_view(directory_stream_pointer const pointer)
+	explicit basic_directory_entry_view(directory_stream_pointer const pointer)
 		: m_pointer(pointer)
 	{
 	}
 
-	[[nodiscard]] directory_entry get_entry() const
+	[[nodiscard]] fs_entry_type type() const
 	{
-		return get_directory_entry(m_pointer);
+		return get_directory_entry_type(m_pointer);
 	}
 
-	[[nodiscard]] operator directory_entry() const
+	[[nodiscard]] std::basic_string_view<platform_path_char_type> name() const
 	{
-		return get_directory_entry(m_pointer);
+		return get_directory_entry_name(m_pointer);
+	}
+
+private:
+	template<typename>
+	friend class basic_directory_entry_view;
+
+	template<typename, typename>
+	friend struct rebind_traits;
+};
+
+template<typename Traits>
+class basic_directory_entry_view : public basic_directory_entry_view<void>
+{
+public:
+	using basic_directory_entry_view<void>::basic_directory_entry_view;
+
+	[[nodiscard]] auto get_name(any_string_buffer const buffer) const
+	{
+		auto r = detail::copy_directory_entry_name(m_pointer, buffer);
+
+		if constexpr (Traits::has_transform_result)
+		{
+			return Traits::transform_result(vsm_move(r));
+		}
+		else
+		{
+			return r;
+		}
+	}
+
+	template<typename String = std::basic_string<platform_path_char_type>>
+	[[nodiscard]] auto get_name() const
+	{
+		auto r = detail::copy_directory_entry_name<String>(m_pointer);
+
+		if constexpr (Traits::has_transform_result)
+		{
+			return Traits::transform_result(vsm_move(r));
+		}
+		else
+		{
+			return r;
+		}
 	}
 };
 
-class directory_stream_sentinel {};
+template<typename Traits>
+class basic_directory_stream_sentinel {};
 
-class directory_stream_iterator
+template<typename Traits>
+class basic_directory_stream_iterator
 {
 	directory_stream_pointer m_pointer;
 
 public:
-	explicit directory_stream_iterator(directory_stream_pointer const pointer)
+	explicit basic_directory_stream_iterator(directory_stream_pointer const pointer)
 		: m_pointer(pointer)
 	{
 	}
 
-	[[nodiscard]] directory_entry_view operator*() const
+	[[nodiscard]] basic_directory_entry_view<Traits> operator*() const
 	{
-		return directory_entry_view(m_pointer);
+		return basic_directory_entry_view<Traits>(m_pointer);
 	}
 
-	[[nodiscard]] vsm::arrow<directory_entry_view> operator->() const
+	[[nodiscard]] vsm::arrow<basic_directory_entry_view<Traits>> operator->() const
 	{
-		return directory_entry_view(m_pointer);
+		return basic_directory_entry_view<Traits>(m_pointer);
 	}
 
-	directory_stream_iterator& operator++() &
+	basic_directory_stream_iterator& operator++() &
 	{
 		m_pointer = next_directory_entry(m_pointer);
 		return *this;
 	}
 
-	[[nodiscard]] directory_stream_iterator operator++(int) &
+	[[nodiscard]] basic_directory_stream_iterator operator++(int) &
 	{
 		auto it = *this;
 		m_pointer = next_directory_entry(m_pointer);
 		return it;
 	}
 
-	[[nodiscard]] bool operator==(directory_stream_sentinel) const
+	[[nodiscard]] bool operator==(basic_directory_stream_sentinel<Traits>) const
 	{
 		return m_pointer == directory_stream_pointer::end_of_stream;
 	}
 
-	[[nodiscard]] bool operator!=(directory_stream_sentinel) const
+	[[nodiscard]] bool operator!=(basic_directory_stream_sentinel<Traits>) const
 	{
 		return m_pointer != directory_stream_pointer::end_of_stream;
 	}
 };
 
-class directory_stream_view
+template<typename Traits>
+class basic_directory_stream_view
 {
 	directory_stream_pointer m_pointer;
 
 public:
-	directory_stream_view() = default;
+	basic_directory_stream_view() = default;
 
-	explicit directory_stream_view(directory_stream_pointer const pointer)
+	explicit basic_directory_stream_view(directory_stream_pointer const pointer)
 		: m_pointer(pointer)
 	{
 	}
@@ -161,18 +205,50 @@ public:
 		return m_pointer != directory_stream_pointer::end_of_directory;
 	}
 
-	[[nodiscard]] directory_stream_iterator begin() const
+	[[nodiscard]] basic_directory_stream_iterator<Traits> begin() const
 	{
 		vsm_assert(m_pointer != directory_stream_pointer::end_of_directory);
-		return directory_stream_iterator(m_pointer);
+		return basic_directory_stream_iterator<Traits>(m_pointer);
 	}
 
-	[[nodiscard]] directory_stream_sentinel end() const
+	[[nodiscard]] basic_directory_stream_sentinel<Traits> end() const
 	{
 		vsm_assert(m_pointer != directory_stream_pointer::end_of_directory);
 		return {};
 	}
+
+private:
+	template<typename, typename>
+	friend struct rebind_traits;
 };
+
+
+template<typename From, typename To>
+struct rebind_traits<basic_directory_entry_view<From>, basic_directory_entry_view<To>>
+{
+	static vsm::result<basic_directory_entry_view<To>> rebind(
+		basic_directory_entry_view<From> const view)
+	{
+		return vsm::result<basic_directory_entry_view<To>>(vsm::result_value, view.m_pointer);
+	}
+};
+
+template<typename From, typename To>
+struct rebind_traits<basic_directory_stream_view<From>, basic_directory_stream_view<To>>
+{
+	static vsm::result<basic_directory_stream_view<To>> rebind(
+		basic_directory_stream_view<From> const view)
+	{
+		return vsm::result<basic_directory_stream_view<To>>(vsm::result_value, view.m_pointer);
+	}
+};
+
+
+template<typename Handle>
+auto select_directory_stream_view(int) -> basic_directory_stream_view<typename Handle::traits_type>;
+
+template<typename Handle>
+auto select_directory_stream_view(...) -> basic_directory_stream_view<void>;
 
 
 namespace directory_io {
@@ -186,10 +262,12 @@ struct read_t
 		read_buffer buffer;
 	};
 
-	using result_type = directory_stream_view;
+	//TODO: the basic handle types don't have traits_type
+	template<handle Handle>
+	using result_type_template = decltype(detail::select_directory_stream_view<Handle>(0));
 
 	template<object Object>
-	static vsm::result<directory_stream_view> blocking_io(
+	static vsm::result<basic_directory_stream_view<void>> blocking_io(
 		native_handle<Object> const& h,
 		io_parameters_t<Object, read_t> const& a)
 		requires requires { Object::read(h, a); }
@@ -205,7 +283,7 @@ struct restart_t
 	using result_type = void;
 
 	template<object Object>
-	static vsm::result<directory_stream_view> blocking_io(
+	static vsm::result<void> blocking_io(
 		native_handle<Object> const& h,
 		io_parameters_t<Object, restart_t> const& a)
 		requires requires { Object::restart(h, a); }
@@ -234,7 +312,7 @@ struct directory_t : fs_object_t
 		native_handle<directory_t>& h,
 		io_parameters_t<directory_t, open_t> const& a);
 
-	static vsm::result<directory_stream_view> read(
+	static vsm::result<basic_directory_stream_view<void>> read(
 		native_handle<directory_t> const& h,
 		io_parameters_t<directory_t, read_t> const& a);
 
@@ -263,7 +341,7 @@ struct directory_t : fs_object_t
 		[[nodiscard]] auto iterate() const;
 		[[nodiscard]] auto recurse() const;
 
-		[[nodiscard]] auto relative(any_path_view const relative_path) const;
+		[[nodiscard]] auto open_relative(any_path_view const relative_path) const;
 		[[nodiscard]] auto operator/(any_path_view const relative_path) const;
 	};
 };
@@ -453,7 +531,7 @@ struct async_operation<Multiplexer, directory_iterator_t, directory_iterator_t::
 		C& c,
 		S& s,
 		io_handler<M>& handler,
-		io_result<directory_stream_view> const& r)
+		io_result<basic_directory_stream_view<void>> const& r)
 	{
 		if (r)
 		{
@@ -606,10 +684,10 @@ class directory_iterator
 			no_parameters_t());
 	}
 
-	static directory_entry_view _get(facade_type const& handle)
+	static basic_directory_entry_view<Traits> _get(facade_type const& handle)
 	{
 		native_handle<directory_iterator_t> const& h = handle.native();
-		return directory_entry_view(h.storage.data() + h.stream_position);
+		return basic_directory_entry_view<Traits>(h.storage.data() + h.stream_position);
 	}
 
 
@@ -620,7 +698,7 @@ class directory_iterator
 		directory_iterator const* m_directory_iterator;
 
 	public:
-		using value_type = directory_entry_view;
+		using value_type = basic_directory_entry_view<Traits>;
 		using difference_type = ptrdiff_t;
 
 		iterator() = default;
@@ -673,7 +751,7 @@ public:
 		return _next(m_handle);
 	}
 
-	[[nodiscard]] directory_entry_view get() const
+	[[nodiscard]] basic_directory_entry_view<Traits> get() const
 	{
 		return _get(m_handle);
 	}

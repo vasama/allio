@@ -121,27 +121,30 @@ static directory_stream_entry const* next_entry(directory_stream_entry const* co
 }
 
 
-vsm::result<size_t> directory_entry::get_name(any_string_buffer const buffer) const
-{
-	return transcode_string(name.view<char>(), buffer);
-}
-
-directory_entry detail::get_directory_entry(directory_stream_pointer const pointer)
-{
-	vsm_assert(pointer != directory_stream_pointer::end_of_stream);
-	directory_stream_entry const& entry = *unwrap_stream(pointer);
-
-	return
-	{
-		.type = get_entry_type(entry),
-		.node_id = std::bit_cast<fs_node_id>(entry.d_ino),
-		.name = any_string_view(get_entry_name(entry), null_terminated),
-	};
-}
-
 directory_stream_pointer detail::next_directory_entry(directory_stream_pointer const pointer)
 {
 	return wrap_stream(next_entry(unwrap_stream(pointer)));
+}
+
+fs_entry_type detail::get_directory_entry_type(directory_stream_pointer const pointer)
+{
+	vsm_assert(pointer != directory_stream_pointer::end_of_stream);
+	return get_entry_type(*unwrap_stream(pointer));
+}
+
+std::string_view detail::get_directory_entry_name(directory_stream_pointer const pointer)
+{
+	vsm_assert(pointer != directory_stream_pointer::end_of_stream);
+	//TODO: This loses the information that the name is null terminated. Try to figure out a nice
+	//      way to preserve it.
+	return get_entry_name(*unwrap_stream(pointer));
+}
+
+vsm::result<size_t> detail::copy_directory_entry_name(
+	directory_stream_pointer const pointer,
+	any_string_buffer const buffer)
+{
+	return transcode_string(get_directory_entry_name(pointer), buffer);
 }
 
 
@@ -173,10 +176,11 @@ static directory_stream_entry* create_entry_list(std::span<std::byte> const buff
 		return reinterpret_cast<directory_stream_entry*>(buffer.data() + offset);
 	};
 
+	// d_off as filled in by the kernel is a filesystem-specific value with no specific meaning to user space. It is
+	// repurposed for constructing a filtered linked list through the directory entries in the buffer.
 	using offset_type = decltype(directory_stream_entry::d_off);
 
-	// d_off of an imaginary entry at index -1.
-	// Holds both absolute and relative offset of the first entry.
+	// d_off of an imaginary entry at index -1. Holds both absolute and relative offset of the first entry.
 	offset_type first_offset = 0;
 
 	// Pointer to d_off of the previous entry in each iteration.
@@ -201,8 +205,8 @@ static directory_stream_entry* create_entry_list(std::span<std::byte> const buff
 		offset += entry.d_reclen;
 	}
 
-	// It is possible that p_last_offset still points to first_offset.
-	// Get a pointer to the first entry before potentially zeroing the offset.
+	// It is possible that p_last_offset still points to first_offset. Get a pointer to the first entry before
+	// potentially zeroing the offset.
 	directory_stream_entry* const first_entry = get_entry(static_cast<size_t>(first_offset));
 
 	// Finally set the relative offset of the last entry to zero to indicate the end of the list.
@@ -247,7 +251,7 @@ vsm::result<void> directory_t::open(
 }
 #endif
 
-vsm::result<directory_stream_view> directory_t::read(
+vsm::result<basic_directory_stream_view<void>> directory_t::read(
 	native_handle<directory_t> const& h,
 	io_parameters_t<directory_t, read_t> const& a)
 {
@@ -267,14 +271,14 @@ vsm::result<directory_stream_view> directory_t::read(
 
 	if (size == 0)
 	{
-		return directory_stream_view(directory_stream_pointer::end_of_directory);
+		return basic_directory_stream_view<void>(directory_stream_pointer::end_of_directory);
 	}
 
 	// Create the iterable entry list by linking the entries together with relative offsets and discarding relative
 	// entries (. and ..).
 	directory_stream_entry const* const entry = create_entry_list(buffer, static_cast<size_t>(size));
 
-	return directory_stream_view(wrap_stream(entry));
+	return basic_directory_stream_view<void>(wrap_stream(entry));
 }
 
 

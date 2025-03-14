@@ -929,8 +929,4 @@ constexpr basic_path_combine_result<Char> combine_path(basic_path_view<Char> con
 	return result_type(lhs, path_view_type(r_root_name_end, r_end), requires_separator);
 }
 
-
-using platform_path_view = basic_path_view<wchar_t>;
-using platform_path_combine_result = basic_path_combine_result<wchar_t>;
-
 } // namespace allio

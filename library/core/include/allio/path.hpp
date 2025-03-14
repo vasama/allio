@@ -420,11 +420,10 @@ using basic_path = basic_path_adaptor<
 	std::basic_string<Char, std::char_traits<Char>, Allocator>>;
 
 
+//TODO: platform_path should be renamed to path
 using path = basic_path<char>;
 using wpath = basic_path<wchar_t>;
 
-} // namespace allio
+using platform_path = basic_path<platform_path_char_type>;
 
-#include <allio/linux/detail/undef.i>
-#include vsm_pp_include(allio/vsm_os/detail/path.hpp)
-#include <allio/linux/detail/undef.i>
+} // namespace allio

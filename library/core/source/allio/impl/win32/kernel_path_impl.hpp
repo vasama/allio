@@ -926,8 +926,8 @@ private:
 			{
 				if (size <= 4)
 				{
-					// Reject "\??", "\??\". Win32 APIs don't recognize these
-					// and convert them to e.g. "\??\C:\??" and "\??\C:\??\".
+					// Reject "\??", "\??\". Win32 APIs don't recognize these and convert them to
+					// e.g. "\??\C:\??" and "\??\C:\??\".
 					return vsm::unexpected(allio_error(error::invalid_path));
 				}
 

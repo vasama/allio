@@ -6,6 +6,9 @@
 namespace allio::blocking {
 inline namespace directories {
 
+using directory_entry_view = detail::basic_directory_entry_view<traits_type>;
+using directory_stream_view = detail::basic_directory_stream_view<traits_type>;
+
 using directory_handle = traits_type::handle<directory_t>;
 
 [[nodiscard]] directory_handle open_directory(detail::fs_path const& path, auto&&... args)

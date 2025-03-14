@@ -38,7 +38,7 @@ using read_t = directory_t::read_t;
 using read_s = async_operation<iocp_multiplexer, directory_t, read_t>;
 using read_a = io_parameters_t<directory_t, read_t>;
 
-static vsm::result<directory_stream_view> read_completed(
+static vsm::result<basic_directory_stream_view<void>> read_completed(
 	read_buffer const buffer,
 	IO_STATUS_BLOCK& io_status_block)
 {
@@ -54,10 +54,16 @@ static vsm::result<directory_stream_view> read_completed(
 		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
-	return directory_stream_view(stream_pointer);
+	return basic_directory_stream_view<void>(stream_pointer);
 }
 
-io_result<directory_stream_view> read_s::submit(M& m, H& h, C&, read_s& s, read_a const& a, io_handler<M>& handler)
+io_result<basic_directory_stream_view<void>> read_s::submit(
+	M& m,
+	H& h,
+	C&,
+	read_s& s,
+	read_a const& a,
+	io_handler<M>& handler)
 {
 	s.io_status_block.bind(handler);
 
@@ -79,7 +85,14 @@ io_result<directory_stream_view> read_s::submit(M& m, H& h, C&, read_s& s, read_
 	return vsm::unexpected(io_notify_status::submitted);
 }
 
-io_result<directory_stream_view> read_s::notify(M&, H&, C&, read_s& s, read_a const& a, io_handler<M>& handler, M::io_status_type const status)
+io_result<basic_directory_stream_view<void>> read_s::notify(
+	M&,
+	H&,
+	C&,
+	read_s& s,
+	read_a const& a,
+	io_handler<M>& handler,
+	M::io_status_type const status)
 {
 	vsm_assert(&status.slot == &s.io_status_block);
 	vsm_assert(status.status == s.io_status_block->Status);

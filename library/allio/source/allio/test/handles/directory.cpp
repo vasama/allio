@@ -17,7 +17,9 @@
 using namespace allio;
 namespace ex = stdexec;
 
-static std::unordered_set<std::string> fill_directory(path_view const base_path, size_t const file_count)
+static std::unordered_set<std::string> fill_directory(
+	path_view const base_path,
+	size_t const file_count)
 {
 	static constexpr size_t name_size = 20;
 	static constexpr size_t rand_size = 10;
@@ -94,9 +96,9 @@ TEST_CASE("Directory entries can be read", "[directory][blocking]")
 				break;
 			}
 
-			for (directory_entry const& entry : stream)
+			for (directory_entry_view const entry : stream)
 			{
-				REQUIRE(file_names.erase(entry.get_name().value()));
+				REQUIRE(file_names.erase(entry.get_name<std::string>()));
 			}
 		}
 	}
@@ -105,16 +107,16 @@ TEST_CASE("Directory entries can be read", "[directory][blocking]")
 	{
 		for (auto iterator = directory.iterate(); iterator.next();)
 		{
-			directory_entry const& entry = iterator.get();
-			REQUIRE(file_names.erase(entry.get_name().value()));
+			directory_entry_view const entry = iterator.get();
+			REQUIRE(file_names.erase(entry.get_name<std::string>()));
 		}
 	}
 
 	SECTION("Directory iterator range-for")
 	{
-		for (directory_entry const& entry : directory.iterate())
+		for (directory_entry_view const entry : directory.iterate())
 		{
-			REQUIRE(file_names.erase(entry.get_name().value()));
+			REQUIRE(file_names.erase(entry.get_name<std::string>()));
 		}
 	}
 

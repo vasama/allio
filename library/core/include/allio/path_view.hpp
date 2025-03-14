@@ -2,6 +2,7 @@
 
 #include <allio/detail/path.hpp>
 #include <allio/detail/platform.h>
+#include <allio/path_char.hpp>
 #include <allio/path_literals.hpp>
 
 #include <vsm/arrow.hpp>
@@ -399,10 +400,14 @@ template<typename Char>
 	basic_path_view<Char> rhs);
 
 
+//TODO: platform_path_view should be renamed to path_view
 using path_view = basic_path_view<char>;
 using wpath_view = basic_path_view<wchar_t>;
 
 using path_combine_result = basic_path_combine_result<char>;
+
+using platform_path_view = basic_path_view<platform_path_char_type>;
+using platform_path_combine_result = basic_path_combine_result<platform_path_char_type>;
 
 } // namespace allio
 

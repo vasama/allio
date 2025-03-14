@@ -82,27 +82,28 @@ static directory_stream_entry const* next_entry(directory_stream_entry const* co
 }
 
 
-vsm::result<size_t> directory_entry::get_name(any_string_buffer const buffer) const
-{
-	return transcode_string(name.view<wchar_t>(), buffer);
-}
-
-directory_entry detail::get_directory_entry(directory_stream_pointer const pointer)
-{
-	vsm_assert(pointer != directory_stream_pointer::end_of_stream);
-	directory_stream_entry const& entry = *unwrap_stream(pointer);
-
-	return
-	{
-		.type = get_entry_type(entry),
-		.node_id = std::bit_cast<fs_node_id>(entry.FileId),
-		.name = any_string_view(get_entry_name(entry)),
-	};
-}
-
 directory_stream_pointer detail::next_directory_entry(directory_stream_pointer const pointer)
 {
 	return wrap_stream(next_entry(unwrap_stream(pointer)));
+}
+
+fs_entry_type detail::get_directory_entry_type(directory_stream_pointer const pointer)
+{
+	vsm_assert(pointer != directory_stream_pointer::end_of_stream);
+	return get_entry_type(*unwrap_stream(pointer));
+}
+
+std::wstring_view detail::get_directory_entry_name(directory_stream_pointer const pointer)
+{
+	vsm_assert(pointer != directory_stream_pointer::end_of_stream);
+	return get_entry_name(*unwrap_stream(pointer));
+}
+
+vsm::result<size_t> detail::copy_directory_entry_name(
+	directory_stream_pointer const pointer,
+	any_string_buffer const buffer)
+{
+	return transcode_string(get_directory_entry_name(pointer), buffer);
 }
 
 
@@ -237,7 +238,7 @@ static vsm::result<directory_stream_pointer> query_directory_file(
 }
 
 
-vsm::result<directory_stream_view> directory_t::read(
+vsm::result<basic_directory_stream_view<void>> directory_t::read(
 	native_handle<directory_t> const& h,
 	io_parameters_t<directory_t, read_t> const& a)
 {
@@ -249,7 +250,7 @@ vsm::result<directory_stream_view> directory_t::read(
 		a.buffer,
 		/* restart: */ false));
 
-	return directory_stream_view(stream);
+	return basic_directory_stream_view<void>(stream);
 }
 
 

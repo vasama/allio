@@ -521,10 +521,6 @@ constexpr basic_path_combine_result<Char> combine_path(basic_path_view<Char> con
 	return result_type(lhs, rhs, requires_separator);
 }
 
-
-using platform_path_view = basic_path_view<char>;
-using platform_path_combine_result = basic_path_combine_result<char>;
-
 } // namespace allio
 
 #include <allio/linux/detail/undef.i>
