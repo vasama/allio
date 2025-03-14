@@ -52,8 +52,11 @@ enum class network_address_kind : uint8_t
 };
 
 
-struct null_endpoint_t {};
-inline constexpr null_endpoint_t null_endpoint = {};
+struct null_endpoint_t
+{
+	explicit null_endpoint_t() = default;
+};
+inline constexpr null_endpoint_t null_endpoint{};
 
 //TODO: Rename to local_endpoint and use in any_endpoint_view, or get rid of.
 class local_address

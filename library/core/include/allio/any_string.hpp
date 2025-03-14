@@ -43,8 +43,11 @@ struct string_length_out_of_range_t
 } // namespace detail
 
 
-struct null_terminated_t {};
-inline constexpr null_terminated_t null_terminated = {};
+struct null_terminated_t
+{
+	explicit null_terminated_t() = default;
+};
+inline constexpr null_terminated_t null_terminated{};
 
 class any_string_view
 {

@@ -12,8 +12,11 @@
 
 namespace allio::detail {
 
-struct adopt_handle_t {};
-inline constexpr adopt_handle_t adopt_handle = {};
+struct adopt_handle_t
+{
+	explicit adopt_handle_t() = default;
+};
+inline constexpr adopt_handle_t adopt_handle{};
 
 
 template<object Object>

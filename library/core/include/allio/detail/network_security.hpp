@@ -171,8 +171,11 @@ struct security_context_parameters
 };
 
 
-struct no_security_t {};
-inline constexpr no_security_t no_security = {};
+struct no_security_t
+{
+	explicit no_security_t() = default;
+};
+inline constexpr no_security_t no_security{};
 
 template<typename SecurityContext>
 struct basic_security_context_t
