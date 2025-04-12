@@ -4,6 +4,7 @@
 #include <allio/error.hpp>
 
 #include <vsm/assert.h>
+#include <vsm/platform.h>
 #include <vsm/result.hpp>
 #include <vsm/standard.hpp>
 #include <vsm/utility.hpp>
@@ -520,5 +521,15 @@ struct rebind_traits<basic_attached_handle<Object, MultiplexerHandle>, basic_det
 	: basic_handle_rebind_traits<Object, MultiplexerHandle>
 {
 };
+
+
+template<object Object>
+vsm_always_inline void verify_handle(native_handle<Object> const& h)
+{
+	if constexpr (requires { Object::verify_handle(h); })
+	{
+		vsm_assert(Object::verify_handle(h));
+	}
+}
 
 } // namespace allio::detail

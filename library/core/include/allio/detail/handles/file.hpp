@@ -144,6 +144,13 @@ struct file_t : fs_object_t
 		io_parameters_t<file_t, random_write_t> const& args);
 
 
+	using is_serializable = file_t;
+
+	static vsm::result<void> serialize(
+		native_handle<file_t>& h,
+		serialization_context& serializer);
+
+
 	template<typename Handle, typename Traits>
 	struct facade : base_type::facade<Handle, Traits>
 	{

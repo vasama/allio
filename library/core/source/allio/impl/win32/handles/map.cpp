@@ -229,6 +229,24 @@ static bool check_address_range(native_handle<map_t> const& h, auto const& a)
 }
 
 
+static protection get_section_protection(native_handle<section_t> const& h)
+{
+	protection protection = protection::none;
+	if (h.flags[section_t::flags::readable])
+	{
+		protection |= protection::read;
+	}
+	if (h.flags[section_t::flags::writable])
+	{
+		protection |= protection::write;
+	}
+	if (h.flags[section_t::flags::executable])
+	{
+		protection |= protection::execute;
+	}
+	return protection;
+};
+
 template<object Object, std::convertible_to<native_handle<Object>> H>
 static vsm::result<unique_ptr<shared_native_handle<Object>>> make_shared_handle(H&& h)
 {
@@ -267,11 +285,11 @@ static vsm::result<void> _map_section(
 		? a.page_level
 		: get_default_page_level();
 
-	protection protection = section_h.protection & protection::read_write;
+	protection protection = get_section_protection(section_h) & protection::read_write;
 
 	if (a.protection != detail::protection(0))
 	{
-		if (!vsm::all_flags(section_h.protection, a.protection))
+		if (!vsm::all_flags(get_section_protection(section_h), a.protection))
 		{
 			return vsm::unexpected(allio_error(error::invalid_argument));
 		}

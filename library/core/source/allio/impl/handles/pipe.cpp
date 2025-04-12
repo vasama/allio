@@ -1,9 +1,18 @@
 #include <allio/detail/handles/pipe.hpp>
 
+#include <allio/detail/serialization.hpp>
 #include <allio/impl/error_encoding.hpp>
 
 using namespace allio;
 using namespace allio::detail;
+
+vsm::result<void> pipe_t::serialize(
+	native_handle<pipe_t>& h,
+	serialization_context& serializer)
+{
+	vsm_try_void(serializer.visit_header("pip", 0));
+	return serializer_visit(h, serializer);
+}
 
 vsm::result<void> pipe_pair_t::close(
 	native_handle<pipe_pair_t>& h,

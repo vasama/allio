@@ -1,5 +1,7 @@
 #pragma once
 
+#include <allio/error.hpp>
+
 #include <allio_error_encoding.hpp>
 
 #include <source_location>
@@ -15,12 +17,13 @@ inline constexpr int file_bits                  = 8;
 inline constexpr int code_bits                  = 12;
 
 template<typename Encoding, typename ErrorCode>
-class encoded_error_category : public std::error_category
+class encoded_error_category : public error_category_base
 {
 public:
 	char const* name() const noexcept override;
 	std::string message(int code) const override;
 	std::error_condition default_error_condition(int code) const noexcept override;
+	std::error_code unwrap(std::error_code ec) const noexcept override;
 
 	static encoded_error_category const instance;
 };

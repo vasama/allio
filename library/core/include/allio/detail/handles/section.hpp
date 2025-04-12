@@ -69,6 +69,13 @@ struct section_t : platform_object_t
 {
 	using base_type = platform_object_t;
 
+	allio_handle_flags
+	(
+		readable,
+		writable,
+		executable,
+	);
+
 	using create_t = section_io::create_t;
 
 	using operations = type_list_append
@@ -80,12 +87,13 @@ struct section_t : platform_object_t
 	static vsm::result<void> create(
 		native_handle<section_t>& h,
 		io_parameters_t<section_t, create_t> const& a);
-};
 
-template<>
-struct native_handle<section_t> : native_handle<section_t::base_type>
-{
-	detail::protection protection;
+
+	using is_serializable = section_t;
+
+	static vsm::result<void> serialize(
+		native_handle<section_t>& h,
+		serialization_context& serializer);
 };
 
 template<typename Traits>

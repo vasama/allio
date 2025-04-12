@@ -1,5 +1,7 @@
 #pragma once
 
+//TODO: Move this header under handles/ ?
+
 #include <allio/detail/handle_flags.hpp>
 #include <allio/detail/io.hpp>
 #include <allio/detail/type_list.hpp>
@@ -7,6 +9,9 @@
 #include <vsm/flags.hpp>
 
 namespace allio::detail {
+
+class serialization_context;
+
 
 enum class io_flags : uint8_t
 {
@@ -29,6 +34,8 @@ inline constexpr explicit_parameter<synchronous_t> synchronous = {};
 
 struct non_blocking_t : explicit_argument<non_blocking_t, bool> {};
 inline constexpr explicit_parameter<non_blocking_t> non_blocking = {};
+
+struct set_io_flags_t : explicit_argument<set_io_flags_t, io_flags> {};
 
 struct io_flags_t
 {
@@ -71,6 +78,11 @@ struct io_flags_t
 		{
 			flags |= io_flags::create_non_blocking;
 		}
+	}
+
+	void set_argument(set_io_flags_t const value)
+	{
+		flags |= value.value;
 	}
 };
 
@@ -130,6 +142,10 @@ struct object_t : _object
 	);
 
 	using operations = type_list<close_t>;
+
+	static vsm::result<void> serializer_visit(
+		native_handle<object_t>& h,
+		serialization_context& serializer);
 
 	template<typename Handle, typename Traits>
 	struct facade {};

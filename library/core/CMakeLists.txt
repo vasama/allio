@@ -61,6 +61,7 @@ vsm_add_library(
 		include/allio/detail/handles/section.hpp
 
 	SOURCES
+		source/allio/impl/any_byte_buffer.cpp
 		source/allio/impl/byte_io_buffers.cpp
 		source/allio/impl/error_default.cpp
 		source/allio/impl/error.cpp
@@ -68,17 +69,26 @@ vsm_add_library(
 		source/allio/impl/network.cpp
 		source/allio/impl/new.cpp
 		source/allio/impl/random.hpp
+		source/allio/impl/serialization.cpp
 		source/allio/impl/transcode.hpp
 		source/allio/impl/unique_name.cpp
 		source/allio/impl/unique_name.hpp
 
 		# Handles
 		source/allio/impl/handles/directory.cpp
+		source/allio/impl/handles/event.cpp
+		source/allio/impl/handles/file.cpp
 		source/allio/impl/handles/fs_object.cpp
 		source/allio/impl/handles/fs_object.hpp
 		source/allio/impl/handles/map.cpp
+		source/allio/impl/handles/object.cpp
 		source/allio/impl/handles/opaque_object.cpp
+		#source/allio/impl/handles/path.cpp
 		source/allio/impl/handles/pipe.cpp
+		source/allio/impl/handles/platform_object.hpp
+		source/allio/impl/handles/process.cpp
+		source/allio/impl/handles/section.cpp
+		#source/allio/impl/handles/thread.cpp
 
 	HEADER_DEPENDENCIES
 		vsm::core
@@ -102,7 +112,7 @@ vsm_configure(
 	HEADERS
 		include/allio/win32/kernel_error.hpp
 
-		include/allio/win32/detail/path.hpp
+		include/allio/win32/detail/path_char.hpp
 		include/allio/win32/detail/path_view.hpp
 		include/allio/win32/detail/win32_fwd.hpp
 
@@ -196,6 +206,7 @@ vsm_configure(
 		vsm::intrusive_ptr
 
 	SOURCE_DEPENDENCIES
+		vsm::base64
 		vsm::intrusive
 
 	TEST_SOURCES

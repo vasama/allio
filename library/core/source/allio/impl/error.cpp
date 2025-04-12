@@ -214,6 +214,12 @@ std::error_condition detail::error_category::default_error_condition(int const c
 	return std::error_condition(code, *this);
 }
 
+std::error_code detail::error_category::unwrap(std::error_code const ec) const noexcept
+{
+	vsm_assert(ec.category() == *this); //PRECONDITION
+	return ec;
+}
+
 detail::error_category const detail::error_category_instance;
 
 
@@ -259,4 +265,28 @@ void allio::set_error_handler(error_handler* const handler) noexcept
 error_handler& allio::get_error_handler() noexcept
 {
 	return *g_error_handler;
+}
+
+
+static bool is_allio_error_category(std::error_category const& category)
+{
+	return
+		category == error_category_instance ||
+		std::strcmp(category.name(), error_category_name) == 0;
+}
+
+bool detail::is_error_code(std::error_code ec, error const e)
+{
+	if (is_allio_error_category(ec.category()))
+	{
+		ec = static_cast<error_category_base const&>(ec.category()).unwrap(ec);
+		return e == static_cast<error>(ec.value());
+	}
+
+	return false;
+}
+
+bool detail::is_error_code(std::error_code const ec, std::errc const e)
+{
+	return e == ec.default_error_condition();
 }

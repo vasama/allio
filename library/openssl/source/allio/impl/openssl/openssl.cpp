@@ -20,7 +20,6 @@
 
 using namespace allio;
 using namespace allio::detail;
-namespace files = allio::nothrow::files;
 
 namespace {
 
@@ -308,11 +307,11 @@ struct file_bio
 
 	struct data_type
 	{
-		files::file_handle file;
+		nothrow::file_handle file;
 		fs_size file_offset;
 		std::error_code file_error;
 
-		explicit data_type(files::file_handle&& file)
+		explicit data_type(nothrow::file_handle&& file)
 			: file(vsm_move(file))
 			, file_offset(0)
 			, file_error{}
@@ -383,7 +382,7 @@ struct file_bio
 
 static vsm::result<bio_ptr> make_raw_file_bio(fs_path const& path)
 {
-	vsm_try(file, files::open_file(path, file_mode::read));
+	vsm_try(file, nothrow::open_file(path, file_mode::read));
 	vsm_try(data, make_unique<file_bio::data_type>(vsm_move(file)));
 	return create_bio<file_bio>(vsm_move(data));
 }
@@ -662,7 +661,7 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(
 #if 1 //TODO: Just for testing
 				if (!SSL_CTX_load_verify_file(
 					ssl_ctx.get(),
-					"C:\\Code\\allio\\build\\msvc\\library\\openssl\\allio-test-secrets\\server-certificate.pem"))
+					"D:\\Code\\allio\\build\\msvc\\library\\openssl\\allio-test-secrets\\server-certificate.pem"))
 				{
 					return vsm::unexpected(get_last_openssl_error());
 				}

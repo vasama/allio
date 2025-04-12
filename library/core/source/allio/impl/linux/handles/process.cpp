@@ -11,6 +11,8 @@
 #include <allio/impl/linux/proc.hpp>
 #include <allio/impl/linux/process_reaper.hpp>
 #include <allio/impl/linux/process.hpp>
+#include <allio/impl/linux/readlink.hpp>
+#include <allio/impl/storage_provider.hpp>
 
 #include <vsm/numeric.hpp>
 #include <vsm/utility.hpp>
@@ -70,6 +72,74 @@ std::optional<process_exit_code> process_wait_result::_get(process_exit_code con
 	}
 
 	return r;
+}
+
+
+template<size_t Capacity>
+static vsm::result<void> make_inherit_fd_array(
+	fork_exec_data& data,
+	platform_handles_view const user_handles,
+	dynamic_storage_provider<Capacity>& storage_provider)
+{
+	using native_handle_type = native_handle<platform_object_t>;
+	using pointer_type = native_handle_type const*;
+
+	static constexpr size_t pointer_to_fd_ratio = sizeof(pointer_type) / sizeof(int);
+
+	union user_handle_union
+	{
+		pointer_type pointer;
+
+		struct
+		{
+			int fd[pointer_to_fd_ratio];
+		};
+	};
+
+	static_assert(sizeof(user_handle_union) == sizeof(pointer_type));
+
+	if (size_t const user_handle_count = user_handles.copy_to(nullptr))
+	{
+		vsm_try(storage, storage_provider.get_storage(
+			user_handle_count * sizeof(user_handle_union),
+			user_handle_count * sizeof(user_handle_union),
+			std::align_val_t(alignof(user_handle_union))));
+
+		auto const user_handle_pointer_array = vsm::start_lifetime_as_array<pointer_type>(
+			storage,
+			user_handle_count);
+
+		vsm_verify(user_handles.copy_to(user_handle_pointer_array) == user_handle_count);
+
+		auto const user_handle_union_array = vsm::start_lifetime_as_array<user_handle_union>(
+			storage,
+			user_handle_count);
+
+		for (size_t i = 0; i < user_handle_count; ++i)
+		{
+			size_t const i_div = i / pointer_to_fd_ratio;
+			size_t const i_mod = i % pointer_to_fd_ratio;
+
+			user_handle_union& union_1 = user_handle_union_array[i];
+			user_handle_union& union_n = user_handle_union_array[i_div];
+
+			union_n.fd[i_mod] = unwrap_handle(union_1.pointer->platform_handle);
+		}
+
+		auto const user_fd_array = vsm::start_lifetime_as<int>(
+			storage,
+			user_handle_count);
+
+		data.inherit_fd_array = user_fd_array;
+		data.inherit_fd_count = user_handle_count;
+	}
+
+	if (data.inherit_fd_count != 0)
+	{
+		std::sort(data.inherit_fd_array, data.inherit_fd_array + data.inherit_fd_count);
+	}
+
+	return {};
 }
 
 
@@ -207,6 +277,15 @@ vsm::result<void> process_t::create(
 			vsm_try_assign(reaper, acquire_process_reaper());
 		}
 
+		dynamic_storage_provider<8 * sizeof(void*)> inherit_fd_storage;
+		if (vsm::any_flags(a.options, process_options::inherit_handles))
+		{
+			vsm_try_void(make_inherit_fd_array(
+				data,
+				a.inherit_handles,
+				inherit_fd_storage));
+		}
+
 		// Actually create the process:
 		if (int const error = fork_exec(data))
 		{
@@ -312,6 +391,25 @@ vsm::result<process_wait_result> process_t::wait(
 	}
 }
 
+vsm::result<native_platform_handle> process_t::duplicate_handle(
+	native_handle<process_t> const& h,
+	io_parameters_t<process_t, duplicate_handle_t> const& a)
+{
+	//TODO: Handle create_synchronized, create_non_blocking somehow?
+
+	vsm_try(new_fd, linux::pidfd_getfd(
+		/* fd: */ unwrap_handle(h.platform_handle),
+		/* target_fd: */ unwrap_handle(a.platform_handle),
+		/* flags: */ 0));
+
+	if (vsm::any_flags(a.flags, io_flags::create_inheritable))
+	{
+		vsm_try_void(set_inheritable(new_fd.get(), /* inheritable: */ true));
+	}
+
+	return wrap_handle(new_fd.release());
+}
+
 vsm::result<void> process_t::close(
 	native_handle<process_t>& h,
 	io_parameters_t<process_t, close_t> const& a)
@@ -345,6 +443,43 @@ vsm::result<void> process_t::close(
 	h.id = {};
 
 	return {};
+}
+
+
+static vsm::result<size_t> get_current_executable_path(string_buffer<char> const buffer)
+{
+	// https://www.man7.org/linux/man-pages/man5/proc_pid_exe.5.html
+
+	if (get_kernel_version() < KERNEL_VERSION(2, 2, 0))
+	{
+		return vsm::unexpected(allio_error(error::unsupported_operation));
+	}
+
+	vsm_try(path, linux::read_link_path(/* dirfd: */ -1, "/proc/self/exe", buffer));
+
+	if (path.ends_with(" (deleted)"))
+	{
+		// TODO: Handle this case better. At least provide a better error code.
+		return vsm::unexpected(allio_error(error::unknown_failure));
+	}
+
+	return path.size();
+}
+
+template<typename Char>
+static vsm::result<size_t> get_current_executable_path(string_buffer<Char> const buffer)
+{
+	small_wide_path_container container;
+	vsm_try(size, ::get_current_executable_path(container));
+	return transcode_string(std::wstring_view(container.begin(), size), buffer);
+}
+
+vsm::result<size_t> detail::get_current_executable_path(any_path_buffer const buffer)
+{
+	return buffer.visit([](auto const buffer)
+	{
+		return ::get_current_executable_path(buffer);
+	});
 }
 
 

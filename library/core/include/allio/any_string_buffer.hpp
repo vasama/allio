@@ -16,7 +16,7 @@ namespace detail {
 
 template<typename String>
 concept _any_mutable_string =
-	mutable_contiguous_container<String> &&
+	mutable_contiguous_range<String> &&
 	character<typename std::remove_cvref_t<String>::value_type>;
 
 template<typename String>
@@ -118,7 +118,7 @@ struct _string_buffer
 	{
 		auto& container = *static_cast<vsm::remove_ref_t<Container>*>(self.m_data);
 		vsm_try_discard(resize_container(container, min_size, max_size));
-		return buffer{ container.data(), container.size() };
+		return buffer{ std::ranges::data(container), std::ranges::size(container) };
 	}
 };
 

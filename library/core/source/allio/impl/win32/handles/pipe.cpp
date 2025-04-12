@@ -216,3 +216,8 @@ vsm::result<size_t> pipe_t::stream_write(
 {
 	return win32::stream_write(h, a);
 }
+
+bool pipe_t::verify_handle(native_handle<pipe_t> const& h)
+{
+	return win32::verify_object_type(unwrap_handle(h.platform_handle), L"File");
+}

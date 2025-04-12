@@ -39,6 +39,16 @@ inline vsm::result<struct stat> lstat(char const* const path)
 	return result;
 }
 
+inline vsm::result<struct stat> fstatat(int const dirfd, char const* const path, int const flags)
+{
+	struct stat result;
+	if (::fstatat(dirfd, path, &result, flags))
+	{
+		return vsm::unexpected(allio_error(get_last_error()));
+	}
+	return result;
+}
+
 } // namespace allio::linux
 
 #include <allio/linux/detail/undef.i>

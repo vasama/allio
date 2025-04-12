@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/any_path.hpp>
+#include <allio/detail/default_sequence_container.hpp>
 #include <allio/detail/mutable_buffer.hpp>
 #include <allio/detail/parameters.hpp>
 
@@ -487,85 +488,15 @@ private:
 
 namespace detail {
 
-class platform_endpoint_container
-{
-	// Enough to store any single socket address with an additional 16 bytes of space required by
-	// asynchronous accept on Windows.
-	static constexpr size_t storage_padding_size = vsm_os_win32 ? 16 : 0;
-	static constexpr size_t local_storage_size = 112 + storage_padding_size;
+// Enough to store any single socket address with an additional 16 bytes of space required by
+// asynchronous accept on Windows.
+inline constexpr size_t endpoint_padding_size = vsm_os_win32 ? 16 : 0;
+inline constexpr size_t endpoint_storage_size = 112 + endpoint_padding_size;
 
-	size_t m_size = local_storage_size;
-	union
-	{
-		alignas(detail::platform_endpoint_alignment) std::byte m_data[local_storage_size];
-		std::byte* m_data_ptr;
-	};
-
-public:
-	using value_type                    = std::byte;
-	using size_type                     = size_t;
-	using difference_type               = ptrdiff_t;
-	using reference                     = value_type&;
-	using const_reference               = value_type const&;
-	using pointer                       = value_type*;
-	using const_pointer                 = value_type const*;
-	using iterator                      = value_type*;
-	using const_iterator                = value_type const*;
-
-	platform_endpoint_container() = default;
-
-	[[nodiscard]] bool empty() const
-	{
-		return false;
-	}
-
-	[[nodiscard]] size_t size() const
-	{
-		return m_size;
-	}
-
-	[[nodiscard]] std::byte* data()
-	{
-		return m_size > local_storage_size ? m_data_ptr : m_data;
-	}
-
-	[[nodiscard]] std::byte const* data() const
-	{
-		return m_size > local_storage_size ? m_data_ptr : m_data;
-	}
-
-	[[nodiscard]] iterator begin()
-	{
-		return data();
-	}
-
-	[[nodiscard]] const_iterator begin() const
-	{
-		return data();
-	}
-
-	[[nodiscard]] iterator end()
-	{
-		return data() + m_size;
-	}
-
-	[[nodiscard]] const_iterator end() const
-	{
-		return data() + m_size;
-	}
-
-private:
-	[[nodiscard]] vsm::result<size_t> tag_invoke(
-		resize_container_t,
-		platform_endpoint_container& self,
-		size_t const min_size,
-		size_t const max_size)
-	{
-		return self._resize(min_size, max_size);
-	}
-
-	[[nodiscard]] vsm::result<size_t> _resize(size_t min_size, size_t max_size);
-};
+using platform_endpoint_container = default_sequence_container<
+	std::byte,
+	endpoint_storage_size,
+	platform_endpoint_alignment>;
 
 } // namespace detail
 

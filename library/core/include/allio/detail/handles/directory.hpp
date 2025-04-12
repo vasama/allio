@@ -321,6 +321,13 @@ struct directory_t : fs_object_t
 		io_parameters_t<directory_t, restart_t> const& a);
 
 
+	using is_serializable = directory_t;
+
+	static vsm::result<void> serialize(
+		native_handle<directory_t>& h,
+		serialization_context& serializer);
+
+
 	template<typename Handle, typename Traits>
 	struct facade : base_type::facade<Handle, Traits>
 	{

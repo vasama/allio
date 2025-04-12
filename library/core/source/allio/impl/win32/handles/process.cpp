@@ -127,14 +127,17 @@ using attribute = attribute_list_builder::attribute;
 
 
 template<size_t Capacity>
-using inherit_handles_storage = basic_dynamic_buffer<std::byte, alignof(HANDLE), Capacity * sizeof(HANDLE)>;
+using inherit_handles_storage = basic_dynamic_buffer<
+	std::byte,
+	alignof(HANDLE),
+	Capacity * sizeof(HANDLE)>;
 
 template<size_t Capacity>
 static vsm::result<attribute> make_inherit_handles_attribute(
 	attribute_list_builder& builder,
 	basic_dynamic_buffer<std::byte, alignof(HANDLE), Capacity>& storage,
 	std::span<HANDLE const> const internal_handles,
-	any_handle_span<platform_object_t> const user_handles)
+	platform_handles_view const user_handles)
 {
 	using native_handle_type = native_handle<platform_object_t>;
 	using pointer_type = native_handle_type const*;
@@ -148,15 +151,13 @@ static vsm::result<attribute> make_inherit_handles_attribute(
 	HANDLE const* handle_array = internal_handles.data();
 	size_t handle_count = internal_handles.size();
 
-	if (size_t const user_handle_count = user_handles.size())
+	if (size_t const user_handle_count = user_handles.copy_to(nullptr))
 	{
 		size_t const new_handle_count = handle_count + user_handle_count;
 		vsm_try(buffer, storage.reserve(new_handle_count * sizeof(HANDLE)));
 
-		user_handles.copy(
-			/* offset: */ 0,
-			user_handle_count,
-			vsm::start_lifetime_as_array<pointer_type>(buffer, user_handle_count));
+		vsm_verify(user_handle_count == user_handles.copy_to(
+			vsm::start_lifetime_as_array<pointer_type>(buffer, user_handle_count)));
 
 		auto const user_handle_array = vsm::start_lifetime_as_array<user_handle_union>(
 			buffer,
@@ -171,7 +172,7 @@ static vsm::result<attribute> make_inherit_handles_attribute(
 			buffer,
 			new_handle_count);
 
-		memcpy(
+		std::memcpy(
 			new_handle_array + user_handle_count,
 			handle_array,
 			handle_count * sizeof(HANDLE));
@@ -192,6 +193,74 @@ static vsm::result<attribute> make_inherit_handles_attribute(
 
 	return {};
 }
+
+
+class small_wide_path_container
+{
+	size_t m_size = MAX_PATH;
+
+	union
+	{
+		wchar_t m_data[MAX_PATH];
+		wchar_t* m_data_ptr;
+	};
+
+public:
+	using value_type = wchar_t;
+
+	small_wide_path_container() = default;
+
+	small_wide_path_container(small_wide_path_container const&) = delete;
+	small_wide_path_container& operator=(small_wide_path_container const&) = delete;
+
+	~small_wide_path_container()
+	{
+		if (m_size > MAX_PATH)
+		{
+			::delete[] m_data_ptr;
+		}
+	}
+
+	[[nodiscard]] wchar_t* begin()
+	{
+		return m_size <= MAX_PATH ? m_data : m_data_ptr;
+	}
+
+	[[nodiscard]] wchar_t* end()
+	{
+		return begin() + m_size;
+	}
+
+private:
+	[[nodiscard]] friend vsm::result<size_t> tag_invoke(
+		resize_container_t,
+		small_wide_path_container& self,
+		size_t const min_size,
+		size_t const max_size)
+	{
+		static constexpr size_t max_path_size = 0x7FFF;
+
+		if (min_size > max_size)
+		{
+			if (self.m_size > MAX_PATH)
+			{
+				return vsm::unexpected(allio_error(error::invariant_violation));
+			}
+
+			wchar_t* const ptr = ::new (std::nothrow) wchar_t[max_path_size];
+
+			if (ptr == nullptr)
+			{
+				return vsm::unexpected(allio_error(error::not_enough_memory));
+			}
+
+			self.m_data_ptr = ptr;
+			self.m_size = max_path_size;
+		}
+
+		return self.m_size;
+	}
+};
 
 } // namespace
 
@@ -339,8 +408,8 @@ vsm::result<void> process_t::create(
 			// Redirecting standard streams requires inheritance of handles.
 			inherit_handles = true;
 
-			// If the user did not request inheritance,
-			// the inheritance is restricted to just the standard stream handles.
+			// If the user did not request inheritance, the inheritance is restricted to just the
+			// standard stream handles.
 			inherit_handles_internal = std::span(&startup_info.StartupInfo.hStdInput, 3);
 		}
 	}
@@ -379,9 +448,25 @@ vsm::result<void> process_t::create(
 	unique_handle process(process_information.hProcess);
 	unique_handle thread(process_information.hThread);
 
-	h.flags = flags::not_null;
-	h.platform_handle = wrap_handle(process.release());
-	h.id = process_id(process_information.dwProcessId);
+	handle_flags flags = handle_flags::none;
+
+	if (vsm::any_flags(a.options, process_options::wait_on_close))
+	{
+		flags |= flags::wait_on_close;
+	}
+
+	h = native_handle<process_t>
+	{
+		native_handle<platform_object_t>
+		{
+			native_handle<object_t>
+			{
+				flags::not_null | flags,
+			},
+			wrap_handle(process.release()),
+		},
+		process_id(process_information.dwProcessId),
+	};
 
 	return {};
 }
@@ -461,6 +546,37 @@ vsm::result<process_wait_result> process_t::wait(
 	return process_wait_result(exit_code);
 }
 
+vsm::result<native_platform_handle> process_t::duplicate_handle(
+	native_handle<process_t> const& h,
+	io_parameters_t<process_t, duplicate_handle_t> const& a)
+{
+	//TODO: Handle create_synchronized, create_non_blocking somehow?
+
+	ULONG handle_attributes = 0;
+
+	if (vsm::any_flags(a.flags, io_flags::create_inheritable))
+	{
+		handle_attributes |= OBJ_INHERIT;
+	}
+
+	HANDLE new_handle;
+	NTSTATUS const status = win32::NtDuplicateObject(
+		/* SourceProcessHandle: */ unwrap_handle(h.platform_handle),
+		/* SourceHandle: */ unwrap_handle(a.platform_handle),
+		/* TargetProcessHandle: */ GetCurrentProcess(),
+		/* TargetHandle: */ &new_handle,
+		/* DesiredAccess: */ 0,
+		/* HandleAttributes: */ handle_attributes,
+		/* Options: */ DUPLICATE_SAME_ACCESS);
+
+	if (!NT_SUCCESS(status))
+	{
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
+	}
+
+	return wrap_handle(new_handle);
+}
+
 vsm::result<void> process_t::close(
 	native_handle<process_t>& h,
 	io_parameters_t<process_t, close_t> const& a)
@@ -486,6 +602,51 @@ vsm::result<void> process_t::close(
 	}
 
 	return base_type::close(h, a);
+}
+
+
+static vsm::result<size_t> get_current_executable_path(string_buffer<wchar_t> const buffer)
+{
+	size_t min_string_size = 2;
+
+	while (true)
+	{
+		vsm_try(path_string, buffer.resize(min_string_size, static_cast<DWORD>(-1)));
+
+		DWORD const path_size = GetModuleFileNameW(
+			/* hModule: */ NULL,
+			path_string.data(),
+			vsm::truncating(path_string.size()));
+
+		if (path_size == 0)
+		{
+			return vsm::unexpected(allio_error(get_last_error()));
+		}
+
+		if (path_size < path_string.size())
+		{
+			vsm_try_discard(buffer.resize(path_size));
+			return path_size;
+		}
+
+		min_string_size = path_string.size() + 1;
+	}
+}
+
+template<typename Char>
+static vsm::result<size_t> get_current_executable_path(string_buffer<Char> const buffer)
+{
+	small_wide_path_container container;
+	vsm_try(size, ::get_current_executable_path(container));
+	return transcode_string(std::wstring_view(container.begin(), size), buffer);
+}
+
+vsm::result<size_t> detail::get_current_executable_path(any_path_buffer const buffer)
+{
+	return buffer.visit([](auto const buffer)
+	{
+		return ::get_current_executable_path(buffer);
+	});
 }
 
 

@@ -78,21 +78,52 @@ typedef void(NTAPI* PIO_APC_ROUTINE)(
 struct _OBJECT_BASIC_INFORMATION
 {
 	ULONG Attributes;
-	ULONG GrantedAccess;
+	ACCESS_MASK GrantedAccess;
 	ULONG HandleCount;
 	ULONG PointerCount;
 	ULONG PagedPoolCharge;
 	ULONG NonPagedPoolCharge;
 	ULONG TotalNumberOfObjects;
-	ULONG Reserved[3];
 	ULONG TotalNumberOfHandles;
-	DWORD Unknown;
+	ULONG Reserved[1];
 	ULONG NameInfoSize;
 	ULONG TypeInfoSize;
 	ULONG SecurityDescriptorSize;
 	LARGE_INTEGER CreationTime;
 }
 typedef OBJECT_BASIC_INFORMATION, *POBJECT_BASIC_INFORMATION;
+
+static_assert(sizeof(OBJECT_BASIC_INFORMATION) == sizeof(PUBLIC_OBJECT_BASIC_INFORMATION));
+
+struct _OBJECT_TYPE_INFORMATION
+{
+	UNICODE_STRING TypeName;
+	ULONG TotalNumberOfObjects;
+	ULONG TotalNumberOfHandles;
+	ULONG TotalPagedPoolUsage;
+	ULONG TotalNonPagedPoolUsage;
+	ULONG TotalNamePoolUsage;
+	ULONG TotalHandleTableUsage;
+	ULONG HighWaterNumberOfObjects;
+	ULONG HighWaterNumberOfHandles;
+	ULONG HighWaterPagedPoolUsage;
+	ULONG HighWaterNonPagedPoolUsage;
+	ULONG HighWaterNamePoolUsage;
+	ULONG HighWaterHandleTableUsage;
+	ULONG InvalidAttributes;
+	GENERIC_MAPPING GenericMapping;
+	ULONG ValidAccessMask;
+	BOOLEAN SecurityRequired;
+	BOOLEAN MaintainHandleCount;
+	UCHAR TypeIndex;
+	UCHAR Reserved[1];
+	ULONG PoolType;
+	ULONG DefaultPagedPoolCharge;
+	ULONG DefaultNonPagedPoolCharge;
+}
+typedef OBJECT_TYPE_INFORMATION, *POBJECT_TYPE_INFORMATION;
+
+static_assert(sizeof(OBJECT_TYPE_INFORMATION) == sizeof(PUBLIC_OBJECT_TYPE_INFORMATION));
 
 enum _FILE_INFORMATION_CLASS
 {
@@ -439,6 +470,15 @@ extern NTSTATUS(NTAPI* RtlSetCurrentDirectory_U)(
 extern NTSTATUS(NTAPI* NtClose)(
 	_In_ HANDLE Handle);
 
+extern NTSTATUS(NTAPI* NtDuplicateObject)(
+	_In_ HANDLE SourceProcessHandle,
+	_In_ HANDLE SourceHandle,
+	_In_opt_ HANDLE TargetProcessHandle,
+	_Out_opt_ PHANDLE TargetHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_ ULONG HandleAttributes,
+	_In_ ULONG Options);
+
 extern NTSTATUS(NTAPI* NtWaitForSingleObject)(
 	_In_ HANDLE Handle,
 	_In_ BOOLEAN Alertable,
@@ -722,6 +762,12 @@ extern NTSTATUS(NTAPI* NtCreateNamedPipeFile)(
 	unicode_string.MaximumLength = unicode_string.Length;
 
 	return unicode_string;
+}
+
+[[nodiscard]] inline std::wstring_view get_unicode_string(UNICODE_STRING const& unicode_string)
+{
+	vsm_assert(unicode_string.Length % sizeof(wchar_t) == 0); //PRECONDITION
+	return std::wstring_view(unicode_string.Buffer, unicode_string.Length / sizeof(wchar_t));
 }
 
 

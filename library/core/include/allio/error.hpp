@@ -35,11 +35,17 @@ decltype(auto) unrecoverable(auto&& r, auto&& default_value) noexcept
 
 inline constexpr char error_category_name[] = "allio";
 
-struct error_category final : std::error_category
+struct error_category_base : std::error_category
+{
+	virtual std::error_code unwrap(std::error_code error) const noexcept = 0;
+};
+
+struct error_category final : error_category_base
 {
 	char const* name() const noexcept override;
 	std::string message(int const code) const override;
 	std::error_condition default_error_condition(int code) const noexcept override;
+	std::error_code unwrap(std::error_code error) const noexcept override;
 };
 
 allio_detail_api
@@ -124,6 +130,14 @@ enum class error
 {
 	return std::error_condition(static_cast<int>(error), detail::error_category_instance);
 }
+
+
+namespace detail {
+
+[[nodiscard]] bool is_error_code(std::error_code ec, error e);
+[[nodiscard]] bool is_error_code(std::error_code ec, std::errc e);
+
+} // namespace detail
 
 
 enum class error_source : uintptr_t;

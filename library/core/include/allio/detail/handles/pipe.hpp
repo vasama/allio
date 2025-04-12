@@ -39,6 +39,16 @@ struct pipe_t : platform_object_t
 		native_handle<pipe_t> const& h,
 		io_parameters_t<pipe_t, stream_write_t> const& a);
 
+
+	using is_serializable = pipe_t;
+
+	static vsm::result<void> serialize(
+		native_handle<pipe_t>& h,
+		serialization_context& serializer);
+
+	static bool verify_handle(native_handle<pipe_t> const& h);
+
+
 	template<typename Handle, typename Traits>
 	struct facade
 		: base_type::facade<Handle, Traits>

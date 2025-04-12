@@ -109,7 +109,6 @@ struct openssl_state_base
 
 	void read_completed(size_t const transferred)
 	{
-
 		m_want_read = false;
 	}
 

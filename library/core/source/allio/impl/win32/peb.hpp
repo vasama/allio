@@ -6,7 +6,7 @@ namespace allio::win32 {
 
 class unique_peb_lock
 {
-	bool m_owns_lock;
+	bool m_owns_lock = false;
 
 public:
 	explicit unique_peb_lock(bool const lock = false)

@@ -219,8 +219,8 @@ static vsm::result<directory_stream_pointer> query_directory_file(
 	{
 		//TODO: Deadline
 		status = event.wait_for_io(handle, io_status_block, deadline::never());
+		vsm_assert(io_status_block.Status == status);
 	}
-	vsm_assert(io_status_block.Status == status);
 
 	directory_stream_pointer stream_pointer;
 	status = query_directory_file_completed(

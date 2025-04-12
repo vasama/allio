@@ -118,7 +118,7 @@ private:
 	}
 
 	template<typename Container>
-	vsm::result<vsm::allocation> _resize_container(
+	static vsm::result<vsm::allocation> _resize_container(
 		void* const object,
 		size_t const min_size,
 		size_t const max_size,

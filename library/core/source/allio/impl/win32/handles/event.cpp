@@ -3,12 +3,11 @@
 #include <allio/detail/unique_handle.hpp>
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/win32/error.hpp>
+#include <allio/impl/win32/handles/platform_object.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/win32/kernel_error.hpp>
 
 #include <vsm/out_resource.hpp>
-
-#include <Windows.h>
 
 using namespace allio;
 using namespace allio::detail;
@@ -123,4 +122,9 @@ vsm::result<void> event_t::wait(
 	}
 
 	return {};
+}
+
+bool event_t::verify_handle(native_handle<event_t> const& h)
+{
+	return win32::verify_object_type(unwrap_handle(h.platform_handle), L"Event");
 }

@@ -1,5 +1,6 @@
 #include <allio/impl/win32/handles/platform_object.hpp>
 
+#include <allio/detail/serialization.hpp>
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>
@@ -11,6 +12,40 @@
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
+
+bool win32::verify_object_type(HANDLE const handle, std::wstring_view const type)
+{
+	struct
+	{
+		struct
+		{
+			OBJECT_TYPE_INFORMATION information;
+			WCHAR typename_storage[32];
+		}
+		storage;
+
+		// In some versions of Windows for certain object types, ObjectTypeInformation may overrun
+		// the provided buffer by at least one WCHAR (null terminator). For this reason, a generous
+		// amount of padding is added after the actual information buffer.
+		UCHAR padding[8];
+	}
+	storage;
+
+	ULONG returned_size;
+	NTSTATUS const status = win32::NtQueryObject(
+		handle,
+		ObjectTypeInformation,
+		&storage,
+		sizeof(storage.storage),
+		&returned_size);
+
+	if (!NT_SUCCESS(status))
+	{
+		return false;
+	}
+
+	return get_unicode_string(storage.storage.information.TypeName) == type;
+}
 
 vsm::result<ACCESS_MASK> win32::get_handle_access(HANDLE const handle)
 {
@@ -28,12 +63,6 @@ vsm::result<ACCESS_MASK> win32::get_handle_access(HANDLE const handle)
 	{
 		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
-
-	static constexpr size_t field_extent =
-		offsetof(OBJECT_BASIC_INFORMATION, GrantedAccess) +
-		sizeof(OBJECT_BASIC_INFORMATION::GrantedAccess);
-
-	vsm_assert(returned_size >= field_extent);
 
 	return information.GrantedAccess;
 }
@@ -85,5 +114,29 @@ vsm::result<void> platform_object_t::close(
 		close_platform_handle(unwrap_handle(h.platform_handle));
 	}
 	h = {};
+	return {};
+}
+
+vsm::result<void> platform_object_t::serializer_visit(
+	native_handle<platform_object_t>& h,
+	serialization_context& serializer)
+{
+	vsm_try_void(base_type::serializer_visit(h, serializer));
+	vsm_try_void(serializer.visit(h.platform_handle));
+
+	// The size of Windows HANDLE depends on the target architecture; either 32-bit or 64-bit. In
+	// order to maintain compatibility between 32-bit and 64-bit processes, when targeting a 32-bit
+	// architecture an additional 32 bits containing the high bit of the handle value are written
+	// after the handle. Being that Windows is always little-endian, this effectively sign-extends
+	// the handle value to 64-bits.
+	if constexpr (sizeof(h.platform_handle) == sizeof(uint32_t))
+	{
+		int32_t extension = static_cast<int32_t>(h.platform_handle) >= 0
+			? 0
+			: -1;
+
+		vsm_try_void(serializer.visit(extension));
+	}
+
 	return {};
 }

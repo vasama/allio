@@ -1,8 +1,10 @@
 #pragma once
 
+#include <cstdint>
+
 namespace allio {
 
-enum class encoding
+enum class encoding : uint8_t
 {
 	narrow_execution_encoding = 1,
 	wide_execution_encoding,

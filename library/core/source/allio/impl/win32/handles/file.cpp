@@ -26,13 +26,6 @@ byte_io_limits file_t::get_byte_io_limits(native_handle<file_t> const& h)
 	};
 }
 
-vsm::result<void> file_t::open(
-	native_handle<file_t>& h,
-	io_parameters_t<file_t, open_t> const& a)
-{
-	return open_fs_object(h, a, open_kind::file);
-}
-
 vsm::result<fs_size> file_t::tell(
 	native_handle<file_t> const& h,
 	io_parameters_t<file_t, tell_t> const&)

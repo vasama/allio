@@ -106,6 +106,18 @@ struct thread_t : platform_object_t
 		native_type const& h,
 		io_parameters_t<thread_t, wait_t> const& args);
 
+
+	using is_serializable = thread_t;
+
+	static vsm::result<void> serializer_visit(
+		native_handle<thread_t>& h,
+		serialization_context& serializer);
+
+	static vsm::result<void> serialize(
+		native_handle<thread_t>& h,
+		serialization_context& serializer);
+
+
 	template<typename Handle, typename Traits>
 	struct facade : base_type::facade<Handle, Traits>
 	{

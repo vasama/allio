@@ -46,6 +46,24 @@ static ACCESS_MASK get_section_access(protection const protection)
 	return section_access;
 }
 
+static handle_flags make_protection_flags(protection const protection)
+{
+	handle_flags flags = handle_flags::none;
+	if (vsm::all_flags(protection, protection::read))
+	{
+		flags |= section_t::flags::readable;
+	}
+	if (vsm::all_flags(protection, protection::write))
+	{
+		flags |= section_t::flags::writable;
+	}
+	if (vsm::all_flags(protection, protection::execute))
+	{
+		flags |= section_t::flags::executable;
+	}
+	return flags;
+}
+
 vsm::result<void> section_t::create(
 	native_handle<section_t>& h,
 	io_parameters_t<section_t, create_t> const& a)
@@ -138,9 +156,17 @@ vsm::result<void> section_t::create(
 		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
-	h.flags = flags::not_null;
-	h.platform_handle = wrap_handle(handle.release());
-	h.protection = protection;
+	h = native_handle<section_t>
+	{
+		native_handle<platform_object_t>
+		{
+			native_handle<object_t>
+			{
+				flags::not_null | make_protection_flags(protection),
+			},
+			wrap_handle(handle.release()),
+		},
+	};
 
 	return {};
 }

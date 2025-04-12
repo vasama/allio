@@ -2,6 +2,7 @@
 
 #include <allio/handles/process.hpp>
 #include <allio/nothrow/traits.hpp>
+#include <allio/path.hpp>
 
 namespace allio::nothrow {
 inline namespace processes {
@@ -13,6 +14,17 @@ using process_handle = traits_type::handle<process_t>;
 namespace this_process {
 
 using namespace detail::_this_process;
+
+[[nodiscard]] vsm::result<size_t> get_executable_path(any_path_buffer const buffer)
+{
+	return detail::_get_current_executable_path<traits_type>(buffer);
+}
+
+template<typename Path = path>
+[[nodiscard]] vsm::result<Path> get_executable_path()
+{
+	return detail::_get_current_executable_path<Path, traits_type>();
+}
 
 [[nodiscard]] vsm::result<process_handle> open(auto&&... args)
 {

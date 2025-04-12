@@ -121,6 +121,32 @@ struct event_t : platform_object_t
 		, wait_t
 	>;
 
+	static vsm::result<void> create(
+		native_handle<event_t>& h,
+		io_parameters_t<event_t, create_t> const& args);
+
+	static vsm::result<void> signal(
+		native_handle<event_t> const& h,
+		io_parameters_t<event_t, signal_t> const& args);
+
+	static vsm::result<void> reset(
+		native_handle<event_t> const& h,
+		io_parameters_t<event_t, reset_t> const& args);
+
+	static vsm::result<void> wait(
+		native_handle<event_t> const& h,
+		io_parameters_t<event_t, wait_t> const& args);
+
+
+	using is_serializable = event_t;
+
+	static vsm::result<void> serialize(
+		native_handle<event_t>& h,
+		serialization_context& serializer);
+
+	static bool verify_handle(native_handle<event_t> const& h);
+
+
 	template<typename Handle, typename Traits>
 	struct facade : base_type::facade<Handle, Traits>
 	{
@@ -166,22 +192,6 @@ struct event_t : platform_object_t
 				a);
 		}
 	};
-
-	static vsm::result<void> create(
-		native_handle<event_t>& h,
-		io_parameters_t<event_t, create_t> const& args);
-
-	static vsm::result<void> signal(
-		native_handle<event_t> const& h,
-		io_parameters_t<event_t, signal_t> const& args);
-
-	static vsm::result<void> reset(
-		native_handle<event_t> const& h,
-		io_parameters_t<event_t, reset_t> const& args);
-
-	static vsm::result<void> wait(
-		native_handle<event_t> const& h,
-		io_parameters_t<event_t, wait_t> const& args);
 };
 
 

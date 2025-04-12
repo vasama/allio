@@ -3,8 +3,6 @@
 #include <allio/detail/unique_handle.hpp>
 #include <allio/impl/linux/error.hpp>
 
-#include <vsm/lazy.hpp>
-
 #include <signal.h>
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -22,7 +20,22 @@ inline vsm::result<detail::unique_handle> pidfd_open(pid_t const pid, unsigned c
 		return vsm::unexpected(allio_error(get_last_error()));
 	}
 
-	return vsm_lazy(detail::unique_handle(fd));
+	return vsm::result<detail::unique_handle>(vsm::result_value, fd);
+}
+
+inline vsm::result<detail::unique_handle> pidfd_getfd(
+	int const fd,
+	int const target_fd,
+	unsigned const flags)
+{
+	int const new_fd = static_cast<int>(syscall(SYS_pidfd_getfd, fd, target_fd, flags));
+
+	if (fd == -1)
+	{
+		return vsm::unexpected(allio_error(get_last_error()));
+	}
+
+	return vsm::result<detail::unique_handle>(vsm::result_value, new_fd);
 }
 
 inline int pidfd_send_signal(

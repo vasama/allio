@@ -21,43 +21,6 @@ fs_path detail::get_null_device_path()
 	return platform_path_view("/dev/null");
 }
 
-vsm::result<void> file_t::open(
-	native_handle<file_t>& h,
-	io_parameters_t<file_t, open_t> const& a)
-{
-	return open_fs_object(h, a, open_kind::file);
-
-#if 0
-	auto const open_args = open_parameters::make(open_kind::file, a);
-	vsm_try_bind((flags, mode), open_info::make(open_args));
-
-	api_string_storage path_storage;
-	vsm_try(path, make_api_c_string(path_storage, a.path.path.string()));
-
-	vsm_try(fd, linux::open_file(
-		unwrap_handle(a.path.base->platform_handle),
-		path,
-		flags,
-		mode));
-
-	h = fs_object_t::native_type
-	{
-		platform_object_t::native_type
-		{
-			object_t::native_type
-			{
-				flags::not_null | open_args.handle_flags,
-			},
-			wrap_handle(fd.release()),
-		},
-		//TODO: Validate flags
-		a.flags,
-	};
-
-	return {};
-#endif
-}
-
 vsm::result<fs_size> file_t::tell(
 	native_handle<file_t> const& h,
 	io_parameters_t<file_t, tell_t> const&)

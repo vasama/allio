@@ -66,6 +66,15 @@ std::error_condition encoded_error_category<Encoding, ErrorCode>::default_error_
 }
 
 template<typename Encoding, typename ErrorCode>
+std::error_code encoded_error_category<Encoding, ErrorCode>::unwrap(
+	std::error_code const ec) const noexcept
+{
+	vsm_assert(ec.category() == *this); //PRECONDITION
+	auto const decoded = _decode_error_code<Encoding, ErrorCode>(ec.value());
+	return std::error_code(static_cast<int>(decoded.code), *this);
+}
+
+template<typename Encoding, typename ErrorCode>
 inline encoded_error_category<Encoding, ErrorCode>
 const encoded_error_category<Encoding, ErrorCode>::instance;
 

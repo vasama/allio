@@ -12,6 +12,39 @@ namespace allio::detail {
 struct no_parameters_t {};
 
 
+template<typename P, P PointerToMember, typename U>
+class assign_member_t;
+
+template<typename T, typename C, T(C::* PointerToMember), typename U>
+	requires std::is_assignable_v<T, U>
+class assign_member_t<T(C::*), PointerToMember, U>
+{
+	U&& m_value;
+
+public:
+	explicit assign_member_t(U&& value)
+		: m_value(value)
+	{
+	}
+
+	void set_argument_on(C& arguments) const&
+	{
+		(arguments.*PointerToMember) = m_value;
+	}
+
+	void set_argument_on(C& arguments) const&&
+	{
+		(arguments.*PointerToMember) = vsm_move(*this).m_value;
+	}
+};
+
+template<auto Member, typename T>
+auto assign_member(T&& value)
+{
+	return assign_member_t<decltype(Member), Member, T>(vsm_forward(value));
+}
+
+
 struct set_argument_t
 {
 	template<typename Parameters, typename Argument>
@@ -23,9 +56,13 @@ struct set_argument_t
 		{
 			arguments = vsm_forward(new_argument);
 		}
-		else
+		else if constexpr (requires { arguments.set_argument(vsm_forward(new_argument)); })
 		{
 			arguments.set_argument(vsm_forward(new_argument));
+		}
+		else
+		{
+			vsm_forward(new_argument).set_argument_on(arguments);
 		}
 	}
 };
