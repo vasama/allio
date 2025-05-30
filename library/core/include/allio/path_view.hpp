@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/detail/path.hpp>
+#include <allio/detail/path_fwd.hpp>
 #include <allio/detail/platform.h>
 #include <allio/path_char.hpp>
 #include <allio/path_literals.hpp>
@@ -15,19 +16,19 @@
 
 namespace allio {
 
-template<typename Char, typename String>
-class basic_path_adaptor;
-
-template<typename Char>
-class basic_path_view : std::basic_string_view<Char>
+template<typename Char, typename Encoding = void>
+class basic_path_view : public detail::path_encoding_base<Encoding>
 {
-	template<typename String>
-	using path_template = basic_path_adaptor<Char, String>;
-
 public:
 	using string_view_type = std::basic_string_view<Char>;
 
+private:
+	template<typename String>
+	using path_template = basic_path_adaptor<Char, String, Encoding>;
 
+	string_view_type m_string_view;
+
+public:
 	static constexpr Char preferred_separator = static_cast<Char>(
 #if vsm_os_win32
 		'\\'
@@ -152,53 +153,56 @@ public:
 	basic_path_view() = default;
 
 	constexpr basic_path_view(basic_path_literal<Char> const literal)
-		: string_view_type(literal.string())
+		: m_string_view(literal.string())
 	{
 	}
 
 	template<typename String>
 	constexpr basic_path_view(path_template<String> const& path)
-		: string_view_type(path.string())
+		: m_string_view(path.string())
 	{
 	}
 
 	explicit constexpr basic_path_view(string_view_type const string)
-		: string_view_type(string)
+		: m_string_view(string)
 	{
 	}
 
 	explicit constexpr basic_path_view(Char const* const c_str)
-		: string_view_type(c_str)
+		: m_string_view(c_str)
 	{
 	}
 
 	explicit constexpr basic_path_view(Char const* const data, size_t const size)
-		: string_view_type(data, size)
+		: m_string_view(data, size)
 	{
 	}
 
 	template<std::contiguous_iterator Iterator, std::sized_sentinel_for<Iterator> Sentinel>
 	explicit constexpr basic_path_view(Iterator const iterator, Sentinel const sentinel)
 		//requires std::is_same_v<std::iterator_value_t<Iterator>, Char>
-		: string_view_type(iterator, sentinel)
+		: m_string_view(iterator, sentinel)
 	{
 	}
 
 	template<std::ranges::contiguous_range Range>
 	explicit constexpr basic_path_view(Range&& range)
 		//requires std::is_same_v<std::ranges::range_value_t<Range>, Char>
-		: string_view_type(static_cast<Range&&>(range))
+		: m_string_view(static_cast<Range&&>(range))
 	{
 	}
 
 	basic_path_view(decltype(nullptr)) = delete;
 
 
-	using string_view_type::empty;
+	[[nodiscard]] constexpr bool empty() const
+	{
+		return m_string_view.empty();
+	}
 
 	[[nodiscard]] constexpr string_view_type string() const
 	{
-		return *this;
+		return m_string_view;
 	}
 
 
@@ -278,14 +282,14 @@ public:
 
 	[[nodiscard]] constexpr iterator begin() const
 	{
-		Char const* const data = this->data();
-		return iterator::make_begin(data, data + this->size());
+		Char const* const data = m_string_view.data();
+		return iterator::make_begin(data, data + m_string_view.size());
 	}
 
 	[[nodiscard]] constexpr iterator end() const
 	{
-		Char const* const data = this->data();
-		return iterator::make_end(data, data + this->size());
+		Char const* const data = m_string_view.data();
+		return iterator::make_end(data, data + m_string_view.size());
 	}
 
 	[[nodiscard]] constexpr reverse_iterator rbegin() const
@@ -339,12 +343,13 @@ private:
 
 	friend string_view_type tag_invoke(get_path_string_t, basic_path_view const& self)
 	{
-		return static_cast<string_view_type const&>(self);
+		return self.m_string_view;
 	}
 };
 
 
-template<typename Char>
+//TODO: Make this variadic to allow combining N paths at once.
+template<typename Char, typename Encoding = void>
 class basic_path_combine_result
 {
 	std::basic_string_view<Char> m_lhs;
@@ -394,20 +399,30 @@ public:
 	}
 };
 
-template<typename Char>
+template<typename Char, typename Encoding>
 [[nodiscard]] constexpr basic_path_combine_result<Char> combine_path(
-	basic_path_view<Char> lhs,
-	basic_path_view<Char> rhs);
+	basic_path_view<Char, Encoding> lhs,
+	basic_path_view<Char, Encoding> rhs);
 
 
-//TODO: platform_path_view should be renamed to path_view
 using path_view = basic_path_view<char>;
 using wpath_view = basic_path_view<wchar_t>;
+using u8path_view = basic_path_view<char8_t>;
+using u16path_view = basic_path_view<char16_t>;
+using u32path_view = basic_path_view<char32_t>;
 
 using path_combine_result = basic_path_combine_result<char>;
+using wpath_combine_result = basic_path_combine_result<wchar_t>;
+using u8path_combine_result = basic_path_combine_result<char8_t>;
+using u16path_combine_result = basic_path_combine_result<char16_t>;
+using u32path_combine_result = basic_path_combine_result<char32_t>;
 
-using platform_path_view = basic_path_view<platform_path_char_type>;
-using platform_path_combine_result = basic_path_combine_result<platform_path_char_type>;
+using native_path_view = basic_path_view<native_path_char_t, no_encoding_t>;
+using native_path_combine_result = basic_path_combine_result<native_path_char_t, no_encoding_t>;
+
+// TODO: Get rid of these and use native_path_view instead.
+using platform_path_view = native_path_view;
+using platform_path_combine_result = native_path_combine_result;
 
 } // namespace allio
 

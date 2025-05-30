@@ -431,10 +431,11 @@ static vsm::result<handle_with_flags> open_named_file(open_parameters const& a)
 
 static vsm::result<handle_with_flags> open_anonymous_file(open_parameters const& a)
 {
+	//TODO: Reject arguments that doesn't allow the required sharing?
+
 	vsm_try(file, open_unique_file(a));
 
-	// Delete the file by reopening it and
-	// setting delete-on-close on the new handle.
+	// Delete the file by reopening it and setting delete-on-close on the new handle.
 	{
 		open_info const info =
 		{
@@ -496,7 +497,7 @@ vsm::result<size_t> fs_object_t::get_current_path(
 		information->FileName,
 		information->FileNameLength / sizeof(wchar_t));
 
-	return transcode_string(wide_path, a.buffer);
+	return copy_or_transcode_string(wide_path, a.buffer.string());
 }
 
 

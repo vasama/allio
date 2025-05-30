@@ -638,12 +638,12 @@ static vsm::result<size_t> get_current_executable_path(string_buffer<Char> const
 {
 	small_wide_path_container container;
 	vsm_try(size, ::get_current_executable_path(container));
-	return transcode_string(std::wstring_view(container.begin(), size), buffer);
+	return copy_or_transcode_string(std::wstring_view(container.begin(), size), buffer);
 }
 
 vsm::result<size_t> detail::get_current_executable_path(any_path_buffer const buffer)
 {
-	return buffer.visit([](auto const buffer)
+	return detail::visit_as<char8_t, wchar_t, char32_t>(buffer.string(), [](auto const buffer)
 	{
 		return ::get_current_executable_path(buffer);
 	});

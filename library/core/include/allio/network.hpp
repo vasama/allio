@@ -357,7 +357,7 @@ public:
 		: any_endpoint_view(local_t(), get_path_string(path))
 	{
 		static_assert(
-			std::is_same_v<typename detail::_path_string_type<Path>::value_type, char>,
+			std::is_same_v<typename path_string_t<Path>::value_type, char>,
 			"Automatic transcoding of local addresses is not currently supported.");
 	}
 

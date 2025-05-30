@@ -67,9 +67,18 @@ using openssl_ssl_ptr = std::unique_ptr<openssl_ssl, openssl_ssl_deleter>;
 template<typename T>
 using openssl_result = vsm::result<T, std::monostate>;
 
-struct openssl_operation_base : vsm::intrusive::mpsc_queue_link {};
+struct openssl_operation_base : vsm::intrusive::mpsc_queue_link
+{
+	enum class state_flags : uint8_t
+	{
+		active                  = 1 << 0,
+		cancel                  = 1 << 1,
+	};
 
-struct openssl_state_base
+	vsm::atomic<state_flags> m_state_flags;
+};
+
+struct openssl_object_base
 {
 	struct bio_type;
 
@@ -88,10 +97,10 @@ struct openssl_state_base
 
 	vsm::intrusive::mpsc_queue<openssl_operation_base> m_queue;
 
-	openssl_state_base() = default;
-	openssl_state_base(openssl_state_base const&) = delete;
-	openssl_state_base& operator=(openssl_state_base const&) = delete;
-	virtual ~openssl_state_base() = default;
+	openssl_object_base() = default;
+	openssl_object_base(openssl_object_base const&) = delete;
+	openssl_object_base& operator=(openssl_object_base const&) = delete;
+	virtual ~openssl_object_base() = default;
 
 	vsm::result<void> initialize(openssl_ssl_ctx* ssl_ctx);
 
@@ -125,12 +134,12 @@ struct openssl_state_base
 	void delete_context();
 };
 
-template<typename RawOperationStates>
-struct openssl_state : openssl_state_base
+template<typename... RawOperationStates>
+struct openssl_object : openssl_object_base
 {
-	RawOperationStates m_raw_state;
+	std::variant<RawOperationStates...> m_raw_state;
 
-	static vsm::result<openssl_state*> create(openssl_ssl_ctx* const ssl_ctx);
+	static vsm::result<openssl_object*> create(openssl_ssl_ctx* const ssl_ctx);
 };
 
 #if 0
@@ -187,7 +196,7 @@ public:
 };
 
 template<typename BufferPoolHandle>
-class openssl_state : openssl_state_base
+class openssl_state : openssl_object_base
 {
 	using buffer_handle_type = typename BufferPoolHandle::buffer_handle_type;
 

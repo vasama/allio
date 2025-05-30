@@ -18,7 +18,8 @@ using detail::transcode_size;
 using detail::transcode;
 using detail::transcode_unchecked;
 
-template<detail::character TargetChar, detail::character SourceChar>
+
+template<vsm::utf_character TargetChar, vsm::utf_character SourceChar>
 vsm::result<size_t> transcode_string(
 	std::basic_string_view<SourceChar> const decode_buffer,
 	string_buffer<TargetChar> const encode_buffer)
@@ -81,23 +82,33 @@ vsm::result<size_t> transcode_string(
 	return encoded_size;
 }
 
-template<detail::character SourceChar>
+template<vsm::character TargetChar, vsm::character SourceChar>
+vsm::result<size_t> transcode_string(
+	std::basic_string_view<SourceChar> const decode_buffer,
+	string_buffer<TargetChar> const encode_buffer)
+{
+	return transcode_string(
+		detail::reinterpret_as_utf(decode_buffer),
+		detail::reinterpret_as_utf(encode_buffer));
+}
+
+template<vsm::character SourceChar>
 vsm::result<size_t> transcode_string(
 	std::basic_string_view<SourceChar> const decode_buffer,
 	any_string_buffer const encode_buffer)
 {
 	return encode_buffer.visit([&](auto const encode_buffer)
 	{
-		return transcode_string(decode_buffer, encode_buffer);
+		return transcode_string(detail::reinterpret_as_utf(decode_buffer), encode_buffer);
 	});
 }
 
-template<detail::character TargetChar>
+template<vsm::character TargetChar>
 vsm::result<size_t> transcode_string(
 	any_string_view const decode_buffer,
 	string_buffer<TargetChar> const encode_buffer)
 {
-	return decode_buffer.visit([&](auto const decode_buffer) -> vsm::result<size_t>
+	return detail::visit_as_utf(decode_buffer, [&](auto const decode_buffer) -> vsm::result<size_t>
 	{
 		using decode_buffer_type = std::remove_cv_t<decltype(decode_buffer)>;
 
@@ -107,8 +118,81 @@ vsm::result<size_t> transcode_string(
 		}
 		else
 		{
-			return transcode_string(decode_buffer, encode_buffer);
+			return transcode_string(decode_buffer, detail::reinterpret_as_utf(encode_buffer));
 		}
+	});
+}
+
+
+template<vsm::utf_character TargetChar, vsm::utf_character SourceChar>
+[[nodiscard]] vsm::result<void> _validate_utf(std::basic_string_view<SourceChar> const string)
+{
+	vsm_msvc_warning(push)
+	vsm_msvc_warning(disable: 4063)
+
+	switch (transcode_size<TargetChar>(string).ec)
+	{
+	case transcode_error():
+		return {};
+
+	case transcode_error::unsupported_operation:
+		return vsm::unexpected(allio_error(error::unsupported_operation));
+
+	default:
+		//TODO: Add a new error code for this.
+		return vsm::unexpected(allio_error(error::invalid_argument));
+	}
+
+	vsm_msvc_warning(pop)
+}
+
+template<vsm::utf_character SourceChar>
+[[nodiscard]] vsm::result<void> validate_utf(std::basic_string_view<SourceChar> const string)
+{
+	return _validate_utf<vsm::select_t<(sizeof(SourceChar) > 1), char8_t, char16_t>>(string);
+}
+
+
+template<vsm::utf_character SourceChar, vsm::utf_character TargetChar>
+[[nodiscard]] vsm::result<size_t> copy_or_transcode_string(
+	std::basic_string_view<SourceChar> const decode_buffer,
+	string_buffer<TargetChar> const encode_buffer)
+{
+	if constexpr (std::is_same_v<SourceChar, TargetChar>)
+	{
+		if (encode_buffer.encoding() == encoding_family::utf)
+		{
+			vsm_try_void(validate_utf(decode_buffer));
+		}
+
+		vsm_try(output_buffer, encode_buffer.resize(decode_buffer.size()));
+		std::memcpy(output_buffer.data(), decode_buffer.data(), decode_buffer.size());
+		return decode_buffer.size();
+	}
+	else
+	{
+		return transcode_string(decode_buffer, encode_buffer);
+	}
+}
+
+template<vsm::character SourceChar, vsm::character TargetChar>
+[[nodiscard]] vsm::result<size_t> copy_or_transcode_string(
+	std::basic_string_view<SourceChar> const decode_buffer,
+	string_buffer<TargetChar> const encode_buffer)
+{
+	return copy_or_transcode_string(
+		detail::reinterpret_as_utf(decode_buffer),
+		detail::reinterpret_as_utf(encode_buffer));
+}
+
+template<vsm::character SourceChar>
+[[nodiscard]] vsm::result<size_t> copy_or_transcode_string(
+	std::basic_string_view<SourceChar> const decode_buffer,
+	any_string_buffer const encode_buffer)
+{
+	return detail::visit_as_utf(encode_buffer, [&](auto const encode_buffer)
+	{
+		return copy_or_transcode_string(detail::reinterpret_as_utf(decode_buffer), encode_buffer);
 	});
 }
 

@@ -2,14 +2,16 @@
 
 #include <allio/detail/mutable_buffer.hpp>
 #include <allio/detail/path.hpp>
+#include <allio/detail/path_fwd.hpp>
+#include <allio/path_char.hpp>
 #include <allio/path_view.hpp>
 
 #include <string>
 
 namespace allio {
 
-template<typename Char, typename String>
-class basic_path_adaptor
+template<typename Char, typename String, typename Encoding>
+class basic_path_adaptor : public detail::path_encoding_base<Encoding>
 {
 	static_assert(std::is_same_v<Char, typename String::value_type>);
 
@@ -403,27 +405,45 @@ private:
 	}
 
 	template<vsm::any_cvref_of<basic_path_adaptor> Self>
-	friend string_view_type tag_invoke(get_path_string_t, Self&& self)
+	friend vsm::copy_cvref_t<Self&&, string_type> tag_invoke(get_path_string_t, Self&& self)
 	{
 		return static_cast<vsm::copy_cvref_t<Self&&, string_type>>(self.m_string);
 	}
 
+#if 0
 	friend string_type& tag_invoke(detail::get_mutable_range_t, basic_path_adaptor& self)
 	{
 		return static_cast<string_type&>(self.m_string);
 	}
+#endif
 };
 
-template<typename Char, typename Allocator = std::allocator<Char>>
+template<
+	typename Char,
+	typename Allocator = std::allocator<Char>,
+	typename Encoding = void>
 using basic_path = basic_path_adaptor<
 	Char,
-	std::basic_string<Char, std::char_traits<Char>, Allocator>>;
+	std::basic_string<Char, std::char_traits<Char>, Allocator>,
+	Encoding>;
 
-
-//TODO: platform_path should be renamed to path
 using path = basic_path<char>;
 using wpath = basic_path<wchar_t>;
+using u8path = basic_path<char8_t>;
+using u16path = basic_path<char16_t>;
+using u32path = basic_path<char32_t>;
 
-using platform_path = basic_path<platform_path_char_type>;
+
+template<typename String>
+using basic_native_path_adaptor = basic_path_adaptor<native_path_char_t, String, no_encoding_t>;
+
+template<typename Allocator>
+using basic_native_path = basic_path<native_path_char_t, Allocator, no_encoding_t>;
+
+using native_path = basic_native_path<std::allocator<native_path_char_t>>;
+
+
+//TODO: Get rid of this, use native_path instead.
+using platform_path = native_path;
 
 } // namespace allio

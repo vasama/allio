@@ -148,6 +148,7 @@ vsm::result<size_t> detail::copy_directory_entry_name(
 }
 
 
+// Returns false if the entry is a relative virtual entry (. or ..), otherwise true.
 static bool filter_entry(directory_stream_entry const& entry)
 {
 	char const* const name = entry.d_name;

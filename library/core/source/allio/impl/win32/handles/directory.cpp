@@ -103,10 +103,11 @@ vsm::result<size_t> detail::copy_directory_entry_name(
 	directory_stream_pointer const pointer,
 	any_string_buffer const buffer)
 {
-	return transcode_string(get_directory_entry_name(pointer), buffer);
+	return copy_or_transcode_string(get_directory_entry_name(pointer), buffer);
 }
 
 
+// Returns false if the entry is a relative virtual entry (. or ..), otherwise true.
 static bool filter_entry(directory_stream_entry const& entry)
 {
 	std::wstring_view const name = get_entry_name(entry);
@@ -341,7 +342,7 @@ vsm::result<size_t> detail::_get_current_directory(any_path_buffer const buffer)
 
 	auto const wide_path = wpath_view(wide_string).without_trailing_separators();
 
-	return transcode_string(wide_path.string(), buffer);
+	return copy_or_transcode_string(wide_path.string(), buffer.string());
 }
 
 
@@ -364,7 +365,7 @@ vsm::result<void> detail::_set_current_directory(fs_path const& path)
 			*path.base,
 			fs_io::get_current_path_t::params_type
 			{
-				.buffer = path_storage,
+				.buffer = any_path_buffer(path_storage),
 				.kind = path_kind::windows_dos,
 			}));
 

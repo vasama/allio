@@ -2,6 +2,8 @@
 
 #include <allio/encoding.hpp>
 
+#include <vsm/concepts.hpp>
+
 #include <span>
 #include <string_view>
 
@@ -21,19 +23,49 @@ struct transcode_result
 	size_t encoded;
 };
 
-template<detail::character TargetChar, detail::character SourceChar>
+template<vsm::utf_character TargetChar, vsm::utf_character SourceChar>
 [[nodiscard]] transcode_result transcode_size(
 	std::basic_string_view<SourceChar> decode_buffer,
 	size_t max_encoded_size = static_cast<size_t>(-1));
 
-template<detail::character TargetChar, detail::character SourceChar>
+template<vsm::character TargetChar, vsm::character SourceChar>
+[[nodiscard]] transcode_result transcode_size(
+	std::basic_string_view<SourceChar> const decode_buffer,
+	size_t const max_encoded_size = static_cast<size_t>(-1))
+{
+	return detail::transcode_size<detail::as_utf_char_t<TargetChar>>(
+		detail::reinterpret_as_utf(decode_buffer),
+		max_encoded_size);
+}
+
+template<vsm::utf_character TargetChar, vsm::utf_character SourceChar>
 [[nodiscard]] transcode_result transcode(
 	std::basic_string_view<SourceChar> decode_buffer,
 	std::span<TargetChar> encode_buffer);
 
-template<detail::character TargetChar, detail::character SourceChar>
+template<vsm::character TargetChar, vsm::character SourceChar>
+[[nodiscard]] transcode_result transcode(
+	std::basic_string_view<SourceChar> const decode_buffer,
+	std::span<TargetChar> const encode_buffer)
+{
+	return detail::transcode(
+		detail::reinterpret_as_utf(decode_buffer),
+		detail::reinterpret_as_utf(encode_buffer));
+}
+
+template<vsm::utf_character TargetChar, vsm::utf_character SourceChar>
 transcode_result transcode_unchecked(
 	std::basic_string_view<SourceChar> decode_buffer,
 	std::span<TargetChar> encode_buffer);
+
+template<vsm::character TargetChar, vsm::character SourceChar>
+transcode_result transcode_unchecked(
+	std::basic_string_view<SourceChar> const decode_buffer,
+	std::span<TargetChar> const encode_buffer)
+{
+	return detail::transcode_unchecked(
+		detail::reinterpret_as_utf(decode_buffer),
+		detail::reinterpret_as_utf(encode_buffer));
+}
 
 } // namespace allio::detail

@@ -18,4 +18,7 @@ struct get_path_string_t
 };
 inline constexpr get_path_string_t get_path_string = {};
 
+template<typename Path>
+using path_string_t = std::remove_cvref_t<decltype(get_path_string(std::declval<Path>()))>;
+
 } // namespace allio

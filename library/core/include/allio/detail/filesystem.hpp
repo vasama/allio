@@ -101,4 +101,42 @@ struct fs_path_t
 
 [[nodiscard]] vsm::result<fs_entry_info> get_fs_entry_info(fs_path path);
 
+
+#if 0 // TODO: Move to a separate header
+namespace _nothrow {
+
+[[nodiscard]] vsm::result<void> delete_file(fs_path const& path);
+
+[[nodiscard]] vsm::result<void> unlink_file(fs_path const& path);
+
+[[nodiscard]] vsm::result<void> rename_file(fs_path const& old_path, fs_path const& new_path);
+
+[[nodiscard]] vsm::result<void> link_file(fs_path const& link_path, fs_path const& file_path);
+
+[[nodiscard]] vsm::result<size_t> get_symbolic_link_path(
+	fs_path const& link_path,
+	any_path_buffer buffer);
+
+template<typename Path = path>
+[[nodiscard]] vsm::result<Path> get_symbolic_link_path(fs_path const& link_path)
+{
+	vsm::result<Path> r(vsm::result_value);
+	if (auto const r2 = _nothrow::get_symbolic_link_path(link_path, *r); !r2)
+	{
+		r = vsm::unexpected(r2.error());
+	}
+	return r;
+}
+
+[[nodiscard]] vsm::result<void> create_file_symbolic_link(
+	fs_path const& link_path,
+	any_path_view target_path);
+
+[[nodiscard]] vsm::result<void> create_directory_symbolic_link(
+	fs_path const& link_path,
+	any_path_view target_path);
+
+} // namespace _nothrow
+#endif
+
 } // namespace allio::detail

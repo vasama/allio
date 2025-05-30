@@ -42,7 +42,6 @@ struct string_length_out_of_range_t
 
 } // namespace detail
 
-
 struct null_terminated_t
 {
 	explicit null_terminated_t() = default;
@@ -51,27 +50,36 @@ inline constexpr null_terminated_t null_terminated{};
 
 class any_string_view
 {
-	static constexpr uint32_t ctrl_bits = 32;
+	static constexpr size_t ctrl_bits = sizeof(size_t) * CHAR_BIT;
 
-	static constexpr uint32_t cstr_flag = (static_cast<uint32_t>(1) << (ctrl_bits - 1));
+	static constexpr size_t cstr_bits = 1;
+	static constexpr size_t cstr_mask = (static_cast<size_t>(1) << cstr_bits) - 1;
 
-	static constexpr uint32_t type_bits = 3;
-	static constexpr uint32_t type_mask = (static_cast<uint32_t>(1) << type_bits) - 1;
+	static constexpr size_t type_bits = 3;
+	static constexpr size_t type_mask = (static_cast<size_t>(1) << type_bits) - 1;
 
-	static constexpr uint32_t size_bits = ctrl_bits - type_bits - 1;
-	static constexpr uint32_t size_mask = (static_cast<uint32_t>(1) << size_bits) - 1;
+	static constexpr size_t size_bits = ctrl_bits - type_bits - cstr_bits;
+	static constexpr size_t size_mask = (static_cast<size_t>(1) << size_bits) - 1;
+
+	static constexpr size_t size_shift = 0;
+	static constexpr size_t type_shift = size_shift + size_bits;
+	static constexpr size_t cstr_shift = type_shift + type_bits;
+
+	static constexpr size_t cstr_flag = static_cast<size_t>(1) << cstr_shift;
+
 
 	template<detail::_any_string String>
-	static constexpr uint32_t cstr_flag_for = cstr_flag * requires (String const& string)
+	static constexpr size_t cstr_flag_for = cstr_flag * requires (String const& string)
 	{
 		{ string.c_str() } -> std::same_as<decltype(string.data())>;
 	};
 
 	template<detail::character Char>
-	static constexpr uint32_t type_mask_for = static_cast<uint32_t>(detail::encoding_of<Char>) << size_bits;
+	static constexpr size_t type_bits_for =
+		static_cast<size_t>(detail::char_type_of<Char>) << type_shift;
 
 	void const* m_data;
-	uint32_t m_ctrl;
+	size_t m_ctrl;
 
 public:
 	any_string_view()
@@ -111,9 +119,9 @@ public:
 	}
 
 
-	[[nodiscard]] allio::encoding encoding() const
+	[[nodiscard]] allio::char_type char_type() const
 	{
-		return static_cast<allio::encoding>((m_ctrl >> size_bits) & type_mask);
+		return static_cast<allio::char_type>((m_ctrl >> size_bits) & type_mask);
 	}
 
 	[[nodiscard]] bool empty() const
@@ -129,7 +137,7 @@ public:
 	template<detail::character Char>
 	[[nodiscard]] Char const* data() const
 	{
-		vsm_assert(encoding() == detail::encoding_of<Char>); //PRECONDITION
+		vsm_assert(char_type() == detail::char_type_of<Char>); //PRECONDITION
 		return static_cast<Char const*>(m_data);
 	}
 
@@ -141,7 +149,7 @@ public:
 	template<detail::character Char>
 	[[nodiscard]] std::basic_string_view<Char> view() const
 	{
-		vsm_assert(encoding() == detail::encoding_of<Char>); //PRECONDITION
+		vsm_assert(char_type() == detail::char_type_of<Char>); //PRECONDITION
 		return std::basic_string_view<Char>(
 			static_cast<Char const*>(m_data),
 			static_cast<size_t>(m_ctrl & size_mask));
@@ -150,32 +158,37 @@ public:
 
 	[[nodiscard]] decltype(auto) visit(auto&& visitor) const
 	{
-		switch (encoding())
+		if ((m_ctrl & size_mask) == size_mask)
 		{
-		case allio::encoding::narrow_execution_encoding:
+			return vsm_forward(visitor)(detail::string_length_out_of_range_t());
+		}
+
+		switch (char_type())
+		{
+		case allio::char_type::_char:
 			return _visitor<char>(vsm_forward(visitor));
 
-		case allio::encoding::wide_execution_encoding:
+		case allio::char_type::_wchar_t:
 			return _visitor<wchar_t>(vsm_forward(visitor));
 
-		case allio::encoding::utf8:
+		case allio::char_type::_char8_t:
 			return _visitor<char8_t>(vsm_forward(visitor));
 
-		case allio::encoding::utf16:
+		case allio::char_type::_char16_t:
 			return _visitor<char16_t>(vsm_forward(visitor));
 
-		case allio::encoding::utf32:
+		case allio::char_type::_char32_t:
 			return _visitor<char32_t>(vsm_forward(visitor));
 		}
 
-		return vsm_forward(visitor)(detail::string_length_out_of_range_t());
+		vsm_unreachable();
 	}
 
 private:
 	template<detail::character Char>
-	explicit any_string_view(Char const* const data, size_t const size, uint32_t const cstr_flag)
+	explicit any_string_view(Char const* const data, size_t const size, size_t const cstr_flag)
 		: m_data(data)
-		, m_ctrl(size > size_mask ? size_mask : static_cast<uint32_t>(size) | type_mask_for<Char> | cstr_flag)
+		, m_ctrl(size >= size_mask ? size_mask : static_cast<size_t>(size) | type_bits_for<Char> | cstr_flag)
 	{
 	}
 
@@ -192,7 +205,6 @@ private:
 		return vsm_forward(visitor)(view<Char>());
 	}
 };
-
 
 class any_string_span
 {

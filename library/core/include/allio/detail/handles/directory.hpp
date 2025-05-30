@@ -48,7 +48,7 @@ enum class directory_stream_pointer : uintptr_t
 
 [[nodiscard]] fs_entry_type get_directory_entry_type(directory_stream_pointer pointer);
 
-[[nodiscard]] std::basic_string_view<platform_path_char_type> get_directory_entry_name(
+[[nodiscard]] std::basic_string_view<native_path_char_t> get_directory_entry_name(
 	directory_stream_pointer pointer);
 
 [[nodiscard]] vsm::result<size_t> copy_directory_entry_name(
@@ -85,7 +85,7 @@ public:
 		return get_directory_entry_type(m_pointer);
 	}
 
-	[[nodiscard]] std::basic_string_view<platform_path_char_type> name() const
+	[[nodiscard]] std::basic_string_view<native_path_char_t> name() const
 	{
 		return get_directory_entry_name(m_pointer);
 	}
@@ -118,7 +118,7 @@ public:
 		}
 	}
 
-	template<typename String = std::basic_string<platform_path_char_type>>
+	template<typename String = std::basic_string<native_path_char_t>>
 	[[nodiscard]] auto get_name() const
 	{
 		auto r = detail::copy_directory_entry_name<String>(m_pointer);

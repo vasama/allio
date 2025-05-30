@@ -7,10 +7,7 @@ namespace allio {
 namespace detail {
 
 template<typename Path>
-using _path_string_type = decltype(get_path_string(std::declval<Path const&>()));
-
-template<typename Path>
-concept _any_path = _any_string<_path_string_type<Path>>;
+concept _any_path = _any_string<path_string_t<Path>>;
 
 } // namespace detail
 

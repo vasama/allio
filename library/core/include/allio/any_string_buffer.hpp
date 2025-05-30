@@ -31,19 +31,27 @@ template<typename String, typename Char>
 concept mutable_string_of = _mutable_string_of<mutable_range_from_t<String>, Char>;
 
 
-struct _string_buffer
+struct string_buffer_base
 {
-	static constexpr uint32_t ctrl_bits = 32;
+	static constexpr size_t ctrl_bits = sizeof(size_t) * CHAR_BIT;
 
-	static constexpr uint32_t type_bits = 4;
-	static constexpr uint32_t type_mask = (static_cast<uint32_t>(1) << type_bits) - 1;
+	static constexpr size_t utfx_bits = 1;
+	static constexpr size_t utfx_mask = (static_cast<size_t>(1) << utfx_bits) - 1;
 
-	static constexpr uint32_t size_bits = ctrl_bits - type_bits - 1;
-	static constexpr uint32_t size_mask = (static_cast<uint32_t>(1) << size_bits) - 1;
+	static constexpr size_t type_bits = 3;
+	static constexpr size_t type_mask = (static_cast<size_t>(1) << type_bits) - 1;
+
+	static constexpr size_t size_bits = ctrl_bits - type_bits - utfx_bits;
+	static constexpr size_t size_mask = (static_cast<size_t>(1) << size_bits) - 1;
+
+	static constexpr size_t size_shift = 0;
+	static constexpr size_t type_shift = size_shift + size_bits;
+	static constexpr size_t utfx_shift = type_shift + type_bits;
+
 
 	template<detail::character Char>
-	static constexpr uint32_t type_mask_for =
-		static_cast<uint32_t>(detail::encoding_of<Char>) << size_bits;
+	static constexpr size_t type_bits_for =
+		static_cast<size_t>(detail::char_type_of<Char>) << size_bits;
 
 	struct buffer
 	{
@@ -52,39 +60,44 @@ struct _string_buffer
 	};
 
 	using resize_type = vsm::result<buffer>(
-		_string_buffer const& self,
+		string_buffer_base const& self,
 		size_t min_size,
 		size_t max_size);
 
 	void* m_data;
-	uint32_t m_ctrl;
+	size_t m_ctrl;
 	resize_type* m_resize;
 
 	template<character Char>
-	explicit _string_buffer(Char* const data, size_t const size)
+	explicit string_buffer_base(Char* const data, size_t const size, encoding_family const encoding)
 		: m_data(data)
-		, m_ctrl(static_cast<uint32_t>(size < size_mask ? size : size_mask) | type_mask_for<Char>)
+		, m_ctrl(static_cast<size_t>(size < size_mask ? size : size_mask) | type_bits_for<Char>)
 		, m_resize(_resize_span<Char>)
 	{
 	}
 
 	template<mutable_contiguous_range Container>
-	explicit _string_buffer(Container&& container)
-		: _string_buffer(container.data(), container.size())
+	explicit string_buffer_base(Container&& container, encoding_family const encoding)
+		: string_buffer_base(container.data(), container.size())
 	{
 	}
 
 	template<resizable_container Container>
-	explicit _string_buffer(Container&& container)
+	explicit string_buffer_base(Container&& container, encoding_family const encoding)
 		: m_data(&container)
-		, m_ctrl(type_mask_for<typename std::remove_cvref_t<Container>::value_type>)
+		, m_ctrl(type_bits_for<typename std::remove_cvref_t<Container>::value_type>)
 		, m_resize(_resize_container<Container>)
 	{
 	}
 
-	[[nodiscard]] allio::encoding encoding() const
+	[[nodiscard]] allio::char_type char_type() const
 	{
-		return static_cast<allio::encoding>((m_ctrl >> size_bits) & type_mask);
+		return static_cast<allio::char_type>((m_ctrl >> type_shift) & type_mask);
+	}
+
+	[[nodiscard]] allio::encoding_family encoding() const
+	{
+		return static_cast<allio::encoding_family>((m_ctrl >> utfx_shift) & utfx_mask);
 	}
 
 	template<typename Char>
@@ -98,7 +111,7 @@ struct _string_buffer
 
 	template<typename Char>
 	static vsm::result<buffer> _resize_span(
-		_string_buffer const& self,
+		string_buffer_base const& self,
 		size_t const min_size,
 		size_t const max_size)
 	{
@@ -112,7 +125,7 @@ struct _string_buffer
 
 	template<typename Container>
 	static vsm::result<buffer> _resize_container(
-		_string_buffer const& self,
+		string_buffer_base const& self,
 		size_t const min_size,
 		size_t const max_size)
 	{
@@ -120,133 +133,191 @@ struct _string_buffer
 		vsm_try_discard(resize_container(container, min_size, max_size));
 		return buffer{ std::ranges::data(container), std::ranges::size(container) };
 	}
+
+
+	static string_buffer_base const& get(auto const& string_buffer)
+	{
+		return string_buffer;
+	}
 };
 
 } // namespace detail
 
 template<detail::character Char>
-class string_buffer : detail::_string_buffer
+class string_buffer : detail::string_buffer_base
 {
 public:
+	using value_type = Char;
+
 	string_buffer()
-		: _string_buffer(static_cast<Char*>(nullptr), 0)
+		: string_buffer_base(static_cast<Char*>(nullptr), 0)
 	{
 	}
 
-	explicit string_buffer(detail::_string_buffer const& buffer)
-		: _string_buffer(buffer)
+	explicit string_buffer(detail::string_buffer_base const& buffer)
+		: string_buffer_base(buffer)
 	{
-		vsm_assert(buffer.encoding() == detail::encoding_of<Char>); //PRECONDITION
+		vsm_assert(sizeof(Char) == detail::get_char_type_size(buffer.char_type())); //PRECONDITION
 	}
 
-	string_buffer(Char* const data, size_t const size)
-		: _string_buffer(data, size)
-	{
-	}
-
-	template<std::contiguous_iterator Iterator, std::sized_sentinel_for<Iterator> Sentinel>
-	string_buffer(Iterator const begin, Sentinel const end)
-		//TODO: This static_cast could theoretically truncate.
-		: _string_buffer(std::to_address(begin), static_cast<size_t>(end - begin))
+	template<detail::explicit_encoding_for<Char> Encoding = detail::default_encoding_t>
+	string_buffer(Char* const data, size_t const size, Encoding const encoding = Encoding())
+		: string_buffer_base(data, size, detail::get_encoding<Char>(encoding))
 	{
 	}
 
-	template<size_t Size>
-	string_buffer(Char(&array)[Size])
-		: _string_buffer(array, Size)
+	template<
+		std::contiguous_iterator Iterator,
+		std::sized_sentinel_for<Iterator> Sentinel,
+		detail::explicit_encoding_for<Char> Encoding = detail::default_encoding_t>
+	string_buffer(Iterator const begin, Sentinel const end, Encoding const encoding = Encoding())
+		: string_buffer_base(
+			std::to_address(begin),
+			//TODO: This static_cast could theoretically truncate.
+			static_cast<size_t>(end - begin),
+			detail::get_encoding<Char>(encoding))
 	{
 	}
 
-	template<detail::mutable_string_of<Char> String>
-	string_buffer(String& string)
-		: _string_buffer(detail::get_mutable_range(string))
+	template<size_t Size, detail::explicit_encoding_for<Char> Encoding = detail::default_encoding_t>
+	string_buffer(Char(&array)[Size], Encoding const encoding = Encoding())
+		: string_buffer_base(array, Size, detail::get_encoding<Char>(encoding))
 	{
 	}
 
-	template<detail::mutable_string_of<Char> String>
-	string_buffer(String const& string)
-		: _string_buffer(detail::get_mutable_range(string))
+	template<
+		detail::mutable_string_of<Char> String,
+		detail::explicit_encoding_for<Char, String> Encoding = detail::default_encoding_t>
+	string_buffer(String& string, Encoding const encoding = Encoding())
+		: string_buffer_base(
+			detail::get_mutable_range(string),
+			detail::get_encoding<Char, String>(encoding))
 	{
 	}
 
+	template<
+		detail::mutable_string_of<Char> String,
+		detail::explicit_encoding_for<Char, String> Encoding = detail::default_encoding_t>
+	string_buffer(String const& string, Encoding const encoding = Encoding())
+		: string_buffer_base(
+			detail::get_mutable_range(string),
+			detail::get_encoding<Char, String>(encoding))
+	{
+	}
+
+
+	using string_buffer_base::encoding;
 
 	[[nodiscard]] vsm::result<std::span<Char>> resize(size_t const size) const
 	{
-		return _string_buffer::_resize<Char>(size, size);
+		return string_buffer_base::_resize<Char>(size, size);
 	}
 
-	[[nodiscard]] vsm::result<std::span<Char>> resize(size_t const min_size, size_t const max_size) const
+	[[nodiscard]] vsm::result<std::span<Char>> resize(
+		size_t const min_size,
+		size_t const max_size) const
 	{
 		vsm_assert(min_size <= max_size); //PRECONDITION
-		return _string_buffer::_resize<Char>(min_size, max_size);
+		return string_buffer_base::_resize<Char>(min_size, max_size);
 	}
+
+private:
+	friend detail::string_buffer_base;
 };
 
-class any_string_buffer : detail::_string_buffer
+class any_string_buffer : detail::string_buffer_base
 {
 public:
 	any_string_buffer()
-		: _string_buffer(static_cast<char*>(nullptr), 0)
+		: string_buffer_base(static_cast<char*>(nullptr), 0, encoding_family::none)
 	{
 	}
 
-	template<detail::character Char>
-	any_string_buffer(Char* const data, size_t const size)
-		: _string_buffer(data, size)
+	template<
+		detail::character Char,
+		detail::explicit_encoding_for<Char> Encoding = detail::default_encoding_t>
+	any_string_buffer(Char* const data, size_t const size, Encoding const encoding = Encoding())
+		: string_buffer_base(data, size, detail::get_encoding<Char>(encoding))
 	{
 	}
 
-	template<detail::character Char, size_t Size>
-	any_string_buffer(Char(&array)[Size])
-		: _string_buffer(array, Size)
+	template<
+		detail::character Char,
+		size_t Size,
+		detail::explicit_encoding_for<Char> Encoding = detail::default_encoding_t>
+	any_string_buffer(Char(&array)[Size], Encoding const encoding = Encoding())
+		: string_buffer_base(array, Size, detail::get_encoding<Char>(encoding))
 	{
 	}
 
-	template<detail::any_mutable_string String>
-	any_string_buffer(String& string)
-		: _string_buffer(detail::get_mutable_range(string))
+	template<
+		detail::any_mutable_string String,
+		detail::explicit_container_encoding_for<String> Encoding = detail::default_encoding_t>
+	any_string_buffer(String& string, Encoding const encoding = Encoding())
+		: string_buffer_base(
+			detail::get_mutable_range(string),
+			detail::get_container_encoding<String>(encoding))
 	{
 	}
 
-	template<typename String>
+	//TODO: Is this overload actually needed? Document why.
+	template<
+		typename String,
+		detail::explicit_container_encoding_for<String> Encoding = detail::default_encoding_t>
 		requires detail::any_mutable_string<String const>
-	any_string_buffer(String const& string)
-		: _string_buffer(detail::get_mutable_range(string))
+	any_string_buffer(String const& string, Encoding const encoding = Encoding())
+		: string_buffer_base(
+			detail::get_mutable_range(string),
+			detail::get_container_encoding<String>(encoding))
 	{
 	}
 
 
-	using _string_buffer::encoding;
+	using string_buffer_base::char_type;
+	using string_buffer_base::encoding;
 
 	template<detail::character Char>
 	[[nodiscard]] string_buffer<Char> buffer() const
 	{
-		vsm_assert(encoding() == detail::encoding_of<Char>); //PRECONDITION
+		vsm_assert(string_buffer_base::char_type() == detail::char_type_of<Char>); //PRECONDITION
 		return string_buffer<Char>(*this);
 	}
 
 	[[nodiscard]] decltype(auto) visit(auto&& visitor) const
 	{
-		switch (encoding())
+		switch (string_buffer_base::char_type())
 		{
-		case allio::encoding::narrow_execution_encoding:
+		case allio::char_type::_char:
 			return vsm_forward(visitor)(string_buffer<char>(*this));
 
-		case allio::encoding::wide_execution_encoding:
+		case allio::char_type::_wchar_t:
 			return vsm_forward(visitor)(string_buffer<wchar_t>(*this));
 
-		case allio::encoding::utf8:
+		case allio::char_type::_char8_t:
 			return vsm_forward(visitor)(string_buffer<char8_t>(*this));
 
-		case allio::encoding::utf16:
+		case allio::char_type::_char16_t:
 			return vsm_forward(visitor)(string_buffer<char16_t>(*this));
 
-		case allio::encoding::utf32:
+		case allio::char_type::_char32_t:
 			return vsm_forward(visitor)(string_buffer<char32_t>(*this));
 		}
 
 		vsm_unreachable();
 	}
+
+private:
+	friend detail::string_buffer_base;
 };
 
+namespace detail {
+
+template<vsm::character To, vsm::character From>
+	requires (sizeof(To) == sizeof(From))
+[[nodiscard]] string_buffer<To> reinterpret(string_buffer<From> const& string)
+{
+	return string_buffer<To>(string_buffer_base::get(string));
+}
+
+} // namespace detail
 } // namespace allio

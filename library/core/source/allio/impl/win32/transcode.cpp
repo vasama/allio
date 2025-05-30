@@ -171,7 +171,7 @@ static transcode_result _transcode(
 		encode_size);
 }
 
-template<character Char>
+template<vsm::utf_character Char>
 static transcode_result _transcode(
 	Char const* const decode_data,
 	size_t const decode_size,
@@ -199,14 +199,14 @@ static transcode_result _transcode(
 	return r;
 }
 
-template<character SourceChar, character TargetChar>
+template<vsm::utf_character SourceChar, vsm::utf_character TargetChar>
 static transcode_result _transcode(
 	SourceChar const* const decode_data,
 	size_t const decode_size,
 	TargetChar* const encode_data,
 	size_t const encode_size)
 {
-	if constexpr (std::is_same_v<SourceChar, char32_t> || std::is_same_v<TargetChar, char32_t>)
+	if constexpr (vsm::any_of<char32_t, SourceChar, TargetChar>)
 	{
 		// UTF32 transcoding cannot be implemented using the Windows transcoding APIs.
 		return { transcode_error::unsupported_operation };
@@ -222,7 +222,7 @@ static transcode_result _transcode(
 }
 
 
-template<character TargetChar, character SourceChar>
+template<vsm::utf_character TargetChar, vsm::utf_character SourceChar>
 transcode_result detail::transcode_size(
 	std::basic_string_view<SourceChar> const decode_buffer,
 	size_t const max_encoded_size)
@@ -234,7 +234,7 @@ transcode_result detail::transcode_size(
 		max_encoded_size);
 }
 
-template<character TargetChar, character SourceChar>
+template<vsm::utf_character TargetChar, vsm::utf_character SourceChar>
 transcode_result detail::transcode(
 	std::basic_string_view<SourceChar> const decode_buffer,
 	std::span<TargetChar> const encode_buffer)
@@ -246,7 +246,7 @@ transcode_result detail::transcode(
 		encode_buffer.size());
 }
 
-template<character TargetChar, character SourceChar>
+template<vsm::utf_character TargetChar, vsm::utf_character SourceChar>
 transcode_result detail::transcode_unchecked(
 	std::basic_string_view<SourceChar> const decode_buffer,
 	std::span<TargetChar> const encode_buffer)
@@ -263,32 +263,14 @@ transcode_result detail::transcode_unchecked(
 	template transcode_result detail::transcode<T, S>(std::basic_string_view<S>, std::span<T>); \
 	template transcode_result detail::transcode_unchecked<T, S>(std::basic_string_view<S>, std::span<T>); \
 
-allio_detail_transcode_instance(char, char);
-allio_detail_transcode_instance(char, wchar_t);
-allio_detail_transcode_instance(char, char8_t);
-allio_detail_transcode_instance(char, char16_t);
-allio_detail_transcode_instance(char, char32_t);
-
-allio_detail_transcode_instance(wchar_t, char);
-allio_detail_transcode_instance(wchar_t, wchar_t);
-allio_detail_transcode_instance(wchar_t, char8_t);
-allio_detail_transcode_instance(wchar_t, char16_t);
-allio_detail_transcode_instance(wchar_t, char32_t);
-
-allio_detail_transcode_instance(char8_t, char);
-allio_detail_transcode_instance(char8_t, wchar_t);
 allio_detail_transcode_instance(char8_t, char8_t);
 allio_detail_transcode_instance(char8_t, char16_t);
 allio_detail_transcode_instance(char8_t, char32_t);
 
-allio_detail_transcode_instance(char16_t, char);
-allio_detail_transcode_instance(char16_t, wchar_t);
 allio_detail_transcode_instance(char16_t, char8_t);
 allio_detail_transcode_instance(char16_t, char16_t);
 allio_detail_transcode_instance(char16_t, char32_t);
 
-allio_detail_transcode_instance(char32_t, char);
-allio_detail_transcode_instance(char32_t, wchar_t);
 allio_detail_transcode_instance(char32_t, char8_t);
 allio_detail_transcode_instance(char32_t, char16_t);
 allio_detail_transcode_instance(char32_t, char32_t);

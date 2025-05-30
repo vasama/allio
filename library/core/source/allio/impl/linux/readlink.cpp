@@ -49,7 +49,7 @@ static vsm::result<std::string_view> _read_link_path(
 		}
 
 	skip_lstat:
-		vsm_try(path_size, _readlinkat(dirfd, path, buffer));
+		vsm_try(path_size, _readlinkat(dirfd, path, string));
 
 		if (path_size < buffer.size())
 		{
@@ -61,16 +61,24 @@ static vsm::result<std::string_view> _read_link_path(
 	}
 }
 
-template<typename Char>
+template<vsm::utf_character Char>
 static vsm::result<std::string_view> _read_link_path(
 	int const dirfd,
 	char const* const path,
-	string_buffer<Char> const buffer);
+	string_buffer<Char> const buffer)
+{
+	small_path_container container;
+	vsm_try(string, _read_link_path(dirfd, path, container));
+	return copy_or_transcode_string(string, buffer);
+}
 
 vsm::result<std::string_view> linux::read_link_path(
 	int const dirfd,
 	char const* const path,
 	any_path_buffer const buffer)
 {
-	
+	return detail::visit_as<char, char16_t, char32_t>(buffer, [&](auto const buffer)
+	{
+		return _read_link_path(dirfd, path, buffer);
+	});
 }
