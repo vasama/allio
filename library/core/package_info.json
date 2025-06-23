@@ -4,10 +4,6 @@
 	"package_type": "static-library",
 	"requirements": [
 		{
-			"package": "vsm.base64",
-			"version": "0.1"
-		},
-		{
 			"package": "vsm.core",
 			"version": "0.1"
 		},

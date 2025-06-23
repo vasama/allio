@@ -4,8 +4,8 @@
 #include <allio/detail/mutable_buffer.hpp>
 #include <allio/network.hpp>
 
+#include <vsm/pointer_tag_pair.hpp>
 #include <vsm/result.hpp>
-#include <vsm/tag_ptr.hpp>
 
 namespace allio::detail {
 
@@ -13,7 +13,7 @@ class any_endpoint_buffer
 {
 	static constexpr size_t min_static_alignment = 4;
 
-	enum class tag_type
+	enum class tag_type : uint8_t
 	{
 		byte_span,
 		container,
@@ -26,7 +26,9 @@ class any_endpoint_buffer
 		size_t max_size,
 		std::align_val_t min_alignment);
 
-	vsm::incomplete_tag_ptr<void, tag_type, tag_type::typed_ptr> m_data;
+	using data_pair_type = vsm::pointer_tag_pair_with_max<void*, tag_type, tag_type::typed_ptr>;
+
+	data_pair_type m_data;
 
 	union
 	{
@@ -37,7 +39,7 @@ class any_endpoint_buffer
 
 public:
 	any_endpoint_buffer()
-		: m_data(nullptr)
+		: m_data()
 		, m_size(0)
 	{
 	}
@@ -67,7 +69,7 @@ public:
 
 	[[nodiscard]] explicit operator bool() const
 	{
-		return m_data != nullptr || m_size != 0;
+		return m_data != data_pair_type() || m_size != 0;
 	}
 
 	[[nodiscard]] network_address_kind kind() const
@@ -91,7 +93,7 @@ public:
 
 		if (m_data.tag() == tag_type::container)
 		{
-			return m_resize_container(m_data.ptr(), min_size, max_size, min_alignment);
+			return m_resize_container(m_data.pointer(), min_size, max_size, min_alignment);
 		}
 
 		if (m_size < min_size)
@@ -99,12 +101,12 @@ public:
 			return vsm::unexpected(error::no_buffer_space);
 		}
 
-		if (vsm::memalignment(m_data.ptr()) < static_cast<size_t>(min_alignment))
+		if (vsm::memalignment(m_data.pointer()) < static_cast<size_t>(min_alignment))
 		{
 			return vsm::unexpected(error::insufficient_alignment);
 		}
 
-		return vsm::allocation(m_data.ptr(), m_size);
+		return vsm::allocation(m_data.pointer(), m_size);
 	}
 
 private:
@@ -112,7 +114,9 @@ private:
 		void* const data,
 		size_t const size,
 		bool const is_sufficiently_aligned)
-		: m_data(is_sufficiently_aligned ? data : nullptr)
+		: m_data(is_sufficiently_aligned
+			? data_pair_type::from_overaligned<min_static_alignment>(data, tag_type::byte_span)
+			: data_pair_type())
 		, m_size(is_sufficiently_aligned ? size : static_cast<size_t>(-1))
 	{
 	}

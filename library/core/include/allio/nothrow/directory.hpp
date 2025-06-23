@@ -6,6 +6,9 @@
 namespace allio::nothrow {
 inline namespace directories {
 
+using directory_entry_view = basic_directory_entry_view<traits_type>;
+using directory_stream_view = basic_directory_stream_view<traits_type>;
+
 using directory_handle = traits_type::handle<directory_t>;
 
 [[nodiscard]] vsm::result<directory_handle> open_directory(

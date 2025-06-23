@@ -12,8 +12,8 @@
 #include <vsm/flags.hpp>
 #include <vsm/intrusive/mpsc_queue.hpp>
 #include <vsm/partial.hpp>
+#include <vsm/pointer_tag_pair.hpp>
 #include <vsm/result.hpp>
-#include <vsm/tag_ptr.hpp>
 
 #include <allio/linux/detail/undef.i>
 
@@ -82,14 +82,14 @@ public:
 	vsm_flag_enum_friend(io_slot_flags);
 
 	template<typename T>
-	using basic_user_data_ptr = vsm::tag_ptr<T, user_data_tag, user_data_tag::all>;
+	using basic_user_data_ptr = vsm::pointer_tag_pair_with_max<T*, user_data_tag, user_data_tag::all>;
 
-	using user_data_ptr = vsm::incomplete_tag_ptr<void, user_data_tag, user_data_tag::all>;
+	using user_data_ptr = vsm::pointer_tag_pair_with_max<void*, user_data_tag, user_data_tag::all>;
 
 	struct io_status_type;
 
 	using io_handler_type = basic_io_handler<io_status_type>;
-	using io_handler_ptr = vsm::tag_ptr<io_handler_type, io_handler_tag>;
+	using io_handler_ptr = vsm::pointer_tag_pair<io_handler_type*, io_handler_tag>;
 
 	class connector_type
 	{
@@ -105,7 +105,8 @@ public:
 	public:
 		void set_handler(io_handler_type& handler) &
 		{
-			m_handler = vsm::reinterpret_pointer_cast<uintptr_t>(io_handler_ptr(&handler));
+			m_handler = reinterpret_cast<uintptr_t>(
+				io_handler_ptr(&handler, io_handler_tag::not_cancelled).tagged_pointer());
 		}
 
 		[[nodiscard]] bool is_cancel_requested() const
@@ -116,14 +117,15 @@ public:
 	private:
 		[[nodiscard]] io_handler_ptr load(std::memory_order const memory_order) const
 		{
-			return vsm::reinterpret_pointer_cast<io_handler_ptr>(
-				vsm::atomic_ref(m_handler).load(memory_order));
+			return io_handler_ptr::from_tagged(
+				reinterpret_cast<io_handler_ptr::tagged_pointer_type>(
+					vsm::atomic_ref(m_handler).load(memory_order)));
 		}
 
 		void store(io_handler_ptr const handler, std::memory_order const memory_order)
 		{
 			vsm::atomic_ref(m_handler).store(
-				vsm::reinterpret_pointer_cast<uintptr_t>(handler),
+				reinterpret_cast<uintptr_t>(handler.tagged_pointer()),
 				memory_order);
 		}
 
@@ -131,8 +133,9 @@ public:
 			io_handler_tag const tag,
 			std::memory_order const memory_order)
 		{
-			return vsm::reinterpret_pointer_cast<io_handler_ptr>(
-				vsm::atomic_ref(m_handler).fetch_or(static_cast<uintptr_t>(tag), memory_order));
+			return io_handler_ptr::from_tagged(
+				reinterpret_cast<io_handler_ptr::tagged_pointer_type>(
+					vsm::atomic_ref(m_handler).fetch_or(static_cast<uintptr_t>(tag), memory_order)));
 		}
 
 		[[nodiscard]] bool compare_exchange_strong(
@@ -141,15 +144,16 @@ public:
 			std::memory_order const success_memory_order,
 			std::memory_order const failure_memory_order)
 		{
-			uintptr_t expected_value = vsm::reinterpret_pointer_cast<uintptr_t>(expected_handler);
+			uintptr_t expected_value = reinterpret_cast<uintptr_t>(expected_handler.tagged_pointer());
 
 			bool const result = vsm::atomic_ref(m_handler).compare_exchange_strong(
 				expected_value,
-				vsm::reinterpret_pointer_cast<uintptr_t>(desired_handler),
+				reinterpret_cast<uintptr_t>(desired_handler.tagged_pointer()),
 				success_memory_order,
 				failure_memory_order);
 
-			expected_handler = vsm::reinterpret_pointer_cast<io_handler_ptr>(expected_value);
+			expected_handler = io_handler_ptr::from_tagged(
+				reinterpret_cast<io_handler_ptr::tagged_pointer_type>(expected_value));
 
 			return result;
 		}
@@ -470,7 +474,7 @@ public:
 	{
 		m_multiplexer->cancel_io(
 			operation,
-			_io_uring_multiplexer::user_data_ptr(&operation));
+			_io_uring_multiplexer::user_data_ptr(&operation, {}));
 	}
 
 	void cancel_io(operation_type& operation, _io_uring_multiplexer::io_slot& slot)

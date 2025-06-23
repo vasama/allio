@@ -206,7 +206,6 @@ vsm_configure(
 		vsm::intrusive_ptr
 
 	SOURCE_DEPENDENCIES
-		vsm::base64
 		vsm::intrusive
 
 	TEST_SOURCES

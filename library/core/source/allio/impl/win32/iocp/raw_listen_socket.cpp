@@ -9,7 +9,6 @@
 #include <allio/win32/kernel_error.hpp>
 
 #include <vsm/numeric.hpp>
-#include <vsm/tag_ptr.hpp>
 
 using namespace allio;
 using namespace allio::detail;

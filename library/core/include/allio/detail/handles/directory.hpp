@@ -85,6 +85,7 @@ public:
 		return get_directory_entry_type(m_pointer);
 	}
 
+	//TODO: Rename to native_name?
 	[[nodiscard]] std::basic_string_view<native_path_char_t> name() const
 	{
 		return get_directory_entry_name(m_pointer);

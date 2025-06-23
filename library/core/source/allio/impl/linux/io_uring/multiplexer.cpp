@@ -15,7 +15,6 @@
 #include <vsm/flags.hpp>
 #include <vsm/lazy.hpp>
 #include <vsm/numeric.hpp>
-#include <vsm/tag_ptr.hpp>
 #include <vsm/utility.hpp>
 
 #include <linux/time_types.h>
@@ -664,7 +663,7 @@ void _io_uring_multiplexer_impl::submit_async_cancel(user_data_ptr const user_da
 		**r =
 		{
 			.opcode = IORING_OP_ASYNC_CANCEL,
-			.addr = vsm::reinterpret_pointer_cast<uintptr_t>(user_data),
+			.addr = reinterpret_cast<uintptr_t>(user_data.tagged_pointer()),
 		};
 
 		ctx.commit();
@@ -705,7 +704,7 @@ void _io_uring_multiplexer_impl::cancel_io_externally_synchronized(
 	else if (handler.tag() == io_handler_tag::cancel_flushing)
 	{
 		operation.store(
-			{ handler.ptr(), io_handler_tag::cancel_submitted },
+			{ handler.pointer(), io_handler_tag::cancel_submitted },
 			std::memory_order_relaxed);
 	}
 	else
@@ -727,7 +726,7 @@ void _io_uring_multiplexer_impl::cancel_io_internally_synchronized(operation_typ
 
 	(void)operation.compare_exchange_strong(
 		handler,
-		{ handler.ptr(), io_handler_tag::cancel_pending },
+		{ handler.pointer(), io_handler_tag::cancel_pending },
 		std::memory_order_release,
 		std::memory_order_relaxed);
 
@@ -779,7 +778,7 @@ bool _io_uring_multiplexer_impl::flush_cancel_queue()
 			vsm_assert(handler.tag() == io_handler_tag::cancel_pending);
 
 			operation.store(
-				{ handler.ptr(), io_handler_tag::cancel_flushing },
+				{ handler.pointer(), io_handler_tag::cancel_flushing },
 				std::memory_order_relaxed);
 
 			handler->cancel();
@@ -788,7 +787,7 @@ bool _io_uring_multiplexer_impl::flush_cancel_queue()
 			if (handler.tag() == io_handler_tag::cancel_flushing)
 			{
 				operation.store(
-					{ handler.ptr(), io_handler_tag::cancel_submitted },
+					{ handler.pointer(), io_handler_tag::cancel_submitted },
 					std::memory_order_relaxed);
 			}
 		}
@@ -805,8 +804,8 @@ void _io_uring_multiplexer_impl::reap_cqe(io_uring_cqe const& cqe)
 		return;
 	}
 
-	auto const user_data = vsm::reinterpret_pointer_cast<user_data_ptr>(cqe.user_data);
-	vsm_assert(user_data.ptr() != nullptr);
+	auto const user_data = user_data_ptr::from_tagged(reinterpret_cast<void*>(cqe.user_data));
+	vsm_assert(user_data.pointer() != nullptr);
 
 	auto const tag = user_data.tag();
 
@@ -829,7 +828,7 @@ void _io_uring_multiplexer_impl::reap_cqe(io_uring_cqe const& cqe)
 
 	if (vsm::any_flags(tag, user_data_tag::io_slot))
 	{
-		io_slot* const slot = static_cast<io_slot*>(user_data.ptr());
+		io_slot* const slot = static_cast<io_slot*>(user_data.pointer());
 
 		// Emulate IOSQE_CQE_SKIP_SUCCESS for successful operations.
 		if (status.result >= 0 && vsm::any_flags(slot->m_flags, io_slot_flags::cqe_skip_success))
@@ -843,7 +842,7 @@ void _io_uring_multiplexer_impl::reap_cqe(io_uring_cqe const& cqe)
 	}
 	else
 	{
-		operation = static_cast<operation_type*>(user_data.ptr());
+		operation = static_cast<operation_type*>(user_data.pointer());
 	}
 
 	io_handler_ptr handler = operation->load(std::memory_order_acquire);

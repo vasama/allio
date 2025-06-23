@@ -8,9 +8,9 @@
 
 #include <vsm/assert.h>
 #include <vsm/intrusive/mpsc_queue.hpp>
+#include <vsm/pointer_tag_pair.hpp>
 #include <vsm/standard.hpp>
 #include <vsm/tag_invoke.hpp>
-#include <vsm/tag_ptr.hpp>
 #include <vsm/utility.hpp>
 
 #include <exec/repeat_effect_until.hpp>
@@ -35,12 +35,12 @@ class event_queue
 
 	struct operation_base : vsm::intrusive::mpsc_queue_link
 	{
-		using ptr_type = vsm::tag_ptr<operation_virtual_table const, bool>;
+		using pair_type = vsm::pointer_tag_pair<operation_virtual_table const*, bool>;
 
-		vsm::atomic<ptr_type> virtual_table_and_cancel;
+		vsm::atomic<pair_type> virtual_table_and_cancel;
 
 		explicit operation_base(operation_virtual_table const& virtual_table)
-			: virtual_table_and_cancel(ptr_type(&virtual_table, false))
+			: virtual_table_and_cancel(pair_type(&virtual_table, false))
 		{
 		}
 
@@ -49,8 +49,8 @@ class event_queue
 
 		void process()
 		{
-			auto const p = virtual_table_and_cancel.load(std::memory_order_acquire);
-			(p.tag() ? p->set_stopped : p->set_value)(*this);
+			auto const [p, cancelled] = virtual_table_and_cancel.load(std::memory_order_acquire);
+			(cancelled ? p->set_stopped : p->set_value)(*this);
 		}
 	};
 

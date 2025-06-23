@@ -76,14 +76,14 @@ public:
 
 	[[nodiscard]] uintptr_t get_user_data(operation_type& operation) const
 	{
-		return vsm::reinterpret_pointer_cast<uintptr_t>(
-			basic_user_data_ptr<operation_type>(&operation));
+		return reinterpret_cast<uintptr_t>(
+			basic_user_data_ptr<operation_type>(&operation, {}).tagged_pointer());
 	}
 
 	[[nodiscard]] uintptr_t get_user_data(io_slot& slot) const
 	{
-		return vsm::reinterpret_pointer_cast<uintptr_t>(
-			basic_user_data_ptr<io_slot>(&slot, user_data_tag::io_slot));
+		return reinterpret_cast<uintptr_t>(
+			basic_user_data_ptr<io_slot>(&slot, user_data_tag::io_slot).tagged_pointer());
 	}
 
 
