@@ -26,7 +26,7 @@ class any_endpoint_buffer
 		size_t max_size,
 		std::align_val_t min_alignment);
 
-	using data_pair_type = vsm::pointer_tag_pair_with_max<void*, tag_type, tag_type::typed_ptr>;
+	using data_pair_type = vsm::pointer_tag_pair_with_max<void, tag_type, tag_type::typed_ptr>;
 
 	data_pair_type m_data;
 

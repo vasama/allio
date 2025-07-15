@@ -62,6 +62,7 @@ vsm_add_library(
 
 	SOURCES
 		source/allio/impl/any_byte_buffer.cpp
+		source/allio/impl/buffer_registrar.cpp
 		source/allio/impl/byte_io_buffers.cpp
 		source/allio/impl/error_default.cpp
 		source/allio/impl/error.cpp

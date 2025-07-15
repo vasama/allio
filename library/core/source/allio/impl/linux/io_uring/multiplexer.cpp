@@ -678,7 +678,7 @@ void _io_uring_multiplexer_impl::cancel_io_externally_synchronized(
 	operation_type& operation,
 	user_data_ptr const user_data)
 {
-	io_handler_ptr handler = operation.load(std::memory_order_acquire);
+	io_handler_ptr handler = operation.m_handler.load(std::memory_order_acquire);
 
 	/**/ if (handler.tag() == io_handler_tag::not_cancelled)
 	{
@@ -690,7 +690,9 @@ void _io_uring_multiplexer_impl::cancel_io_externally_synchronized(
 		// to set the tag to cancel_pending. Should one do so between the previous load and this
 		// operation, setting the cancel_submitted bits will have no effect, because, as asserted
 		// above, the cancel_pending value sets all the bits of the cancel_submitted value.
-		handler = operation.fetch_or(io_handler_tag::cancel_submitted, std::memory_order_acq_rel);
+		operation.m_handler.fetch_or_tag(
+			io_handler_tag::cancel_submitted,
+			std::memory_order_acq_rel);
 
 		// Another thread could have won the race to modify the tag, in which case it must now be in
 		// the cancel_pending state. The other thread will push the operation into the cancel queue.
@@ -703,7 +705,7 @@ void _io_uring_multiplexer_impl::cancel_io_externally_synchronized(
 	}
 	else if (handler.tag() == io_handler_tag::cancel_flushing)
 	{
-		operation.store(
+		operation.m_handler.store(
 			{ handler.pointer(), io_handler_tag::cancel_submitted },
 			std::memory_order_relaxed);
 	}
@@ -717,14 +719,14 @@ void _io_uring_multiplexer_impl::cancel_io_externally_synchronized(
 
 void _io_uring_multiplexer_impl::cancel_io_internally_synchronized(operation_type& operation)
 {
-	io_handler_ptr handler = operation.load(std::memory_order_acquire);
+	io_handler_ptr handler = operation.m_handler.load(std::memory_order_acquire);
 
 	if (handler.tag() != io_handler_tag::not_cancelled)
 	{
 		return;
 	}
 
-	(void)operation.compare_exchange_strong(
+	operation.m_handler.compare_exchange_strong(
 		handler,
 		{ handler.pointer(), io_handler_tag::cancel_pending },
 		std::memory_order_release,
@@ -772,21 +774,21 @@ bool _io_uring_multiplexer_impl::flush_cancel_queue()
 			// other modification by another thread is in cancel_io_internally_synchronized and it
 			// loads and checks the value before modifying it, never modifying if cancellation has
 			// already been initiated. For this reason relaxed memory order is sufficient.
-			io_handler_ptr handler = operation.load(std::memory_order_relaxed);
+			io_handler_ptr handler = operation.m_handler.load(std::memory_order_relaxed);
 
 			// The handler tag must be cancel_pending before the operation can end up in the queue.
 			vsm_assert(handler.tag() == io_handler_tag::cancel_pending);
 
-			operation.store(
+			operation.m_handler.store(
 				{ handler.pointer(), io_handler_tag::cancel_flushing },
 				std::memory_order_relaxed);
 
 			handler->cancel();
 
-			handler = operation.load(std::memory_order_relaxed);
+			handler = operation.m_handler.load(std::memory_order_relaxed);
 			if (handler.tag() == io_handler_tag::cancel_flushing)
 			{
-				operation.store(
+				operation.m_handler.store(
 					{ handler.pointer(), io_handler_tag::cancel_submitted },
 					std::memory_order_relaxed);
 			}
@@ -845,14 +847,14 @@ void _io_uring_multiplexer_impl::reap_cqe(io_uring_cqe const& cqe)
 		operation = static_cast<operation_type*>(user_data.pointer());
 	}
 
-	io_handler_ptr handler = operation->load(std::memory_order_acquire);
+	io_handler_ptr handler = operation->m_handler.load(std::memory_order_acquire);
 	if (handler.tag() != io_handler_tag::cancel_pending)
 	{
 		while (true)
 		{
 			(void)flush_cancel_queue();
 
-			handler = operation->load(std::memory_order_acquire);
+			handler = operation->m_handler.load(std::memory_order_acquire);
 			if (handler.tag() != io_handler_tag::cancel_pending)
 			{
 				break;

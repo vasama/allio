@@ -1,5 +1,6 @@
 #pragma once
 
+#include <allio/detail/buffer_registrar.hpp>
 #include <allio/detail/byte_io_buffers.hpp>
 #include <allio/impl/posix/socket.hpp>
 #include <allio/impl/storage_provider.hpp>
@@ -264,5 +265,19 @@ vsm::result<unique_rio_buffer> rio_register_buffer(
 size_t rio_dequeue_completion(
 	RIO_CQ cq,
 	std::span<RIORESULT> buffer);
+
+
+struct rio_buffer_registrar : detail::buffer_registrar
+{
+	[[nodiscard]] vsm::result<void*> register_buffers(
+		std::byte* storage,
+		size_t buffer_size,
+		size_t buffer_count) override;
+
+	[[nodiscard]] void deregister_buffers(void* opaque_pointer) override;
+
+
+	static rio_buffer_registrar instance;
+};
 
 } // namespace allio::win32

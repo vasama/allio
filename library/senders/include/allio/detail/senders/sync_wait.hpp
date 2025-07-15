@@ -35,7 +35,7 @@ class event_queue
 
 	struct operation_base : vsm::intrusive::mpsc_queue_link
 	{
-		using pair_type = vsm::pointer_tag_pair<operation_virtual_table const*, bool>;
+		using pair_type = vsm::pointer_tag_pair<operation_virtual_table const, bool>;
 
 		vsm::atomic<pair_type> virtual_table_and_cancel;
 

@@ -11,7 +11,7 @@ using namespace allio::win32;
 static std::string get_win32_error_message(ULONG const error) noexcept
 {
 #if _MSVC_STL_UPDATE >= 202501L
-	return std::system_category().message(static_cast<int>(win32_error));
+	return std::system_category().message(static_cast<int>(error));
 #else
 	static constexpr DWORD flags =
 		FORMAT_MESSAGE_ALLOCATE_BUFFER |
@@ -40,9 +40,9 @@ static std::string get_win32_error_message(ULONG const error) noexcept
 	{
 		return std::string(p_message.get(), message_size);
 	}
-#endif
 
 	return {};
+#endif
 }
 
 char const* detail::kernel_error_category::name() const noexcept

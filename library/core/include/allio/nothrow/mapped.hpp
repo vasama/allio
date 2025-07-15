@@ -1,7 +1,7 @@
 #pragma once
 
 #include <allio/mapped.hpp>
-#include <allio/nothrow/blocking/map.hpp>
+#include <allio/nothrow/map.hpp>
 
 #include <vsm/concepts.hpp>
 

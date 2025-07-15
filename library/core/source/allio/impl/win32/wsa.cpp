@@ -474,3 +474,26 @@ size_t win32::rio_dequeue_completion(
 	vsm_assert(size != RIO_CORRUPT_CQ);
 	return size;
 }
+
+
+vsm::result<void*> rio_buffer_registrar::register_buffers(
+	std::byte* const storage,
+	size_t const buffer_size,
+	size_t const buffer_count)
+{
+	if (buffer_size == 0 || buffer_count == 0)
+	{
+		return vsm::unexpected(allio_error(error::invalid_argument));
+	}
+
+	vsm_try(buffer_id, rio_register_buffer(std::span(storage, buffer_size * buffer_count)));
+
+	return static_cast<void*>(buffer_id.release());
+}
+
+void rio_buffer_registrar::deregister_buffers(void* const opaque_pointer)
+{
+	rio_deregister_buffer(static_cast<RIO_BUFFERID>(opaque_pointer));
+}
+
+rio_buffer_registrar rio_buffer_registrar::instance;
