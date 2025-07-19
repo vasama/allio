@@ -79,6 +79,11 @@ public:
 		return vsm_forward(self).base_type::m_handle;
 	}
 
+	[[nodiscard]] explicit operator bool() const
+	{
+		return static_cast<bool>(base_type::m_handle);
+	}
+
 	using span_type::empty;
 	using span_type::size;
 	using span_type::size_bytes;

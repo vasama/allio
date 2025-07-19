@@ -161,6 +161,16 @@ struct file_t : fs_object_t
 				no_parameters_t());
 		}
 
+		[[nodiscard]] auto set_maximum_extent(fs_size const extent) const
+		{
+			auto a = io_parameters_t<typename Handle::object_type, set_maximum_extent_t>{};
+			a.size = extent;
+
+			return Traits::template observe<set_maximum_extent_t>(
+				static_cast<Handle const&>(*this),
+				a);
+		}
+
 		[[nodiscard]] auto read_some(
 			fs_size const offset,
 			new_read_buffers const buffers,
