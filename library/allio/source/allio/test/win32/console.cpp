@@ -114,8 +114,12 @@ static NTSTATUS write_console(
 
 struct console_read_console_info
 {
+	WORD is_wide;
+	WORD exe_name_length;
+	ULONG control_characters_size;
+	ULONG control_wake_up_mask;
+	ULONG unknown_value_always_zero;
 	ULONG transfer_size;
-	BOOLEAN is_wide;
 };
 
 static NTSTATUS read_console(
@@ -126,14 +130,31 @@ static NTSTATUS read_console(
 {
 	auto event = thread_event::get().value();
 
+	// ExeNameBuffer[0].Buffer = ExeNameBufferStorage;
+	// ExeNameBuffer[0].Length = 2 * ExeNameLength;
+	// ExeNameBuffer[1].Buffer = Buffer;
+	// ExeNameBuffer[1].Length = ControlCharactersCount;
+	// DataBuffer.Buffer = Buffer;
+	// DataBuffer.Length = BufferLengthBytes;
+	// Status = ConsoleCallServerGeneric(
+	//     FileHandle,
+	//     0LL,
+	//     (ConsoleControlInfo_Generic *)&ConsoleControl,
+	//     0x1000005u,
+	//     0x14u,
+	//     ExeNameBuffer,
+	//     2u,
+	//     &DataBuffer,
+	//     1u);
+
 	console_ioctl_info<console_read_console_info> info =
 	{
-		.control_code = 0x01000006u,
+		.control_code = 0x01000005u,
 		.size = sizeof(console_read_console_info),
 		.data = {.is_wide = is_wide },
 	};
 
-	
+	console_ioctl_data<5> data;
 }
 
 
