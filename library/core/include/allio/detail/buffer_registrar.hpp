@@ -10,8 +10,12 @@ namespace allio::detail {
 class buffer_registrar
 {
 public:
+	/// @brief Allocates storage for use with this registrar.
 	[[nodiscard]] virtual vsm::result<vsm::allocation> allocate_buffers(size_t min_size);
-	void deallocate_buffers(vsm::allocation storage);
+
+	/// @brief Deallocates storage allocated using @ref allocate_buffers.
+	virtual void deallocate_buffers(vsm::allocation storage);
+
 
 	[[nodiscard]] virtual vsm::result<void*> register_buffers(
 		std::byte* storage,

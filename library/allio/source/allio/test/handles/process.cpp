@@ -32,7 +32,7 @@ TEST_CASE("Waiting on the current process returns an error", "[process][this_pro
 }
 
 //TODO: This test case requires opening the current process with sufficient access rights for handle
-//      duplication. There is currently no way to request such access rights.
+//      duplication. There is currently no way in allio to request such access rights.
 #if 0
 TEST_CASE(
 	"Handles can be duplicated from the current process",

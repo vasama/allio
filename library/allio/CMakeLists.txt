@@ -36,6 +36,7 @@ vsm_configure(
 	PLATFORM Windows
 
 	TEST_SOURCES
+		source/allio/test/win32/console.cpp
 		source/allio/test/win32/memory.cpp
 )
 

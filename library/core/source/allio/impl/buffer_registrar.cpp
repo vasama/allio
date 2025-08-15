@@ -12,4 +12,5 @@ vsm::result<vsm::allocation> buffer_registrar::allocate_buffers(size_t const min
 
 void buffer_registrar::deallocate_buffers(vsm::allocation const storage)
 {
+	vsm_unreachable();
 }

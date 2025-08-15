@@ -78,6 +78,44 @@ struct openssl_operation_base : vsm::intrusive::mpsc_queue_link
 	vsm::atomic<state_flags> m_state_flags;
 };
 
+
+struct openssl_socket_state_base
+{
+	openssl_ssl_ptr m_ssl;
+};
+
+template<typename RawSocketObject>
+struct openssl_socket_state : openssl_socket_state_base
+{
+	template<typename Operation>
+	using operation_state = async_operation_t<Multiplexer, RawSocketObject, Operation>;
+
+	using connect_state = operation<connect_t>;
+	using disconnect_state = operation<disconnect_t>;
+
+	struct rw_state
+	{
+		operation_state<byte_io::stream_read_t> r;
+		operation_state<byte_io::stream_write_t> w;
+	};
+
+	std::variant<connect_state, disconnect_state, rw_state> m_raw_state;
+};
+
+
+struct openssl_listen_socket_state_base
+{
+	openssl_ssl_ptr m_ssl;
+};
+
+template<typename Multiplexer, typename RawSocketObject>
+struct openssl_listen_socket_state : openssl_listen_socket_state_base
+{
+	async_operation_t<Multiplexer, RawSocketObject, listen_t> m_raw_state;
+};
+
+
+
 struct openssl_object_base
 {
 	struct bio_type;
