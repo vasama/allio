@@ -1,6 +1,7 @@
 #pragma once
 
-#include <allio/byte_io.hpp>
+#include <allio/detail/byte_io.hpp>
+#include <allio/detail/byte_io_buffers.hpp>
 #include <allio/detail/handle.hpp>
 #include <allio/detail/handles/platform_object.hpp>
 

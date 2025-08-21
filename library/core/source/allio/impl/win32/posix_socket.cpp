@@ -96,12 +96,9 @@ vsm::result<posix::socket_with_flags> posix::create_socket(
 		w_flags |= WSA_FLAG_NO_HANDLE_INHERIT;
 	}
 
-	if (vsm::any_flags(flags, io_flags::create_synchronous))
+	if (vsm::no_flags(flags, io_flags::create_synchronous))
 	{
-		h_flags |= platform_object_t::impl_type::flags::synchronous;
-	}
-	else
-	{
+		h_flags |= platform_object_t::impl_type::flags::overlapped;
 		w_flags |= WSA_FLAG_OVERLAPPED;
 	}
 
@@ -118,8 +115,7 @@ vsm::result<posix::socket_with_flags> posix::create_socket(
 
 	if (vsm::no_flags(flags, io_flags::create_synchronous))
 	{
-		h_flags |= set_file_completion_notification_modes(
-			reinterpret_cast<HANDLE>(socket.get()));
+		h_flags |= set_file_completion_notification_modes(reinterpret_cast<HANDLE>(socket.get()));
 	}
 
 	return vsm_lazy(socket_with_flags

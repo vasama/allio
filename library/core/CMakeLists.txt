@@ -188,6 +188,7 @@ vsm_configure(
 		source/allio/impl/win32/handles/raw_listen_socket.cpp
 		source/allio/impl/win32/handles/raw_socket.cpp
 		source/allio/impl/win32/handles/section.cpp
+		source/allio/impl/win32/handles/standard_stream.cpp
 
 		# IOCP
 		source/allio/impl/win32/iocp/byte_io.cpp
@@ -289,6 +290,7 @@ vsm_configure(
 		source/allio/impl/linux/handles/platform_object.cpp
 		source/allio/impl/linux/handles/process.cpp
 		source/allio/impl/linux/handles/section.cpp
+		source/allio/impl/linux/handles/standard_stream.cpp
 		source/allio/impl/posix/handles/raw_datagram_socket.cpp
 		source/allio/impl/posix/handles/raw_listen_socket.cpp
 		source/allio/impl/posix/handles/raw_socket.cpp

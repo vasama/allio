@@ -30,7 +30,7 @@ static vsm::result<void> do_byte_io_2(
 	static constexpr bool is_random_access = requires { a.offset; };
 
 	if (a.deadline != deadline::never() &&
-		h.flags[platform_object_t::impl_type::flags::synchronous])
+		!h.flags[platform_object_t::impl_type::flags::overlapped])
 	{
 		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}

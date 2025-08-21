@@ -28,7 +28,7 @@ vsm::result<void> raw_socket_t::connect(
 	io_parameters_t<raw_socket_t, connect_t> const& a)
 {
 	if (a.deadline != deadline::never() &&
-		h.flags[platform_object_t::impl_type::flags::synchronous])
+		vsm::no_flags(a.flags, io_flags::create_synchronous))
 	{
 		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
@@ -37,16 +37,16 @@ vsm::result<void> raw_socket_t::connect(
 	vsm_try(addr, posix::get_socket_address(a.endpoint, address_storage));
 	vsm_try(protocol, posix::choose_protocol(addr.addr->sa_family, SOCK_STREAM));
 
-	vsm_try_bind((socket, flags), posix::create_socket(
+	vsm_try_bind((socket, socket_flags), posix::create_socket(
 		addr.addr->sa_family,
 		SOCK_STREAM,
 		protocol,
 		a.flags));
 
-	if (vsm::no_flags(a.flags, io_flags::create_synchronous) || a.deadline != deadline::never())
+	if (socket_flags[platform_object_t::impl_type::flags::overlapped])
 	{
 		//TODO: Test this and the matching accept with attached IOCP.
-		vsm_try(overlapped, wsa_thread_overlapped::get_for(h));
+		vsm_try(overlapped, wsa_thread_overlapped::get());
 
 		// The socket must be bound before calling ConnectEx.
 		{
@@ -63,19 +63,23 @@ vsm::result<void> raw_socket_t::connect(
 			addr.size,
 			overlapped);
 
-		if (e != WSA_IO_PENDING)
+		if (e == WSA_IO_PENDING)
+		{
+			DWORD transferred;
+			DWORD dummy_flags;
+
+			vsm_try_void(overlapped.wait(
+				socket.get(),
+				a.deadline,
+				&transferred,
+				&dummy_flags));
+
+			vsm_assert(transferred == 0);
+		}
+		else if (e != 0)
 		{
 			return vsm::unexpected(allio_error(static_cast<posix::socket_error>(e)));
 		}
-
-		DWORD transferred;
-		DWORD dummy_flags;
-
-		vsm_try_void(overlapped.wait(
-			socket.get(),
-			a.deadline,
-			&transferred,
-			&dummy_flags));
 
 #if 0
 		DWORD transferred = static_cast<DWORD>(-1);
@@ -111,8 +115,19 @@ vsm::result<void> raw_socket_t::connect(
 		}
 	}
 
-	h.flags = flags::not_null | posix::set_address_family(addr.addr->sa_family) | flags;
-	h.platform_handle = posix::wrap_socket(socket.release());
+	socket_flags |= posix::set_address_family(addr.addr->sa_family);
+
+	h = native_handle<raw_socket_t>
+	{
+		native_handle<platform_object_t>
+		{
+			native_handle<object_t>
+			{
+				flags::not_null | socket_flags,
+			},
+			posix::wrap_socket(socket.release()),
+		},
+	};
 
 	return {};
 }
@@ -122,7 +137,7 @@ vsm::result<size_t> raw_socket_t::stream_read(
 	io_parameters_t<raw_socket_t, stream_read_t> const& a)
 {
 	if (a.deadline != deadline::never() &&
-		h.flags[platform_object_t::impl_type::flags::synchronous])
+		!h.flags[platform_object_t::impl_type::flags::overlapped])
 	{
 		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
@@ -174,7 +189,7 @@ vsm::result<size_t> raw_socket_t::stream_write(
 	io_parameters_t<raw_socket_t, stream_write_t> const& a)
 {
 	if (a.deadline != deadline::never() &&
-		h.flags[platform_object_t::impl_type::flags::synchronous])
+		!h.flags[platform_object_t::impl_type::flags::overlapped])
 	{
 		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}

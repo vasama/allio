@@ -27,6 +27,7 @@ vsm_add_library(
 		source/allio/test/handles/pipe.cpp
 		source/allio/test/handles/process.cpp
 		source/allio/test/handles/socket.cpp
+		source/allio/test/handles/standard_stream.cpp
 
 	TEST_CUSTOM_MAIN
 )
@@ -36,7 +37,6 @@ vsm_configure(
 	PLATFORM Windows
 
 	TEST_SOURCES
-		source/allio/test/win32/console.cpp
 		source/allio/test/win32/memory.cpp
 )
 

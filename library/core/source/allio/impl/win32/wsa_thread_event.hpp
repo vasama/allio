@@ -15,11 +15,25 @@ class wsa_thread_overlapped
 	thread_event::overlapped_t m_overlapped;
 
 public:
-	static [[nodiscard]] vsm::result<wsa_thread_overlapped> get_for(
+	[[nodiscard]] static vsm::result<wsa_thread_overlapped> get()
+	{
+		vsm::result<wsa_thread_overlapped> r(vsm::result_value);
+		if (auto r2 = thread_event::get())
+		{
+			r->m_event = vsm_move(*r2);
+		}
+		else
+		{
+			r = vsm::unexpected(r2.error());
+		}
+		return r;
+	}
+
+	[[nodiscard]] static vsm::result<wsa_thread_overlapped> get_for(
 		detail::native_handle<detail::platform_object_t> const& h)
 	{
 		vsm::result<wsa_thread_overlapped> r(vsm::result_value);
-		if (!h.flags[detail::platform_object_t::impl_type::flags::synchronous])
+		if (h.flags[detail::platform_object_t::impl_type::flags::overlapped])
 		{
 			if (auto r2 = thread_event::get())
 			{

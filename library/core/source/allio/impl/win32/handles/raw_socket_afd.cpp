@@ -68,12 +68,9 @@ vsm::result<void> raw_socket_t::connect(
 	}
 
 	auto h_flags = handle_flags::none;
-	if (vsm::any_flags(create_options, FILE_SYNCHRONOUS_IO_NONALERT))
+	if (vsm::no_flags(create_options, FILE_SYNCHRONOUS_IO_NONALERT))
 	{
-		h_flags |= impl_type::flags::synchronous;
-	}
-	else
-	{
+		h_flags |= impl_type::flags::overlapped;
 		h_flags |= set_file_completion_notification_modes(handle.get());
 	}
 

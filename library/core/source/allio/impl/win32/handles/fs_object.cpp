@@ -152,6 +152,7 @@ vsm::result<handle_with_flags> win32::create_file(
 	object_attributes.Length = sizeof(object_attributes);
 	object_attributes.RootDirectory = base_handle;
 	object_attributes.ObjectName = &path;
+	object_attributes.Attributes = info.object_attributes;
 
 	LARGE_INTEGER allocation_size;
 	allocation_size.QuadPart = 0;
@@ -178,10 +179,10 @@ vsm::result<handle_with_flags> win32::create_file(
 		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
-	//TODO: Make sure the synchronous flag is set.
 	auto h_flags = handle_flags::none;
 	if ((info.create_options & FILE_SYNCHRONOUS_IO_NONALERT) == 0)
 	{
+		h_flags |= platform_object_t::impl_type::flags::overlapped;
 		h_flags |= set_file_completion_notification_modes(handle.get());
 	}
 

@@ -44,7 +44,7 @@ vsm::result<socket_handle_type> raw_listen_socket_t::accept(
 	io_parameters_t<raw_listen_socket_t, accept_t> const& a)
 {
 	if (a.deadline != deadline::never() &&
-		h.flags[platform_object_t::impl_type::flags::synchronous])
+		!h.flags[platform_object_t::impl_type::flags::overlapped])
 	{
 		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
@@ -73,9 +73,9 @@ vsm::result<socket_handle_type> raw_listen_socket_t::accept(
 	posix::socket_with_flags socket_with_flags;
 	auto& [socket, socket_flags] = socket_with_flags;
 
-	if (a.deadline != deadline::never() ||
-		!h.flags[platform_object_t::impl_type::flags::synchronous] ||
-		vsm::no_flags(a.flags, io_flags::create_synchronous))
+	//TODO: Test this with all combinations of synchronous/overlapped handles.
+	if (h.flags[platform_object_t::impl_type::flags::overlapped] ||
+		socket_flags[platform_object_t::impl_type::flags::overlapped])
 	{
 		vsm_try_assign(socket_with_flags, posix::create_socket(
 			address_family,
@@ -102,6 +102,8 @@ vsm::result<socket_handle_type> raw_listen_socket_t::accept(
 				a.deadline,
 				&transferred,
 				&dummy_flags));
+
+			vsm_assert(transferred == 0);
 		}
 		else if (e != 0)
 		{
@@ -157,7 +159,6 @@ vsm::result<socket_handle_type> raw_listen_socket_t::accept(
 		}
 
 		socket.reset(new_socket);
-		socket_flags = platform_object_t::impl_type::flags::synchronous;
 	}
 
 	socket_flags |= posix::set_address_family(address_family);

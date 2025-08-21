@@ -11,8 +11,8 @@
 
 #include <optional>
 #include <span>
-#include <thread>
 
+#include <pthread.h>
 #include <sys/wait.h>
 #include <linux/wait.h>
 
@@ -44,6 +44,30 @@ struct detail::unix_process_reaper : vsm::intrusive::mpsc_queue_link
 
 namespace {
 
+class pthread_attr
+{
+	pthread_attr_t m_attr;
+
+public:
+	pthread_attr()
+	{
+		pthread_attr_init(&m_attr);
+	}
+
+	pthread_attr(pthread_attr const&) = delete;
+	pthread_attr& operator=(pthread_attr const&) = delete;
+
+	~pthread_attr()
+	{
+		pthread_attr_destroy(&m_attr);
+	}
+
+	[[nodiscard]] operator pthread_attr_t*()
+	{
+		return &m_attr;
+	}
+};
+
 struct reaper_thread
 {
 	vsm::intrusive::mpsc_queue<process_reaper> m_shared_queue;
@@ -53,7 +77,7 @@ struct reaper_thread
 	unique_handle m_epoll;
 
 	vsm::atomic<bool> m_exit_requested = false;
-	std::thread m_thread;
+	std::optional<pthread_t> m_thread;
 
 public:
 	reaper_thread() = default;
@@ -63,22 +87,28 @@ public:
 
 	~reaper_thread()
 	{
-		if (m_thread.joinable())
+		if (m_thread)
 		{
 			m_exit_requested.store(true, std::memory_order_release);
 			vsm_verify(linux::eventfd_write(m_event.get(), 1));
-			m_thread.join();
-		}
 
-		splice_shared_queue();
-		while (!m_local_queue.empty())
-		{
-			release_process_reaper(&m_local_queue.pop_front());
+			if (int const e = pthread_join(*m_thread, /* retval: */ nullptr))
+			{
+				unrecoverable_error(static_cast<system_error>(e));
+			}
+
+			splice_shared_queue();
+			while (!m_local_queue.empty())
+			{
+				release_process_reaper(&m_local_queue.pop_front());
+			}
 		}
 	}
 
 	vsm::result<void> initialize()
 	{
+		vsm_assert(!m_thread);
+
 		vsm_try_assign(m_event, linux::eventfd(EFD_CLOEXEC | EFD_NONBLOCK));
 		vsm_try_assign(m_epoll, linux::epoll_create());
 
@@ -95,21 +125,29 @@ public:
 				&event));
 		}
 
-		try
+		static constexpr auto thread_main = [](void* const argument)
 		{
-			//TODO: Reduce the thread stack size to bare minimum.
-			m_thread = std::thread([this]() { thread_start(); });
-		}
-		catch (std::system_error const& e)
+			static_cast<reaper_thread*>(argument)->thread_main();
+		};
+
+		pthread_attr attr;
+		(void)pthread_attr_setstacksize(attr, 1 << 14);
+
+		pthread_t thread;
+		if (int const e = pthread_create(&thread, attr, thread_main, this))
 		{
-			return vsm::unexpected(e.code());
+			return vsm::unexpected(static_cast<system_error>(e));
 		}
+
+		m_thread = thread;
 
 		return {};
 	}
 
 	void register_process(process_reaper* const process)
 	{
+		vsm_assert(m_thread);
+
 		(void)process->refcount.fetch_add(1, std::memory_order_relaxed);
 
 		if (!create_process_wait(process))
@@ -122,8 +160,11 @@ public:
 	}
 
 private:
-	void thread_start()
+	void thread_main()
 	{
+		//TODO: Only set the thread name in debug builds.
+		(void)pthread_setname_np(pthread_self(), "ALLIO Process Reaper");
+
 		while (true)
 		{
 			epoll_event events[16];
@@ -229,7 +270,7 @@ static reaper_thread g_reaper_thread;
 
 static vsm::result<void> initialize_reaper_thread()
 {
-	static auto const r = g_reaper_thread.initialize();
+	static vsm::result<void> const r = g_reaper_thread.initialize();
 	return r;
 }
 
@@ -287,6 +328,8 @@ vsm::result<std::optional<int>> linux::process_reaper_wait(
 		// retrieved from the process reaper shared state.
 	}
 
+	//TODO: A futex wait could probably be used here in case the exit code is still not available
+	//      after some small number of iterations.
 	while (true)
 	{
 		switch (process->exit_state.load(std::memory_order_acquire))

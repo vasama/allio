@@ -14,12 +14,15 @@
 
 #include <chrono>
 #include <filesystem>
+#include <iostream>
 #include <random>
 #include <string>
 #include <thread>
 #include <vector>
 
 using namespace allio;
+
+namespace {
 
 TEST_CASE("Waiting on the current process returns an error", "[process][this_process]")
 {
@@ -268,6 +271,145 @@ TEST_CASE("Child process can be terminated", "[process]")
 	process.terminate();
 }
 
+TEST_CASE("Standard streams are implicitly inherited", "[process]")
+{
+	using namespace blocking;
+	using namespace std::string_view_literals;
+
+	auto i_pipe = create_pipe(inheritable);
+	auto o_pipe = create_pipe(inheritable);
+	auto e_pipe = create_pipe(inheritable);
+
+	i_pipe.write_pipe.write(as_write_buffer("hello world"sv));
+
+	std::string control_argument;
+
+	if (GENERATE(0, 1))
+	{
+		control_argument.push_back('i');
+	}
+
+	if (GENERATE(0, 1))
+	{
+		control_argument.push_back('o');
+	}
+
+	if (GENERATE(0, 1))
+	{
+		control_argument.push_back('e');
+	}
+
+	auto const child_main = [](std::string_view const control_argument)
+	{
+		auto const child_main = []()
+		{
+			std::cout << "out: ";
+			std::cerr << "err: ";
+
+			struct pseudo_container_t
+			{
+				using value_type = char;
+
+				void push_back(char const character)
+				{
+					std::cout << character;
+					std::cerr << character;
+				}
+			};
+
+			pseudo_container_t pseudo_container;
+			std::copy(
+				std::istreambuf_iterator<char>(std::cin),
+				std::istreambuf_iterator<char>(),
+				std::back_inserter(pseudo_container));
+		};
+
+		auto const child_path = test::get_child_executable_path();
+		auto const child_args = test::make_child_args(child_main);
+
+		detail::io_parameters_t<process_t, process_t::create_t> args = {};
+		args.executable_path = child_path;
+		args.arguments = child_args;
+
+		std::optional<pipe_handle_pair> i_pipe;
+		std::optional<pipe_handle_pair> o_pipe;
+		std::optional<pipe_handle_pair> e_pipe;
+
+		if (control_argument.find('i') != std::string_view::npos)
+		{
+			auto const input = std::string(
+				std::istreambuf_iterator<char>(std::cin),
+				std::istreambuf_iterator<char>());
+
+			i_pipe = create_pipe(inheritable);
+			i_pipe->write_pipe.write(as_write_buffer(input));
+			detail::set_argument(args, redirect_stdin(i_pipe->read_pipe));
+		}
+
+		if (control_argument.find('o') != std::string_view::npos)
+		{
+			o_pipe = create_pipe(inheritable);
+			detail::set_argument(args, redirect_stdout(o_pipe->write_pipe));
+		}
+
+		if (control_argument.find('e') != std::string_view::npos)
+		{
+			e_pipe = create_pipe(inheritable);
+			detail::set_argument(args, redirect_stderr(e_pipe->write_pipe));
+		}
+
+		process_handle child_process;
+		detail::blocking_io<process_t::create_t>(child_process, args).value();
+
+		if (i_pipe)
+		{
+			i_pipe->write_pipe.close();
+		}
+
+		if (o_pipe)
+		{
+			o_pipe->write_pipe.close();
+		}
+
+		if (e_pipe)
+		{
+			e_pipe->write_pipe.close();
+		}
+
+		if (child_process.wait().get_exit_code() != EXIT_SUCCESS)
+		{
+			throw std::runtime_error("Inner child process failed.");
+		}
+
+		if (o_pipe)
+		{
+			std::cout << read_to_end<std::string>(o_pipe->read_pipe);
+		}
+
+		if (e_pipe)
+		{
+			std::cerr << read_to_end<std::string>(e_pipe->read_pipe);
+		}
+	};
+
+	auto const child_args = test::make_child_args(child_main, control_argument);
+	auto const child_process = create_process(
+		test::get_child_executable_path(),
+		process_arguments(child_args),
+		redirect_stdin(i_pipe.read_pipe),
+		redirect_stdout(o_pipe.write_pipe),
+		redirect_stderr(e_pipe.write_pipe));
+
+	i_pipe.write_pipe.close();
+	o_pipe.write_pipe.close();
+	e_pipe.write_pipe.close();
+
+	REQUIRE(child_process.wait().get_exit_code() == EXIT_SUCCESS);
+
+	REQUIRE(read_to_end<std::string>(o_pipe.read_pipe) == "out: hello world");
+	REQUIRE(read_to_end<std::string>(e_pipe.read_pipe) == "err: hello world");
+}
+
 TEST_CASE("Handles can be inherited by a child process", "[process][serialization]")
 {
 	auto const child_process = [](std::string_view const serialized_event)
@@ -370,3 +512,5 @@ TEST_CASE("Child process can be waited for upon handle destruction", "[process]"
 	REQUIRE(process_2.wait().get_exit_code() == EXIT_SUCCESS);
 }
 #endif
+
+} // namespace

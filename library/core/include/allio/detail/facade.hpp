@@ -61,7 +61,7 @@ public:
 
 	using Handle::Handle;
 
-	explicit basic_facade(Handle&& handle)
+	explicit constexpr basic_facade(Handle&& handle)
 		: Handle(vsm_move(handle))
 	{
 	}
@@ -165,7 +165,7 @@ public:
 
 	using Handle::Handle;
 
-	explicit basic_facade(Handle&& handle)
+	explicit constexpr basic_facade(Handle&& handle)
 		: Handle(vsm_move(handle))
 	{
 	}

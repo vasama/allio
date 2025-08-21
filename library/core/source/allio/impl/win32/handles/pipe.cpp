@@ -78,7 +78,10 @@ static vsm::result<handle_with_flags> create_named_pipe_file(io_flags const flag
 	if (vsm::any_flags(flags, io_flags::create_synchronous))
 	{
 		create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
-		h_flags |= platform_object_t::impl_type::flags::synchronous;
+	}
+	else
+	{
+		h_flags |= platform_object_t::impl_type::flags::overlapped;
 	}
 
 	IO_STATUS_BLOCK io_status_block;
@@ -137,7 +140,10 @@ static vsm::result<handle_with_flags> create_pipe(
 	if (vsm::any_flags(flags, io_flags::create_synchronous))
 	{
 		create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
-		h_flags |= platform_object_t::impl_type::flags::synchronous;
+	}
+	else
+	{
+		h_flags |= platform_object_t::impl_type::flags::overlapped;
 	}
 
 	IO_STATUS_BLOCK io_status_block;

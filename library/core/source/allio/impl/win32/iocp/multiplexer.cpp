@@ -82,7 +82,7 @@ vsm::result<void> iocp_multiplexer::_attach_handle(
 	native_handle<platform_object_t> const& h,
 	connector_type& c)
 {
-	if (h.flags[platform_object_t::impl_type::flags::synchronous])
+	if (!h.flags[platform_object_t::impl_type::flags::overlapped])
 	{
 		return vsm::unexpected(allio_error(error::handle_is_not_multiplexable));
 	}

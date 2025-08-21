@@ -28,6 +28,9 @@ vsm_add_library(
 	SOURCES
 		source/allio/impl/exceptions.cpp
 
+		# Handles
+		source/allio/impl/handles/standard_stream.cpp
+
 	HEADER_DEPENDENCIES
 		allio::core
 )

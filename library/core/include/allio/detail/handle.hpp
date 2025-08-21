@@ -83,7 +83,7 @@ public:
 
 	basic_detached_handle() = default;
 
-	explicit basic_detached_handle(
+	explicit constexpr basic_detached_handle(
 		adopt_handle_t,
 		std::convertible_to<native_type> auto&& native)
 		: m_native(vsm_forward(native))
@@ -266,7 +266,7 @@ public:
 	}
 
 	//TODO: Adopt should be noexcept
-	explicit basic_attached_handle(
+	explicit constexpr basic_attached_handle(
 		adopt_handle_t,
 		std::convertible_to<MultiplexerHandle> auto&& multiplexer_handle,
 		std::convertible_to<native_type> auto&& native,

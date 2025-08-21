@@ -12,9 +12,10 @@ struct platform_object_t::impl_type : base_type::impl_type
 		/// @brief The handle is a pseudo handle and does not need to be closed.
 		pseudo_handle,
 
-		/// @brief The handle is synchronous and cannot be attached to a completion port.
+		/// @brief The handle is overlapped and can be attached to a completion port.
+		/// @see FILE_FLAG_OVERLAPPED
 		/// @see FILE_SYNCHRONOUS_IO_NONALERT
-		synchronous,
+		overlapped,
 
 		/// @brief The handle does not queue completions to an attached completion port
 		///        on synchronous I/O completion.

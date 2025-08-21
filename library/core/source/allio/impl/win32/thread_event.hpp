@@ -61,7 +61,7 @@ public:
 	[[nodiscard]] static vsm::result<thread_event> get_for(
 		detail::native_handle<detail::platform_object_t> const& h)
 	{
-		if (!h.flags[detail::platform_object_t::impl_type::flags::synchronous])
+		if (h.flags[detail::platform_object_t::impl_type::flags::overlapped])
 		{
 			return get();
 		}
@@ -89,7 +89,9 @@ public:
 
 		// Set the low bit to tell Win32 API functions not to pass ApcContext to NT kernel APIs.
 		// This prevents completions from being queued on an IOCP if the handle is attached.
-		return reinterpret_cast<HANDLE>(reinterpret_cast<uintptr_t>(m_event) | 1);
+		return m_event == NULL
+			? NULL
+			: reinterpret_cast<HANDLE>(reinterpret_cast<uintptr_t>(m_event) | 1);
 	}
 
 	[[nodiscard]] explicit operator bool() const

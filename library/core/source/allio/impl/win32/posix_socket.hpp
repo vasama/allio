@@ -12,9 +12,13 @@
 #	define _WINSOCKAPI_
 #endif
 
+// Preserve ordering:
 #include <Windows.h>
+// Preserve ordering:
 #include <WinSock2.h>
+// Preserve ordering:
 #include <ws2ipdef.h>
+// Preserve ordering:
 #include <afunix.h>
 
 namespace allio::posix {

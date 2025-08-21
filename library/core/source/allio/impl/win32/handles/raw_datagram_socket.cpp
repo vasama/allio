@@ -51,7 +51,7 @@ vsm::result<size_t> raw_datagram_socket_t::receive_from(
 	io_parameters_t<raw_datagram_socket_t, receive_from_t> const& a)
 {
 	if (a.deadline != deadline::never() &&
-		h.flags[platform_object_t::impl_type::flags::synchronous])
+		!h.flags[platform_object_t::impl_type::flags::overlapped])
 	{
 		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
@@ -128,7 +128,7 @@ vsm::result<void> raw_datagram_socket_t::send_to(
 	io_parameters_t<raw_datagram_socket_t, send_to_t> const& a)
 {
 	if (a.deadline != deadline::never() &&
-		h.flags[platform_object_t::impl_type::flags::synchronous])
+		!h.flags[platform_object_t::impl_type::flags::overlapped])
 	{
 		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}

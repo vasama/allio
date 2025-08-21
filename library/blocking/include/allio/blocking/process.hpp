@@ -25,7 +25,7 @@ namespace this_process {
 
 using namespace detail::_this_process;
 
-[[nodiscard]] size_t get_executable_path(any_path_buffer const buffer)
+[[nodiscard]] inline size_t get_executable_path(any_path_buffer const buffer)
 {
 	return detail::_get_current_executable_path<traits_type>(buffer);
 }
@@ -36,7 +36,7 @@ template<typename Path = path>
 	return detail::_get_current_executable_path<Path, traits_type>();
 }
 
-[[nodiscard]] process_handle open(auto&&... args)
+[[nodiscard]] inline process_handle open(auto&&... args)
 {
 	return detail::open_process<traits_type>(get_id(), vsm_forward(args)...);
 }

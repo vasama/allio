@@ -15,6 +15,7 @@ struct open_info
 	ULONG share_access;
 	ULONG create_disposition;
 	ULONG create_options;
+	ULONG object_attributes;
 
 	static vsm::result<open_info> make(detail::open_parameters const& args);
 };
