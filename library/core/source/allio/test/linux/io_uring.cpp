@@ -293,7 +293,10 @@ TEST_CASE("io_uring", "[io_uring]")
 
 	SECTION("NOP-LINK_TIMEOUT -> OK,ECANCELED")
 	{
-		__kernel_timespec ts = {};
+		__kernel_timespec ts =
+		{
+			.tv_sec = 1
+		};
 
 		push_sqe(
 		{
@@ -317,7 +320,10 @@ TEST_CASE("io_uring", "[io_uring]")
 
 	SECTION("ready POLL-LINK_TIMEOUT -> OK,ECANCELED")
 	{
-		__kernel_timespec ts = {};
+		__kernel_timespec ts =
+		{
+			.tv_sec = 1
+		};
 
 		push_sqe(
 		{
@@ -369,7 +375,10 @@ TEST_CASE("io_uring", "[io_uring]")
 
 	SECTION("NOP-LINK_TIMEOUT-NOP -> OK,ECANCELED,OK")
 	{
-		__kernel_timespec ts = {};
+		__kernel_timespec ts =
+		{
+			.tv_sec = 1
+		};
 
 		push_sqe(
 		{
@@ -598,7 +607,7 @@ TEST_CASE("io_uring", "[io_uring]")
 
 			reap_cqe(1, -ECANCELED);
 			REQUIRE(find_cqe(2) == nullptr);
-			reap_cqe(2, 0);
+			reap_cqe(3, 0);
 		}
 
 		SECTION("POLL?-LINK_TIMEOUT?-NOP|ASYNC_CANCEL -> ECANCELED,NONE,NONE,OK")

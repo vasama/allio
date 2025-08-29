@@ -50,10 +50,7 @@ public:
 
 	void release()
 	{
-		if (m_extension != nullptr)
-		{
-			m_extension->extension = nullptr;
-		}
+		m_extension = nullptr;
 	}
 
 protected:

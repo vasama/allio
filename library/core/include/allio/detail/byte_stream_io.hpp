@@ -127,8 +127,8 @@ vsm::result<size_t> _read_to_end_f(Handle const& h, any_byte_buffer const buffer
 {
 	auto const a = detail::make_args<deadline_t>(vsm_forward(args)...);
 
-	vsm_try(maximum_extent, detail::_block<file_t::get_maximum_extent_t>(h));
-	vsm_try(current_offset, detail::_block<file_t::tell_t>(h));
+	vsm_try(maximum_extent, detail::_block<file_io::get_maximum_extent_t>(h));
+	vsm_try(current_offset, detail::_block<file_io::tell_t>(h));
 
 	fs_size const remaining_size = maximum_extent - current_offset;
 	if (remaining_size > std::numeric_limits<size_t>::max())

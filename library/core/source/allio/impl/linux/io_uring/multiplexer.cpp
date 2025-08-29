@@ -6,6 +6,7 @@
 #include <allio/impl/linux/eventfd.hpp>
 #include <allio/impl/linux/io_uring.hpp>
 #include <allio/impl/linux/poll.hpp>
+#include <allio/impl/linux/signal.hpp>
 #include <allio/impl/linux/timeout.hpp>
 #include <allio/impl/linux/version.hpp>
 #include <allio/linux/io_uring_record_context.hpp>
@@ -19,6 +20,7 @@
 
 #include <linux/time_types.h>
 #include <poll.h>
+#include <signal.h>
 #include <sys/mman.h>
 
 #include <allio/linux/detail/undef.i>
@@ -29,7 +31,7 @@ using namespace allio::linux;
 
 bool io_uring::is_supported()
 {
-	//TODO: This shouldn't really be here... Move to linux default multiplexer instead.
+	// TODO: This shouldn't really be here... Move to linux default multiplexer instead.
 	// The io_uring multiplexer requires at minimum Linux 5.5 for IORING_FEAT_NODROP.
 	if (get_kernel_version() < KERNEL_VERSION(5, 5, 0))
 	{
@@ -46,7 +48,7 @@ bool io_uring::is_supported()
 	if (value == 0)
 	{
 		errno = 0;
-		syscall(__NR_io_uring_register, 0, IORING_UNREGISTER_BUFFERS, NULL, 0);
+		syscall(SYS_io_uring_register, 0, IORING_UNREGISTER_BUFFERS, NULL, 0);
 		value = lazy_init_flag | (errno != ENOSYS ? supported_flag : 0);
 
 		reference.store(value, std::memory_order::release);
@@ -134,6 +136,9 @@ public:
 };
 
 } // namespace
+
+vsm_gcc_diagnostic(push)
+vsm_gcc_diagnostic(ignored "-Wnon-virtual-dtor")
 
 using _io_uring_multiplexer_impl = vsm::partial::private_class<_io_uring_multiplexer>;
 class _io_uring_multiplexer::private_class : public _io_uring_multiplexer
@@ -350,6 +355,8 @@ public:
 		deadline deadline);
 };
 
+vsm_gcc_diagnostic(pop)
+
 _io_uring_multiplexer::_io_uring_multiplexer(
 	io_uring_params const& setup,
 	unique_io_uring_byte_mmap&& sq_ring,
@@ -415,6 +422,25 @@ _io_uring_multiplexer_impl::private_class(
 	{
 		m_k_sq_array[m_sq_acquire + i & m_sq_size - 1] = i;
 	}
+}
+
+vsm::result<void*> _io_uring_multiplexer::register_buffers(
+	std::byte* const storage,
+	size_t const buffer_size,
+	size_t const buffer_count)
+{
+	return vsm::unexpected(allio_error(error::unsupported_operation));
+}
+
+void _io_uring_multiplexer::deregister_buffers(void* const opaque_pointer)
+{
+}
+
+void _io_uring_multiplexer::operator delete(
+	_io_uring_multiplexer* const self,
+	std::destroying_delete_t)
+{
+	vsm_qualified_delete(static_cast<_io_uring_multiplexer_impl*>(self));
 }
 
 vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
@@ -604,13 +630,6 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 		vsm_lazy(io_uring_multiplexer(vsm_move(multiplexer))));
 }
 
-void _io_uring_multiplexer::operator delete(
-	_io_uring_multiplexer* const self,
-	std::destroying_delete_t)
-{
-	vsm_qualified_delete(static_cast<_io_uring_multiplexer_impl*>(self));
-}
-
 
 void _io_uring_multiplexer_impl::wake_poll_thread()
 {
@@ -690,7 +709,7 @@ void _io_uring_multiplexer_impl::cancel_io_externally_synchronized(
 		// to set the tag to cancel_pending. Should one do so between the previous load and this
 		// operation, setting the cancel_submitted bits will have no effect, because, as asserted
 		// above, the cancel_pending value sets all the bits of the cancel_submitted value.
-		operation.m_handler.fetch_or_tag(
+		handler = operation.m_handler.fetch_or_tag(
 			io_handler_tag::cancel_submitted,
 			std::memory_order_acq_rel);
 
@@ -726,7 +745,7 @@ void _io_uring_multiplexer_impl::cancel_io_internally_synchronized(operation_typ
 		return;
 	}
 
-	operation.m_handler.compare_exchange_strong(
+	(void)operation.m_handler.compare_exchange_strong(
 		handler,
 		{ handler.pointer(), io_handler_tag::cancel_pending },
 		std::memory_order_release,
@@ -783,7 +802,7 @@ bool _io_uring_multiplexer_impl::flush_cancel_queue()
 				{ handler.pointer(), io_handler_tag::cancel_flushing },
 				std::memory_order_relaxed);
 
-			handler->cancel();
+			handler.pointer()->cancel();
 
 			handler = operation.m_handler.load(std::memory_order_relaxed);
 			if (handler.tag() == io_handler_tag::cancel_flushing)
@@ -865,7 +884,7 @@ void _io_uring_multiplexer_impl::reap_cqe(io_uring_cqe const& cqe)
 	}
 
 	// The CQE becomes potentially invalid upon the call to notify.
-	handler->notify(vsm_move(status));
+	handler.pointer()->notify(vsm_move(status));
 }
 
 bool _io_uring_multiplexer_impl::reap_all_cqes()
@@ -904,8 +923,8 @@ vsm::result<int> _io_uring_multiplexer_impl::enter(
 	deadline const deadline)
 {
 	__kernel_timespec timespec;
-	io_uring_getevents_arg arg = {};
-	io_uring_getevents_arg* p_arg = nullptr;
+	io_uring_getevents_arg arg;
+	void const* p_arg = nullptr;
 
 	if (deadline != deadline::never())
 	{
@@ -918,9 +937,15 @@ vsm::result<int> _io_uring_multiplexer_impl::enter(
 			// If IORING_FEAT_EXT_ARG is available, a timeout can be specified using the
 			// extended io_uring_getevents_arg parameter structure.
 			timespec = make_timespec<__kernel_timespec>(deadline);
-			arg.ts = reinterpret_cast<uintptr_t>(&timespec);
-			flags |= IORING_ENTER_EXT_ARG;
+
+			arg =
+			{
+				.ts = reinterpret_cast<uintptr_t>(&timespec),
+			};
+
 			p_arg = &arg;
+
+			flags |= IORING_ENTER_EXT_ARG;
 		}
 		else if (min_complete != 0)
 		{
@@ -1128,8 +1153,14 @@ vsm::result<bool> _io_uring_multiplexer::poll(poll_parameters const& args)
 		enter_reason |= reason::wait_for_cqes;
 	}
 
+	linux::sigpipe_handler signal_handler;
+
 	if (enter_reason != reason::none)
 	{
+		vsm_try_void(signal_handler.activate());
+
+		signal_handler.expect_signal();
+
 		vsm_try(error, self->enter(
 			enter_to_submit,
 			enter_min_complete,
@@ -1154,6 +1185,8 @@ vsm::result<bool> _io_uring_multiplexer::poll(poll_parameters const& args)
 		// Check for new CQEs produced by the kernel.
 		made_progress |= self->acquire_cqes();
 	}
+
+	// TODO: We could avoid checking for a signal if none of the reaped CQEs had -EPIPE.
 
 	// Finally, reap the pending CQEs, invoking their notify callbacks if necessary.
 	return made_progress | self->reap_all_cqes();

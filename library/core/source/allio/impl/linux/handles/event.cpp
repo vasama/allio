@@ -2,6 +2,7 @@
 
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/eventfd.hpp>
+#include <allio/impl/linux/handles/platform_object.hpp>
 #include <allio/impl/linux/poll.hpp>
 #include <allio/step_deadline.hpp>
 
@@ -133,4 +134,9 @@ vsm::result<void> event_t::wait(
 
 		return {};
 	}
+}
+
+bool event_t::verify_handle(native_handle<event_t> const& h)
+{
+	return verify_anon_inode_type(unwrap_handle(h.platform_handle), "eventfd");
 }

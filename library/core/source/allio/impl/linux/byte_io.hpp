@@ -66,6 +66,10 @@ vsm::result<size_t> stream_read(
 vsm::result<size_t> stream_write(
 	detail::native_handle<detail::platform_object_t> const& h,
 	detail::byte_io::stream_parameters_t<std::byte const> const& a);
+	
+vsm::result<size_t> stream_write_no_signal(
+	detail::native_handle<detail::platform_object_t> const& h,
+	detail::byte_io::stream_parameters_t<std::byte const> const& a);
 
 } // namespace allio::linux
 

@@ -4,6 +4,7 @@
 #include <allio/impl/linux/byte_io.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/fcntl.hpp>
+#include <allio/impl/linux/handles/platform_object.hpp>
 
 #include <vsm/lazy.hpp>
 
@@ -79,5 +80,10 @@ vsm::result<size_t> pipe_t::stream_write(
 	native_handle<pipe_t> const& h,
 	io_parameters_t<pipe_t, stream_write_t> const& a)
 {
-	return linux::stream_write(h, a);
+	return linux::stream_write_no_signal(h, a);
+}
+
+bool pipe_t::verify_handle(native_handle<pipe_t> const& h)
+{
+	return verify_file_stat_mode(unwrap_handle(h.platform_handle), S_IFIFO);
 }

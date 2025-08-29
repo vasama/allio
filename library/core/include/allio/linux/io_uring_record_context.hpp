@@ -105,6 +105,7 @@ public:
 	}
 
 
+#if 0
 	[[nodiscard]] vsm::result<io_uring_sqe*> push_timeout(timeout::reference const timeout)
 	{
 		vsm_try(p_sqe, push());
@@ -117,6 +118,7 @@ public:
 		};
 		return p_sqe;
 	}
+#endif
 
 	[[nodiscard]] vsm::result<void> link_timeout(timeout::reference const timeout)
 	{

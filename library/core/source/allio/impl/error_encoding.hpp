@@ -35,9 +35,7 @@ template<typename ErrorCode>
 ErrorCode decode_error_code(uint32_t e);
 
 template<typename Encoding>
-consteval uint32_t encode_file_name(
-	std::string_view const root_path,
-	std::string_view file_name)
+consteval uint32_t encode_file_name(std::string_view const root_path, std::string_view file_name)
 {
 #if vsm_os_win32
 	constexpr auto compare = [](

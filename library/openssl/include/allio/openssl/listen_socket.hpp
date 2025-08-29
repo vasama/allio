@@ -6,7 +6,10 @@
 
 namespace allio::openssl {
 
-using listen_socket_t = detail::openssl_listen_socket_t;
+template<typename RawListenSocket>
+using basic_listen_socket_t = detail::openssl_listen_socket_t<RawListenSocket>;
+
+using listen_socket_t = basic_listen_socket_t<detail::raw_listen_socket_t>;
 using listen_socket_security_context = detail::openssl_listen_socket_security_context;
 
 [[nodiscard]] vsm::result<listen_socket_security_context> create_listen_socket_security_context(

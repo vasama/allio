@@ -50,8 +50,12 @@ inline constexpr explicit_parameter<completion_queue_size_t> completion_queue_si
 
 } // namespace io_uring
 
+vsm_gcc_diagnostic(push)
+vsm_gcc_diagnostic(ignored "-Wnon-virtual-dtor")
+
 class _io_uring_multiplexer
-	: public externally_synchronized
+	: public buffer_registrar
+	, public externally_synchronized
 {
 	vsm_partial(_io_uring_multiplexer);
 	vsm_partial_delete(_io_uring_multiplexer);
@@ -286,6 +290,14 @@ public:
 		friend _io_uring_multiplexer;
 	};
 
+
+	[[nodiscard]] vsm::result<void*> register_buffers(
+		std::byte* storage,
+		size_t buffer_size,
+		size_t buffer_count) final override;
+
+	void deregister_buffers(void* opaque_pointer) final override;
+
 private:
 	template<typename T>
 	class ring_view
@@ -343,6 +355,8 @@ protected:
 		unique_io_uring_byte_mmap&& cq_ring,
 		unique_io_uring_void_mmap&& sq_data) noexcept;
 };
+
+vsm_gcc_diagnostic(pop)
 
 static_assert(std::is_default_constructible_v<_io_uring_multiplexer::io_slot>);
 static_assert(std::is_default_constructible_v<_io_uring_multiplexer::timeout>);

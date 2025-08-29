@@ -9,6 +9,11 @@ namespace allio::linux {
 [[nodiscard]] vsm::result<size_t> read_link_path(
 	int dirfd,
 	char const* relative_path,
+	string_buffer<char> buffer);
+
+[[nodiscard]] vsm::result<size_t> read_link_path(
+	int dirfd,
+	char const* relative_path,
 	any_path_buffer buffer);
 
 } // namespace allio::linux

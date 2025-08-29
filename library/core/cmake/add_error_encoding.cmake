@@ -39,7 +39,10 @@ function(allio_add_error_encoding name target sources_target)
 			--encoding "${encoding}"
 			--sources "\"${sources_file}\""
 			--outfile "\"${inline_file}\""
-		DEPENDS "${script_file}" ${sources}
+		DEPENDS
+			"${script_file}"
+			"${sources_file}"
+			${sources}
 		WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 	)
 

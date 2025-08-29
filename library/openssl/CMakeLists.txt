@@ -31,10 +31,12 @@ vsm_add_library(
 
 	TEST_DEPENDENCIES
 		allio::blocking
+		allio::senders
 )
 
-#TODO: Handle allio.openssl include paths a little smarter:
+# TODO: Handle allio.openssl include paths a little smarter:
 target_include_directories(allio_openssl PRIVATE ../core/source)
+target_include_directories(allio_openssl_test_suite PRIVATE ../core/source)
 
 
 # Generate private keys and certificates for testing purposes:
@@ -50,14 +52,16 @@ set(client_certificate_file "${test_secrets_dir}/client-certificate.pem")
 set(server_private_key_file "${test_secrets_dir}/server-private-key.pem")
 set(server_certificate_file "${test_secrets_dir}/server-certificate.pem")
 
+# TODO: Use the OpenSSL executable available from the installed dependency.
+set(openssl_executable openssl)
+
 function(allio_add_test_private_key name)
 	set(private_key_file "${test_secrets_dir}/${name}-private-key.pem")
 
 	add_custom_command(
 		OUTPUT "${private_key_file}"
 		COMMAND
-			#TODO: Debugging
-			C:/Users/vasama/.conan2/p/b/opensc2a66914737f6/p/bin/openssl genpkey
+			"${openssl_executable}" genpkey
 			-algorithm ed25519
 			-out "${private_key_file}"
 	)
@@ -74,12 +78,12 @@ function(allio_add_test_certificate name subject)
 		OUTPUT "${certificate_file}"
 		DEPENDS "${private_key_file}"
 		COMMAND
-			#TODO: Debugging
-			C:/Users/vasama/.conan2/p/b/opensc2a66914737f6/p/bin/openssl req
+			"${openssl_executable}" req
 			-new
 			-x509
 			-sha256
 			-days 365 #TODO: If possible, invalidate target based on date.
+			-subj "/"
 			-key "${private_key_file}"
 			-out "${certificate_file}"
 	)

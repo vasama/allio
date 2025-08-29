@@ -4,6 +4,7 @@
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/poll.hpp>
+#include <allio/impl/linux/signal.hpp>
 #include <allio/linux/handles/platform_object.hpp>
 #include <allio/linux/timespec.hpp>
 #include <allio/step_deadline.hpp>
@@ -16,9 +17,11 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::linux;
 
+namespace {
+
 static constexpr fs_size max_file_extent = std::numeric_limits<off_t>::max();
 
-template<auto Syscall, short Event, typename Arguments>
+template<auto Syscall, short Event, bool HandleSignal, typename Arguments>
 static vsm::result<void> do_byte_io_2(
 	native_handle<platform_object_t> const& h,
 	Arguments const& a,
@@ -64,6 +67,8 @@ static vsm::result<void> do_byte_io_2(
 		return local_io_vector_storage;
 	};
 
+	vsm::select_t<HandleSignal, sigpipe_handler, char> signal_handler;
+
 	while (true)
 	{
 		if (do_poll)
@@ -76,6 +81,11 @@ static vsm::result<void> do_byte_io_2(
 				local_deadline));
 		}
 
+		if constexpr (HandleSignal)
+		{
+			vsm_try_void(signal_handler.activate());
+		}
+
 		auto const local_io_vectors = get_local_io_vectors();
 		ssize_t const r = Syscall(
 			fd,
@@ -85,7 +95,17 @@ static vsm::result<void> do_byte_io_2(
 
 		if (r == -1)
 		{
-			return vsm::unexpected(allio_error(get_last_error()));
+			int const e = errno;
+
+			if constexpr (HandleSignal)
+			{
+				if (e == EPIPE)
+				{
+					signal_handler.expect_signal();
+				}
+			}
+
+			return vsm::unexpected(allio_error(static_cast<system_error>(e)));
 		}
 
 		if (r == 0)
@@ -140,7 +160,7 @@ static vsm::result<void> do_byte_io_2(
 	return {};
 }
 
-template<auto Syscall, short Event, typename Arguments>
+template<auto Syscall, short Event, bool HandleSignal, typename Arguments>
 static vsm::result<void> do_byte_io_1(
 	native_handle<platform_object_t> const& h,
 	Arguments const& a,
@@ -153,20 +173,20 @@ static vsm::result<void> do_byte_io_1(
 			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
 
-		return do_byte_io_2<Syscall, Event>(h, a, transferred, a.offset);
+		return do_byte_io_2<Syscall, Event, HandleSignal>(h, a, transferred, a.offset);
 	}
 	else
 	{
-		return do_byte_io_2<Syscall, Event>(h, a, transferred);
+		return do_byte_io_2<Syscall, Event, HandleSignal>(h, a, transferred);
 	}
 }
 
-template<auto Syscall, short Event, typename Arguments>
+template<auto Syscall, short Event, bool HandleSignal = false, typename Arguments>
 static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h, Arguments const& a)
 {
 	size_t transferred = 0;
 
-	if (auto const r = do_byte_io_1<Syscall, Event>(h, a, transferred); !r)
+	if (auto const r = do_byte_io_1<Syscall, Event, HandleSignal>(h, a, transferred); !r)
 	{
 		// The error is ignored if some data was transferred and greedy I/O was not requested.
 		if (transferred == 0 || vsm::any_flags(a.flags, io_flags::greedy_byte_io))
@@ -177,6 +197,8 @@ static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h,
 
 	return transferred;
 }
+
+} // namespace
 
 vsm::result<size_t> linux::random_read(
 	detail::native_handle<platform_object_t> const& h,
@@ -204,4 +226,11 @@ vsm::result<size_t> linux::stream_write(
 	detail::byte_io::stream_parameters_t<std::byte const> const& a)
 {
 	return do_byte_io<writev, POLLOUT>(h, a);
+}
+
+vsm::result<size_t> linux::stream_write_no_signal(
+	detail::native_handle<platform_object_t> const& h,
+	detail::byte_io::stream_parameters_t<std::byte const> const& a)
+{
+	return do_byte_io<writev, POLLOUT, /* HandleSignal: */ true>(h, a);
 }

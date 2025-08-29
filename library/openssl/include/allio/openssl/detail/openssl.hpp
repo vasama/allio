@@ -1,7 +1,11 @@
 #pragma once
 
 #include <allio/byte_io_buffers.hpp>
+#include <allio/detail/handles/socket_base.hpp>
+#include <allio/detail/handles/listen_socket_base.hpp>
+#include <allio/detail/io.hpp>
 #include <allio/detail/network_security.hpp>
+#include <allio/detail/new.hpp>
 
 #include <vsm/assert.h>
 #include <vsm/atomic.hpp>
@@ -79,27 +83,126 @@ struct openssl_operation_base : vsm::intrusive::mpsc_queue_link
 };
 
 
+class openssl_socket
+{
+	struct bio_type;
+
+	static constexpr uint32_t flag_want_read                = 1 << 0;
+	static constexpr uint32_t flag_want_write               = 1 << 1;
+
+	openssl_ssl_ptr m_ssl;
+	uint32_t m_flags = 0;
+
+	size_t m_read_beg_offset = 0;
+	size_t m_read_end_offset = 0;
+
+	size_t m_write_beg_offset = 0;
+	size_t m_write_end_offset = 0;
+
+	union
+	{
+		struct
+		{
+			std::byte* m_read_buffer;
+			size_t m_read_buffer_size;
+		};
+	};
+
+	union
+	{
+		struct
+		{
+			std::byte* m_write_buffer;
+			size_t m_write_buffer_size;
+		};
+	};
+
+public:
+	vsm::result<void> initialize(openssl_ssl_ctx* ssl_ctx);
+
+	void set_read_buffer(std::span<std::byte> const buffer)
+	{
+		vsm_assert(m_read_beg_offset == m_read_end_offset);
+
+		m_read_buffer = buffer.data();
+		m_read_buffer_size = buffer.size();
+
+		m_read_beg_offset = 0;
+		m_read_end_offset = 0;
+	}
+
+	void set_write_buffer(std::span<std::byte> const buffer)
+	{
+		vsm_assert(m_write_beg_offset == m_write_end_offset);
+
+		m_write_buffer = buffer.data();
+		m_write_buffer_size = buffer.size();
+
+		m_write_beg_offset = 0;
+		m_write_end_offset = 0;
+	}
+
+	bool want_read() const
+	{
+		return m_flags & flag_want_read;
+	}
+
+	bool want_write() const
+	{
+		return m_flags & flag_want_write;
+	}
+
+	read_buffer get_read_buffer() const
+	{
+		vsm_assert(m_read_beg_offset == m_read_end_offset);
+		return read_buffer(m_read_buffer, m_read_buffer_size);
+	}
+
+	write_buffer get_write_buffer() const
+	{
+		return write_buffer(m_write_buffer, m_write_buffer_size)
+			.subspan(m_write_beg_offset, m_write_end_offset - m_write_beg_offset);
+	}
+
+	void read_completed(size_t const size)
+	{
+		m_flags &= ~flag_want_read;
+	}
+
+	void write_completed(size_t const size)
+	{
+		m_flags &= ~flag_want_write;
+	}
+
+	vsm::result<openssl_result<void>> accept();
+	vsm::result<openssl_result<void>> connect();
+	vsm::result<openssl_result<void>> disconnect();
+
+	vsm::result<openssl_result<size_t>> read_some(read_buffer user_buffer);
+	vsm::result<openssl_result<size_t>> write_some(write_buffer user_buffer);
+};
+
+vsm::result<openssl_socket*> new_openssl_socket(openssl_ssl_ctx* ssl_ctx);
+void delete_openssl_socket(openssl_socket* socket);
+
+
+#if 0
 struct openssl_socket_state_base
 {
 	openssl_ssl_ptr m_ssl;
+
+	vsm::result<openssl_result<void>> accept();
+	vsm::result<openssl_result<void>> connect();
+	vsm::result<openssl_result<void>> disconnect();
+
+	vsm::result<openssl_result<size_t>> read(read_buffer user_buffer);
+	vsm::result<openssl_result<size_t>> write(write_buffer user_buffer);
 };
 
-template<typename RawSocketObject>
-struct openssl_socket_state : openssl_socket_state_base
+template<typename RawSocket>
+struct openssl_socket_state
 {
-	template<typename Operation>
-	using operation_state = async_operation_t<Multiplexer, RawSocketObject, Operation>;
-
-	using connect_state = operation<connect_t>;
-	using disconnect_state = operation<disconnect_t>;
-
-	struct rw_state
-	{
-		operation_state<byte_io::stream_read_t> r;
-		operation_state<byte_io::stream_write_t> w;
-	};
-
-	std::variant<connect_state, disconnect_state, rw_state> m_raw_state;
+	native_handle<RawSocket> m_raw_h;
 };
 
 
@@ -172,6 +275,42 @@ struct openssl_object_base
 	void delete_context();
 };
 
+template<typename Multiplexer, typename RawSocket>
+struct openssl_socket_object : openssl_object_base
+{
+	template<typename Operation>
+	using operation_state = async_operation_t<Multiplexer, RawSocket, Operation>;
+
+	native_handle<RawSocket> m_h;
+	async_connector_t<Multiplexer, RawSocket> m_c;
+
+	operation_state<byte_io::stream_read_t> m_r_state;
+	operation_state<byte_io::stream_write_t> m_w_state;
+
+	using openssl_object_base::openssl_object_base;
+};
+
+vsm::result<void*> allocate_openssl_socket(size_t size);
+
+template<typename Multiplexer, typename RawSocket>
+vsm::result<openssl_socket_object<Multiplexer, RawSocket>*> create_openssl_socket(
+	openssl_ssl_ctx* const ssl_ctx)
+{
+	using object_type = openssl_socket_object<Multiplexer, RawSocket>;
+	static_assert(alignof(object_type) <= alignof(std::max_align_t));
+
+	vsm_try(object, detail::make_unique<object_type>());
+	vsm_try_void(object->initialize(ssl_ctx));
+
+	return object.release();
+}
+
+template<typename... States>
+struct openssl_listen_socket_object : openssl_object_base
+{
+	std::variant<States...> m_raw_states;
+};
+
 template<typename... RawOperationStates>
 struct openssl_object : openssl_object_base
 {
@@ -179,75 +318,6 @@ struct openssl_object : openssl_object_base
 
 	static vsm::result<openssl_object*> create(openssl_ssl_ctx* const ssl_ctx);
 };
-
-#if 0
-//TODO: Move elsewhere
-template<typename Allocator, size_t BufferSize>
-class allocator_buffer_pool_handle
-{
-	static_assert(std::is_same_v<typename Allocator::value_type, std::byte>);
-	vsm_no_unique_address Allocator m_allocator;
-
-public:
-	using buffer_pool_handle_concept = void;
-
-	class buffer_handle_type
-	{
-		std::byte* m_buffer;
-
-	public:
-		[[nodiscard]] std::byte* data() const
-		{
-			return m_buffer;
-		}
-
-		[[nodiscard]] size_t size() const
-		{
-			return BufferSize;
-		}
-
-	private:
-		explicit buffer_handle_type(std::byte* const buffer)
-			: m_buffer(buffer)
-		{
-		}
-
-		friend allocator_buffer_pool_handle;
-	};
-
-	[[nodiscard]] vsm::result<buffer_handle_type> acquire()
-	{
-		try
-		{
-			return buffer_handle_type(m_allocator.allocate(BufferSize));
-		}
-		catch (std::bad_alloc const&)
-		{
-			return vsm::unexpected(error::not_enough_memory);
-		}
-	}
-
-	void release(buffer_handle_type const buffer)
-	{
-		m_allocator.deallocate(m_buffer, BufferSize);
-	}
-};
-
-template<typename BufferPoolHandle>
-class openssl_state : openssl_object_base
-{
-	using buffer_handle_type = typename BufferPoolHandle::buffer_handle_type;
-
-	vsm_no_unique_address BufferPoolHandle m_buffer_pool_handle;
-	buffer_handle_type m_r_buffer;
-	buffer_handle_type m_w_buffer;
-
-public:
-
-};
-
-template<typename BufferPool>
-using openssl_state_ptr = std::unique_ptr<openssl_state<BufferPool>>;
 #endif
 
 } // namespace allio::detail

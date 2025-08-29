@@ -17,7 +17,7 @@ using namespace detail::io_uring_constants;
 
 inline int _io_uring_setup(unsigned const entries, io_uring_params* const args)
 {
-	return static_cast<int>(syscall(__NR_io_uring_setup, entries, args));
+	return static_cast<int>(syscall(SYS_io_uring_setup, entries, args));
 }
 
 inline int _io_uring_enter(
@@ -29,7 +29,7 @@ inline int _io_uring_enter(
 	size_t const argsz)
 {
 	return static_cast<int>(syscall(
-		__NR_io_uring_enter,
+		SYS_io_uring_enter,
 		fd,
 		to_submit,
 		min_complete,
@@ -44,7 +44,7 @@ inline int _io_uring_register(
 	void* const arg,
 	unsigned const nr_args)
 {
-	return static_cast<int>(syscall(__NR_io_uring_register, fd, opcode, arg, nr_args));
+	return static_cast<int>(syscall(SYS_io_uring_register, fd, opcode, arg, nr_args));
 }
 
 

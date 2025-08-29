@@ -39,9 +39,12 @@ public:
 		handle_const_t<Operation, native_handle<Object>>& h,
 		io_parameters_t<Object, Operation> const& a)
 	{
+		using result_type = io_result_t<handle_type<Object>, Operation>;
+
 		async_connector_t<multiplexer_type, Object> c;
 		async_operation_t<multiplexer_type, Object, Operation> s;
-		auto r = submit_io(multiplexer, h, c, s, a, handler);
+
+		auto r = detail::submit_io(multiplexer, h, c, s, a, handler);
 
 		vsm_assert(get_io_notify_status(r) == io_notify_status::completed);
 
@@ -50,17 +53,17 @@ public:
 			return vsm::unexpected(r.error());
 		}
 
-		if constexpr (std::is_void_v<io_result_t<handle_type<Object>, Operation>>)
+		if constexpr (std::is_void_v<result_type>)
 		{
 			return {};
 		}
 		else
 		{
-			return rebind_handle<io_result_t<handle_type<Object>, Operation>>(vsm_move(*r));
+			return rebind_handle<result_type>(vsm_move(*r));
 		}
 	}
 
-	operator uniplexer& () const
+	[[nodiscard]] operator uniplexer& () const
 	{
 		return multiplexer;
 	}
@@ -111,26 +114,24 @@ struct async_operation<Multiplexer, Object, Operation> : uniplexer::operation_ty
 
 	static io_result<R> submit(M&, H& h, C&, S&, A const& a, io_handler<M>&)
 	{
-		auto r = blocking_io<Operation>(h, a);
+		auto r = detail::blocking_io<Operation>(h, a);
 
 		if (!r)
 		{
 			return vsm::unexpected(r.error());
 		}
 
-		if constexpr (std::is_void_v<io_result_t<basic_attached_handle<Object, uniplexer_handle>, Operation>>)
+		if constexpr (std::is_void_v<R>)
 		{
 			return {};
 		}
 		else
 		{
-			return rebind_handle<R>(
-				vsm_move(*r),
-				uniplexer_handle());
+			return rebind_handle<R>(vsm_move(*r), uniplexer_handle());
 		}
 	}
 
-	static io_result<R> notify(M&, H&, C&, S&, A const&, M::io_status_type&&)
+	static io_result<R> notify(M&, H&, C&, S&, A const&, io_handler<M>&, M::io_status_type&&)
 	{
 		vsm_unreachable();
 	}

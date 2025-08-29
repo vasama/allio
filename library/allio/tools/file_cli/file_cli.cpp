@@ -72,7 +72,7 @@ static std::string unescape(std::string_view const argument)
 	return s;
 }
 
-void main_2(int const argc, char const* const* const argv)
+static void main_impl(int const argc, char const* const* const argv)
 {
 	int argi = 0;
 
@@ -135,7 +135,7 @@ int main(int const argc, char const* const* const argv)
 {
 	try
 	{
-		main_2(argc - 1, argv + 1);
+		main_impl(argc - 1, argv + 1);
 		return EXIT_SUCCESS;
 	}
 	catch (std::exception const& e)

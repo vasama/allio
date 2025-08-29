@@ -11,6 +11,7 @@
 
 #include <optional>
 #include <span>
+#include <thread>
 
 #include <pthread.h>
 #include <sys/wait.h>
@@ -125,9 +126,10 @@ public:
 				&event));
 		}
 
-		static constexpr auto thread_main = [](void* const argument)
+		static constexpr auto thread_main = [](void* const argument) -> void*
 		{
 			static_cast<reaper_thread*>(argument)->thread_main();
+			return nullptr;
 		};
 
 		pthread_attr attr;

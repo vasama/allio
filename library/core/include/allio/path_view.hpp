@@ -400,7 +400,7 @@ public:
 };
 
 template<typename Char, typename Encoding>
-[[nodiscard]] constexpr basic_path_combine_result<Char> combine_path(
+[[nodiscard]] constexpr basic_path_combine_result<Char, Encoding> combine_path(
 	basic_path_view<Char, Encoding> lhs,
 	basic_path_view<Char, Encoding> rhs);
 

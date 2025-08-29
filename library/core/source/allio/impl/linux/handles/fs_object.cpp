@@ -308,7 +308,7 @@ vsm::result<size_t> fs_object_t::get_current_path(
 		"/proc/self/fd/%d",
 		unwrap_handle(h.platform_handle)) > 0);
 
-	return a.buffer.visit([&](auto const buffer) -> vsm::result<size_t>
+	return a.buffer.string().visit([&](auto const buffer) -> vsm::result<size_t>
 	{
 		//TODO: Write directly to the user buffer if encoding matches.
 		//      Should the native linux path character type be byte?

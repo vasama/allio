@@ -5,13 +5,6 @@
 using namespace allio;
 using namespace allio::detail;
 
-static void pop_front_into(std::vector<std::byte>& vector, std::span<std::byte> const buffer)
-{
-	vsm_assert(buffer.size() <= vector.size());
-	std::copy(vector.begin(), vector.begin() + buffer.size(), buffer.begin());
-	vector.erase(vector.begin(), vector.begin() + buffer.size());
-}
-
 TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 {
 	using stream = std::vector<std::byte>;
@@ -19,36 +12,34 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 	auto const enter = [&](
 		stream& read_stream,
 		stream& write_stream,
-		openssl_state_base& state,
+		openssl_socket& socket,
 		auto const p_member,
 		auto&&... args)
 	{
-		if (state.m_want_read)
+		if (socket.want_read())
 		{
 			if (read_stream.empty())
 			{
 				return true;
 			}
 
-			size_t const transfer_size = std::min(
-				read_stream.size(),
-				static_cast<size_t>(state.m_r_end - state.m_r_beg));
+			auto const buffer = socket.get_read_buffer();
+			size_t const transfer_size = std::min(buffer.size(), read_stream.size());
+			std::memcpy(buffer.data(), read_stream.data(), transfer_size);
+			socket.read_completed(transfer_size);
 
-			std::byte* const new_r_pos = state.m_r_end - transfer_size;
-			pop_front_into(read_stream, std::span(new_r_pos, state.m_r_end));
-			state.m_r_pos = new_r_pos;
-
-			state.m_want_read = false;
+			read_stream.erase(
+				read_stream.begin(),
+				read_stream.begin() + static_cast<ptrdiff_t>(transfer_size));
 		}
 
-		auto const r = (state.*p_member)(vsm_forward(args)...).value();
+		auto const r = (socket.*p_member)(vsm_forward(args)...).value();
 
-		if (state.m_want_write)
+		if (socket.want_write())
 		{
-			write_stream.append_range(std::span(state.m_w_beg, state.m_w_pos));
-			state.m_w_pos = state.m_w_beg;
-
-			state.m_want_write = false;
+			auto const buffer = socket.get_write_buffer();
+			write_stream.insert(write_stream.end(), buffer.begin(), buffer.end());
+			socket.write_completed(buffer.size());
 		}
 
 		return !r.has_value();
@@ -64,11 +55,11 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 		make_args<security_context_parameters>()).value();
 
 
-	openssl_state_base server_state;
-	openssl_state_base client_state;
+	openssl_socket server_socket;
+	openssl_socket client_socket;
 
-	server_state.initialize(server_ssl_ctx.get()).value();
-	client_state.initialize(client_ssl_ctx.get()).value();
+	server_socket.initialize(server_ssl_ctx.get()).value();
+	client_socket.initialize(client_ssl_ctx.get()).value();
 
 	stream client_to_server;
 	stream server_to_client;
@@ -78,7 +69,7 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 		return enter(
 			client_to_server,
 			server_to_client,
-			server_state,
+			server_socket,
 			p_member,
 			vsm_forward(args)...);
 	};
@@ -88,7 +79,7 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 		return enter(
 			server_to_client,
 			client_to_server,
-			client_state,
+			client_socket,
 			p_member,
 			vsm_forward(args)...);
 	};
@@ -96,25 +87,17 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 
 	static constexpr size_t buffer_size = 64;
 
-	std::byte server_r_buffer[buffer_size];
-	server_state.m_r_beg = server_r_buffer;
-	server_state.m_r_pos = server_r_buffer + buffer_size;
-	server_state.m_r_end = server_r_buffer + buffer_size;
+	std::byte server_read_buffer[buffer_size];
+	server_socket.set_read_buffer(server_read_buffer);
 
-	std::byte server_w_buffer[buffer_size];
-	server_state.m_w_beg = server_w_buffer;
-	server_state.m_w_pos = server_w_buffer;
-	server_state.m_w_end = server_w_buffer + buffer_size;
+	std::byte server_write_buffer[buffer_size];
+	server_socket.set_write_buffer(server_write_buffer);
 
-	std::byte client_r_buffer[buffer_size];
-	client_state.m_r_beg = client_r_buffer;
-	client_state.m_r_pos = client_r_buffer + buffer_size;
-	client_state.m_r_end = client_r_buffer + buffer_size;
+	std::byte client_read_buffer[buffer_size];
+	client_socket.set_read_buffer(client_read_buffer);
 
-	std::byte client_w_buffer[buffer_size];
-	client_state.m_w_beg = client_w_buffer;
-	client_state.m_w_pos = client_w_buffer;
-	client_state.m_w_end = client_w_buffer + buffer_size;
+	std::byte client_write_buffer[buffer_size];
+	client_socket.set_write_buffer(client_write_buffer);
 
 
 	bool accept_pending = true;
@@ -124,12 +107,12 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 	{
 		if (accept_pending)
 		{
-			accept_pending = enter_server(&openssl_state_base::accept);
+			accept_pending = enter_server(&openssl_socket::accept);
 		}
 
 		if (connect_pending)
 		{
-			connect_pending = enter_client(&openssl_state_base::connect);
+			connect_pending = enter_client(&openssl_socket::connect);
 		}
 	}
 
@@ -150,17 +133,17 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 		if (read_pending)
 		{
 			read_pending = enter_server(
-				&openssl_state_base::read,
+				&openssl_socket::read_some,
 				as_read_buffer(read_buffer, sizeof(read_buffer)));
 		}
 
 		if (write_pending)
 		{
 			write_pending = enter_client(
-				&openssl_state_base::write,
+				&openssl_socket::write_some,
 				as_write_buffer(write_buffer, sizeof(write_buffer)));
 		}
 	}
 
-	REQUIRE(memcmp(read_buffer, write_buffer, sizeof(read_buffer)) == 0);
+	REQUIRE(std::memcmp(read_buffer, write_buffer, sizeof(read_buffer)) == 0);
 }

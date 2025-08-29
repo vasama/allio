@@ -48,6 +48,24 @@ static int get_file_protection_flags(protection const protection)
 	return open_flags;
 }
 
+static handle_flags make_protection_flags(protection const protection)
+{
+	handle_flags flags = handle_flags::none;
+	if (vsm::all_flags(protection, protection::read))
+	{
+		flags |= section_t::flags::readable;
+	}
+	if (vsm::all_flags(protection, protection::write))
+	{
+		flags |= section_t::flags::writable;
+	}
+	if (vsm::all_flags(protection, protection::execute))
+	{
+		flags |= section_t::flags::executable;
+	}
+	return flags;
+}
+
 static vsm::result<native_handle<fs_object_t> const*> get_default_backing_directory()
 {
 	//TODO: Implement default backing directory.
@@ -97,11 +115,10 @@ static vsm::result<void> _create_with_backing_file(
 		{
 			native_handle<object_t>
 			{
-				object_t::flags::not_null,
+				object_t::flags::not_null | make_protection_flags(protection),
 			},
 			wrap_handle(fd.release()),
 		},
-		protection,
 	};
 
 	return {};
@@ -140,11 +157,10 @@ static vsm::result<void> _create_with_backing_directory(
 		{
 			native_handle<object_t>
 			{
-				object_t::flags::not_null,
+				object_t::flags::not_null | make_protection_flags(protection),
 			},
 			wrap_handle(fd.release()),
 		},
-		protection,
 	};
 
 	return {};

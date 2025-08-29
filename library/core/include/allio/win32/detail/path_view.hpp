@@ -6,10 +6,6 @@
 #include <compare>
 
 namespace allio {
-
-template<typename Char, typename Encoding>
-class basic_path_view;
-
 namespace detail::path_impl {
 
 template<typename Char>
@@ -882,7 +878,9 @@ constexpr void basic_path_view<Char, Encoding>::iterator::decrement()
 
 
 template<typename Char, typename Encoding>
-constexpr basic_path_combine_result<Char> combine_path(basic_path_view<Char, Encoding> const lhs, basic_path_view<Char, Encoding> const rhs)
+constexpr basic_path_combine_result<Char, Encoding> allio::combine_path(
+	basic_path_view<Char, Encoding> const lhs,
+	basic_path_view<Char, Encoding> const rhs)
 {
 	using namespace detail::path_impl;
 

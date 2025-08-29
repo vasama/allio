@@ -81,7 +81,7 @@ public:
 			min_size,
 			max_size,
 			alignof(std::max_align_t),
-			allio_allocation_strategy_automatic);
+			allio_allocation_strategy_generic);
 
 		if (allocation.storage == nullptr)
 		{
@@ -94,7 +94,7 @@ public:
 				m_storage_ptr,
 				m_size,
 				alignof(std::max_align_t),
-				allio_allocation_strategy_automatic);
+				allio_allocation_strategy_generic);
 		}
 
 		m_storage_ptr = allocation.storage;

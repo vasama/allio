@@ -1,8 +1,17 @@
 #include <allio/impl/linux/readlink.hpp>
 
+#include <allio/detail/default_sequence_container.hpp>
+#include <allio/impl/error_encoding.hpp>
+#include <allio/impl/linux/error.hpp>
+#include <allio/impl/linux/stat.hpp>
+#include <allio/impl/transcode.hpp>
+
+#include <fcntl.h>
+
 #include <allio/linux/detail/undef.i>
 
 using namespace allio;
+using namespace allio::detail;
 using namespace allio::linux;
 
 static vsm::result<size_t> _readlinkat(
@@ -18,7 +27,7 @@ static vsm::result<size_t> _readlinkat(
 	return static_cast<size_t>(size);
 }
 
-static vsm::result<std::string_view> _read_link_path(
+static vsm::result<size_t> _read_link_path(
 	int const dirfd,
 	char const* const path,
 	string_buffer<char> const buffer)
@@ -38,8 +47,10 @@ static vsm::result<std::string_view> _read_link_path(
 			// Use lstat to get the size of the symbolic link target path.
 			vsm_try(stat, linux::fstatat(dirfd, path, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW));
 
-			// These conditions should never happen, and could not really be handled anyway.
-			if (stat.st_size == 0 || stat.st_size >= std::numeric_limits<size_t>::max())
+			static_assert(sizeof(off_t) >= sizeof(size_t));
+
+			// This conditions should never happen, and could not really be handled anyway.
+			if (stat.st_size == 0)
 			{
 				return vsm::unexpected(allio_error(error::unknown_failure));
 			}
@@ -51,34 +62,45 @@ static vsm::result<std::string_view> _read_link_path(
 	skip_lstat:
 		vsm_try(path_size, _readlinkat(dirfd, path, string));
 
-		if (path_size < buffer.size())
+		if (path_size < string.size())
 		{
 			// Resize the storage back down to the exact size of the path.
 			vsm_try_assign(string, buffer.resize(path_size));
 
-			return std::string_view(string.data(), path_size);
+			return path_size;
 		}
 	}
 }
 
 template<vsm::utf_character Char>
-static vsm::result<std::string_view> _read_link_path(
+static vsm::result<size_t> _read_link_path(
 	int const dirfd,
 	char const* const path,
 	string_buffer<Char> const buffer)
 {
-	small_path_container container;
-	vsm_try(string, _read_link_path(dirfd, path, container));
+	default_sequence_container<char, 512> container;
+	vsm_try(path_size, _read_link_path(dirfd, path, container));
+	auto const string = std::string_view(container.data(), path_size);
 	return copy_or_transcode_string(string, buffer);
 }
 
-vsm::result<std::string_view> linux::read_link_path(
+vsm::result<size_t> linux::read_link_path(
+	int const dirfd,
+	char const* const path,
+	string_buffer<char> const buffer)
+{
+	return _read_link_path(dirfd, path, buffer);
+}
+
+vsm::result<size_t> linux::read_link_path(
 	int const dirfd,
 	char const* const path,
 	any_path_buffer const buffer)
 {
-	return detail::visit_as<char, char16_t, char32_t>(buffer, [&](auto const buffer)
-	{
-		return _read_link_path(dirfd, path, buffer);
-	});
+	return detail::visit_as<char, char16_t, char32_t>(
+		buffer.string(),
+		[&](auto const buffer)
+		{
+			return _read_link_path(dirfd, path, buffer);
+		});
 }

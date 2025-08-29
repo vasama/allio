@@ -121,17 +121,22 @@ TEST_CASE("Asynchronous pipe pair can send and receive data", "[pipe][senders][a
 			[&]() -> task<void>
 			{
 				unsigned char r_buffer = 0;
-				REQUIRE(co_await r.read_some(as_read_buffer(&r_buffer, 1)) == 1);
+
+				size_t const rs_1 = co_await r.read_some(as_read_buffer(&r_buffer, 1));
+				REQUIRE(rs_1 == 1);
 				REQUIRE(r_buffer == 1);
 
-				REQUIRE(co_await r.read_some(as_read_buffer(&r_buffer, 1)) == 1);
+				size_t const rs_2 = co_await r.read_some(as_read_buffer(&r_buffer, 1));
+				REQUIRE(rs_2 == 1);
 				REQUIRE(r_buffer == 2);
 			}(),
 
 			[&]() -> task<void>
 			{
 				unsigned char w_buffer[2] = { 1, 2 };
-				REQUIRE(co_await w.write_some(as_write_buffer(w_buffer, 2)) == 2);
+
+				size_t const ws = co_await w.write_some(as_write_buffer(w_buffer, 2));
+				REQUIRE(ws == 2);
 			}()
 		);
 	}());

@@ -13,7 +13,8 @@
 		},
 		{
 			"package": "openssl",
-			"version": "3.3.2"
+			"version": "3.3.2",
+			"find_package": "OpenSSL"
 		}
 	]
 }

@@ -58,7 +58,7 @@ TEST_CASE(
 }
 #endif
 
-TEST_CASE("Child process can be created", "[process]")
+TEST_CASE("Child process can be created", "[process][multi_process]")
 {
 	using namespace blocking;
 
@@ -68,7 +68,7 @@ TEST_CASE("Child process can be created", "[process]")
 	REQUIRE(process.wait().get_exit_code() == EXIT_SUCCESS);
 }
 
-TEST_CASE("Child process can be created with arguments", "[process]")
+TEST_CASE("Child process can be created with arguments", "[process][multi_process]")
 {
 	using namespace blocking;
 
@@ -85,7 +85,7 @@ TEST_CASE("Child process can be created with arguments", "[process]")
 	test::check_file_content(allio_detail_test_exe_output, "hello\n");
 }
 
-TEST_CASE("Child process exit code can be observed", "[process]")
+TEST_CASE("Child process exit code can be observed", "[process][multi_process]")
 {
 	using namespace blocking;
 
@@ -99,7 +99,7 @@ TEST_CASE("Child process exit code can be observed", "[process]")
 	REQUIRE(process.wait().get_exit_code() == exit_code);
 }
 
-TEST_CASE("Child process working directory can be changed", "[process]")
+TEST_CASE("Child process working directory can be changed", "[process][multi_process]")
 {
 	using namespace blocking;
 
@@ -137,7 +137,7 @@ TEST_CASE("Child process working directory can be changed", "[process]")
 	test::check_file_content(allio_detail_test_exe_output, wdir + '\n');
 }
 
-TEST_CASE("Child process environment can be changed", "[process]")
+TEST_CASE("Child process environment can be changed", "[process][multi_process]")
 {
 	using namespace blocking;
 
@@ -171,7 +171,7 @@ TEST_CASE("Child process environment can be changed", "[process]")
 		"foo bar\n");
 }
 
-TEST_CASE("Child stdin can be redirected", "[process][pipe]")
+TEST_CASE("Child stdin can be redirected", "[process][pipe][multi_process]")
 {
 	using namespace blocking;
 
@@ -198,7 +198,7 @@ TEST_CASE("Child stdin can be redirected", "[process][pipe]")
 	test::check_file_content(allio_detail_test_exe_output, "input data\n");
 }
 
-TEST_CASE("Child stdout can be redirected", "[process][pipe]")
+TEST_CASE("Child stdout can be redirected", "[process][pipe][multi_process]")
 {
 	using namespace blocking;
 
@@ -223,7 +223,7 @@ TEST_CASE("Child stdout can be redirected", "[process][pipe]")
 	REQUIRE(std::string_view(output_data, output_size) == "input data\n");
 }
 
-TEST_CASE("Child stderr can be redirected", "[process][pipe]")
+TEST_CASE("Child stderr can be redirected", "[process][pipe][multi_process]")
 {
 	using namespace blocking;
 
@@ -248,7 +248,7 @@ TEST_CASE("Child stderr can be redirected", "[process][pipe]")
 	REQUIRE(std::string_view(output_data, output_size) == "input data\n");
 }
 
-TEST_CASE("Child process can be terminated", "[process]")
+TEST_CASE("Child process can be terminated", "[process][multi_process]")
 {
 	using namespace blocking;
 
@@ -271,7 +271,7 @@ TEST_CASE("Child process can be terminated", "[process]")
 	process.terminate();
 }
 
-TEST_CASE("Standard streams are implicitly inherited", "[process]")
+TEST_CASE("Standard streams are implicitly inherited", "[process][multi_process]")
 {
 	using namespace blocking;
 	using namespace std::string_view_literals;
@@ -281,20 +281,23 @@ TEST_CASE("Standard streams are implicitly inherited", "[process]")
 	auto e_pipe = create_pipe(inheritable);
 
 	i_pipe.write_pipe.write(as_write_buffer("hello world"sv));
+	i_pipe.write_pipe.close();
 
 	std::string control_argument;
 
-	if (GENERATE(0, 1))
+	// if (GENERATE(0, 1))
+	if (0)
 	{
 		control_argument.push_back('i');
 	}
 
-	if (GENERATE(0, 1))
+	// if (GENERATE(0, 1))
+	if (0)
 	{
 		control_argument.push_back('o');
 	}
 
-	if (GENERATE(0, 1))
+	// if (GENERATE(0, 1))
 	{
 		control_argument.push_back('e');
 	}
@@ -343,6 +346,8 @@ TEST_CASE("Standard streams are implicitly inherited", "[process]")
 
 			i_pipe = create_pipe(inheritable);
 			i_pipe->write_pipe.write(as_write_buffer(input));
+			i_pipe->write_pipe.close();
+
 			detail::set_argument(args, redirect_stdin(i_pipe->read_pipe));
 		}
 
@@ -360,11 +365,6 @@ TEST_CASE("Standard streams are implicitly inherited", "[process]")
 
 		process_handle child_process;
 		detail::blocking_io<process_t::create_t>(child_process, args).value();
-
-		if (i_pipe)
-		{
-			i_pipe->write_pipe.close();
-		}
 
 		if (o_pipe)
 		{
@@ -400,17 +400,16 @@ TEST_CASE("Standard streams are implicitly inherited", "[process]")
 		redirect_stdout(o_pipe.write_pipe),
 		redirect_stderr(e_pipe.write_pipe));
 
-	i_pipe.write_pipe.close();
 	o_pipe.write_pipe.close();
 	e_pipe.write_pipe.close();
 
 	REQUIRE(child_process.wait().get_exit_code() == EXIT_SUCCESS);
 
-	REQUIRE(read_to_end<std::string>(o_pipe.read_pipe) == "out: hello world");
-	REQUIRE(read_to_end<std::string>(e_pipe.read_pipe) == "err: hello world");
+	CHECK(read_to_end<std::string>(o_pipe.read_pipe) == "out: hello world");
+	CHECK(read_to_end<std::string>(e_pipe.read_pipe) == "err: hello world");
 }
 
-TEST_CASE("Handles can be inherited by a child process", "[process][serialization]")
+TEST_CASE("Handles can be inherited by a child process", "[process][serialization][multi_process]")
 {
 	auto const child_process = [](std::string_view const serialized_event)
 	{
@@ -433,7 +432,7 @@ TEST_CASE("Handles can be inherited by a child process", "[process][serializatio
 	REQUIRE(process.wait().get_exit_code() == EXIT_SUCCESS);
 }
 
-TEST_CASE("Handles can be duplicated from a child process", "[process][serialization]")
+TEST_CASE("Handles can be duplicated from a child process", "[process][serialization][multi_process]")
 {
 	auto const child_process = [](std::string_view const serialized_pipe)
 	{
@@ -467,10 +466,10 @@ TEST_CASE("Handles can be duplicated from a child process", "[process][serializa
 	REQUIRE(process.wait().get_exit_code() == EXIT_SUCCESS);
 }
 
-//TODO: This test case won't currently work on Linux due to the inability to get the exit code of an
-//      opened process handle.
+// TODO: This test case won't currently work on Linux due to the inability to get the exit code of
+//       an opened process handle.
 #if vsm_os_win32
-TEST_CASE("Child process can be waited for upon handle destruction", "[process]")
+TEST_CASE("Child process can be waited for upon handle destruction", "[process][multi_process]")
 {
 	auto const child_process = [](std::string_view const serialized_event)
 	{

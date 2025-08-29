@@ -7,6 +7,11 @@ namespace allio {
 template<typename Timespec>
 class kernel_timeout
 {
+	struct instant_t
+	{
+		explicit instant_t() = default;
+	};
+
 	Timespec m_timespec;
 	Timespec* m_p_timespec;
 
@@ -21,15 +26,25 @@ public:
 		set(deadline);
 	}
 
+	kernel_timeout(instant_t)
+	{
+		set_instant();
+	}
+
 	kernel_timeout(kernel_timeout const&) = delete;
 	kernel_timeout& operator=(kernel_timeout const&) = delete;
 
-	Timespec* get()
+	[[nodiscard]] static kernel_timeout instant()
+	{
+		return kernel_timeout(instant_t());
+	}
+
+	[[nodiscard]] Timespec* get()
 	{
 		return m_p_timespec;
 	}
 
-	Timespec const* get() const
+	[[nodiscard]] Timespec const* get() const
 	{
 		return m_p_timespec;
 	}
@@ -67,15 +82,17 @@ public:
 		m_p_timespec = nullptr;
 	}
 
-	operator Timespec*()
+	[[nodiscard]] operator Timespec*()
 	{
 		return m_p_timespec;
 	}
 
-	operator Timespec const*() const
+	[[nodiscard]] operator Timespec const*() const
 	{
 		return m_p_timespec;
 	}
+
+private:
 };
 
 } // namespace allio

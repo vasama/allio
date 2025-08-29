@@ -95,14 +95,6 @@ struct result_message
 	pid_t pid;
 };
 
-struct result_pid_fds
-{
-	int pid_fd;
-	int dup_fd;
-};
-
-} // namespace
-
 
 static pid_t clone3(clone_args& args)
 {
@@ -145,7 +137,7 @@ static int create_socket_pair(stream_pair& sockets)
 
 /* In the target process */
 
-// Closes all open file descriptors not found in the ordered array.
+// Sets CLOEXEC on all open file descriptors not found in the ordered array.
 static int close_other(int const* const array, size_t const count)
 {
 	int lower_bound = -1;
@@ -182,9 +174,11 @@ static int close_other(int const* const array, size_t const count)
 	return 0;
 }
 
-static int exec_target(fork_exec_data& data)
+static int exec_target(fork_exec_data const& data)
 {
-	if (data.inherit_fd_count != 0)
+	// If an inherit fd array is specified, set the CLOEXEC flag on all file descriptors not present
+	// in the array. Specifying a non-null but empty array causes all descriptors to be affected.
+	if (data.inherit_fd_array != nullptr)
 	{
 		if (int const e = close_other(data.inherit_fd_array, data.inherit_fd_count))
 		{
@@ -192,15 +186,24 @@ static int exec_target(fork_exec_data& data)
 		}
 	}
 
+	// If the working directory path base descriptor is set, change the current working directory to
+	// the directory referred to by the base descriptor. If the working directory path is absolute,
+	// this is pointless but also harmless. The user should ensure that a base descriptor is only
+	// set in combination with a relative working directory path.
 	if (data.wdir_base != -1 && fchdir(data.wdir_base) == -1)
 	{
 		return errno;
 	}
 
+	// Change the current working directory to the directory referred to by the specified path.
 	if (data.wdir_path != nullptr && chdir(data.wdir_path) == -1)
 	{
 		return errno;
 	}
+
+	// Duplicate the standard stream handles into the appropriate positions. dup2 does not set the
+	// CLOEXEC flag, which is exactly what is needed for preserving the descriptors across exec. If
+	// the descriptor is already in the correct position, this has the effect of clearing CLOEXEC.
 
 	if (data.exec_stdin != -1)
 	{
@@ -238,9 +241,12 @@ static int exec_target(fork_exec_data& data)
 }
 
 // Attempts to exec the target executable. If the exec fails, writes the error code to the output
-// pipe and exits.
+// pipe and exits. If r_pipe is not -1, waits for the parent process to finish its pre-exec
+// initialization by reading from r_pipe, before calling exec. The exec error code is communicated
+// to the parent process via w_pipe. The process exit code communicates the success or failure of
+// the write on w_pipe.
 [[noreturn]] static void target_entry_point(
-	fork_exec_data& data,
+	fork_exec_data const& data,
 	int const r_pipe,
 	int const w_pipe)
 {
@@ -258,16 +264,14 @@ static int exec_target(fork_exec_data& data)
 }
 
 
-/* In the helper process */
+/* In either the source or the helper process */
 
-static int fork_target(fork_exec_data& data, result_storage& result)
+static int fork_target(fork_exec_data const& data, result_storage& result)
 {
-	// Child-to-parent pipe.
-	// The child sends an int error code or nothing.
+	// Child-to-parent pipe. The child sends an int error code or nothing.
 	stream_pair c_p_pipe;
 
-	// Parent-to-child pipe.
-	// The parent send a single byte or nothing.
+	// Parent-to-child pipe. The parent sends a single byte or nothing.
 	stream_pair p_c_pipe;
 
 	if (int const e = create_pipe_pair(c_p_pipe))
@@ -275,6 +279,8 @@ static int fork_target(fork_exec_data& data, result_storage& result)
 		return e;
 	}
 
+	// If duplication or inheritability of the pid fd is requested, the target process is instructed
+	// to wait for confirmation via the parent-to-child pipe before proceeding with exec.
 	if (data.duplicate_fd || data.inheritable_fd)
 	{
 		if (int const e = create_pipe_pair(p_c_pipe))
@@ -286,13 +292,14 @@ static int fork_target(fork_exec_data& data, result_storage& result)
 	int pid_fd;
 	clone_args clone_args =
 	{
-		.flags = CLONE_PIDFD,
+		.flags = CLONE_CLEAR_SIGHAND | CLONE_PIDFD,
 		.pidfd = reinterpret_cast<uintptr_t>(&pid_fd),
 	};
 	pid_t const target_pid = clone3(clone_args);
 
 	if (target_pid == 0)
 	{
+		// This function - executed in the child process - does not return:
 		target_entry_point(data, p_c_pipe.r.get(), c_p_pipe.w.get());
 	}
 
@@ -304,6 +311,9 @@ static int fork_target(fork_exec_data& data, result_storage& result)
 	result.pid_fd.set(pid_fd);
 	result.pid = target_pid;
 
+	// If duplication or inheritability of the pid fd is requested, the necessary operations are
+	// performed before signaling the child process to proceed with exec. This is done to avoid a
+	// situation where a file control operation fails after the child has already called exec.
 	if (data.duplicate_fd)
 	{
 		int const dup_fd = fcntl(
@@ -320,61 +330,60 @@ static int fork_target(fork_exec_data& data, result_storage& result)
 
 		if (data.inheritable_fd)
 		{
-			// dup_fd is already inheritable, so swap
-			// the two otherwise identical file descriptors.
+			// dup_fd is already inheritable (due to the flags used), so the two otherwise identical
+			// file descriptors are swapped, leaving pid_fd inheritable and dup_fd with CLOEXEC set.
 			result.pid_fd.swap(result.dup_fd);
 		}
 	}
 	else if (data.inheritable_fd)
 	{
-		int const flags = fcntl(pid_fd, F_GETFD);
-
-		if (flags == -1)
-		{
-			return errno;
-		}
-
-		// Clear the FD_CLOEXEC flag.
-		if (fcntl(pid_fd, F_SETFD, 0) == -1)
-		{
-			return errno;
-		}
+		// Clear the FD_CLOEXEC flag:
+		fcntl(pid_fd, F_SETFD, 0);
 	}
 
 	if (p_c_pipe.w.get() != -1)
 	{
-		// Signal the child process to proceed with exec.
+		// Signal the child process to proceed with exec. The value of the byte sent via the pipe
+		// has no effect. The child process simply waits for the read to complete successfully.
 		if (write(p_c_pipe.w.get(), "", 1) != 1)
 		{
 			return errno;
 		}
 	}
 
-	// Close the write end of the pipe.
-	// The child holds it open until exec or exit.
+	// Close the write end of the child-to-parent pipe. The child process holds it open until
+	// calling exec or exit, at which point the following read in the parent process completes.
 	c_p_pipe.w.set(-1);
 
-	// Wait for the child to exec or exit by reading on the pipe.
-	// When the write end is closed, the read completes with 0 bytes read.
+	// Wait for the child to exec or exit by reading from the child-to-parent pipe. When the write
+	// end is closed, the read completes with 0 bytes read. This indicates that either exec was
+	// called successfully, or that the child process was otherwise unexpectedly terminated. There
+	// is no need to distinguish between these two cases, because that unexpected termination could
+	// apply to the process after exec equally well.
 	switch (int target_e; read(c_p_pipe.r.get(), &target_e, sizeof(target_e)))
 	{
 	case 0:
-		break;
+		return 0;
 
+	// Failure in reading is unexpected:
 	case static_cast<ssize_t>(-1):
 		return errno;
 
 	case static_cast<ssize_t>(sizeof(target_e)):
 		return target_e;
 
+	// Any size other than the size of the error code is unexpected:
 	default:
 		return -1; //TODO
 	}
-
-	return 0;
 }
 
-static int send_result(int const socket, int const error, result_storage& result)
+
+/* In the helper process */
+
+// Send the error code along with the target process pid fds (one or two depending on duplication)
+// and target pid to the parent process using the shared unix domain socket.
+static int send_result(int const socket, int const error, result_storage const& result)
 {
 	result_message message =
 	{
@@ -448,9 +457,12 @@ static int send_result(int const socket, int const error, result_storage& result
 
 /* In the source process */
 
-//TODO: Set CLOEXEC on the received FDs.
+// Receive the error code along with the target process pid fds (one or two depending on
+// duplication) and target pid from the helper process using the shared unix domain socket.
 static int recv_result(int const socket, result_storage& result)
 {
+	//TODO: Set CLOEXEC on the received FDs.
+
 	result_message message;
 	unsigned char control_buffer alignas(cmsghdr)[CMSG_SPACE(2 * sizeof(int))];
 
@@ -524,20 +536,22 @@ static int recv_result(int const socket, result_storage& result)
 
 static int fork_helper(fork_exec_data& data, result_storage& result)
 {
-	stream_pair sockets;
-	if (int const e = create_socket_pair(sockets))
+	stream_pair socket_pair;
+	if (int const e = create_socket_pair(socket_pair))
 	{
 		return e;
 	}
 
 	clone_args clone_args =
 	{
+		.flags = CLONE_CLEAR_SIGHAND,
 	};
 	pid_t const helper_pid = clone3(clone_args);
 
 	if (helper_pid == 0)
 	{
-		helper_entry_point(data, sockets.w.get());
+		// This function - executed in the helper process - does not return:
+		helper_entry_point(data, socket_pair.w.get());
 	}
 
 	if (helper_pid == -1)
@@ -556,13 +570,21 @@ static int fork_helper(fork_exec_data& data, result_storage& result)
 		return -2; //TODO
 	}
 
-	if (int const e = recv_result(sockets.r.get(), result))
+	if (int const e = recv_result(socket_pair.r.get(), result))
 	{
 		return e;
 	}
 
+	// TODO: pid_fd always has CLOEXEC (due to MSG_CMSG_CLOEXEC). The helper and target process
+	//       launch should be restructured in such a way that it is always the root process which
+	//       signals the target process to proceed with exec. The parent-to-child pipe should be
+	//       created by the root process.
+
 	return 0;
 }
+
+} // namespace
+
 
 int allio::linux::fork_exec(fork_exec_data& data)
 {

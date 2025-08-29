@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/detail/unique_handle.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
 
 #include <vsm/lazy.hpp>
@@ -14,35 +15,43 @@
 
 #include <allio/linux/detail/undef.i>
 
-namespace allio {
-namespace detail {
+namespace allio::linux {
 
-struct file_deleter
+struct proc_file_deleter
 {
 	vsm_static_operator void operator()(FILE* const file) vsm_static_operator_const
 	{
 		fclose(file);
 	}
 };
+using unique_proc_file = std::unique_ptr<FILE, proc_file_deleter>;
 
-} // namespace detail
-
-namespace linux {
-
-using unique_proc_file = std::unique_ptr<FILE, detail::file_deleter>;
-
-template<size_t Size>
-vsm::result<unique_proc_file> proc_open(
-	char const(&format)[Size],
-	std::convertible_to<int> auto const... args)
+template<size_t FormatSize>
+[[nodiscard]] auto make_proc_path(
+	char const(&format)[FormatSize],
+	std::same_as<int> auto const... args)
 {
 	// Max number of digits in an int, including +1 for the sign.
-	static constexpr size_t max_int_digits = std::numeric_limits<int>::digits + 1;
+	constexpr size_t max_int_digits = std::numeric_limits<int>::digits + 1;
+	constexpr size_t max_path_size = FormatSize + sizeof...(args) * max_int_digits;
 
-	char buffer[Size + sizeof...(args) * max_int_digits];
-	vsm_verify(snprintf(buffer, format, static_cast<int>(args)...) > 0);
+	vsm_gnu_diagnostic(push)
+	vsm_gnu_diagnostic(ignored "-Wformat-nonliteral")
 
-	FILE* const file = fopen(buffer, "r");
+	std::array<char, max_path_size> path;
+	vsm_verify(std::snprintf(path.data(), path.size(), format, args...) > 0);
+
+	vsm_gnu_diagnostic(pop)
+
+	return path;
+}
+
+template<size_t Size>
+[[nodiscard]] vsm::result<unique_proc_file> proc_open(
+	char const(&format)[Size],
+	std::same_as<int> auto const... args)
+{
+	FILE* const file = fopen(make_proc_path(format, args...).data(), "r");
 
 	if (file == nullptr)
 	{
@@ -52,7 +61,7 @@ vsm::result<unique_proc_file> proc_open(
 	return vsm_lazy(unique_proc_file(file));
 }
 
-vsm::result<void> proc_scan(
+[[nodiscard]] vsm::result<void> proc_scan(
 	unique_proc_file const& file,
 	char const* const format,
 	auto const&... args)
@@ -67,7 +76,6 @@ vsm::result<void> proc_scan(
 	return {};
 }
 
-} // namespace linux
-} // namespace allio
+} // namespace allio::linux
 
 #include <allio/linux/detail/undef.i>

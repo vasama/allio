@@ -1,5 +1,6 @@
 #include <allio/handles/process.hpp>
 
+#include <allio/detail/default_sequence_container.hpp>
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/api_string.hpp>
 #include <allio/impl/linux/error.hpp>
@@ -12,7 +13,9 @@
 #include <allio/impl/linux/process_reaper.hpp>
 #include <allio/impl/linux/process.hpp>
 #include <allio/impl/linux/readlink.hpp>
+#include <allio/impl/linux/version.hpp>
 #include <allio/impl/storage_provider.hpp>
+#include <allio/impl/transcode.hpp>
 
 #include <vsm/numeric.hpp>
 #include <vsm/utility.hpp>
@@ -23,6 +26,7 @@
 
 #include <sys/wait.h>
 
+#include <linux/limits.h>
 #include <linux/wait.h>
 
 #include <allio/linux/detail/undef.i>
@@ -30,6 +34,28 @@
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::linux;
+
+#if allio_config_sanitize
+namespace allio::sanitizer {
+
+static void check_inheritable_fd(int const fd)
+{
+	int const flags = ::fcntl(fd, F_GETFD);
+
+	if (flags < 0)
+	{
+		vsm_assert(flags == EBADF);
+		sanitizer::report_error("File descriptor is not valid: {}", wrap_handle(fd));
+	}
+	else if (flags & FD_CLOEXEC)
+	{
+		sanitizer::report_error("File descriptor is not inheritable (CLOEXEC): {}", wrap_handle(fd));
+	}
+}
+
+} // namespace allio::sanitizer
+#endif // allio_config_sanitize
+
 
 #if 0
 static vsm::result<pid_t> get_process_id(int const fd)
@@ -49,16 +75,14 @@ static vsm::result<pid_t> get_process_id(int const fd)
 		return vsm::unexpected(allio_error(error::process_id_not_available));
 	}
 
-	// Linux PIDs are in the range [1, 2^22] and further limited
-	// to at most 2^31-1 by the 32-bit integers used to store them.
-	// Despite the kernel using long long for printing, there is no
+	// Linux PIDs are in the range [1, 2^22] and further limited to at most 2^31-1 by the 32-bit
+	// integers used to store them. Despite the kernel using long long for printing, there is no
 	// reasonable scenario where pid would exceed the range of pid_t.
 	vsm_assert(0 < pid && pid < std::numeric_limits<pid_t>::max());
 
 	return static_cast<pid_t>(pid);
 }
 #endif
-
 
 static constexpr process_exit_code no_exit_code = -1;
 
@@ -78,6 +102,7 @@ std::optional<process_exit_code> process_wait_result::_get(process_exit_code con
 template<size_t Capacity>
 static vsm::result<void> make_inherit_fd_array(
 	fork_exec_data& data,
+	std::span<int const> const default_inherit_fd,
 	platform_handles_view const user_handles,
 	dynamic_storage_provider<Capacity>& storage_provider)
 {
@@ -100,19 +125,21 @@ static vsm::result<void> make_inherit_fd_array(
 
 	if (size_t const user_handle_count = user_handles.copy_to(nullptr))
 	{
+		size_t const handle_count = default_inherit_fd.size() + user_handle_count;
+
 		vsm_try(storage, storage_provider.get_storage(
-			user_handle_count * sizeof(user_handle_union),
-			user_handle_count * sizeof(user_handle_union),
+			handle_count * sizeof(user_handle_union),
+			handle_count * sizeof(user_handle_union),
 			std::align_val_t(alignof(user_handle_union))));
 
 		auto const user_handle_pointer_array = vsm::start_lifetime_as_array<pointer_type>(
-			storage,
+			storage.storage,
 			user_handle_count);
 
 		vsm_verify(user_handles.copy_to(user_handle_pointer_array) == user_handle_count);
 
 		auto const user_handle_union_array = vsm::start_lifetime_as_array<user_handle_union>(
-			storage,
+			storage.storage,
 			user_handle_count);
 
 		for (size_t i = 0; i < user_handle_count; ++i)
@@ -126,17 +153,31 @@ static vsm::result<void> make_inherit_fd_array(
 			union_n.fd[i_mod] = unwrap_handle(union_1.pointer->platform_handle);
 		}
 
-		auto const user_fd_array = vsm::start_lifetime_as<int>(
-			storage,
+		auto const user_fd_array = vsm::start_lifetime_as_array<int>(
+			storage.storage,
 			user_handle_count);
+
+#if allio_config_sanitize
+		for (int const fd : std::span(user_fd_array, user_handle_count))
+		{
+			sanitizer::check_inheritable_fd(fd);
+		}
+#endif // allio_config_sanitize
+
+		std::memcpy(
+			user_fd_array + user_handle_count,
+			default_inherit_fd.data(),
+			default_inherit_fd.size() * sizeof(int));
 
 		data.inherit_fd_array = user_fd_array;
 		data.inherit_fd_count = user_handle_count;
-	}
 
-	if (data.inherit_fd_count != 0)
+		std::sort(user_fd_array, user_fd_array + handle_count);
+	}
+	else
 	{
-		std::sort(data.inherit_fd_array, data.inherit_fd_array + data.inherit_fd_count);
+		data.inherit_fd_array = default_inherit_fd.data();
+		data.inherit_fd_count = default_inherit_fd.size();
 	}
 
 	return {};
@@ -172,15 +213,13 @@ vsm::result<void> process_t::create(
 	native_handle<process_t>& h,
 	io_parameters_t<process_t, create_t> const& a)
 {
-	//TODO: Implement inherit_handles
-
 	process_reaper_ptr reaper;
 	handle_flags h_flags = {};
 
 	unique_handle pid_fd;
 	pid_t pid = 0;
 
-	// Launch the process using the internal fork_exec interface.
+	// Launch the process using the internal fork-exec interface.
 	{
 		fork_exec_data data =
 		{
@@ -188,6 +227,7 @@ vsm::result<void> process_t::create(
 				? AT_FDCWD
 				: unwrap_handle(a.executable_path.base->platform_handle),
 
+			.fork_detached = vsm::any_flags(a.options, process_options::launch_detached),
 			.inheritable_fd = vsm::any_flags(a.flags, io_flags::create_inheritable),
 		};
 
@@ -250,17 +290,51 @@ vsm::result<void> process_t::create(
 			}
 		}
 
-		if (a.redirect_stdin != nullptr)
+		static constexpr auto set_standard_stream = [](
+			int& exec_fd,
+			native_handle<platform_object_t> const* const p_handle)
 		{
-			data.exec_stdin = unwrap_handle(a.redirect_stdin->platform_handle);
+			if (p_handle != nullptr)
+			{
+				exec_fd = unwrap_handle(p_handle->platform_handle);
+
+#if allio_config_sanitize
+				// TODO: This is a portability issue. Only works on Linux, not on Windows.
+				sanitizer::check_inheritable_fd(exec_fd);
+#endif // allio_config_sanitize
+			}
+		};
+
+		set_standard_stream(data.exec_stdin, a.redirect_stdin);
+		set_standard_stream(data.exec_stdout, a.redirect_stdout);
+		set_standard_stream(data.exec_stderr, a.redirect_stderr);
+
+		static constexpr int default_inherit_fd[] =
+		{
+			STDIN_FILENO,
+			STDOUT_FILENO,
+			STDERR_FILENO,
+		};
+
+		dynamic_storage_provider<8 * sizeof(void*)> inherit_fd_storage;
+		if (vsm::any_flags(a.options, process_options::inherit_handles))
+		{
+			if (a.inherit_handles)
+			{
+				vsm_try_void(make_inherit_fd_array(
+					data,
+					default_inherit_fd,
+					a.inherit_handles,
+					inherit_fd_storage));
+			}
 		}
-		if (a.redirect_stdout != nullptr)
+		else
 		{
-			data.exec_stdout = unwrap_handle(a.redirect_stdout->platform_handle);
-		}
-		if (a.redirect_stderr != nullptr)
-		{
-			data.exec_stderr = unwrap_handle(a.redirect_stderr->platform_handle);
+			static_assert(std::ranges::is_sorted(default_inherit_fd));
+
+			// Close all open file descriptors, except for the standard stream descriptors:
+			data.inherit_fd_array = default_inherit_fd;
+			data.inherit_fd_count = std::size(default_inherit_fd);
 		}
 
 		// If the process is not launched detached and this handle does not wait on close, then a
@@ -273,20 +347,12 @@ vsm::result<void> process_t::create(
 			data.duplicate_fd = true;
 
 			// Create the reaper before launching to avoid the failure after the child process was
-			// already launched, at which point we would have to terminate it and wait for exit.
+			// already launched, at which point failure to propagate the resulting handler to the
+			// user is no longer an option.
 			vsm_try_assign(reaper, acquire_process_reaper());
 		}
 
-		dynamic_storage_provider<8 * sizeof(void*)> inherit_fd_storage;
-		if (vsm::any_flags(a.options, process_options::inherit_handles))
-		{
-			vsm_try_void(make_inherit_fd_array(
-				data,
-				a.inherit_handles,
-				inherit_fd_storage));
-		}
-
-		// Actually create the process:
+		// Launch the child process using fork-exec:
 		if (int const error = fork_exec(data))
 		{
 			return vsm::unexpected(allio_error(static_cast<system_error>(error)));
@@ -455,7 +521,8 @@ static vsm::result<size_t> get_current_executable_path(string_buffer<char> const
 		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
-	vsm_try(path, linux::read_link_path(/* dirfd: */ -1, "/proc/self/exe", buffer));
+	vsm_try(path_size, linux::read_link_path(/* dirfd: */ -1, "/proc/self/exe", buffer));
+	auto const path = std::string_view(vsm::assume_success(buffer.resize(path_size)));
 
 	if (path.ends_with(" (deleted)"))
 	{
@@ -469,14 +536,15 @@ static vsm::result<size_t> get_current_executable_path(string_buffer<char> const
 template<typename Char>
 static vsm::result<size_t> get_current_executable_path(string_buffer<Char> const buffer)
 {
-	small_wide_path_container container;
-	vsm_try(size, ::get_current_executable_path(container));
-	return transcode_string(std::wstring_view(container.begin(), size), buffer);
+	default_sequence_container<char, 512> container;
+	vsm_try(path_size, ::get_current_executable_path(container));
+	auto const string = std::string_view(container.begin(), path_size);
+	return transcode_string(string, buffer);
 }
 
 vsm::result<size_t> detail::get_current_executable_path(any_path_buffer const buffer)
 {
-	return buffer.visit([](auto const buffer)
+	return buffer.string().visit([](auto const buffer)
 	{
 		return ::get_current_executable_path(buffer);
 	});

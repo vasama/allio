@@ -12,7 +12,7 @@ namespace detail::path_impl {
 template<typename Char>
 constexpr bool is_separator(Char const character)
 {
-	return basic_path_view<Char>::is_separator(character);
+	return basic_path_view<Char, no_encoding_t>::is_separator(character);
 }
 
 template<typename Char>
@@ -144,59 +144,59 @@ constexpr std::pair<std::strong_ordering, bool> root_path_compare(
 } // namespace detail::path_impl
 
 
-template<typename Char>
-constexpr bool basic_path_view<Char>::is_absolute() const
+template<typename Char, typename Encoding>
+constexpr bool basic_path_view<Char, Encoding>::is_absolute() const
 {
 	using namespace detail::path_impl;
 
-	Char const* const beg = string_view_type::data();
-	Char const* const end = beg + string_view_type::size();
+	Char const* const beg = m_string_view.data();
+	Char const* const end = beg + m_string_view.size();
 
 	// If the path has a root name, it is absolute.
 	return starts_with_separator(beg, end);
 }
 
 
-template<typename Char>
-constexpr basic_path_view<Char> basic_path_view<Char>::root_name() const
+template<typename Char, typename Encoding>
+constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::root_name() const
 {
 	return basic_path_view<Char>();
 }
 
-template<typename Char>
-constexpr basic_path_view<Char> basic_path_view<Char>::root_directory() const
+template<typename Char, typename Encoding>
+constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::root_directory() const
 {
 	return root_path();
 }
 
-template<typename Char>
-constexpr basic_path_view<Char> basic_path_view<Char>::root_path() const
+template<typename Char, typename Encoding>
+constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::root_path() const
 {
 	using namespace detail::path_impl;
 
-	Char const* const beg = string_view_type::data();
-	Char const* const end = beg + string_view_type::size();
+	Char const* const beg = m_string_view.data();
+	Char const* const end = beg + m_string_view.size();
 	return basic_path_view(string_view_type(beg, starts_with_separator(beg, end)));
 }
 
-template<typename Char>
-constexpr basic_path_view<Char> basic_path_view<Char>::relative_path() const
+template<typename Char, typename Encoding>
+constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::relative_path() const
 {
 	using namespace detail::path_impl;
 
-	Char const* const beg = string_view_type::data();
-	Char const* const end = beg + string_view_type::size();
+	Char const* const beg = m_string_view.data();
+	Char const* const end = beg + m_string_view.size();
 	Char const* const rel = skip_separators(beg, end);
 	return basic_path_view(string_view_type(rel, end));
 }
 
-template<typename Char>
-constexpr basic_path_view<Char> basic_path_view<Char>::parent_path() const
+template<typename Char, typename Encoding>
+constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::parent_path() const
 {
 	using namespace detail::path_impl;
 
-	Char const* const beg = string_view_type::data();
-	Char const* end = beg + string_view_type::size();
+	Char const* const beg = m_string_view.data();
+	Char const* end = beg + m_string_view.size();
 	Char const* const rel = skip_separators(beg, end);
 
 	while (end != rel && !is_separator(end[-1]))
@@ -212,65 +212,65 @@ constexpr basic_path_view<Char> basic_path_view<Char>::parent_path() const
 	return basic_path_view(string_view_type(beg, end));
 }
 
-template<typename Char>
-constexpr basic_path_view<Char> basic_path_view<Char>::filename() const
+template<typename Char, typename Encoding>
+constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::filename() const
 {
 	using namespace detail::path_impl;
 
-	Char const* const beg = string_view_type::data();
-	Char const* const end = beg + string_view_type::size();
+	Char const* const beg = m_string_view.data();
+	Char const* const end = beg + m_string_view.size();
 	Char const* const leaf = find_leaf_name(beg, end);
 	return basic_path_view(string_view_type(leaf, end));
 }
 
-template<typename Char>
-constexpr basic_path_view<Char> basic_path_view<Char>::stem() const
+template<typename Char, typename Encoding>
+constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::stem() const
 {
 	using namespace detail::path_impl;
 
-	Char const* const beg = string_view_type::data();
-	Char const* const end = beg + string_view_type::size();
+	Char const* const beg = m_string_view.data();
+	Char const* const end = beg + m_string_view.size();
 	Char const* const leaf = find_leaf_name(beg, end);
 	Char const* const ext = find_extension(leaf, end);
 	return basic_path_view(string_view_type(leaf, ext));
 }
 
-template<typename Char>
-constexpr basic_path_view<Char> basic_path_view<Char>::extension() const
+template<typename Char, typename Encoding>
+constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::extension() const
 {
 	using namespace detail::path_impl;
 
-	Char const* const beg = string_view_type::data();
-	Char const* const end = beg + string_view_type::size();
+	Char const* const beg = m_string_view.data();
+	Char const* const end = beg + m_string_view.size();
 	Char const* const leaf = find_leaf_name(beg, end);
 	Char const* const ext = find_extension(leaf, end);
 	return basic_path_view(string_view_type(ext, end));
 }
 
 
-template<typename Char>
-constexpr bool basic_path_view<Char>::has_trailing_separators() const
+template<typename Char, typename Encoding>
+constexpr bool basic_path_view<Char, Encoding>::has_trailing_separators() const
 {
 	using namespace detail::path_impl;
 
-	Char const* const beg = string_view_type::data();
-	Char const* const end = beg + string_view_type::size();
+	Char const* const beg = m_string_view.data();
+	Char const* const end = beg + m_string_view.size();
 	return find_trailing_separator(beg, end) != end;
 }
 
-template<typename Char>
-constexpr basic_path_view<Char> basic_path_view<Char>::without_trailing_separators() const
+template<typename Char, typename Encoding>
+constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::without_trailing_separators() const
 {
 	using namespace detail::path_impl;
 
-	Char const* const beg = string_view_type::data();
-	Char const* const end = beg + string_view_type::size();
+	Char const* const beg = m_string_view.data();
+	Char const* const end = beg + m_string_view.size();
 	return basic_path_view(string_view_type(beg, find_trailing_separator(beg, end)));
 }
 
 
-template <typename Char>
-constexpr bool basic_path_view<Char>::equal(basic_path_view const lhs, basic_path_view const rhs)
+template<typename Char, typename Encoding>
+constexpr bool basic_path_view<Char, Encoding>::equal(basic_path_view const lhs, basic_path_view const rhs)
 {
 	using namespace detail::path_impl;
 
@@ -319,8 +319,8 @@ constexpr bool basic_path_view<Char>::equal(basic_path_view const lhs, basic_pat
 	}
 }
 
-template <typename Char>
-constexpr std::strong_ordering basic_path_view<Char>::compare(
+template<typename Char, typename Encoding>
+constexpr std::strong_ordering basic_path_view<Char, Encoding>::compare(
 	basic_path_view const lhs,
 	basic_path_view const rhs)
 {
@@ -372,8 +372,8 @@ constexpr std::strong_ordering basic_path_view<Char>::compare(
 }
 
 
-template<typename Char>
-constexpr void basic_path_view<Char>::iterator::init_begin(Char const* beg, Char const* end)
+template<typename Char, typename Encoding>
+constexpr void basic_path_view<Char, Encoding>::iterator::init_begin(Char const* beg, Char const* end)
 {
 	using namespace detail::path_impl;
 
@@ -391,8 +391,8 @@ constexpr void basic_path_view<Char>::iterator::init_begin(Char const* beg, Char
 	}
 }
 
-template<typename Char>
-constexpr void basic_path_view<Char>::iterator::increment()
+template<typename Char, typename Encoding>
+constexpr void basic_path_view<Char, Encoding>::iterator::increment()
 {
 	using namespace detail::path_impl;
 
@@ -433,8 +433,8 @@ constexpr void basic_path_view<Char>::iterator::increment()
 	m_send = find_separator(sbeg, end);
 }
 
-template<typename Char>
-constexpr void basic_path_view<Char>::iterator::decrement()
+template<typename Char, typename Encoding>
+constexpr void basic_path_view<Char, Encoding>::iterator::decrement()
 {
 	using namespace detail::path_impl;
 
@@ -484,8 +484,10 @@ constexpr void basic_path_view<Char>::iterator::decrement()
 }
 
 
-template<typename Char>
-constexpr basic_path_combine_result<Char> combine_path(basic_path_view<Char> const lhs, basic_path_view<Char> const rhs)
+template<typename Char, typename Encoding>
+constexpr basic_path_combine_result<Char, Encoding> allio::combine_path(
+	basic_path_view<Char, Encoding> const lhs,
+	basic_path_view<Char, Encoding> const rhs)
 {
 	using namespace detail::path_impl;
 

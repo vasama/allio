@@ -9,7 +9,6 @@ extern "C" {
 enum allio_allocation_strategy
 {
 	allio_allocation_strategy_generic,
-	allio_allocation_strategy_automatic,
 	allio_allocation_strategy_buffering,
 };
 
@@ -25,7 +24,6 @@ allio_allocation allio_acquire_storage(
 	size_t min_alignment,
 	allio_allocation_strategy strategy);
 
-extern "C"
 void allio_release_storage(
 	void* storage,
 	size_t size_hint,

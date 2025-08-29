@@ -85,7 +85,6 @@ std::span<page_level const> detail::get_supported_page_levels()
 	{
 		supported_page_levels<3> levels;
 		levels.unchecked_push_back(get_default_page_level());
-		vsm_assert(levels.size() == 1); //TODO: Debugging
 
 		if (auto const huge = get_supported_huge_page_levels(); huge && !huge->empty())
 		{

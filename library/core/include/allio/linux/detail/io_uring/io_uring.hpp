@@ -6,7 +6,7 @@ namespace allio::detail {
 inline namespace io_uring_constants {
 
 #ifndef IORING_SETUP_SQE128
-inline constexpr auto IORING_SETUP_SQE128           			= 1U << 10;
+inline constexpr auto IORING_SETUP_SQE128                       = 1U << 10;
 inline constexpr auto IORING_SETUP_SQE128                       = 1U << 10;
 #endif
 

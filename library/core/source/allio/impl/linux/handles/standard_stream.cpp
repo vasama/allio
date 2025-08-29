@@ -10,21 +10,17 @@ using namespace allio::linux;
 
 static int get_std_fd(native_handle<standard_stream_t> const& h)
 {
-	if (h.flags[standard_stream_t::flags::input_stream])
+	if (h.flags[standard_stream_t::flags::stream_bit_1])
 	{
-		return STDIN_FILENO;
+		return STDERR_FILENO;
 	}
-	else
+	
+	if (h.flags[standard_stream_t::flags::stream_bit_0])
 	{
-		if (h.flags[standard_stream_t::flags::error_stream])
-		{
-			return STDERR_FILENO;
-		}
-		else
-		{
-			return STDOUT_FILENO;
-		}
+		return STDOUT_FILENO;
 	}
+
+	return STDIN_FILENO;
 }
 
 static native_handle<platform_object_t> make_std_platform_handle(
@@ -51,5 +47,5 @@ vsm::result<size_t> standard_stream_t::stream_write(
 	native_handle<standard_stream_t> const& h,
 	io_parameters_t<standard_stream_t, stream_write_t> const& args)
 {
-	return linux::stream_write(make_std_platform_handle(h), args);
+	return linux::stream_write_no_signal(make_std_platform_handle(h), args);
 }

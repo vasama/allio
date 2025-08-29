@@ -41,7 +41,7 @@ struct linux_dirent64
 static ssize_t getdents64(int const fd, linux_dirent64* const dirent, size_t count)
 {
 	return syscall(
-		__NR_getdents64,
+		SYS_getdents64,
 		static_cast<unsigned>(fd),
 		dirent,
 		// The syscall takes unsigned int for count, but later converts it to int.
@@ -301,7 +301,7 @@ vsm::result<size_t> detail::_get_current_directory(any_path_buffer const buffer)
 	};
 	std::unique_ptr<char const, cwd_deleter> const unique_c_string(c_string);
 
-	return transcode_string(std::string_view(c_string), buffer);
+	return transcode_string(std::string_view(c_string), buffer.string());
 }
 
 vsm::result<void> detail::_set_current_directory(fs_path const& path)

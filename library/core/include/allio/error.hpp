@@ -5,30 +5,39 @@
 #include <vsm/concepts.hpp>
 #include <vsm/result.hpp>
 
+#include <source_location>
+
 #include <cstring>
 
 namespace allio {
 
-void unrecoverable_error(std::error_code error) noexcept;
+void unrecoverable_error(
+	std::error_code error,
+	std::source_location location = std::source_location::current()) noexcept;
 
 namespace detail {
 
-inline void unrecoverable(vsm::result<void> const& e) noexcept
+inline void unrecoverable(
+	vsm::result<void> const& e,
+	std::source_location location = std::source_location::current()) noexcept
 {
 	if (!e)
 	{
-		unrecoverable_error(e.error());
+		unrecoverable_error(e.error(), location);
 	}
 }
 
-decltype(auto) unrecoverable(auto&& r, auto&& default_value) noexcept
+decltype(auto) unrecoverable(
+	auto&& r,
+	auto&& default_value,
+	std::source_location location = std::source_location::current()) noexcept
 {
 	if (r)
 	{
 		return *vsm_forward(r);
 	}
 
-	unrecoverable_error(r.error());
+	unrecoverable_error(r.error(), location);
 	return vsm_forward(default_value);
 }
 

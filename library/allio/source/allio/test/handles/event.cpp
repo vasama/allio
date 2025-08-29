@@ -1,12 +1,15 @@
 #include <allio/blocking/event.hpp>
 #include <allio/senders/event.hpp>
 
+#include <allio/blocking/serialization.hpp>
 #include <allio/default_multiplexer.hpp>
 #include <allio/handles/object.hpp>
 #include <allio/nothrow/block.hpp>
 #include <allio/senders/sync_wait.hpp>
+#include <allio/test/match_error.hpp>
 
 #include <vsm/atomic.hpp>
+#include <vsm/defer.hpp>
 
 #include <exec/async_scope.hpp>
 
@@ -48,6 +51,27 @@ static event_mode get_reset_mode(bool const manual_reset)
 static event_mode generate_reset_mode()
 {
 	return get_reset_mode(GENERATE(false, true));
+}
+
+
+TEST_CASE("Event handle be serialized and deserialized", "[event][serialization]")
+{
+	auto const event_1 = blocking::event(manual_reset_event);
+	auto const event_1_serialized = blocking::encode_handle<std::string>(event_1);
+	auto event_2 = blocking::decode_handle<blocking::event_handle>(event_1_serialized);
+
+	vsm_defer
+	{
+		(void) event_2.release();
+	};
+
+	REQUIRE_THROWS_MATCHES(
+		event_1.wait(deadline::instant()),
+		std::system_error,
+		match_error(std::errc::timed_out));
+
+	event_2.signal();
+	event_1.wait(deadline::instant());
 }
 
 
@@ -412,7 +436,7 @@ TEST_CASE("Manual reset event can be awaited many times concurrently", "[event][
 		scope.request_stop();
 	}
 
-	allio::sync_wait(multiplexer, scope.on_empty());
+	senders::sync_wait(multiplexer, scope.on_empty());
 
 	if (signal && cancel)
 	{

@@ -5,7 +5,10 @@
 
 namespace allio::openssl {
 
-using socket_t = detail::openssl_socket_t;
+template<typename RawSocket>
+using basic_socket_t = detail::openssl_socket_t<RawSocket>;
+
+using socket_t = basic_socket_t<detail::raw_socket_t>;
 using socket_security_context = detail::openssl_socket_security_context;
 
 [[nodiscard]] vsm::result<socket_security_context> create_socket_security_context(auto&&... args)

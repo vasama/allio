@@ -1,9 +1,8 @@
-#if 0
+#if 1
 #include <allio/openssl/listen_socket.hpp>
 #include <allio/openssl/socket.hpp>
 
 #include <allio/blocking/traits.hpp>
-#include <allio/senders.hpp>
 #include <allio/senders/sync_wait.hpp>
 #include <allio/senders/task.hpp>
 #include <allio/test/network.hpp>
@@ -15,13 +14,6 @@ using namespace allio;
 using namespace allio::openssl;
 
 namespace ex = stdexec;
-
-void f(
-	detail::native_handle<detail::openssl_socket_t>& h,
-	detail::connect_t::params_type_template<detail::openssl_socket_t> const& a)
-{
-	detail::openssl_socket_t::blocking_io<detail::connect_t>(h, a);
-}
 
 TEST_CASE(
 	"a stream socket can connect to a listening socket and exchange data",
@@ -48,7 +40,7 @@ TEST_CASE(
 		return detail::connect<socket_object, traits_type>(endpoint, client_security);
 	});
 
-	auto const server_socket = listen_socket.accept().socket;
+	auto const server_socket = listen_socket.accept();
 	auto const client_socket = connect_future.get();
 
 	signed char value = 42;

@@ -272,6 +272,11 @@ public:
 	{
 	}
 
+	[[nodiscard]] explicit operator bool() const
+	{
+		return m_context != nullptr;
+	}
+
 	[[nodiscard]] size_t copy_to(native_handle<platform_object_t> const** const out) const
 	{
 		return m_copy_to(m_context, out);

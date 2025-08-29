@@ -6,6 +6,10 @@ vsm_define_package(allio.core)
 
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/add_error_encoding.cmake")
 
+try_compile(
+	has_std_stacktrace
+	SOURCES "${CMAKE_CURRENT_LIST_DIR}/tools/detect-std-stacktrace.cpp")
+
 vsm_add_library(
 	allio::core
 
@@ -90,6 +94,9 @@ vsm_add_library(
 		source/allio/impl/handles/process.cpp
 		source/allio/impl/handles/section.cpp
 		#source/allio/impl/handles/thread.cpp
+
+	SOURCE_DEFINITIONS
+		"allio_config_std_stacktrace=${has_std_stacktrace}"
 
 	HEADER_DEPENDENCIES
 		vsm::core
@@ -230,7 +237,7 @@ vsm_configure(
 	HEADERS
 		include/allio/linux/timespec.hpp
 
-		include/allio/linux/detail/path.hpp
+		include/allio/linux/detail/path_char.hpp
 		include/allio/linux/detail/path_view.hpp
 		include/allio/linux/detail/undef.i
 
@@ -260,6 +267,7 @@ vsm_configure(
 		source/allio/impl/linux/mman.hpp
 		source/allio/impl/linux/mmap.cpp
 		source/allio/impl/linux/platform.cpp
+		source/allio/impl/linux/poll.hpp
 		source/allio/impl/linux/posix_socket.cpp
 		source/allio/impl/linux/posix_socket.hpp
 		source/allio/impl/linux/proc.hpp
@@ -268,6 +276,10 @@ vsm_configure(
 		source/allio/impl/linux/process.cpp
 		source/allio/impl/linux/process.hpp
 		source/allio/impl/linux/random.cpp
+		source/allio/impl/linux/readlink.cpp
+		source/allio/impl/linux/readlink.hpp
+		source/allio/impl/linux/signal.cpp
+		source/allio/impl/linux/signal.hpp
 		source/allio/impl/linux/stat.hpp
 		source/allio/impl/linux/timeout.hpp
 		source/allio/impl/linux/transcode.cpp

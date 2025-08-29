@@ -109,6 +109,24 @@ static Offset round_to_page(Offset const offset, page_level const page_level)
 }
 
 
+static protection get_section_protection(native_handle<section_t> const& h)
+{
+	protection protection = protection::none;
+	if (h.flags[section_t::flags::readable])
+	{
+		protection |= protection::read;
+	}
+	if (h.flags[section_t::flags::writable])
+	{
+		protection |= protection::write;
+	}
+	if (h.flags[section_t::flags::executable])
+	{
+		protection |= protection::execute;
+	}
+	return protection;
+};
+
 static vsm::result<protection> get_protection(
 	protection const section_protection,
 	protection const desired_protection)
@@ -138,7 +156,7 @@ static vsm::result<protection> get_protection(
 	return get_protection(
 		h.section == nullptr
 			? detail::protection(0)
-			: h.section->h.protection,
+			: get_section_protection(h.section->h),
 		desired_protection);
 }
 
@@ -222,15 +240,16 @@ static vsm::result<void> _map_section(
 		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
-	auto protection = section_h.protection;
+	auto protection = get_section_protection(section_h);
 
 	if (a.protection != detail::protection(0))
 	{
-		protection = a.protection;
-		if (!vsm::all_flags(section_h.protection, protection))
+		if (!vsm::all_flags(protection, a.protection))
 		{
 			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
+
+		protection = a.protection;
 	}
 
 	vsm_try(offset, vsm::try_truncate<off_t>(a.section_offset, error::invalid_argument));
@@ -390,6 +409,12 @@ vsm::result<void> map_t::close(
 	{
 		unrecoverable_error(allio_error(get_last_error()));
 	}
+
+	if (shared_section_handle* const h_section = h.section)
+	{
+		h_section->release();
+	}
+
 	h = {};
 	return {};
 }

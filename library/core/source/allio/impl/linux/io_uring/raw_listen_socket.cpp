@@ -6,6 +6,7 @@
 #include <allio/linux/io_uring_record_context.hpp>
 
 #include <vsm/lazy.hpp>
+#include <vsm/numeric.hpp>
 
 #include <allio/linux/detail/undef.i>
 
@@ -103,6 +104,8 @@ io_result<socket_handle_type> accept_s::submit(
 				max_address_size,
 				max_address_size,
 				std::align_val_t(alignof(posix::socket_address_union))));
+
+			s.address_size = vsm::truncating(max_address_size);
 		}
 		else if (a.endpoint.kind() != posix::get_address_kind(address_family))
 		{

@@ -7,6 +7,9 @@
 
 namespace allio::detail {
 
+vsm_gcc_diagnostic(push)
+vsm_gcc_diagnostic(ignored "-Wnon-virtual-dtor")
+
 class buffer_registrar
 {
 public:
@@ -36,5 +39,7 @@ protected:
 	buffer_registrar& operator=(buffer_registrar const&) = default;
 	~buffer_registrar() = default;
 };
+
+vsm_gcc_diagnostic(pop)
 
 } // namespace allio::detail
