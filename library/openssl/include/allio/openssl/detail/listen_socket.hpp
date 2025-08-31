@@ -143,11 +143,34 @@ class async_operation<M, openssl_listen_socket_t<RawListenSocket>, listen_t>
 			c,
 			raw_state,
 			a,
+			handler,
 			vsm_move(status)));
 
 		_listen_completed(h, a);
 
 		return {};
+	}
+
+	static io_result<void> _notify(
+		M& m,
+		H& h,
+		C& c,
+		S& s,
+		A const& a,
+		io_handler<M>& handler,
+		M::io_status_type&& status,
+		raw_close& raw_state)
+	{
+		vsm_try_void(detail::notify_io(
+			m,
+			h,
+			c,
+			raw_state,
+			make_args<io_parameters_t<RawListenSocket, close_t>>(),
+			handler,
+			vsm_move(status)));
+
+		return vsm::unexpected(raw_state.error);
 	}
 
 	static io_result<void> _continue(M&, H&, C&, S&, A const&, io_handler<M>&)
@@ -189,7 +212,7 @@ class async_operation<M, openssl_listen_socket_t<RawListenSocket>, listen_t>
 
 template<typename M, typename RawListenSocket>
 class async_operation<M, openssl_listen_socket_t<RawListenSocket>, accept_t>
-	: public openssl_operation<
+	: public openssl_rw_operation<
 		M,
 		openssl_listen_socket_t<RawListenSocket>,
 		accept_t,
@@ -197,7 +220,7 @@ class async_operation<M, openssl_listen_socket_t<RawListenSocket>, accept_t>
 		async_operation<M, RawListenSocket, accept_t>,
 		async_operation<M, typename RawListenSocket::socket_object_type, close_t>>
 {
-	using base = openssl_operation<
+	using base = openssl_rw_operation<
 		M,
 		openssl_listen_socket_t<RawListenSocket>,
 		accept_t,

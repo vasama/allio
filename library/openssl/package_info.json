@@ -14,7 +14,8 @@
 		{
 			"package": "openssl",
 			"version": "3.3.2",
-			"configs": ["source-library", "test-tooling"]
+			"configs": ["source-library", "test-tooling"],
+			"find_package": "OpenSSL"
 		}
 	]
 }

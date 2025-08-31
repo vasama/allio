@@ -75,13 +75,8 @@ struct openssl_raw_state<async_operation<M, RawSocket, close_t>>
 	using type = openssl_raw_close<M, RawSocket>;
 };
 
-template<
-	typename M,
-	typename Socket,
-	typename Operation,
-	typename RawSocket,
-	typename... RawStates>
-class openssl_operation : protected openssl_operation_base
+template<typename M, typename Socket, typename Operation, typename RawSocket, typename... RawStates>
+class openssl_operation
 {
 protected:
 	using H = handle_const_t<Operation, native_handle<Socket>>;
@@ -96,7 +91,7 @@ protected:
 	template<typename RawState>
 	using raw_state = typename openssl_raw_state<RawState>::type;
 
-	std::variant<std::monostate, raw_read, raw_write, raw_state<RawStates>...> m_raw_state;
+	std::variant<std::monostate, raw_state<RawStates>...> m_raw_state;
 
 public:
 	static io_result<R> submit(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler)
@@ -280,7 +275,14 @@ protected:
 		M::io_status_type&& status,
 		RawState& raw_state)
 	{
-		return detail::notify_io(m, h, c, raw_state, a, status);
+		return detail::notify_io(
+			m,
+			h,
+			c,
+			raw_state,
+			a,
+			handler,
+			vsm_move(status));
 	}
 
 	static io_result<void> _notify(
@@ -359,8 +361,18 @@ protected:
 	}
 };
 
+template<typename M, typename Socket, typename Operation, typename RawSocket, typename... RawStates>
+using openssl_rw_operation = openssl_operation<
+	M,
+	Socket,
+	Operation,
+	RawSocket,
+	RawStates...,
+	async_operation_t<M, RawSocket, byte_io::stream_read_t>,
+	async_operation_t<M, RawSocket, byte_io::stream_write_t>>;
+
 template<typename M, typename RawSocket, typename Operation, typename... RawOperations>
-using openssl_socket_operation = openssl_operation<
+using openssl_socket_operation = openssl_rw_operation<
 	M,
 	openssl_socket_t<RawSocket>,
 	Operation,
@@ -441,12 +453,35 @@ class async_operation<M, openssl_socket_t<RawSocket>, connect_t>
 			c,
 			raw_state,
 			a,
+			handler,
 			vsm_move(status)));
 
 		// Handle successful raw connect completion:
 		vsm_try_void(_connect_completed(h, a));
 
 		return {};
+	}
+
+	static io_result<void> _notify(
+		M& m,
+		H& h,
+		C& c,
+		S& s,
+		A const& a,
+		io_handler<M>& handler,
+		M::io_status_type&& status,
+		raw_close& raw_state)
+	{
+		vsm_try_void(detail::notify_io(
+			m,
+			h,
+			c,
+			raw_state,
+			make_args<io_parameters_t<RawSocket, close_t>>(),
+			handler,
+			vsm_move(status)));
+
+		return vsm::unexpected(raw_state.error);
 	}
 
 	static io_result<void> _continue(M& m, H& h, C& c, S& s, A const&, io_handler<M>& handler)
