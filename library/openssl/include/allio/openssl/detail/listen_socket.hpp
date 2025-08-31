@@ -225,6 +225,8 @@ class async_operation<M, openssl_listen_socket_t<RawListenSocket>, accept_t>
 		// The client TLS context is created after successful raw accept.
 		vsm_try_assign(s.m_socket_h.openssl, detail::new_openssl_socket(h.ssl_ctx));
 
+		vsm_try_void(s.m_socket_h.openssl->allocate_buffers());
+
 		auto [socket_h, socket_c] = socket.release();
 		static_cast<native_handle<raw_socket_object_type>&>(s.m_socket_h) = vsm_move(socket_h);
 		static_cast<async_connector_t<M, raw_socket_object_type>&>(s.m_socket_c) = vsm_move(socket_c);

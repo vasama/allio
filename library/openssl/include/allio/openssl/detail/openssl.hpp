@@ -120,6 +120,8 @@ class openssl_socket
 public:
 	vsm::result<void> initialize(openssl_ssl_ctx* ssl_ctx);
 
+	vsm::result<void> allocate_buffers();
+
 	void set_read_buffer(std::span<std::byte> const buffer)
 	{
 		vsm_assert(m_read_beg_offset == m_read_end_offset);
@@ -166,12 +168,19 @@ public:
 
 	void read_completed(size_t const size)
 	{
+		m_read_end_offset += size;
 		m_flags &= ~flag_want_read;
 	}
 
 	void write_completed(size_t const size)
 	{
-		m_flags &= ~flag_want_write;
+		m_write_beg_offset += size;
+		if (m_write_beg_offset == m_write_end_offset)
+		{
+			m_flags &= ~flag_want_write;
+			m_write_beg_offset = 0;
+			m_write_end_offset = 0;
+		}
 	}
 
 	vsm::result<openssl_result<void>> accept();

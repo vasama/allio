@@ -2,14 +2,84 @@
 
 #include <allio/impl/linux/poll.hpp>
 
+#include <sys/ioctl.h>
 #include <sys/wait.h>
+#include <linux/types.h>
 #include <linux/wait.h>
 
 #include <allio/linux/detail/undef.i>
 
+namespace allio::linux::pidfd {
+#ifndef PIDFD_GET_INFO
+
+struct pidfd_info
+{
+	__u64 mask;
+	__u64 cgroupid;
+	__u32 pid;
+	__u32 tgid;
+	__u32 ppid;
+	__u32 ruid;
+	__u32 rgid;
+	__u32 euid;
+	__u32 egid;
+	__u32 suid;
+	__u32 sgid;
+	__u32 fsuid;
+	__u32 fsgid;
+	__s32 exit_code;
+	__u32 coredump_mask;
+	__u32 __spare1;
+};
+
+#define PIDFD_INFO_PID          (1UL << 0)
+#define PIDFD_INFO_EXIT         (1UL << 3)
+
+#define PIDFS_IOCTL_MAGIC       0xFF
+#define PIDFD_GET_INFO          _IOWR(PIDFS_IOCTL_MAGIC, 11, pidfd_info)
+
+#endif // PIDFD_GET_INFO
+} // namespace allio::linux::pidfd
+using namespace allio::linux::pidfd;
+
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::linux;
+
+static vsm::result<void> get_pidfd_info(
+	int const fd,
+	uint64_t const mask,
+	pidfd_info& out_info)
+{
+	out_info.mask = mask;
+	int const r = ::ioctl(fd, PIDFD_GET_INFO, &out_info);
+
+	if (r < 0)
+	{
+		return vsm::unexpected(allio_error(get_last_error()));
+	}
+
+	if ((out_info.mask & mask) != mask)
+	{
+		return vsm::unexpected(allio_error(error::unknown_failure));
+	}
+
+	return {};
+}
+
+vsm::result<int> linux::get_pid(int const fd)
+{
+	pidfd_info info;
+	vsm_try_void(get_pidfd_info(fd, PIDFD_INFO_PID, info));
+	return info.pid;
+}
+
+vsm::result<int> linux::get_exit_code(int const fd)
+{
+	pidfd_info info;
+	vsm_try_void(get_pidfd_info(fd, PIDFD_INFO_EXIT, info));
+	return info.exit_code;
+}
 
 vsm::result<std::optional<int>> linux::wait_process(
 	int const fd,

@@ -41,10 +41,14 @@ target_include_directories(allio_openssl_test_suite PRIVATE ../core/source)
 
 # Generate private keys and certificates for testing purposes:
 
+vsm_find_program(openssl_exe openssl REQUIRED)
+
 set(test_secrets_dir "${CMAKE_CURRENT_BINARY_DIR}/allio-test-secrets")
 set(test_secret_list "")
 
 file(MAKE_DIRECTORY "${test_secrets_dir}")
+
+set(openssl_config_file "${test_secrets_dir}/openssl.cnf")
 
 set(client_private_key_file "${test_secrets_dir}/client-private-key.pem")
 set(client_certificate_file "${test_secrets_dir}/client-certificate.pem")
@@ -52,8 +56,10 @@ set(client_certificate_file "${test_secrets_dir}/client-certificate.pem")
 set(server_private_key_file "${test_secrets_dir}/server-private-key.pem")
 set(server_certificate_file "${test_secrets_dir}/server-certificate.pem")
 
-# TODO: Use the OpenSSL executable available from the installed dependency.
-set(openssl_executable openssl)
+add_custom_command(
+	OUTPUT "${openssl_config_file}"
+	COMMAND "${CMAKE_COMMAND}" -E touch "${openssl_config_file}"
+)
 
 function(allio_add_test_private_key name)
 	set(private_key_file "${test_secrets_dir}/${name}-private-key.pem")
@@ -61,7 +67,7 @@ function(allio_add_test_private_key name)
 	add_custom_command(
 		OUTPUT "${private_key_file}"
 		COMMAND
-			"${openssl_executable}" genpkey
+			"${openssl_exe}" genpkey
 			-algorithm ed25519
 			-out "${private_key_file}"
 	)
@@ -76,13 +82,16 @@ function(allio_add_test_certificate name subject)
 
 	add_custom_command(
 		OUTPUT "${certificate_file}"
-		DEPENDS "${private_key_file}"
+		DEPENDS
+			"${openssl_config_file}"
+			"${private_key_file}"
 		COMMAND
-			"${openssl_executable}" req
+			"${openssl_exe}" req
+			-config "${openssl_config_file}"
 			-new
 			-x509
 			-sha256
-			-days 365 #TODO: If possible, invalidate target based on date.
+			-days 36500
 			-subj "/"
 			-key "${private_key_file}"
 			-out "${certificate_file}"

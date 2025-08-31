@@ -113,6 +113,7 @@ static io_result<socket_handle_type> handle_accept_completion(
 
 	if (a.endpoint && a.endpoint.is_platform_endpoint() && extension.has_object())
 	{
+		vsm_assert(extension->user_storage != nullptr);
 		std::memcpy(extension->user_storage, &extension->addr_storage, max_address_size);
 	}
 
@@ -156,6 +157,18 @@ io_result<socket_handle_type> accept_s::submit(
 	accept_extension extension = initialize_extension(s);
 
 	void* address_storage = nullptr;
+	auto const allocate_address_storage = [&]() -> vsm::result<accept_address_storage*>
+	{
+		if (!extension.has_object())
+		{
+			vsm_assert(address_storage == nullptr);
+			vsm_try(extension_storage, extension.emplace_default());
+			address_storage = &extension_storage->addr_storage;
+		}
+
+		return extension.get();
+	};
+
 	if (a.endpoint)
 	{
 		if (a.endpoint.is_platform_endpoint())
@@ -171,9 +184,8 @@ io_result<socket_handle_type> accept_s::submit(
 			}
 			else
 			{
-				vsm_try(extension_storage, extension.emplace_default());
+				vsm_try(extension_storage, allocate_address_storage());
 				extension_storage->user_storage = storage;
-				address_storage = &extension_storage->addr_storage;
 			}
 		}
 		else if (a.endpoint.kind() != posix::get_address_kind(address_family))
@@ -185,6 +197,12 @@ io_result<socket_handle_type> accept_s::submit(
 			//TODO: Implement typed endpoint buffer usage.
 			return vsm::unexpected(allio_error(error::unsupported_operation));
 		}
+	}
+
+	if (address_storage == nullptr)
+	{
+		vsm_try(extension_storage, allocate_address_storage());
+		extension_storage->user_storage = nullptr;
 	}
 
 	vsm_try_bind((socket, flags), posix::create_socket(

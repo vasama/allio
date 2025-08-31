@@ -153,7 +153,7 @@ public:
 			{
 				// First, the underlying raw operation is notified and upon completion its non-void
 				// result (if any) is handled.
-				auto r = S::_notify(m, h, c, s, a, vsm_move(status), raw_state);
+				auto r = S::_notify(m, h, c, s, a, handler, vsm_move(status), raw_state);
 
 				if constexpr (!vsm::is_instance_of_v<RawState, openssl_raw_close>)
 				{
@@ -219,18 +219,6 @@ protected:
 		{
 			vsm_try(r, callable());
 
-			if (r)
-			{
-				if constexpr (std::is_void_v<value_type>)
-				{
-					return {};
-				}
-				else
-				{
-					return vsm_move(*r);
-				}
-			}
-
 			auto& rw_h = S::_get_rw_h(h, s);
 			auto& rw_c = S::_get_rw_c(c, s);
 
@@ -264,6 +252,18 @@ protected:
 					handler));
 
 				rw_h.openssl->read_completed(transferred);
+			}
+
+			if (r)
+			{
+				if constexpr (std::is_void_v<value_type>)
+				{
+					return {};
+				}
+				else
+				{
+					return vsm_move(*r);
+				}
 			}
 		}
 	}
@@ -391,6 +391,8 @@ class async_operation<M, openssl_socket_t<RawSocket>, connect_t>
 			h.openssl,
 			detail::new_openssl_socket(detail::openssl_get_ssl_ctx(*a.security_context)));
 
+		vsm_try_void(h.openssl->allocate_buffers());
+
 		return {};
 	}
 
@@ -428,6 +430,7 @@ class async_operation<M, openssl_socket_t<RawSocket>, connect_t>
 		C& c,
 		S& s,
 		A const& a,
+		io_handler<M>& handler,
 		M::io_status_type&& status,
 		raw_connect& raw_state)
 	{
@@ -548,7 +551,9 @@ class async_operation<M, openssl_socket_t<RawSocket>, Operation>
 					return h.openssl->write_some(write_buffer(remaining_data, remaining_size));
 				}
 			}));
+
 			vsm_assert(transferred <= remaining_size);
+			s.transferred += transferred;
 
 			if (transferred == remaining_size)
 			{

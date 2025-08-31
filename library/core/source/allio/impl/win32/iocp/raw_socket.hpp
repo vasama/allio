@@ -41,7 +41,7 @@ vsm::result<bool> submit_socket_io(
 
 	if (error != 0)
 	{
-		return vsm::unexpected(static_cast<posix::socket_error>(error));
+		return vsm::unexpected(allio_error(static_cast<posix::socket_error>(error)));
 	}
 
 	return supports_synchronous_completion;

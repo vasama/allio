@@ -716,6 +716,8 @@ void detail::openssl_release_ssl(openssl_ssl* const ssl)
 }
 
 
+static thread_local char const* debug_context;
+
 struct openssl_socket::bio_type
 {
 	static constexpr char name[] = "ALLIO_SOCKET_BIO";
@@ -729,29 +731,36 @@ struct openssl_socket::bio_type
 		size_t const requested_size,
 		size_t* const transferred)
 	{
+		vsm_assert(data.m_read_buffer_size != 0);
+
 		size_t const beg_offset = data.m_read_beg_offset;
 		size_t const total_size = data.m_read_end_offset - beg_offset;
-
-		if (total_size == 0)
-		{
-			data.m_flags |= flag_want_read;
-			BIO_set_retry_read(bio);
-			return 0;
-		}
 
 		size_t const transfer_size = std::min(
 			total_size,
 			requested_size);
 
-		std::memcpy(
-			buffer,
-			data.m_read_buffer + beg_offset,
-			transfer_size);
+		if (transfer_size != 0)
+		{
+			std::memcpy(
+				buffer,
+				data.m_read_buffer + beg_offset,
+				transfer_size);
 
-		data.m_read_beg_offset = beg_offset + transfer_size;
-		*transferred = transfer_size;
+			data.m_read_beg_offset = beg_offset + transfer_size;
+			*transferred = transfer_size;
+		}
 
-		return 1;
+		if (transfer_size != requested_size)
+		{
+			data.m_flags |= flag_want_read;
+			data.m_read_beg_offset = 0;
+			data.m_read_end_offset = 0;
+
+			BIO_set_retry_read(bio);
+		}
+
+		return transfer_size != 0;
 	}
 
 	static int write_ex(
@@ -761,29 +770,34 @@ struct openssl_socket::bio_type
 		size_t const available_size,
 		size_t* const transferred)
 	{
+		vsm_assert(data.m_write_buffer_size != 0);
+
 		size_t const end_offset = data.m_write_end_offset;
 		size_t const space_size = data.m_write_buffer_size - end_offset;
-
-		if (space_size == 0)
-		{
-			data.m_flags |= flag_want_write;
-			BIO_set_retry_write(bio);
-			return 0;
-		}
 
 		size_t const transfer_size = std::min(
 			space_size,
 			available_size);
 
-		std::memcpy(
-			data.m_write_buffer + end_offset,
-			buffer,
-			transfer_size);
+		if (transfer_size != 0)
+		{
+			std::memcpy(
+				data.m_write_buffer + end_offset,
+				buffer,
+				transfer_size);
 
-		data.m_write_end_offset = end_offset + transfer_size;
-		*transferred = transfer_size;
+			data.m_write_end_offset = end_offset + transfer_size;
+			*transferred = transfer_size;
 
-		return 1;
+			data.m_flags |= flag_want_write;
+		}
+
+		if (transfer_size != available_size)
+		{
+			BIO_set_retry_write(bio);
+		}
+
+		return transfer_size != 0;
 	}
 
 	static long ctrl(
@@ -821,6 +835,32 @@ vsm::result<void> openssl_socket::initialize(openssl_ssl_ctx* const _ssl_ctx)
 	return {};
 }
 
+vsm::result<void> openssl_socket::allocate_buffers()
+{
+	static constexpr size_t min_rw_buffer_size = 4096;
+
+	auto const allocation = allio_acquire_storage(
+		min_rw_buffer_size * 2,
+		static_cast<size_t>(-1),
+		/* min_alignment: */ 1,
+		allio_allocation_strategy_buffering);
+
+	if (allocation.storage == nullptr)
+	{
+		return vsm::unexpected(error::not_enough_memory);
+	}
+
+	auto const storage = static_cast<std::byte*>(allocation.storage);
+
+	size_t const r_buffer_size = allocation.size / 2;
+	size_t const w_buffer_size = allocation.size - r_buffer_size;
+
+	set_read_buffer(std::span(storage, r_buffer_size));
+	set_write_buffer(std::span(storage + r_buffer_size, w_buffer_size));
+
+	return {};
+}
+
 vsm::result<openssl_socket*> detail::new_openssl_socket(openssl_ssl_ctx* const ssl_ctx)
 {
 	vsm_try(socket, detail::make_unique<openssl_socket>());
@@ -837,6 +877,7 @@ vsm::result<openssl_result<void>> openssl_socket::accept()
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
+	debug_context = "accept:  ";
 	vsm_try(r, ssl_try<SSL_accept, /* SuccessThreshold: */ 0>(ssl));
 
 	if (!r)
@@ -856,6 +897,7 @@ vsm::result<openssl_result<void>> openssl_socket::connect()
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
+	debug_context = "connect: ";
 	vsm_try(r, ssl_try<SSL_connect, /* SuccessThreshold: */ 0>(ssl));
 
 	if (!r)
