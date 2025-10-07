@@ -9,6 +9,23 @@
 #include <string>
 
 namespace allio {
+namespace detail {
+
+template<typename T>
+struct has_resize_and_overwrite_helper
+{
+	size_t operator()(T*, size_t) const;
+};
+
+template<typename Container>
+concept has_resize_and_overwrite = requires (Container& container)
+{
+	container.resize_and_overwrite(
+		static_cast<size_t>(0),
+		has_resize_and_overwrite_helper<typename Container::value_type>());
+};
+
+} // namespace detail
 
 template<typename Char, typename String, typename Encoding>
 class basic_path_adaptor : public detail::path_encoding_base<Encoding>
@@ -114,6 +131,24 @@ public:
 		//requires std::is_same_v<std::ranges::range_value_t<Range>, Char>
 		: m_string(static_cast<Range&&>(range))
 	{
+	}
+
+	basic_path_adaptor(basic_path_combine_result<Char, Encoding> const& combine_result)
+	{
+		if constexpr (detail::has_resize_and_overwrite<String>)
+		{
+			m_string.resize_and_overwrite(
+				combine_result.size(),
+				[&](Char* const data, size_t const size)
+				{
+					return combine_result.copy(std::span<Char>(data, size)).string().size();
+				});
+		}
+		else
+		{
+			m_string.resize(combine_result.size());
+			combine_result.copy(m_string);
+		}
 	}
 
 
@@ -396,12 +431,7 @@ private:
 
 	static constexpr basic_path_adaptor combine(path_view_type const lhs, path_view_type const rhs)
 	{
-		auto const combine_result = combine_path(lhs, rhs);
-
-		basic_path_adaptor path;
-		path.resize(combine_result.size());
-		combine_result.copy(path.string());
-		return path;
+		return basic_path_adaptor(combine_path(lhs, rhs));
 	}
 
 	template<vsm::any_cvref_of<basic_path_adaptor> Self>

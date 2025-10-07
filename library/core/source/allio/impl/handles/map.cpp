@@ -55,6 +55,23 @@ vsm::result<void> map_t::map_file(
 		*a.file,
 		file_io::get_maximum_extent_t::params_type()));
 
+	if (file_size == 0)
+	{
+		h =
+		{
+			native_handle<object_t>
+			{
+				handle_flags(object_t::flags::not_null) | flags::no_mapping
+			},
+
+			static_cast<shared_section_handle*>(nullptr),
+			static_cast<void*>(nullptr),
+			static_cast<size_t>(0),
+		};
+
+		return {};
+	}
+
 	vsm_try(mmap_size, vsm::try_truncate<size_t>(
 		file_size,
 		error::not_enough_address_space));

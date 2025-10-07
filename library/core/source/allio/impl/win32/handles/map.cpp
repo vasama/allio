@@ -475,22 +475,26 @@ vsm::result<void> map_t::close(
 	//TODO: Change close to return void?
 	//      It's pretty pointless to return a result if it's always void and never fails.
 
-	if (h.section != nullptr)
+	if (!h.flags[flags::no_mapping])
 	{
-		unrecoverable(unmap_view_of_section(
-			GetCurrentProcess(),
-			h.base));
+		if (h.section != nullptr)
+		{
+			unrecoverable(unmap_view_of_section(
+				GetCurrentProcess(),
+				h.base));
+	
+			h.section->release();
+		}
+		else
+		{
+			unrecoverable(free_virtual_memory(
+				GetCurrentProcess(),
+				h.base,
+				h.size,
+				MEM_RELEASE));
+		}
+	}
 
-		h.section->release();
-	}
-	else
-	{
-		unrecoverable(free_virtual_memory(
-			GetCurrentProcess(),
-			h.base,
-			h.size,
-			MEM_RELEASE));
-	}
 	h = {};
 	return {};
 }

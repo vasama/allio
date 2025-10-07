@@ -222,6 +222,7 @@ struct map_t : object_t
 
 	allio_handle_flags
 	(
+		no_mapping,
 		page_level_1,
 		page_level_2,
 	);
@@ -366,6 +367,26 @@ template<typename Traits>
 	a.file = &file.native();
 	(set_argument(a, vsm_forward(args)), ...);
 	return Traits::template produce<map_t, map_io::map_file_t>(a);
+}
+
+template<bool Const, typename Traits>
+[[nodiscard]] auto map_file_as(auto&& file, auto&&... args)
+{
+	if constexpr (Const)
+	{
+		return detail::map_file<Traits>(
+			vsm_forward(file),
+			file_mode::read_data,
+			vsm_forward(args)...,
+			file_opening::open_existing);
+	}
+	else
+	{
+		return detail::map_file<Traits>(
+			vsm_forward(file),
+			vsm_forward(args)...,
+			file_opening::open_existing);
+	}
 }
 
 } // namespace allio::detail

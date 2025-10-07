@@ -93,6 +93,7 @@ vsm_add_library(
 		source/allio/impl/handles/platform_object.hpp
 		source/allio/impl/handles/process.cpp
 		source/allio/impl/handles/section.cpp
+		source/allio/impl/handles/standard_stream.cpp
 		#source/allio/impl/handles/thread.cpp
 
 	SOURCE_DEFINITIONS

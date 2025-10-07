@@ -16,18 +16,16 @@ template<vsm::non_ref T>
 	detail::handle_for<detail::file_t> auto const& file,
 	auto&&... args)
 {
-	vsm_try(map, map_file(file, vsm_forward(args)...));
+	vsm_try(map, detail::map_file_as<std::is_const_v<T>, traits_type>(file, vsm_forward(args)...));
 	return vsm::result<mapped<T>>(vsm::result_value, vsm_move(map));
 }
 
 //TODO: * If T is const, default to read only.
 //      * Force open only mode. Don't allow creating files using this API.
 template<vsm::non_ref T>
-[[nodiscard]] vsm::result<mapped<T>> map_file_as(
-	detail::fs_path const& path,
-	auto&&... args)
+[[nodiscard]] vsm::result<mapped<T>> map_file_as(detail::fs_path const& path, auto&&... args)
 {
-	vsm_try(map, map_file(path, vsm_forward(args)...));
+	vsm_try(map, detail::map_file_as<std::is_const_v<T>, traits_type>(path, vsm_forward(args)...));
 	return vsm::result<mapped<T>>(vsm::result_value, vsm_move(map));
 }
 

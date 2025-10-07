@@ -405,14 +405,17 @@ vsm::result<void> map_t::close(
 	native_handle<map_t>& h,
 	io_parameters_t<map_t, close_t> const& a)
 {
-	if (munmap(h.base, h.size) == -1)
+	if (!h.flags[flags::no_mapping])
 	{
-		unrecoverable_error(allio_error(get_last_error()));
-	}
-
-	if (shared_section_handle* const h_section = h.section)
-	{
-		h_section->release();
+		if (munmap(h.base, h.size) == -1)
+		{
+			unrecoverable_error(allio_error(get_last_error()));
+		}
+	
+		if (shared_section_handle* const h_section = h.section)
+		{
+			h_section->release();
+		}
 	}
 
 	h = {};

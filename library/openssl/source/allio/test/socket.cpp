@@ -14,43 +14,63 @@ using namespace allio::openssl;
 
 namespace ex = stdexec;
 
+static auto make_server_security_context()
+{
+	using namespace path_literals;
+
+	return openssl::create_listen_socket_security_context(
+		tls_certificate(allio_test_secret_path "/server-certificate.pem"_path),
+		tls_private_key(allio_test_secret_path "/server-private-key.pem"_path)).value();
+}
+
+static auto make_client_security_context()
+{
+	return openssl::create_socket_security_context().value();
+}
+
 TEST_CASE(
 	"Blocking OpenSSL stream sockets can exchange data",
 	"[openssl][socket][blocking]")
 {
 	using namespace blocking;
 
-	using namespace path_literals;
-	auto const server_security = openssl::create_listen_socket_security_context(
-		tls_certificate(allio_test_secret_path "/server-certificate.pem"_path),
-		tls_private_key(allio_test_secret_path "/server-private-key.pem"_path)).value();
-
 	auto const endpoint = test::generate_endpoint();
 	auto const listen_socket = detail::listen<openssl::listen_socket_t, traits_type>(
 		endpoint,
-		server_security);
+		make_server_security_context());
 
 	auto connect_future = test::spawn([&]()
 	{
-		auto const client_security = openssl::create_socket_security_context().value();
-		return detail::connect<openssl::socket_t, traits_type>(endpoint, client_security);
+		return detail::connect<openssl::socket_t, traits_type>(
+			endpoint,
+			make_client_security_context());
 	});
 
 	auto const server_socket = listen_socket.accept();
 	auto const client_socket = connect_future.get();
 
-	signed char value = 42;
-	size_t const ws = client_socket.write_some(as_write_buffer(&value, 1));
-	REQUIRE(ws == 1);
+	char const write_buffer[] =
+		"Lorem ipsum dolor sit amet, consectetur adipisci elit, sed eiusmod tempor incidunt ut "
+		"labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco "
+		"laboris nisi ut aliquid ex ea commodi consequat. Quis aute iure reprehenderit in "
+		"voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint obcaecat "
+		"cupiditat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
 
-	static_cast<volatile signed char&>(value) = 0;
-	size_t const rs = server_socket.read_some(as_read_buffer(&value, 1));
-	REQUIRE(rs == 1);
+	client_socket.write(as_write_buffer(write_buffer));
 
-	REQUIRE(value == 42);
+	char read_buffer[sizeof(write_buffer)];
+	server_socket.read(as_read_buffer(read_buffer));
+
+	REQUIRE(std::string_view(read_buffer) == std::string_view(write_buffer));
+
+#if 0 // TODO: Enable this. Requires match_error from allio/source/test...
+	REQUIRE_THROWS_MATCHES(
+		client_socket.read_some(as_read_buffer(read_buffer), deadline::instant()),
+		std::system_error,
+		match_error(std::errc::timed_out));
+#endif
 }
 
-#if 1
 TEST_CASE(
 	"Asynchronous OpenSSL stream sockets can exchange data",
 	"[openssl][socket][senders]")
@@ -61,17 +81,12 @@ TEST_CASE(
 
 	auto const combined_task = []() -> task<void>
 	{
-		using namespace path_literals;
-		auto const server_security = openssl::create_listen_socket_security_context(
-			tls_certificate(allio_test_secret_path "/server-certificate.pem"_path),
-			tls_private_key(allio_test_secret_path "/server-private-key.pem"_path)).value();
-
 		auto const endpoint = test::generate_endpoint();
 
 		// Make sure the listening socket is bound before the client attempts to connect.
 		auto const listen_socket = co_await detail::listen<openssl::listen_socket_t, traits_type>(
 			endpoint,
-			server_security);
+			make_server_security_context());
 
 		auto const server_task = [&]() -> task<void>
 		{
@@ -90,12 +105,10 @@ TEST_CASE(
 
 		auto const client_task = [&]() -> task<void>
 		{
-			auto const client_security = openssl::create_socket_security_context().value();
-
 			// Connect to the server:
 			auto const socket = co_await detail::connect<openssl::socket_t, traits_type>(
 				endpoint,
-				client_security);
+				make_client_security_context());
 
 			// Send a request to the server:
 			signed char const request_data = 42;
@@ -115,4 +128,3 @@ TEST_CASE(
 
 	senders::sync_wait(multiplexer, combined_task());
 }
-#endif

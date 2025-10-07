@@ -116,7 +116,7 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 		}
 	}
 
-	char write_buffer[] =
+	char const write_buffer[] =
 		"Lorem ipsum dolor sit amet, consectetur adipisci elit, sed eiusmod tempor incidunt ut "
 		"labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco "
 		"laboris nisi ut aliquid ex ea commodi consequat. Quis aute iure reprehenderit in "
@@ -134,14 +134,14 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 		{
 			read_pending = enter_server(
 				&openssl_socket::read_some,
-				as_read_buffer(read_buffer, sizeof(read_buffer)));
+				as_read_buffer(read_buffer));
 		}
 
 		if (write_pending)
 		{
 			write_pending = enter_client(
 				&openssl_socket::write_some,
-				as_write_buffer(write_buffer, sizeof(write_buffer)));
+				as_write_buffer(write_buffer));
 		}
 	}
 

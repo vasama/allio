@@ -35,9 +35,9 @@ template<vsm::non_cvref T>
 
 //TODO: requires mutable
 template<std::ranges::contiguous_range Range>
-[[nodiscard]] write_buffer as_read_buffer(Range&& range)
+[[nodiscard]] read_buffer as_read_buffer(Range&& range)
 {
-	return write_buffer(
+	return read_buffer(
 		reinterpret_cast<std::byte*>(std::ranges::data(range)),
 		std::ranges::size(range) * sizeof(std::ranges::range_value_t<Range>));
 }

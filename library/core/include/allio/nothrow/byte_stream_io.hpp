@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/nothrow/traits.hpp>
+#include <allio/detail/byte_stream_io.hpp>
 
 #include <vector>
 
@@ -60,16 +60,16 @@ auto _nothrow_loop(Handle&& handle, Loop const loop_function)
 
 namespace allio::nothrow {
 
-template<handle Handle>
+template<detail::handle Handle>
 [[nodiscard]] vsm::result<size_t> read_to_end(
 	Handle const& handle,
-	any_buffer const buffer,
+	detail::any_byte_buffer const buffer,
 	auto&&... args)
 {
 	return detail::_read_to_end_x(handle, buffer, vsm_forward(args)...);
 }
 
-template<typename Container = std::vector<std::byte>, handle Handle>
+template<typename Container = std::vector<std::byte>, detail::handle Handle>
 [[nodiscard]] vsm::result<Container> read_to_end(Handle const& handle, auto&&... args)
 {
 	return detail::_read_to_end_c<Container>(handle, vsm_forward(args)...);
