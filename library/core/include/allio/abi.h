@@ -64,5 +64,5 @@ typedef allio_abi_object_functions_v1;
 #endif
 
 #ifdef __cplusplus
-#	include <allio/detail/abi.ipp>
+#	include <allio/detail/abi.hpp>
 #endif

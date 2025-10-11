@@ -1,3 +1,7 @@
+#pragma once
+
+#include <allio/abi.h>
+
 #include <system_error>
 
 namespace allio::detail {

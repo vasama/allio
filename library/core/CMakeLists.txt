@@ -108,6 +108,7 @@ vsm_add_library(
 	TEST_SOURCES
 		source/allio/test/reverse_iterator.hpp
 
+		source/allio/test/any_object.cpp
 		source/allio/test/byte_io_buffers.cpp
 		source/allio/test/fd_tree.cpp
 		source/allio/test/network.cpp
