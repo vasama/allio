@@ -6,6 +6,7 @@
 
 #include <vsm/assert.h>
 #include <vsm/concepts.hpp>
+#include <vsm/priority_tag.hpp>
 #include <vsm/result.hpp>
 #include <vsm/standard.hpp>
 #include <vsm/tag_invoke.hpp>
@@ -61,13 +62,16 @@ using io_result_t = decltype(detail::_io_result<Handle, Operation>(0));
 
 
 template<typename Object, operation_c Operation>
-typename Operation::template params_type_template<Object> _io_params(int);
+typename Object::template params_type<Operation> _io_params(vsm::priority_tag<2>);
 
 template<typename Object, operation_c Operation>
-typename Operation::params_type _io_params(...);
+typename Operation::template params_type_template<Object> _io_params(vsm::priority_tag<1>);
 
 template<typename Object, operation_c Operation>
-using io_parameters_t = decltype(detail::_io_params<Object, Operation>(0));
+typename Operation::params_type _io_params(vsm::priority_tag<0>);
+
+template<typename Object, operation_c Operation>
+using io_parameters_t = decltype(detail::_io_params<Object, Operation>(vsm::priority_tag<2>()));
 
 
 template<bool IsMutation>

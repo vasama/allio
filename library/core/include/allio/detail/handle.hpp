@@ -69,9 +69,7 @@ public:
 	using native_type = native_handle<Object>;
 
 private:
-	static_assert(std::is_default_constructible_v<native_type>);
-
-	native_type m_native = {};
+	native_type m_native;
 
 public:
 	template<object OtherObject>
@@ -81,7 +79,11 @@ public:
 	using rebind_multiplexer = basic_handle<Object, OtherMultiplexerHandle>;
 
 
-	basic_detached_handle() = default;
+	basic_detached_handle()
+		requires std::is_default_constructible_v<native_type>
+	{
+		m_native.flags = handle_flags::none;
+	}
 
 	explicit constexpr basic_detached_handle(
 		adopt_handle_t,
@@ -93,7 +95,7 @@ public:
 	basic_detached_handle(basic_detached_handle&& other)
 		: m_native(vsm_move(other.m_native))
 	{
-		other.m_native = {};
+		other.m_native.flags = handle_flags::none;
 	}
 
 	basic_detached_handle& operator=(basic_detached_handle&& other) &
@@ -104,7 +106,7 @@ public:
 		}
 
 		m_native = vsm_move(other.m_native);
-		other.m_native = {};
+		other.m_native.flags = handle_flags::none;
 
 		return *this;
 	}
@@ -146,7 +148,7 @@ public:
 	{
 		vsm_assert(*this); //PRECONDITION
 		native_type const r = vsm_move(m_native);
-		m_native = {};
+		m_native.flags = handle_flags::none;
 		return r;
 	}
 
@@ -170,7 +172,7 @@ private:
 			if (r_attach)
 			{
 				r->m_native = vsm_move(h.m_native);
-				h.m_native = {};
+				h.m_native.flags = handle_flags::none;
 			}
 			else
 			{
@@ -234,18 +236,16 @@ public:
 	using multiplexer_handle_type = MultiplexerHandle;
 
 	using native_type = native_handle<Object>;
-	static_assert(std::is_nothrow_default_constructible_v<native_type>);
 	static_assert(std::is_nothrow_move_constructible_v<native_type>);
 	static_assert(std::is_nothrow_move_assignable_v<native_type>);
 
 	using connector_type = async_connector_t<multiplexer_type, Object>;
-	static_assert(std::is_nothrow_default_constructible_v<connector_type>);
 	static_assert(std::is_nothrow_move_constructible_v<connector_type>);
 	static_assert(std::is_nothrow_move_assignable_v<connector_type>);
 
 private:
-	native_type m_native = {};
-	vsm_no_unique_address MultiplexerHandle m_multiplexer_handle = {};
+	native_type m_native;
+	vsm_no_unique_address MultiplexerHandle m_multiplexer_handle;
 	vsm_no_unique_address connector_type m_connector;
 
 public:
@@ -257,12 +257,19 @@ public:
 	using rebind_multiplexer = basic_handle<Object, OtherMultiplexerHandle>;
 
 	basic_attached_handle()
-		requires std::is_default_constructible_v<MultiplexerHandle>
-		= default;
+		requires
+			std::is_default_constructible_v<native_type> &&
+			std::is_default_constructible_v<MultiplexerHandle>
+		: m_multiplexer_handle()
+	{
+		m_native.flags = handle_flags::none;
+	}
 
 	explicit basic_attached_handle(std::convertible_to<MultiplexerHandle> auto&& multiplexer_handle)
+		requires std::is_default_constructible_v<native_type>
 		: m_multiplexer_handle(vsm_forward(multiplexer_handle))
 	{
+		m_native.flags = handle_flags::none;
 	}
 
 	//TODO: Adopt should be noexcept
@@ -282,7 +289,7 @@ public:
 		, m_multiplexer_handle(vsm_move(other.m_multiplexer_handle))
 		, m_connector(vsm_move(other.m_connector))
 	{
-		other.m_native = {};
+		other.m_native.flags = handle_flags::none;
 	}
 
 	basic_attached_handle& operator=(basic_attached_handle&& other) &
@@ -292,7 +299,7 @@ public:
 		m_native = vsm_move(other.m_native);
 		m_multiplexer_handle = vsm_move(other.m_multiplexer_handle);
 		m_connector = vsm_move(other.m_connector);
-		other.m_native = {};
+		other.m_native.flags = handle_flags::none;
 
 		return *this;
 	}
@@ -346,7 +353,7 @@ public:
 			vsm_move(m_native),
 			vsm_move(m_connector),
 		};
-		m_native = {};
+		m_native.flags = handle_flags::none;
 		return r;
 	}
 
@@ -366,7 +373,7 @@ private:
 			if (r_detach)
 			{
 				r->m_native = vsm_move(h.m_native);
-				h.m_native = {};
+				h.m_native.flags = handle_flags::none;
 			}
 			else
 			{
@@ -473,7 +480,7 @@ struct basic_handle_rebind_traits
 			if (r2)
 			{
 				r->m_native = vsm_move(h.m_native);
-				h.m_native = {};
+				h.m_native.flags = handle_flags::none;
 			}
 			else
 			{
@@ -498,7 +505,7 @@ struct basic_handle_rebind_traits
 			if (r2)
 			{
 				r->m_native = vsm_move(h.m_native);
-				h.m_native = {};
+				h.m_native.flags = handle_flags::none;
 			}
 			else
 			{

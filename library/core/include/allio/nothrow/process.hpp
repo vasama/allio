@@ -9,6 +9,16 @@ inline namespace processes {
 
 using process_handle = traits_type::handle<process_t>;
 
+[[nodiscard]] vsm::result<process_handle> open_process(process_id const id, auto&&... args)
+{
+	return detail::open_process<traits_type>(id, vsm_forward(args)...);
+}
+
+[[nodiscard]] vsm::result<process_handle> create_process(detail::fs_path const& path, auto&&... args)
+{
+	return detail::create_process<traits_type>(path, vsm_forward(args)...);
+}
+
 } // inline namespace processes
 
 namespace this_process {

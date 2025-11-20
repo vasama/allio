@@ -114,23 +114,10 @@ TEST_CASE("Child process working directory can be changed", "[process][multi_pro
 	{
 		std::string const args[] = { std::format("getcwd") };
 
-#if 0
-		auto a0 = path_view(allio_detail_test_exe);
-		auto a1 = process_arguments(args);
-
-		auto a2_v = detail::fs_path(path_view(wdir));
-		auto a2 = working_directory(a2_v);
-
-		auto const process = create_process(
-			a0,
-			a1,
-			a2);
-#else
 		auto const process = create_process(
 			path_view(allio_detail_test_exe),
 			process_arguments(args),
 			working_directory(path_view(wdir)));
-#endif
 
 		REQUIRE(process.wait().get_exit_code() == EXIT_SUCCESS);
 	}
@@ -285,19 +272,17 @@ TEST_CASE("Standard streams are implicitly inherited", "[process][multi_process]
 
 	std::string control_argument;
 
-	// if (GENERATE(0, 1))
-	if (0)
+	if (GENERATE(0, 1))
 	{
 		control_argument.push_back('i');
 	}
 
-	// if (GENERATE(0, 1))
-	if (0)
+	if (GENERATE(0, 1))
 	{
 		control_argument.push_back('o');
 	}
 
-	// if (GENERATE(0, 1))
+	if (GENERATE(0, 1))
 	{
 		control_argument.push_back('e');
 	}

@@ -58,7 +58,7 @@ struct openssl_error_category : std::error_category
 
 	std::string message(int const e) const override
 	{
-		static bool const init = [&]() -> bool
+		static bool const init = []() -> bool
 		{
 			return OPENSSL_init_crypto(
 				OPENSSL_INIT_LOAD_CRYPTO_STRINGS,
@@ -99,7 +99,7 @@ struct ssl_error_category : std::error_category
 
 	std::string message(int const e) const override
 	{
-		static bool const init = [&]() -> bool
+		static bool const init = []() -> bool
 		{
 			return OPENSSL_init_ssl(
 				OPENSSL_INIT_LOAD_SSL_STRINGS |
