@@ -458,15 +458,16 @@ static auto read_secret(tls_secret const& secret, Callable&& callable)
 
 	vsm_try(mime_type_format, get_mime_type_format(secret.mime_type()));
 
-	return read_secret(secret, [&](BIO* const bio)
-		-> std::invoke_result_t<Callable&&, BIO*, secret_format>
-	{
-		vsm_try(format, mime_type_format
-			? vsm::result<secret_format>(*mime_type_format)
-			: deduce_secret_format(bio));
+	return read_secret(
+		secret,
+		[&](BIO* const bio) -> std::invoke_result_t<Callable&&, BIO*, secret_format>
+		{
+			vsm_try(format, mime_type_format
+				? vsm::result<secret_format>(*mime_type_format)
+				: deduce_secret_format(bio));
 
-		return vsm_forward(callable)(bio, format);
-	});
+			return vsm_forward(callable)(bio, format);
+		});
 }
 
 

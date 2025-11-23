@@ -2,7 +2,7 @@
 
 ALLIO does not provide a stable ABI, except where explicitly specified.
 
-## native_opaque_handle
+## `native_opaque_handle`
 
 `allio_abi_object_v1` is an intentionally ABI stable C-compatible struct. It represents an opaque asynchronously pollable object. If you require ABI stability in your DLL/SO interface, this type provides that guarantee.
 
