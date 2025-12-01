@@ -84,7 +84,7 @@ static vsm::result<handle_with_flags> _open(open_parameters& a)
 
 	if (a.opening == file_opening(0))
 	{
-		if (vsm::all_flags(a.mode, file_mode::write_data))
+		if (vsm::any_flags(a.mode.value_or_zero(), file_mode::write_data))
 		{
 			a.opening = file_opening::open_or_create;
 		}
@@ -107,7 +107,7 @@ vsm::result<void> detail::open_fs_object(
 	vsm_assert(vsm::no_flags(a.special, open_kind::mask)); //PRECONDITION
 	a.special |= kind;
 
-	if (a.mode == file_mode(0))
+	if (!a.mode)
 	{
 		vsm_msvc_warning(push)
 		vsm_msvc_warning(disable: 4063) // Disable C4063: Case is not a valid value for switch of enum.
@@ -134,7 +134,7 @@ vsm::result<void> detail::open_fs_object(
 		vsm_gnu_diagnostic(pop)
 	}
 
-	if (a.sharing == file_sharing(0))
+	if (!a.sharing)
 	{
 		a.sharing = file_sharing::all;
 	}
@@ -150,11 +150,11 @@ vsm::result<void> detail::open_fs_object(
 
 	vsm_try_bind((handle, flags), _open(a));
 
-	if (vsm::all_flags(a.mode, file_mode::read_data))
+	if (vsm::any_flags(a.mode.value_or_zero(), file_mode::read_data))
 	{
 		flags |= fs_object_t::flags::readable;
 	}
-	if (vsm::all_flags(a.mode, file_mode::write_data))
+	if (vsm::any_flags(a.mode.value_or_zero(), file_mode::write_data))
 	{
 		flags |= fs_object_t::flags::writable;
 	}

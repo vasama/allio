@@ -59,25 +59,6 @@ struct null_endpoint_t
 };
 inline constexpr null_endpoint_t null_endpoint{};
 
-//TODO: Rename to local_endpoint and use in any_endpoint_view, or get rid of.
-class local_address
-{
-	path_view m_path;
-
-public:
-	local_address() = default;
-
-	explicit constexpr local_address(path_view const path)
-		: m_path(path)
-	{
-	}
-
-	[[nodiscard]] constexpr path_view path() const
-	{
-		return m_path;
-	}
-};
-
 
 using network_port_t = uint16_t;
 

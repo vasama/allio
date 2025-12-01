@@ -7,12 +7,17 @@
 #include <vsm/standard.hpp>
 #include <vsm/tag_invoke.hpp>
 
+#include <ranges>
 #include <span>
 
 #include <cstddef>
 #include <cstdint>
 
 namespace allio::detail {
+
+template<typename T>
+concept mutable_reference = std::is_same_v<T, std::remove_cvref_t<T>&>;
+
 
 template<vsm::any_cv_of<std::byte> T>
 using basic_buffer = std::span<T>;
@@ -33,8 +38,8 @@ template<vsm::non_cvref T>
 	return read_buffer(reinterpret_cast<std::byte*>(data), size * sizeof(T));
 }
 
-//TODO: requires mutable
 template<std::ranges::contiguous_range Range>
+	requires mutable_reference<std::ranges::range_reference_t<Range>>
 [[nodiscard]] read_buffer as_read_buffer(Range&& range)
 {
 	return read_buffer(
@@ -138,17 +143,6 @@ concept io_buffers_range_concept = requires (Range const& range)
 struct io_buffers_base : protected io_buffer
 {
 protected:
-#if 0
-	static constexpr size_t layout_shift = sizeof(size_t) * CHAR_BIT - 2;
-
-	static constexpr size_t size_data_flag =
-		static_cast<size_t>(io_buffer_layout::size_data) << layout_shift;
-
-	static constexpr size_t size_mask = static_cast<size_t>(-1) >> 4;
-	static constexpr size_t view_flag = static_cast<size_t>(1) << (layout_shift - 1);
-	static constexpr size_t size_flag = static_cast<size_t>(1) << (layout_shift - 2);
-#endif
-
 	static constexpr size_t byte_size_mask          = static_cast<size_t>(-1) >> 1;
 	static constexpr size_t view_flag               = ~byte_size_mask;
 
@@ -267,51 +261,5 @@ private:
 
 using new_read_buffers = io_buffers<std::byte>;
 using new_write_buffers = io_buffers<std::byte const>;
-
-
-#if 0
-class io_buffers_storage
-{
-	struct storage_type
-	{
-		size_t const size;
-		io_buffer data[];
-
-		explicit storage_type(size_t const size)
-			: size(size)
-#if vsm_compiler_msvc
-			, data{}
-#endif
-		{
-		}
-	};
-
-	storage_type* m_storage;
-
-public:
-	io_buffers_storage()
-		: m_storage(nullptr)
-	{
-	}
-
-	io_buffers_storage(io_buffers_storage const&) = delete;
-	io_buffers_storage& operator=(io_buffers_storage const&) = delete;
-
-	~io_buffers_storage();
-
-	[[nodiscard]] io_buffers_view get_buffers_view() const
-	{
-		vsm_assert(m_storage != nullptr);
-
-		return io_buffers_view
-		{
-			.buffers_data = m_storage->data,
-			.buffers_size = m_storage->size,
-		};
-	}
-
-	[[nodiscard]] vsm::result<io_buffer*> resize(size_t size) &;
-};
-#endif
 
 } // namespace allio::detail

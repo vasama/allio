@@ -3,6 +3,7 @@
 #include <allio/any_path.hpp>
 #include <allio/any_path_buffer.hpp>
 #include <allio/detail/filesystem.hpp>
+#include <allio/detail/optional_flags.hpp>
 #include <allio/detail/handles/platform_object.hpp>
 #include <allio/path.hpp>
 #include <allio/path_view.hpp>
@@ -11,13 +12,15 @@ namespace allio::detail {
 
 enum class file_mode : uint8_t
 {
-	none                                = 1,
+	// Bit 0 is used by optional_flags.
 
-	read_data                           = 1 | 1 << 1,
-	write_data                          = 1 | 1 << 2,
+	none                                = 0,
 
-	read_attributes                     = 1 | 1 << 3,
-	write_attributes                    = 1 | 1 << 4,
+	read_data                           = 1 << 1,
+	write_data                          = 1 << 2,
+
+	read_attributes                     = 1 << 3,
+	write_attributes                    = 1 << 4,
 
 	read                                = read_data | read_attributes,
 	write                               = write_data | write_attributes,
@@ -39,15 +42,16 @@ enum class file_opening : uint8_t
 //TODO: Replace file_opening
 enum class file_opening2 : uint8_t
 {
-	open                        = 1 << 0,
-	create                      = 1 << 1,
-	truncate                    = 1 << 2,
+	open                        = 1 << 1,
+	create                      = 1 << 2,
+	truncate                    = 1 << 3,
+	replace                     = 1 << 4,
 
 	open_existing               = open,
 	create_only                 = create,
 	open_or_create              = open | create,
-	open_and_truncate           = open | truncate,
-	create_or_truncate          = create | truncate,
+	truncate_existing           = open | truncate,
+	create_or_truncate          = open | create | truncate,
 };
 
 /// @brief Controls sharing of the file by other handles.
@@ -55,9 +59,13 @@ enum class file_opening2 : uint8_t
 ///       For maximum portability, do not specify file sharing restrictions.
 enum class file_sharing : uint8_t
 {
-	unlink                              = 1 | 1 << 1,
-	read                                = 1 | 1 << 2,
-	write                               = 1 | 1 << 3,
+	// Bit 0 is used by optional_flags.
+
+	none                                = 0,
+
+	unlink                              = 1 << 1,
+	read                                = 1 << 2,
+	write                               = 1 << 3,
 
 	all = unlink | read | write,
 };
@@ -76,15 +84,17 @@ enum class file_caching : uint8_t
 
 enum class file_options : uint16_t
 {
-	none                                        = 1,
-	unlink_on_first_close                       = 1 | 1 << 1,
-	disable_safety_barriers                     = 1 | 1 << 2,
-	disable_safety_unlinks                      = 1 | 1 << 3,
-	disable_prefetching                         = 1 | 1 << 4,
-	maximum_prefetching                         = 1 | 1 << 5,
+	// Bit 0 is used by optional_flags.
+
+	none                                        = 0,
+	unlink_on_first_close                       = 1 << 1,
+	disable_safety_barriers                     = 1 << 2,
+	disable_safety_unlinks                      = 1 << 3,
+	disable_prefetching                         = 1 << 4,
+	maximum_prefetching                         = 1 << 5,
 
 #if vsm_os_win32
-#	define allio_detail_windows_flag(x) 1 | 1 << x
+#	define allio_detail_windows_flag(x) 1 << x
 #else
 #	define allio_detail_windows_flag(x) 0
 #endif
@@ -143,10 +153,10 @@ struct open_t
 
 	struct params_type : io_flags_t
 	{
-		file_mode mode = {};
-		file_options options = {};
+		optional_flags<file_mode> mode;
+		optional_flags<file_options> options;
 		file_opening opening = {};
-		file_sharing sharing = {};
+		optional_flags<file_sharing> sharing;
 		file_caching caching = {};
 		open_options special = {};
 		fs_path path = {};

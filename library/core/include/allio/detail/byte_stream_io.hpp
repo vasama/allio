@@ -210,8 +210,7 @@ vsm::result<Container> _read_to_end_c(Handle const& h, auto&&... args)
 		{
 			if (*r2 % sizeof(typename Container::value_type) != 0)
 			{
-				//TODO: Use a proper error code:
-				r = vsm::unexpected(error::unknown_failure);
+				r = vsm::unexpected(error::invalid_data_format);
 			}
 		}
 	}

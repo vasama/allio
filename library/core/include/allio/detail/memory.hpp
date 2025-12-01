@@ -13,12 +13,13 @@ namespace allio::detail {
 
 enum class protection : uint8_t
 {
-	//TODO: Use optional_flags type with sentinel value instead.
-	none                                = 1,
+	// Bit 0 is used by optional_flags.
 
-	read                                = 1 | 1 << 1,
-	write                               = 1 | 1 << 2,
-	execute                             = 1 | 1 << 3,
+	none                                = 0,
+
+	read                                = 1 << 1,
+	write                               = 1 << 2,
+	execute                             = 1 << 3,
 
 	read_write                          = read | write,
 	all                                 = read | write | execute,

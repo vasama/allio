@@ -31,28 +31,19 @@ static auto with_constant_layouts(
 
 	using enum io_buffer_layout;
 
-	switch (layout)
+	switch (std::to_underlying(layout))
 	{
-		vsm_msvc_warning(push)
-		vsm_msvc_warning(disable: 4063) // C4063: case x is not a valid value for switch of enum
-
-		vsm_gnu_diagnostic(push)
-		vsm_gnu_diagnostic(ignored "-Wswitch")
-
-	case data_size:
+	case std::to_underlying(data_size):
 		return with_constant_layouts<Layouts..., data_size>(lambda, rest...);
 
-	case size_data:
+	case std::to_underlying(size_data):
 		return with_constant_layouts<Layouts..., size_data>(lambda, rest...);
 
-	case data_size | size_le32:
+	case std::to_underlying(data_size | size_le32):
 		return with_constant_layouts<Layouts..., data_size | size_le32>(lambda, rest...);
 
-	case size_data | size_le32:
+	case std::to_underlying(size_data | size_le32):
 		return with_constant_layouts<Layouts..., size_data | size_le32>(lambda, rest...);
-
-		vsm_msvc_warning(pop)
-		vsm_gnu_diagnostic(pop)
 	}
 
 	vsm_unreachable();
@@ -182,44 +173,6 @@ static vsm::result<void const*> swizzle_buffers(
 }
 
 } // namespace
-
-#if 0
-detail::io_buffers_storage::~io_buffers_storage()
-{
-	static constexpr size_t data_offset = offsetof(storage_type, data);
-
-	if (m_storage != nullptr)
-	{
-		allio_release_storage(
-			m_storage,
-			data_offset + m_storage->size * sizeof(io_buffer),
-			alignof(storage_type),
-			allio_allocation_strategy_generic);
-	}
-}
-
-vsm::result<io_buffer*> detail::io_buffers_storage::resize(size_t const size) &
-{
-	static constexpr size_t data_offset = offsetof(storage_type, data);
-
-	size_t const allocation_size = data_offset + size * sizeof(io_buffer);
-
-	auto const allocation = allio_acquire_storage(
-		/* min_size: */ allocation_size,
-		/* max_size: */ allocation_size,
-		alignof(io_buffer),
-		allio_allocation_strategy_generic);
-
-	if (allocation.storage == nullptr)
-	{
-		return vsm::unexpected(allio_error(error::not_enough_memory));
-	}
-
-	m_storage = new (allocation.storage) storage_type(size);
-
-	return m_storage->data;
-}
-#endif
 
 vsm::result<io_buffers_view> allio::get_io_buffers(
 	io_buffers_base const& buffers,

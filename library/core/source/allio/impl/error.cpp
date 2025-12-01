@@ -78,6 +78,8 @@ std::string detail::error_category::message(int const code) const
 		return "Too many byte I/O buffers were specified for the operation.";
 	case error::io_size_out_of_range:
 		return "The size of the requested operation is too large.";
+	case error::invalid_data_format:
+		return "The data was not formatted correctly.";
 
 	// Filesystem
 	case error::filename_too_long:
@@ -177,6 +179,8 @@ std::error_condition detail::error_category::default_error_condition(int const c
 	case error::too_many_io_buffers:
 		break;
 	case error::io_size_out_of_range:
+		break;
+	case error::invalid_data_format:
 		break;
 
 	// Filesystem

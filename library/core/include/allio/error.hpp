@@ -108,6 +108,7 @@ enum class error
 	end_of_stream,
 	too_many_io_buffers,
 	io_size_out_of_range,
+	invalid_data_format,
 
 	// Filesystem
 	filename_too_long,

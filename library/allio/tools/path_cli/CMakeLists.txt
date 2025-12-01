@@ -4,8 +4,8 @@ add_executable(path_cli
 set_target_properties(
 	path_cli
 
-	PROPERTIES
-		FOLDER "Tools"
+	INTERNAL
+	FOLDER "Tools"
 )
 target_include_directories(path_cli
 	PRIVATE

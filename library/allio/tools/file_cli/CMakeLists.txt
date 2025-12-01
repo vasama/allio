@@ -1,5 +1,7 @@
 vsm_add_executable(
 	file_cli
+
+	INTERNAL
 	FOLDER Tools
 
 	SOURCES

@@ -1,5 +1,7 @@
 vsm_add_executable(
 	test_exe
+
+	INTERNAL
 	FOLDER Tools
 
 	PROPERTIES

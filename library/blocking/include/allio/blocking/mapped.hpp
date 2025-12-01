@@ -19,12 +19,8 @@ template<vsm::non_ref T>
 	return mapped<T>(map_file(file, vsm_forward(args)...));
 }
 
-//TODO: * If T is const, default to read only.
-//      * Force open only mode. Don't allow creating files using this API.
 template<vsm::non_ref T>
-[[nodiscard]] mapped<T> map_file_as(
-	detail::fs_path const& path,
-	auto&&... args)
+[[nodiscard]] mapped<T> map_file_as(detail::fs_path const& path, auto&&... args)
 {
 	return mapped<T>(map_file(path, vsm_forward(args)...));
 }

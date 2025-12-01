@@ -270,12 +270,18 @@ struct map_t : object_t
 	{
 		[[nodiscard]] void* base() const
 		{
-			return static_cast<Handle const&>(*this).native().base;
+			auto const& h = static_cast<Handle const&>(*this).native();
+			vsm_assert(h.flags[object_t::flags::not_null]);
+
+			return h.base;
 		}
 
 		[[nodiscard]] size_t size() const
 		{
-			return static_cast<Handle const&>(*this).native().size;
+			auto const& h = static_cast<Handle const&>(*this).native();
+			vsm_assert(h.flags[object_t::flags::not_null]);
+
+			return h.size;
 		}
 
 		[[nodiscard]] size_t allocated_size() const
@@ -286,7 +292,10 @@ struct map_t : object_t
 
 		[[nodiscard]] detail::page_level page_level() const
 		{
-			return get_page_level(static_cast<Handle const&>(*this).native());
+			auto const& h = static_cast<Handle const&>(*this).native();
+			vsm_assert(h.flags[object_t::flags::not_null]);
+
+			return get_page_level(h);
 		}
 
 		[[nodiscard]] size_t page_size() const

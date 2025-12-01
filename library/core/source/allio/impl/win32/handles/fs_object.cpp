@@ -38,7 +38,7 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 		vsm_msvc_warning(disable: 4063)
 
 	case open_kind::path:
-		if (args.mode != file_mode::none)
+		if (args.mode.value_or_zero() != file_mode::none)
 		{
 			// When opening a path, it is not possible to specify a mode.
 			return vsm::unexpected(allio_error(error::invalid_argument));
@@ -59,23 +59,23 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
-	if (args.mode != file_mode::none)
+	if (args.mode.value_or_zero() != file_mode::none)
 	{
 		info.desired_access |= READ_CONTROL;
 	}
-	if (vsm::all_flags(args.mode, file_mode::read_data))
+	if (vsm::any_flags(args.mode.value_or_zero(), file_mode::read_data))
 	{
 		info.desired_access |= FILE_GENERIC_READ;
 	}
-	if (vsm::all_flags(args.mode, file_mode::write_data))
+	if (vsm::any_flags(args.mode.value_or_zero(), file_mode::write_data))
 	{
 		info.desired_access |= FILE_GENERIC_WRITE | DELETE;
 	}
-	if (vsm::all_flags(args.mode, file_mode::read_attributes))
+	if (vsm::any_flags(args.mode.value_or_zero(), file_mode::read_attributes))
 	{
 		info.desired_access |= FILE_READ_ATTRIBUTES | FILE_READ_EA;
 	}
-	if (vsm::all_flags(args.mode, file_mode::write_attributes))
+	if (vsm::any_flags(args.mode.value_or_zero(), file_mode::write_attributes))
 	{
 		info.desired_access |= FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA;
 	}
@@ -107,15 +107,15 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 	}
 
 	// Sharing
-	if (vsm::all_flags(args.sharing, file_sharing::unlink))
+	if (vsm::any_flags(args.sharing.value_or_zero(), file_sharing::unlink))
 	{
 		info.share_access |= FILE_SHARE_DELETE;
 	}
-	if (vsm::all_flags(args.sharing, file_sharing::read))
+	if (vsm::any_flags(args.sharing.value_or_zero(), file_sharing::read))
 	{
 		info.share_access |= FILE_SHARE_READ;
 	}
-	if (vsm::all_flags(args.sharing, file_sharing::write))
+	if (vsm::any_flags(args.sharing.value_or_zero(), file_sharing::write))
 	{
 		info.share_access |= FILE_SHARE_WRITE;
 	}
