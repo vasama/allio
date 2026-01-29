@@ -41,4 +41,14 @@ vsm::result<detail::handle_with_flags> reopen_file(
 	HANDLE handle,
 	open_info const& info);
 
+vsm::result<void> _link_file_at(
+	HANDLE handle,
+	HANDLE base_handle,
+	std::wstring_view path);
+
+vsm::result<void> link_file_at(
+	HANDLE handle,
+	HANDLE base_handle,
+	any_path_view path);
+
 } // namespace allio::win32

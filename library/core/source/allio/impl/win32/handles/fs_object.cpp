@@ -2,6 +2,7 @@
 
 #include <allio/detail/config.hpp>
 #include <allio/impl/new.hpp>
+#include <allio/impl/storage_provider.hpp>
 #include <allio/impl/transcode.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>
@@ -217,6 +218,60 @@ vsm::result<handle_with_flags> win32::reopen_file(
 	return create_file(handle, make_unicode_string(), info);
 }
 
+static constexpr size_t file_link_information_size(size_t const path_size)
+{
+	return sizeof(FILE_LINK_INFORMATION) + (path_size - 1) * sizeof(wchar_t);
+}
+
+vsm::result<void> win32::_link_file_at(
+	HANDLE const handle,
+	HANDLE const base_handle,
+	std::wstring_view const path)
+{
+	size_t const information_size = file_link_information_size(path.size());
+
+	dynamic_storage_provider<file_link_information_size(MAX_PATH)> storage_provider;
+	vsm_try(storage, storage_provider.get_storage(
+		information_size,
+		std::align_val_t(alignof(FILE_LINK_INFORMATION))));
+
+	auto const information = ::new (storage) FILE_LINK_INFORMATION
+	{
+		.RootDirectory = base_handle,
+		.FileNameLength = vsm::truncating(path.size() * sizeof(wchar_t)),
+	};
+	std::memcpy(information->FileName, path.data(), path.size() * sizeof(wchar_t));
+
+	IO_STATUS_BLOCK io_status_block;
+	NTSTATUS const status = NtSetInformationFile(
+		handle,
+		&io_status_block,
+		information,
+		vsm::truncating(information_size),
+		FileLinkInformation);
+
+	if (!NT_SUCCESS(status))
+	{
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
+	}
+
+	return {};
+}
+
+vsm::result<void> win32::link_file_at(
+	HANDLE const handle,
+	HANDLE const base_handle,
+	any_path_view const path)
+{
+	kernel_path_storage path_storage;
+	vsm_try(kernel_path, make_kernel_path(path_storage,
+	{
+		.handle = base_handle,
+		.path = path,
+	}));
+
+	return _link_file_at(handle, kernel_path.handle, kernel_path.path);
+}
 
 namespace {
 
@@ -423,7 +478,7 @@ static vsm::result<handle_with_flags> open_named_file(open_parameters const& a)
 {
 	vsm_try(info, open_info::make(a));
 
-	auto const base = a.path.base == nullptr
+	HANDLE const base = a.path.base == nullptr
 		? NULL
 		: unwrap_handle(a.path.base->platform_handle);
 
@@ -499,6 +554,16 @@ vsm::result<size_t> fs_object_t::get_current_path(
 		information->FileNameLength / sizeof(wchar_t));
 
 	return copy_or_transcode_string(wide_path, a.buffer.string());
+}
+
+
+vsm::result<void> detail::_link_at(native_handle<fs_object_t> const& h, fs_path const& path)
+{
+	HANDLE const base_handle = path.base == nullptr
+		? NULL
+		: unwrap_handle(path.base->platform_handle);
+
+	return win32::link_file_at(unwrap_handle(h.platform_handle), base_handle, path.path);
 }
 
 

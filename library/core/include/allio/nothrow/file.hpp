@@ -1,7 +1,7 @@
 #pragma once
 
 #include <allio/handles/file.hpp>
-#include <allio/nothrow/traits.hpp>
+#include <allio/nothrow/fs_object.hpp>
 
 namespace allio::nothrow {
 inline namespace files {

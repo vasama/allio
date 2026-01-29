@@ -5,6 +5,6 @@
 
 namespace allio::nothrow {
 
-using namespace detail::_nothrow;
+
 
 } // namespace allio::nothrow

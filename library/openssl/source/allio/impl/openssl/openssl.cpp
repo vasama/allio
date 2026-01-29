@@ -620,6 +620,10 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(
 
 		switch (verification)
 		{
+		default:
+			vsm_unreachable();
+			[[fallthrough]];
+
 		case tls_verification::none:
 			break;
 
@@ -635,16 +639,6 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(
 			}
 			verify = SSL_VERIFY_PEER;
 			break;
-
-		vsm_gcc_diagnostic(push)
-		vsm_gcc_diagnostic(ignored "-Wswitch")
-		vsm_msvc_warning(push)
-		vsm_msvc_warning(disable: 4063)
-		case static_cast<tls_verification>(0):
-			vsm_unreachable();
-
-		vsm_gcc_diagnostic(pop)
-		vsm_msvc_warning(pop)
 		}
 
 		SSL_CTX_set_verify(
@@ -668,7 +662,7 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(
 #if 1 //TODO: Just for testing
 				if (!SSL_CTX_load_verify_file(
 					ssl_ctx.get(),
-					"D:\\Code\\allio\\build\\msvc\\library\\openssl\\allio-test-secrets\\server-certificate.pem"))
+					"D:\\Code\\allio\\build\\msvc-asan\\library\\openssl\\allio-test-secrets\\server-certificate.pem"))
 				{
 					return vsm::unexpected(get_last_openssl_error());
 				}

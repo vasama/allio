@@ -1,7 +1,7 @@
 #pragma once
 
 #include <allio/handles/directory.hpp>
-#include <allio/nothrow/traits.hpp>
+#include <allio/nothrow/fs_object.hpp>
 
 namespace allio::nothrow {
 inline namespace directories {
@@ -43,7 +43,7 @@ template<typename Path = path>
 	return detail::get_current_directory<traits_type, Path>();
 }
 
-[[nodiscard]] vsm::result<void> set_current_directory(fs_path const& path)
+[[nodiscard]] vsm::result<void> set_current_directory(detail::fs_path const& path)
 {
 	return detail::set_current_directory<traits_type>(path);
 }

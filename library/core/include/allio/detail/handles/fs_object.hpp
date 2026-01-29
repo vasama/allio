@@ -329,6 +329,15 @@ struct fs_object_t : platform_object_t
 };
 
 
+vsm::result<void> _link_at(native_handle<fs_object_t> const& h, fs_path const& path);
+
+template<handle_for<fs_object_t> FsObject>
+vsm::result<void> link_at(FsObject const& handle, fs_path const& path)
+{
+	return _link_at(handle.native(), path);
+}
+
+
 [[nodiscard]] vsm::result<bool> _equivalent(
 	native_handle<fs_object_t> const* lhs,
 	native_handle<fs_object_t> const* rhs);

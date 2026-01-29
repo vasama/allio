@@ -155,7 +155,7 @@ template<typename Char>
 constexpr Char const* find_leaf_name(Char const* const beg, Char const* end)
 {
 	Char const* const root_path_end = find_root_path_end(beg, end);
-	while (end != root_path_end && !is_separator(end[-1]))
+	while (root_path_end != end && !is_separator(end[-1]))
 	{
 		--end;
 	}
@@ -686,7 +686,9 @@ constexpr bool basic_path_view<Char, Encoding>::equal(basic_path_view const lhs,
 }
 
 template<typename Char, typename Encoding>
-constexpr std::strong_ordering basic_path_view<Char, Encoding>::compare(basic_path_view const lhs, basic_path_view const rhs)
+constexpr std::strong_ordering basic_path_view<Char, Encoding>::compare(
+	basic_path_view const lhs,
+	basic_path_view const rhs)
 {
 	using namespace detail::path_impl;
 
@@ -737,7 +739,9 @@ constexpr std::strong_ordering basic_path_view<Char, Encoding>::compare(basic_pa
 
 
 template<typename Char, typename Encoding>
-constexpr void basic_path_view<Char, Encoding>::iterator::init_begin(Char const* const beg, Char const* const end)
+constexpr void basic_path_view<Char, Encoding>::iterator::init_begin(
+	Char const* const beg,
+	Char const* const end)
 {
 	using namespace detail::path_impl;
 

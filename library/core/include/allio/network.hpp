@@ -29,7 +29,7 @@ namespace allio {
 template<std::integral T>
 [[nodiscard]] constexpr T network_byte_order(T const value)
 {
-	if constexpr (std::endian::native == std::endian::little)
+	/**/ if constexpr (std::endian::native == std::endian::little)
 	{
 		return vsm::byteswap(value);
 	}

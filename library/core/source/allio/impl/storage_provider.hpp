@@ -25,6 +25,13 @@ public:
 
 	[[nodiscard]] vsm::result<vsm::allocation> get_storage(
 		size_t const min_size,
+		std::align_val_t const min_alignment) &
+	{
+		return get_storage(min_size, min_size, min_alignment);
+	}
+
+	[[nodiscard]] vsm::result<vsm::allocation> get_storage(
+		size_t const min_size,
 		size_t const max_size,
 		std::align_val_t const min_alignment) &
 	{
@@ -57,6 +64,13 @@ public:
 	dynamic_storage_provider() = default;
 	dynamic_storage_provider(dynamic_storage_provider const&) = delete;
 	dynamic_storage_provider& operator=(dynamic_storage_provider const&) = delete;
+
+	[[nodiscard]] vsm::result<vsm::allocation> get_storage(
+		size_t const min_size,
+		std::align_val_t const min_alignment) &
+	{
+		return get_storage(min_size, min_size, min_alignment);
+	}
 
 	[[nodiscard]] vsm::result<vsm::allocation> get_storage(
 		size_t const min_size,

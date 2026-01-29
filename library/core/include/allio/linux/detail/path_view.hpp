@@ -12,6 +12,7 @@ namespace detail::path_impl {
 template<typename Char>
 constexpr bool is_separator(Char const character)
 {
+	// TODO: Move the is_separator implementation out of basic_path_view
 	return basic_path_view<Char, no_encoding_t>::is_separator(character);
 }
 
@@ -176,7 +177,7 @@ constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::root_
 
 	Char const* const beg = m_string_view.data();
 	Char const* const end = beg + m_string_view.size();
-	return basic_path_view(string_view_type(beg, starts_with_separator(beg, end)));
+	return basic_path_view(beg, starts_with_separator(beg, end));
 }
 
 template<typename Char, typename Encoding>
@@ -186,8 +187,7 @@ constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::relat
 
 	Char const* const beg = m_string_view.data();
 	Char const* const end = beg + m_string_view.size();
-	Char const* const rel = skip_separators(beg, end);
-	return basic_path_view(string_view_type(rel, end));
+	return basic_path_view(skip_separators(beg, end), end);
 }
 
 template<typename Char, typename Encoding>
@@ -209,7 +209,7 @@ constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::paren
 		--end;
 	}
 
-	return basic_path_view(string_view_type(beg, end));
+	return basic_path_view(beg, end);
 }
 
 template<typename Char, typename Encoding>
@@ -219,8 +219,7 @@ constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::filen
 
 	Char const* const beg = m_string_view.data();
 	Char const* const end = beg + m_string_view.size();
-	Char const* const leaf = find_leaf_name(beg, end);
-	return basic_path_view(string_view_type(leaf, end));
+	return basic_path_view(find_leaf_name(beg, end), end);
 }
 
 template<typename Char, typename Encoding>
@@ -231,8 +230,7 @@ constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::stem(
 	Char const* const beg = m_string_view.data();
 	Char const* const end = beg + m_string_view.size();
 	Char const* const leaf = find_leaf_name(beg, end);
-	Char const* const ext = find_extension(leaf, end);
-	return basic_path_view(string_view_type(leaf, ext));
+	return basic_path_view(leaf, find_extension(leaf, end));
 }
 
 template<typename Char, typename Encoding>
@@ -242,9 +240,7 @@ constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::exten
 
 	Char const* const beg = m_string_view.data();
 	Char const* const end = beg + m_string_view.size();
-	Char const* const leaf = find_leaf_name(beg, end);
-	Char const* const ext = find_extension(leaf, end);
-	return basic_path_view(string_view_type(ext, end));
+	return basic_path_view(find_extension(find_leaf_name(beg, end), end), end);
 }
 
 
@@ -265,7 +261,7 @@ constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::witho
 
 	Char const* const beg = m_string_view.data();
 	Char const* const end = beg + m_string_view.size();
-	return basic_path_view(string_view_type(beg, find_trailing_separator(beg, end)));
+	return basic_path_view(beg, find_trailing_separator(beg, end));
 }
 
 
@@ -277,44 +273,44 @@ constexpr bool basic_path_view<Char, Encoding>::equal(basic_path_view const lhs,
 	string_view_type const lhs_string = lhs.string();
 	string_view_type const rhs_string = rhs.string();
 
-	Char const* beg1 = lhs_string.data();
-	Char const* const end1 = beg1 + lhs_string.size();
+	Char const* l_beg = lhs_string.data();
+	Char const* const l_end = l_beg + lhs_string.size();
 
-	Char const* beg2 = rhs_string.data();
-	Char const* const end2 = beg2 + lhs_string.size();
+	Char const* r_beg = rhs_string.data();
+	Char const* const r_end = r_beg + lhs_string.size();
 
-	if (root_path_compare(beg1, end1, beg2, end2).first != 0)
+	if (root_path_compare(l_beg, l_end, r_beg, r_end).first != 0)
 	{
 		return false;
 	}
 
 	while (true)
 	{
-		Char const* const cbeg1 = beg1;
-		Char const* const cbeg2 = beg2;
+		Char const* const l_c_beg = l_beg;
+		Char const* const r_c_beg = r_beg;
 
-		beg1 = find_separator(beg1, end1);
-		beg2 = find_separator(beg2, end2);
+		l_beg = find_separator(l_beg, l_end);
+		r_beg = find_separator(r_beg, r_end);
 
 		// If the components are not equal, the paths are not equal.
-		if (!std::equal(cbeg1, beg1, cbeg2, beg2))
+		if (!std::equal(l_c_beg, l_beg, r_c_beg, r_beg))
 		{
 			return false;
 		}
 
 		// If one path ends and the other doesn't, they are not equal.
-		if (bool e1 = beg1 == end1, e2 = beg2 == end2; e1 || e2)
+		if (bool l_e = l_beg == l_end, r_e = r_beg == r_end; l_e || r_e)
 		{
-			return e1 == e2;
+			return l_e == r_e;
 		}
 
-		beg1 = skip_separators(beg1 + 1, end1);
-		beg2 = skip_separators(beg2 + 1, end2);
+		l_beg = skip_separators(l_beg + 1, l_end);
+		r_beg = skip_separators(r_beg + 1, r_end);
 
 		// If one path ends and the other doesn't, they are not equal.
-		if (bool e1 = beg1 == end1, e2 = beg2 == end2; e1 || e2)
+		if (bool l_e = l_beg == l_end, r_e = r_beg == r_end; l_e || r_e)
 		{
-			return e1 == e2;
+			return l_e == r_e;
 		}
 	}
 }
@@ -329,51 +325,53 @@ constexpr std::strong_ordering basic_path_view<Char, Encoding>::compare(
 	string_view_type const lhs_string = lhs.string();
 	string_view_type const rhs_string = rhs.string();
 
-	Char const* beg1 = lhs_string.data();
-	Char const* const end1 = beg1 + lhs_string.size();
+	Char const* l_beg = lhs_string.data();
+	Char const* const l_end = l_beg + lhs_string.size();
 
-	Char const* beg2 = rhs_string.data();
-	Char const* const end2 = beg2 + lhs_string.size();
+	Char const* r_beg = rhs_string.data();
+	Char const* const r_end = r_beg + lhs_string.size();
 
-	if (auto const ordering = root_path_compare(beg1, end1, beg2, end2).first)
+	if (auto const ordering = root_path_compare(l_beg, l_end, r_beg, r_end).first; ordering != 0)
 	{
 		return ordering;
 	}
 
 	while (true)
 	{
-		Char const* const cbeg1 = beg1;
-		Char const* const cbeg2 = beg2;
+		Char const* const l_c_beg = l_beg;
+		Char const* const r_c_beg = r_beg;
 
-		beg1 = find_separator(beg1, end1);
-		beg2 = find_separator(beg2, end2);
+		l_beg = find_separator(l_beg, l_end);
+		r_beg = find_separator(r_beg, r_end);
 
 		// Compare components.
-		if (auto const ordering = compare_chars(cbeg1, beg1, cbeg2, beg2))
+		if (auto const ordering = compare_chars(l_c_beg, l_beg, r_c_beg, r_beg); ordering != 0)
 		{
 			return ordering;
 		}
 
 		// If one path ends and the other doesn't, the comparison result depends on which path ends.
-		if (bool const e1 = beg1 == end1, e2 = beg2 == end2; e1 || e2)
+		if (bool const l_e = l_beg == l_end, r_e = r_beg == r_end; l_e || r_e)
 		{
-			return e2 <=> e1;
+			return r_e <=> l_e;
 		}
 
-		beg1 = skip_separators(beg1 + 1, end1);
-		beg2 = skip_separators(beg2 + 1, end2);
+		l_beg = skip_separators(l_beg + 1, l_end);
+		r_beg = skip_separators(r_beg + 1, r_end);
 
 		// If one path ends and the other doesn't, the comparison result depends on which path ends.
-		if (bool const e1 = beg1 == end1, e2 = beg2 == end2; e1 || e2)
+		if (bool const l_e = l_beg == l_end, r_e = r_beg == r_end; l_e || r_e)
 		{
-			return e2 <=> e1;
+			return r_e <=> l_e;
 		}
 	}
 }
 
 
 template<typename Char, typename Encoding>
-constexpr void basic_path_view<Char, Encoding>::iterator::init_begin(Char const* beg, Char const* end)
+constexpr void basic_path_view<Char, Encoding>::iterator::init_begin(
+	Char const* const beg,
+	Char const* const end)
 {
 	using namespace detail::path_impl;
 
