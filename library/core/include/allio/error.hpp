@@ -58,7 +58,7 @@ struct error_category final : error_category_base
 };
 
 allio_detail_api
-extern const error_category error_category_instance;
+extern error_category const error_category_instance;
 
 } // namespace detail
 

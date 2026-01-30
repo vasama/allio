@@ -15,20 +15,14 @@ namespace allio {
 namespace detail {
 
 template<typename String>
-concept _any_mutable_string =
+concept any_mutable_string =
 	mutable_contiguous_range<String> &&
 	character<typename std::remove_cvref_t<String>::value_type>;
 
-template<typename String>
-concept any_mutable_string = _any_mutable_string<mutable_range_from_t<String>>;
-
 template<typename String, typename Char>
-concept _mutable_string_of =
-	_any_mutable_string<String> &&
+concept mutable_string_of =
+	any_mutable_string<String> &&
 	std::is_same_v<typename std::remove_cvref_t<String>::value_type, Char>;
-
-template<typename String, typename Char>
-concept mutable_string_of = _mutable_string_of<mutable_range_from_t<String>, Char>;
 
 
 struct string_buffer_base
@@ -189,9 +183,7 @@ public:
 		detail::mutable_string_of<Char> String,
 		detail::explicit_encoding_for<Char, String> Encoding = detail::default_encoding_t>
 	string_buffer(String& string, Encoding const encoding = Encoding())
-		: string_buffer_base(
-			detail::get_mutable_range(string),
-			detail::get_encoding<Char, String>(encoding))
+		: string_buffer_base(string, detail::get_encoding<Char, String>(encoding))
 	{
 	}
 
@@ -199,9 +191,7 @@ public:
 		detail::mutable_string_of<Char> String,
 		detail::explicit_encoding_for<Char, String> Encoding = detail::default_encoding_t>
 	string_buffer(String const& string, Encoding const encoding = Encoding())
-		: string_buffer_base(
-			detail::get_mutable_range(string),
-			detail::get_encoding<Char, String>(encoding))
+		: string_buffer_base(string, detail::get_encoding<Char, String>(encoding))
 	{
 	}
 
@@ -254,9 +244,7 @@ public:
 		detail::any_mutable_string String,
 		detail::explicit_container_encoding_for<String> Encoding = detail::default_encoding_t>
 	any_string_buffer(String& string, Encoding const encoding = Encoding())
-		: string_buffer_base(
-			detail::get_mutable_range(string),
-			detail::get_container_encoding<String>(encoding))
+		: string_buffer_base(string, detail::get_container_encoding<String>(encoding))
 	{
 	}
 
@@ -266,9 +254,7 @@ public:
 		detail::explicit_container_encoding_for<String> Encoding = detail::default_encoding_t>
 		requires detail::any_mutable_string<String const>
 	any_string_buffer(String const& string, Encoding const encoding = Encoding())
-		: string_buffer_base(
-			detail::get_mutable_range(string),
-			detail::get_container_encoding<String>(encoding))
+		: string_buffer_base(string, detail::get_container_encoding<String>(encoding))
 	{
 	}
 

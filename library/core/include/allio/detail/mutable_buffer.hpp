@@ -177,32 +177,6 @@ concept mutable_contiguous_container =
 	};
 
 
-//TODO: Get rid of this. Should not be needed anymore.
-struct get_mutable_range_t
-{
-	template<mutable_contiguous_range Range>
-	[[nodiscard]] vsm_static_operator Range&& operator()(Range&& range) vsm_static_operator_const
-	{
-		return vsm_forward(range);
-	}
-
-	template<typename T>
-		requires vsm::tag_invocable<get_mutable_range_t, T&>
-	[[nodiscard]] vsm_static_operator mutable_contiguous_range auto& operator()(
-		T& object) vsm_static_operator_const
-	{
-		return vsm::tag_invoke(get_mutable_range_t(), object);
-	}
-};
-inline constexpr get_mutable_range_t get_mutable_range = {};
-
-template<typename T>
-using mutable_range_from_t = decltype(detail::get_mutable_range(std::declval<T&>()));
-
-template<typename T>
-concept indirectly_mutable_contiguous_range = requires { typename mutable_range_from_t<T>; };
-
-
 struct resize_container_t
 {
 	template<mutable_contiguous_container Container>

@@ -7,7 +7,7 @@ namespace allio {
 namespace detail {
 
 template<typename Path>
-concept any_mutable_path = _any_mutable_string<path_string_t<Path>>;
+concept any_mutable_path = any_mutable_string<path_string_t<Path>>;
 
 } // namespace detail
 
