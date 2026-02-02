@@ -85,6 +85,13 @@ struct fs_path
 
 	fs_path() = default;
 
+	template<detail::handle_for<detail::fs_object_t> Handle>
+	fs_path(Handle const& base)
+		: base(&base.native())
+		, path{}
+	{
+	}
+
 	template<std::convertible_to<any_path_view> Path>
 	fs_path(Path const& path)
 		: base(nullptr)

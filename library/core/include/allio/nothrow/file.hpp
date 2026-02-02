@@ -18,18 +18,30 @@ using file_handle = traits_type::handle<file_t>;
 	return detail::open_temp_file<traits_type>(vsm_forward(args)...);
 }
 
+[[nodiscard]] vsm::result<file_handle> open_unique_file(detail::fs_path const& path, auto&&... args)
+{
+	return detail::open_unique_file<traits_type>(path, vsm_forward(args)...);
+}
+
 [[nodiscard]] vsm::result<file_handle> open_unique_file(
 	detail::handle_for<fs_object_t> auto const& base,
 	auto&&... args)
 {
-	return detail::open_unique_file<traits_type>(base, vsm_forward(args)...);
+	return detail::open_unique_file<traits_type>(detail::fs_path(base), vsm_forward(args)...);
+}
+
+[[nodiscard]] vsm::result<file_handle> open_anonymous_file(
+	detail::fs_path const& path,
+	auto&&... args)
+{
+	return detail::open_anonymous_file<traits_type>(path, vsm_forward(args)...);
 }
 
 [[nodiscard]] vsm::result<file_handle> open_anonymous_file(
 	detail::handle_for<fs_object_t> auto const& base,
 	auto&&... args)
 {
-	return detail::open_anonymous_file<traits_type>(base, vsm_forward(args)...);
+	return detail::open_anonymous_file<traits_type>(detail::fs_path(base), vsm_forward(args)...);
 }
 
 [[nodiscard]] vsm::result<file_handle> open_null_device(auto&&... args)

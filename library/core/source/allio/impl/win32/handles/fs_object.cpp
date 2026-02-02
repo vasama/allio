@@ -228,6 +228,63 @@ vsm::result<void> win32::_link_file_at(
 	HANDLE const base_handle,
 	std::wstring_view const path)
 {
+#if 0
+	// TODO: Just debugging
+	{
+		HANDLE delete_handle = handle;
+
+#if 0
+		open_info const dup_info =
+		{
+			.desired_access = SYNCHRONIZE | DELETE,
+			.share_access = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+			.create_options = FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+		};
+
+		vsm_try(duplicate, win32::reopen_file(handle, dup_info));
+
+		delete_handle = duplicate.handle.get();
+#endif
+
+		FILE_DISPOSITION_INFORMATION_EX information2 =
+		{
+			.Flags = FILE_DISPOSITION_DELETE /*| FILE_DISPOSITION_POSIX_SEMANTICS*/,
+		};
+
+		IO_STATUS_BLOCK io_status_block2;
+		[[maybe_unused]] NTSTATUS const status2 = NtSetInformationFile(
+			delete_handle,
+			&io_status_block2,
+			&information2,
+			sizeof(information2),
+			FileDispositionInformationEx);
+
+		[[maybe_unused]] int x = 0;
+	}
+
+	// TODO: Just debugging
+	{
+#if 1
+		HANDLE delete_handle = handle;
+
+		FILE_DISPOSITION_INFORMATION_EX information2 =
+		{
+			.Flags = FILE_DISPOSITION_ON_CLOSE,
+		};
+
+		IO_STATUS_BLOCK io_status_block2;
+		[[maybe_unused]] NTSTATUS const status2 = NtSetInformationFile(
+			delete_handle,
+			&io_status_block2,
+			&information2,
+			sizeof(information2),
+			FileDispositionInformationEx);
+#endif
+
+		[[maybe_unused]] int x = 0;
+	}
+#endif
+
 	size_t const information_size = file_link_information_size(path.size());
 
 	dynamic_storage_provider<file_link_information_size(MAX_PATH)> storage_provider;
@@ -487,9 +544,17 @@ static vsm::result<handle_with_flags> open_named_file(open_parameters const& a)
 
 static vsm::result<handle_with_flags> open_anonymous_file(open_parameters const& a)
 {
+	vsm_assert(vsm::any_flags(a.special, open_options::anonymous));
+	vsm_assert(a.path.path.empty());
+	vsm_assert(a.opening == file_opening(0));
+
 	//TODO: Reject arguments that doesn't allow the required sharing?
 
-	vsm_try(file, open_unique_file(a));
+	open_parameters local_a = a;
+	local_a.special &= ~open_options::anonymous;
+	local_a.special |= open_options::unique_name;
+
+	vsm_try(file, open_unique_file(local_a));
 
 	// Delete the file by reopening it and setting delete-on-close on the new handle.
 	{
@@ -502,25 +567,41 @@ static vsm::result<handle_with_flags> open_anonymous_file(open_parameters const&
 
 		vsm_try(duplicate, win32::reopen_file(file.handle.get(), info));
 
-		FILE_DISPOSITION_INFORMATION_EX information =
+		for (bool const use_posix_semantics : {true, false})
 		{
-			.Flags = FILE_DISPOSITION_DELETE | FILE_DISPOSITION_POSIX_SEMANTICS,
-		};
+			FILE_DISPOSITION_INFORMATION_EX information =
+			{
+				.Flags = FILE_DISPOSITION_DELETE,
+			};
 
-		IO_STATUS_BLOCK io_status_block;
-		NTSTATUS const status = NtSetInformationFile(
-			duplicate.handle.get(),
-			&io_status_block,
-			&information,
-			sizeof(information),
-			FileDispositionInformationEx);
+			if (use_posix_semantics)
+			{
+				information.Flags |= FILE_DISPOSITION_POSIX_SEMANTICS;
+			}
 
-		if (!NT_SUCCESS(status))
-		{
-			//TODO: Fall back to non-posix semantics or at least
-			//      attempt to delete the unique file now.
+			IO_STATUS_BLOCK io_status_block;
+			NTSTATUS const status = NtSetInformationFile(
+				duplicate.handle.get(),
+				&io_status_block,
+				&information,
+				sizeof(information),
+				FileDispositionInformationEx);
 
-			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
+			if (!NT_SUCCESS(status))
+			{
+				if (use_posix_semantics && status == STATUS_INVALID_PARAMETER)
+				{
+					continue;
+				}
+
+				return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
+			}
+
+			// TODO: Hide file if not using POSIX semantics?
+			//       What about when the file is eventually linked somewhere?
+			//       Is it still hidden? Test all this.
+
+			break;
 		}
 	}
 

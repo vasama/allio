@@ -68,6 +68,7 @@ inline constexpr ULONG SL_RESTART_SCAN                          = 0x00000001u;
 inline constexpr ULONG FILE_DISPOSITION_DO_NOT_DELETE           = 0x00000000u;
 inline constexpr ULONG FILE_DISPOSITION_DELETE                  = 0x00000001u;
 inline constexpr ULONG FILE_DISPOSITION_POSIX_SEMANTICS         = 0x00000002u;
+inline constexpr ULONG FILE_DISPOSITION_ON_CLOSE                = 0x00000008u;
 
 
 typedef void(NTAPI* PIO_APC_ROUTINE)(

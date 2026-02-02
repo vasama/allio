@@ -1,5 +1,6 @@
 #include <allio/impl/handles/fs_object.hpp>
 
+#include <allio/detail/handles/directory.hpp>
 #include <allio/impl/hexadecimal.hpp>
 #include <allio/impl/random.hpp>
 #include <allio/step_deadline.hpp>
@@ -40,22 +41,16 @@ public:
 
 } // namespace
 
-vsm::result<handle_with_flags> detail::open_unique_file(open_parameters const& a_ref)
+vsm::result<handle_with_flags> detail::open_unique_file(open_parameters const& a)
 {
-	open_parameters a = a_ref;
+	// Checked before calling this function.
+	vsm_assert(vsm::any_flags(a.special, open_options::unique_name));
+	vsm_assert(a.path.path.empty());
+	vsm_assert(a.opening == file_opening(0));
 
-	//TODO: Should a non-empty path specify the directory in this case?
-	if (!a.path.path.empty())
-	{
-		return vsm::unexpected(allio_error(error::invalid_argument));
-	}
-
-	if (a.opening != file_opening(0))
-	{
-		return vsm::unexpected(allio_error(error::invalid_argument));
-	}
-
-	a.opening = file_opening::create_only;
+	open_parameters local_a = a;
+	local_a.special &= ~open_options::unique_name;
+	local_a.opening = file_opening::create_only;
 
 	//TODO: Deadline
 	deadline const relative_deadline = deadline::never();
@@ -66,9 +61,9 @@ vsm::result<handle_with_flags> detail::open_unique_file(open_parameters const& a
 	while (true)
 	{
 		vsm_try_discard(absolute_deadline.step());
-		vsm_try_assign(a.path.path, name.generate());
+		vsm_try_assign(local_a.path.path, name.generate());
 
-		if (auto r = detail::open_file(a))
+		if (auto r = detail::open_file(local_a))
 		{
 			return r;
 		}
@@ -77,20 +72,48 @@ vsm::result<handle_with_flags> detail::open_unique_file(open_parameters const& a
 
 static vsm::result<handle_with_flags> _open(open_parameters& a)
 {
+	basic_detached_handle<directory_t> directory;
+
+	if (vsm::any_flags(a.special, open_options::unique_name | open_options::anonymous))
+	{
+		if (!a.path.path.empty())
+		{
+			open_parameters const directory_args =
+			{
+				.path = a.path,
+			};
+
+			vsm_try_void(blocking_io<fs_io::open_t>(directory, directory_args));
+
+			a.path.base = &directory.native();
+			a.path.path = {};
+		}
+	}
+
 	if (vsm::any_flags(a.special, open_options::unique_name))
 	{
 		return open_unique_file(a);
 	}
 
-	if (a.opening == file_opening(0))
+	if (vsm::any_flags(a.special, open_options::anonymous))
 	{
-		if (vsm::any_flags(a.mode.value_or_zero(), file_mode::write_data))
+		if (a.opening != file_opening(0))
 		{
-			a.opening = file_opening::open_or_create;
+			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
-		else
+	}
+	else
+	{
+		if (a.opening == file_opening(0))
 		{
-			a.opening = file_opening::open_existing;
+			if (vsm::any_flags(a.mode.value_or_zero(), file_mode::write_data))
+			{
+				a.opening = file_opening::open_or_create;
+			}
+			else
+			{
+				a.opening = file_opening::open_existing;
+			}
 		}
 	}
 

@@ -1,3 +1,4 @@
+#include <allio/blocking/directory.hpp>
 #include <allio/blocking/file.hpp>
 
 #include <allio/test/filesystem.hpp>
@@ -39,6 +40,46 @@ TEST_CASE("Files can be written", "[file][blocking]")
 	}
 	test::check_file_content(path, "allio");
 }
+
+#if 0
+TEST_CASE("File can be linked into the filesystem", "[file][blocking]")
+{
+	using namespace blocking;
+
+	//auto const path = test::get_temp_path();
+	auto const path_1 = allio::path_view("C:\\Users\\vasama\\Downloads\\test\\file_1");
+	auto const path_2 = allio::path_view("C:\\Users\\vasama\\Downloads\\test\\file_2");
+
+	auto const file = open_file(path_1, file_opening::create_only);
+	detail::link_at(file, path_2).value();
+}
+
+TEST_CASE("File can be created with unique name", "[file][blocking]")
+{
+	using namespace blocking;
+
+	//auto const path = test::get_temp_path();
+	auto const path = allio::path_view("C:\\Users\\vasama\\Downloads\\test");
+	auto const file = open_unique_file(path);
+}
+
+TEST_CASE("Anonymous file can be created", "[file][blocking]")
+{
+	using namespace blocking;
+
+	//auto const path = test::get_temp_path();
+	auto const path = allio::path_view("C:\\Users\\vasama\\Downloads\\test");
+	auto const new_path = allio::path_view("C:\\Users\\vasama\\Downloads\\test\\file");
+
+	{
+		auto const file = open_anonymous_file(path);
+		file.write(0, as_write_buffer(std::string_view("hello")));
+		detail::link_at(file, new_path).value();
+	}
+
+	[[maybe_unused]] int x = 0;
+}
+#endif
 
 #if 0
 #include <allio/senders/sync_wait.hpp>

@@ -194,6 +194,32 @@ struct file_t : fs_object_t
 			(set_argument(a, vsm_forward(args)), ...);
 			return Traits::template observe<random_write_t>(static_cast<Handle const&>(*this), a);
 		}
+
+		auto read(
+			fs_size const offset,
+			new_read_buffers const buffers,
+			auto&&... args) const
+		{
+			auto a = io_parameters_t<typename Handle::object_type, random_read_t>{};
+			a.flags |= io_flags::greedy_byte_io;
+			a.buffers = buffers;
+			a.offset = offset;
+			(set_argument(a, vsm_forward(args)), ...);
+			return Traits::template observe<random_read_t>(static_cast<Handle const&>(*this), a);
+		}
+
+		auto write(
+			fs_size const offset,
+			new_write_buffers const buffers,
+			auto&&... args) const
+		{
+			auto a = io_parameters_t<typename Handle::object_type, random_write_t>{};
+			a.flags |= io_flags::greedy_byte_io;
+			a.buffers = buffers;
+			a.offset = offset;
+			(set_argument(a, vsm_forward(args)), ...);
+			return Traits::template observe<random_write_t>(static_cast<Handle const&>(*this), a);
+		}
 	};
 };
 
@@ -219,25 +245,21 @@ template<typename Traits>
 }
 
 template<typename Traits>
-[[nodiscard]] auto open_unique_file(
-	handle_for<fs_object_t> auto const& base,
-	auto&&... args)
+[[nodiscard]] auto open_unique_file(fs_path const& path, auto&&... args)
 {
 	auto a = io_parameters_t<file_t, fs_io::open_t>{};
 	a.special = open_options::unique_name;
-	a.path.base = &base.native();
+	a.path = path;
 	(set_argument(a, vsm_forward(args)), ...);
 	return Traits::template produce<file_t, fs_io::open_t>(a);
 }
 
 template<typename Traits>
-[[nodiscard]] auto open_anonymous_file(
-	handle_for<fs_object_t> auto const& base,
-	auto&&... args)
+[[nodiscard]] auto open_anonymous_file(fs_path const& path, auto&&... args)
 {
 	auto a = io_parameters_t<file_t, fs_io::open_t>{};
 	a.special = open_options::anonymous;
-	a.path.base = &base.native();
+	a.path = path;
 	(set_argument(a, vsm_forward(args)), ...);
 	return Traits::template produce<file_t, fs_io::open_t>(a);
 }

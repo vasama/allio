@@ -30,7 +30,7 @@ static constexpr size_t make_hexadecimal(std::span<std::byte const> const bytes,
 		for (size_t i = 0; i < chars_per_byte; ++i)
 		{
 			auto const v = value & 0x0f;
-			*out++ = static_cast<Char>((v < 10 ? '0' : 'a') + v);
+			*out++ = static_cast<Char>((v < 10 ? '0' : ('a' - 10)) + v);
 			value >>= bits_per_char;
 		}
 	}
