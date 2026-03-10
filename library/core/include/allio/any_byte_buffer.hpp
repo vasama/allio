@@ -88,3 +88,9 @@ private:
 };
 
 } // namespace allio::detail
+
+namespace allio {
+
+using detail::any_byte_buffer;
+
+} // namespace allio

@@ -70,6 +70,7 @@ vsm_add_library(
 		source/allio/impl/byte_io_buffers.cpp
 		source/allio/impl/error_default.cpp
 		source/allio/impl/error.cpp
+		source/allio/impl/exceptions.cpp
 		source/allio/impl/fd_tree.hpp
 		source/allio/impl/network.cpp
 		source/allio/impl/new.cpp
@@ -95,6 +96,12 @@ vsm_add_library(
 		source/allio/impl/handles/section.cpp
 		source/allio/impl/handles/standard_stream.cpp
 		#source/allio/impl/handles/thread.cpp
+
+		# Windows
+		source/allio/impl/win32/path_traits.cpp
+
+		# POSIX
+		source/allio/impl/posix/path_traits.cpp
 
 	SOURCE_DEFINITIONS
 		"allio_config_std_stacktrace=${has_std_stacktrace}"
@@ -156,6 +163,7 @@ vsm_configure(
 		source/allio/impl/win32/error.hpp
 		source/allio/impl/win32/event.cpp
 		source/allio/impl/win32/event.hpp
+		source/allio/impl/win32/filesystem.cpp
 		source/allio/impl/win32/kernel_error.cpp
 		source/allio/impl/win32/kernel_path_impl.hpp
 		source/allio/impl/win32/kernel_path.cpp

@@ -3,6 +3,8 @@
 #include <allio/any_string.hpp>
 #include <allio/path_view.hpp>
 
+#include <vsm/lift.hpp>
+
 namespace allio {
 namespace detail {
 

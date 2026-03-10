@@ -11,7 +11,7 @@ vsm::result<void> directory_t::open(
 	native_handle<directory_t>& h,
 	io_parameters_t<directory_t, open_t> const& a)
 {
-	return open_fs_object(h, a, open_kind::directory);
+	return open_fs_object(h, open_kind::directory, a);
 }
 
 vsm::result<void> directory_t::serialize(

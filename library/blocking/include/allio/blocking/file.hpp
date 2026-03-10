@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/blocking/traits.hpp>
+#include <allio/blocking/fs_object.hpp>
 #include <allio/handles/file.hpp>
 
 namespace allio::blocking {

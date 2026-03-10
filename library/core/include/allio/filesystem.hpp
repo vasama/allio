@@ -22,6 +22,7 @@ using detail::fs_entry_type;
 using detail::fs_entry_info;
 using detail::fs_path;
 using detail::get_fs_entry_info;
+using detail::is_null_device_path;
 
 template<detail::handle_for<detail::fs_object_t> Handle>
 [[nodiscard]] fs_path at(Handle const& location)

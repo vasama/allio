@@ -150,14 +150,11 @@ vsm::result<size_t> _read_to_end_s(Handle const& h, any_byte_buffer const buffer
 	step_deadline deadline = detail::make_args<deadline_t>(vsm_forward(args)...).deadline;
 
 	size_t transferred = 0;
-	size_t grow_buffer = 1;
+	vsm_try(storage, buffer.resize(1, static_cast<size_t>(-1)));
 
 	while (true)
 	{
 		vsm_try(local_deadline, deadline.step());
-
-		size_t const min_buffer_size = transferred + grow_buffer;
-		vsm_try(storage, buffer.resize(min_buffer_size, static_cast<size_t>(-1)));
 
 		auto a = io_parameters_t<typename Handle::object_type, byte_io::stream_read_t>{};
 		a.buffers = storage.subspan(transferred);
@@ -175,10 +172,22 @@ vsm::result<size_t> _read_to_end_s(Handle const& h, any_byte_buffer const buffer
 		}
 
 		transferred += *r;
-		grow_buffer = std::min(transferred / 2, static_cast<size_t>(-1) - transferred);
+
+		if (transferred == storage.size())
+		{
+			size_t const add_size = std::max(transferred / 2, static_cast<size_t>(1));
+			size_t const min_size = transferred <= std::numeric_limits<size_t>::max() - add_size
+				? transferred + add_size
+				: static_cast<size_t>(-1);
+
+			vsm_try_assign(storage, buffer.resize(min_size, static_cast<size_t>(-1)));
+		}
 	}
 
-	vsm_try_discard(buffer.resize(transferred));
+	if (transferred != storage.size())
+	{
+		vsm_try_discard(buffer.resize(transferred));
+	}
 
 	return transferred;
 }

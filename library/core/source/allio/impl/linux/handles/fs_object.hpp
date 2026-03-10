@@ -10,13 +10,7 @@
 
 namespace allio::linux {
 
-struct open_info
-{
-	int flags;
-	mode_t mode;
-
-	static vsm::result<open_info> make(detail::open_parameters const& args);
-};
+using detail::platform_open_options;
 
 vsm::result<detail::unique_handle> open_file(
 	int dir_fd,

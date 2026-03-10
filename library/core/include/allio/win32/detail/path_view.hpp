@@ -1,5 +1,8 @@
 #pragma once
 
+#include <allio/any_path_buffer.hpp>
+#include <allio/detail/path.hpp>
+
 #include <vsm/assert.h>
 
 #include <algorithm>
@@ -7,6 +10,9 @@
 
 namespace allio {
 namespace detail::path_impl {
+
+template<typename Char>
+using ptr_pair = std::pair<Char*>;
 
 template<typename Char>
 constexpr Char const* find_last(Char const* const beg, Char const* const end, Char const value)
@@ -41,12 +47,37 @@ constexpr Char const* find_separator(Char const* const beg, Char const* const en
 }
 
 template<typename Char>
+constexpr Char const* find_last_separator(Char const* const beg, Char const* const end)
+{
+	Char const* pos = end;
+	while (pos != beg)
+	{
+		if (is_separator(*--pos))
+		{
+			return pos;
+		}
+	}
+	return end;
+}
+
+template<typename Char>
 constexpr Char const* skip_separators(Char const* const beg, Char const* const end)
 {
 	return std::find_if_not(beg, end, [](Char const character)
 	{
 		return is_separator(character);
 	});
+}
+
+template<typename Char>
+constexpr Char const* skip_last_separators(Char const* const beg, Char const* const end)
+{
+	Char const* pos = end;
+	while (pos != beg && is_separator(pos[-1]))
+	{
+		--pos;
+	}
+	return end;
 }
 
 template<typename Char>
@@ -257,6 +288,7 @@ constexpr std::pair<std::strong_ordering, bool> root_path_compare(
 	return { std::strong_ordering::equal, l_absolute };
 }
 
+#if 0
 template<typename Char>
 constexpr std::pair<Char const*, Char const*> take_component(
 	Char const*& beg_ref,
@@ -273,7 +305,205 @@ constexpr std::pair<Char const*, Char const*> take_component(
 
 	return { beg, sep };
 }
+#endif
 
+template<typename Char>
+class normalizing_reverse_iterator
+{
+	Char const* m_beg;
+	Char const* m_pos;
+	Char const* m_end;
+
+	size_t m_backtrack_count = 0;
+
+public:
+	explicit normalizing_reverse_iterator(Char const* const beg, Char const* const end)
+		: m_beg(beg)
+		, m_pos(end)
+		, m_end(end)
+	{
+		vsm_assert(beg == end || !is_separator(end[-1]));
+
+		if (beg != end)
+		{
+			find_next_component();
+		}
+	}
+
+	[[nodiscard]] ptr_pair<Char const> operator*() const
+	{
+		vsm_assert(m_pos != m_end);
+		return { m_pos, m_end };
+	}
+
+	[[nodiscard]] normalizing_reverse_iterator& operator++() &
+	{
+		vsm_assert(m_pos != m_end);
+		find_next_component();
+		return *this;
+	}
+
+	[[nodiscard]] explicit operator bool() const
+	{
+		return m_pos != m_end;
+	}
+
+	[[nodiscard]] size_t backtrack_count() const
+	{
+		return m_backtrack_count;
+	}
+
+private:
+	void find_next_component()
+	{
+		while (true)
+		{
+			m_end = skip_last_separators(m_beg, m_pos);
+			m_pos = m_end;
+
+			if (m_beg == m_end)
+			{
+				break;
+			}
+
+			Char const* const sep = find_last_separator(m_beg, m_end);
+			m_pos = sep == m_end ? m_beg : sep + 1;
+
+			if (m_pos[0] == '.')
+			{
+				if (m_end - m_pos == 1)
+				{
+					continue;
+				}
+
+				if (m_end - m_pos == 2 && m_pos[1] == '.')
+				{
+					++m_backtrack_count;
+					continue;
+				}
+			}
+
+			if (m_backtrack_count != 0)
+			{
+				--m_backtrack_count;
+			}
+			else
+			{
+				break;
+			}
+		}
+	}
+};
+
+template<typename Char>
+class reversed_path_builder
+{
+	string_buffer<Char> m_buffer;
+
+	Char* m_beg = nullptr;
+	Char* m_pos = nullptr;
+	Char* m_end = nullptr;
+
+	bool m_requires_separator;
+	size_t m_max_path_size;
+
+public:
+	explicit reversed_path_builder(
+		string_buffer<Char> const buffer,
+		bool const trailing_separator,
+		size_t const max_path_size = static_cast<size_t>(-1))
+		: m_buffer(buffer)
+		, m_requires_separator(trailing_separator)
+		, m_max_path_size(max_path_size)
+	{
+	}
+
+	[[nodiscard]] vsm::result<ptr_pair<Char>> push_component(
+		Char const* const beg,
+		Char const* const end)
+	{
+		vsm_try(out, push_uninitialized(static_cast<size_t>(end - beg) + m_requires_separator));
+
+		if (m_requires_separator)
+		{
+			*out++ = '\\';
+		}
+		m_requires_separator = true;
+
+		Char* const out_beg = out;
+		Char* const out_end = std::reverse_copy(beg, end, out);
+
+		return ptr_pair<Char>(out_beg, out_end);
+	}
+
+	[[nodiscard]] vsm::result<void> push_empty_component()
+	{
+		return vsm::discard_value(push_component(nullptr, nullptr));
+	}
+
+	[[nodiscard]] vsm::result<void> push_backtracking(size_t const backtrack_count)
+	{
+		if (backtrack_count != 0)
+		{
+			size_t const backtrack_1 = backtrack_count - !m_requires_separator;
+			size_t const backtrack_n = backtrack_count - backtrack_1;
+			vsm_try(out, push_uninitialized(backtrack_n * 3 + backtrack_1 * 2));
+
+			if (backtrack_1 != 0)
+			{
+				*out++ = '.';
+				*out++ = '.';
+			}
+
+			for (size_t i = 0; i < backtrack_n; ++i)
+			{
+				*out++ = '\\';
+				*out++ = '.';
+				*out++ = '.';
+			}
+
+			m_requires_separator = true;
+		}
+
+		return {};
+	}
+
+	[[nodiscard]] vsm::result<ptr_pair<Char>> finalize()
+	{
+		if (m_pos != m_end)
+		{
+			size_t const size = static_cast<size_t>(m_pos - m_beg);
+			vsm_try_void(resize_buffer(size, size));
+		}
+
+		return std::pair<Char*, Char*>(m_beg, m_pos);
+	}
+
+private:
+	[[nodiscard]] vsm::result<Char*> push_uninitialized(size_t const size)
+	{
+		size_t const cur_size = static_cast<size_t>(m_pos - m_beg);
+		size_t const min_size = cur_size + size;
+		vsm_assert(min_size <= m_max_path_size);
+
+		vsm_try_void(resize_buffer(min_size, m_max_path_size));
+
+		Char* const pos = m_pos;
+		m_pos = pos + size;
+		return pos;
+	}
+
+	[[nodiscard]] vsm::result<void> resize_buffer(size_t const min_size, size_t const max_size)
+	{
+		vsm_try(new_buffer, m_buffer.resize(min_size, max_size));
+
+		m_beg = new_buffer.data();
+		m_pos = new_buffer.data() + static_cast<size_t>(m_pos - m_beg)
+		m_end = new_buffer.data() + new_buffer.size();
+
+		return {};
+	}
+};
 
 #if 0
 template<typename Char>
@@ -339,38 +569,6 @@ constexpr int32_t count_lexically_normal_segments(Char const* const beg, Char co
 	return segment_count;
 }
 #endif
-
-template<typename Char>
-class normalizer
-{
-	struct cache_element
-	{
-		Char const* beg;
-		Char const* end;
-	};
-
-	Char const* m_beg;
-	Char const* m_pos;
-	Char const* m_end;
-
-	cache_element m_cache[8];
-	uint8_t m_cache_head = 0;
-	uint8_t m_cache_tail = 0;
-	int32_t m_segment_count = 0;
-
-public:
-	explicit normalizer(Char const* const beg, Char const* const* end)
-		: m_beg(beg)
-		, m_pos(beg)
-		, m_end(end)
-	{
-	}
-
-	normalizer(normalizer const&) = delete;
-	normalizer& operator=(normalizer const&) = delete;
-
-
-};
 
 } // namespace detail::path_impl
 
@@ -513,13 +711,60 @@ constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::witho
 }
 
 
-#if 0
 template<typename Char, typename Encoding>
-constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::render_lexically_normal(Char* const buffer)
+constexpr vsm::result<basic_path_view<Char, Encoding>> basic_path_view<Char, Encoding>::render_lexically_normal(
+	path_buffer<Char> const buffer)
 {
+	using namespace detail::path_impl;
 
+	Char const* const beg = m_string_view.data();
+	Char const* const end = beg + m_string_view.size();
+
+	Char const* const root_name_end = find_root_name_end(beg, end);
+	Char const* const relative_beg = skip_separators(root_name_end, end);
+	Char const* const relative_end = skip_last_separators(relative_beg, end);
+
+	reversed_path_builder<Char> builder(
+		buffer,
+		/* trailing_separator: */ relative_end != end,
+		/* max_path_size: */ static_cast<size_t>(end - beg));
+
+	normalizing_reverse_iterator<Char> iterator(relative_beg, relative_end);
+	for (; iterator; ++iterator)
+	{
+		auto const [c_beg, c_end] = *iterator;
+		vsm_try_void(builder.push_component(c_beg, c_end));
+	}
+
+	// Backtracking is only preserved in relative paths, including drive-relative paths.
+	if (root_name_end == relative_beg)
+	{
+		vsm_try_void(builder.push_backtracking(iterator.backtrack_count()));
+	}
+
+	// Finally the root name, if present, must be copied over. Otherwise the root separator, if
+	// present, is reintroduced by pushing an empty component.
+	/**/ if (beg != root_name_end)
+	{
+		vsm_try_bind((out_root_beg, out_root_end), push_component(beg, root_name_end));
+
+		if (is_separator(*beg))
+		{
+			// The root name contains separators which must be normalized. Any such root name is no
+			// less than two characters long, and only the first two characters can be separators.
+			std::replace(out_root_end - 2, out_root_end, '/', '\\');
+		}
+	}
+	else if (root_name_end != relative_beg)
+	{
+		vsm_try_void(builder.push_empty_component());
+	}
+
+	vsm_try_bind((out_beg, out_end), builder.finalize());
+	return basic_path_view<Char, Encoding>(out_beg, out_pos);
 }
 
+#if 0
 template<typename Char, typename Encoding>
 constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::render_lexically_relative(basic_path_view const base, Char* const buffer)
 {
@@ -531,9 +776,11 @@ constexpr basic_path_view<Char, Encoding> basic_path_view<Char, Encoding>::rende
 }
 #endif
 
-#if 0
+#if 1
 template<typename Char, typename Encoding>
-constexpr bool lexically_equivalent(basic_path_view<Char, Encoding> const lhs, basic_path_view<Char, Encoding> const rhs)
+constexpr bool basic_path_view<Char, Encoding>::lexically_equivalent(
+	basic_path_view<Char, Encoding> const lhs,
+	basic_path_view<Char, Encoding> const rhs)
 {
 	using namespace detail::path_impl;
 
@@ -544,17 +791,21 @@ constexpr bool lexically_equivalent(basic_path_view<Char, Encoding> const lhs, b
 	string_view_type const rhs_string = rhs.string();
 
 	Char const* l_beg = lhs_string.data();
-	Char const* const l_end = l_beg + lhs_string.size();
+	Char const* l_end = l_beg + lhs_string.size();
 
 	Char const* r_beg = rhs_string.data();
-	Char const* const r_end = r_beg + rhs_string.size();
+	Char const* r_end = r_beg + rhs_string.size();
 
 	Char const* const l_root_name_end = find_root_name_end(l_beg, l_end);
 	Char const* const r_root_name_end = find_root_name_end(r_beg, r_end);
 
+	auto const are_equivalent = [](Char const lhs, Char const rhs) -> bool
+	{
+		return a == b || (is_separator(a) && is_separator(b));
+	};
+
 	// If the root names are not equivalent, the paths are not equivalent.
-	if (!std::equal(l_beg, l_root_name_end, r_beg, r_root_name_end,
-		[](Char const a, Char const b) { return a == b || (is_separator(a) && is_separator(b)); }))
+	if (!std::equal(l_beg, l_root_name_end, r_beg, r_root_name_end, are_equivalent))
 	{
 		return false;
 	}
@@ -566,23 +817,27 @@ constexpr bool lexically_equivalent(basic_path_view<Char, Encoding> const lhs, b
 	bool const absolute = l_root_name_end != l_beg;
 
 	// Equivalent paths are either both absolute or both relative.
-	if ((r_root_name_end != r_beg) != absolute)
+	if (absolute != (r_root_name_end != r_beg))
 	{
 		return false;
 	}
 
-	size_t lhs_parent_count = 0;
-	size_t rhs_parent_count = 0;
+	normalizing_reverse_iterator<Char> l_it(l_beg, l_end);
+	normalizing_reverse_iterator<Char> r_it(l_beg, l_end);
 
-	size_t lhs_component_count = 0;
-	size_t rhs_component_count = 0;
-
-	size_t common_count = 0;
-
-	while (true)
+	for (; l_it && r_it; ++l_it, ++r_it)
 	{
+		auto const [l_c_beg, l_c_end] = *l_it;
+		auto const [r_c_beg, r_c_end] = *r_it;
 
+		if (!std::equal(l_c_beg, l_c_end, r_c_beg, r_c_end))
+		{
+			return false;
+		}
 	}
+
+	// Equivalent relative paths involve equal amounts of backtracking.
+	return !l_it && !r_it && (absolute || l_it.backtrack_count() == r_it.backtrack_count());
 }
 #endif
 

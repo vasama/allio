@@ -82,6 +82,7 @@ enum class file_caching : uint8_t
 	temporary,
 };
 
+// TODO: None of these flags are currently used...
 enum class file_options : uint16_t
 {
 	// Bit 0 is used by optional_flags.
@@ -145,6 +146,9 @@ struct path_kind_t
 	}
 };
 
+struct replace_existing_file_t : explicit_argument<replace_existing_file_t, bool> {};
+inline constexpr explicit_parameter<replace_existing_file_t> replace_existing_file = {};
+
 namespace fs_io {
 
 struct open_t
@@ -159,7 +163,7 @@ struct open_t
 		optional_flags<file_sharing> sharing;
 		file_caching caching = {};
 		open_options special = {};
-		fs_path path = {};
+		fs_path path;
 
 		using io_flags_t::set_argument;
 
@@ -238,6 +242,38 @@ struct get_current_path_t
 	}
 };
 
+struct link_at_t
+{
+	using operation_concept = void;
+
+	struct params_type
+	{
+		fs_path path;
+		bool replace_existing_file = false;
+
+		void set_argument(explicit_parameter<replace_existing_file_t>)
+		{
+			replace_existing_file = true;
+		}
+
+		void set_argument(replace_existing_file_t const value)
+		{
+			replace_existing_file = value.value;
+		}
+	};
+
+	using result_type = void;
+
+	template<object Object>
+	static vsm::result<void> blocking_io(
+		native_handle<Object> const& h,
+		io_parameters_t<Object, link_at_t> const& a)
+		requires requires { Object::link_at(h, a); }
+	{
+		return Object::link_at(h, a);
+	}
+};
+
 } // namespace fs_io
 
 struct fs_object_t : platform_object_t
@@ -252,17 +288,23 @@ struct fs_object_t : platform_object_t
 
 	using open_t = fs_io::open_t;
 	using get_current_path_t = fs_io::get_current_path_t;
+	using link_at_t = fs_io::link_at_t;
 
 	using operations = type_list_append
 	<
 		base_type::operations
 		, open_t
 		, get_current_path_t
+		, link_at_t
 	>;
 
 	static vsm::result<size_t> get_current_path(
 		native_handle<fs_object_t> const& h,
 		io_parameters_t<fs_object_t, get_current_path_t> const& a);
+
+	static vsm::result<void> link_at(
+		native_handle<fs_object_t> const& h,
+		io_parameters_t<fs_object_t, link_at_t> const& a);
 
 	template<typename Handle, typename Traits>
 	struct facade : base_type::facade<Handle, Traits>
@@ -329,12 +371,14 @@ struct fs_object_t : platform_object_t
 };
 
 
-vsm::result<void> _link_at(native_handle<fs_object_t> const& h, fs_path const& path);
-
-template<handle_for<fs_object_t> FsObject>
-vsm::result<void> link_at(FsObject const& handle, fs_path const& path)
+template<typename Traits, detail::handle_for<fs_object_t> Handle>
+[[nodiscard]] auto _link_at(Handle const& handle, fs_path const& path, auto&&... args)
 {
-	return _link_at(handle.native(), path);
+	using operation_type = detail::fs_io::link_at_t;
+	auto a = io_parameters_t<typename Handle::object_type, operation_type>{};
+	a.path = path;
+	(set_argument(a, vsm_forward(args)), ...);
+	return Traits::template observe<operation_type>(handle, a);
 }
 
 

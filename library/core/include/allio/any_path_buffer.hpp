@@ -11,6 +11,34 @@ concept any_mutable_path = any_mutable_string<path_string_t<Path>>;
 
 } // namespace detail
 
+template<detail::character Char, typename Encoding = void>
+class path_buffer
+{
+	string_buffer<Char> m_string_buffer;
+
+public:
+	path_buffer() = default;
+
+	template<typename... Args>
+		requires std::constructible_from<string_buffer<Char>, Args...>
+	explicit path_buffer(Args&&... args)
+		: m_string_buffer(vsm_forward(args)...)
+	{
+	}
+
+	template<detail::any_mutable_path Path, typename Encoding = detail::default_encoding_t>
+		requires detail::explicit_container_encoding_for<Encoding, path_string_t<Path>>
+	path_buffer(Path& path, Encoding const encoding = Encoding())
+		: m_string_buffer(get_path_string(path), encoding)
+	{
+	}
+
+	[[nodiscard]] string_buffer<Char> string() const
+	{
+		return m_string_buffer;
+	}
+};
+
 class any_path_buffer
 {
 	any_string_buffer m_string_buffer;
@@ -31,7 +59,6 @@ public:
 		: m_string_buffer(get_path_string(path), encoding)
 	{
 	}
-
 
 	[[nodiscard]] any_string_buffer string() const
 	{

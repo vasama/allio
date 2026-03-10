@@ -405,7 +405,7 @@ static vsm::result<handle_with_flags> open_current_directory_from_peb()
 
 	auto const& process_parameters = *NtCurrentPeb()->ProcessParameters;
 
-	open_info const info =
+	platform_open_options const options =
 	{
 		//TODO: Is SYNCHRONIZE needed?
 		.desired_access = SYNCHRONIZE,
@@ -415,11 +415,11 @@ static vsm::result<handle_with_flags> open_current_directory_from_peb()
 
 	if (process_parameters.CurrentDirectoryHandle != NULL)
 	{
-		return reopen_file(process_parameters.CurrentDirectoryHandle, info);
+		return reopen_file(process_parameters.CurrentDirectoryHandle, options);
 	}
 	else
 	{
-		return create_file(NULL, process_parameters.CurrentDirectoryPath, info);;
+		return create_file(NULL, process_parameters.CurrentDirectoryPath, options);
 	}
 }
 

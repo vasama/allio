@@ -9,6 +9,11 @@
 
 using namespace allio;
 
+static size_t count_files(std::filesystem::path const& path)
+{
+	return std::ranges::distance(std::filesystem::directory_iterator(path));
+}
+
 TEST_CASE("Files can be read", "[file][blocking]")
 {
 	using namespace blocking;
@@ -17,7 +22,7 @@ TEST_CASE("Files can be read", "[file][blocking]")
 
 	test::write_file_content(path, "allio");
 	{
-		auto const file = open_file(path);
+		auto const file = open_file(path, file_mode::read);
 
 		char data[] = "trash";
 		REQUIRE(file.read_some(0, as_read_buffer(data, 5)) == 5);
@@ -41,45 +46,67 @@ TEST_CASE("Files can be written", "[file][blocking]")
 	test::check_file_content(path, "allio");
 }
 
-#if 0
 TEST_CASE("File can be linked into the filesystem", "[file][blocking]")
 {
 	using namespace blocking;
 
-	//auto const path = test::get_temp_path();
-	auto const path_1 = allio::path_view("C:\\Users\\vasama\\Downloads\\test\\file_1");
-	auto const path_2 = allio::path_view("C:\\Users\\vasama\\Downloads\\test\\file_2");
+	auto const stdfs_path = test::get_temp_stdfs_path();
+	vsm_assert(std::filesystem::create_directory(stdfs_path));
 
-	auto const file = open_file(path_1, file_opening::create_only);
-	detail::link_at(file, path_2).value();
-}
-
-TEST_CASE("File can be created with unique name", "[file][blocking]")
-{
-	using namespace blocking;
-
-	//auto const path = test::get_temp_path();
-	auto const path = allio::path_view("C:\\Users\\vasama\\Downloads\\test");
-	auto const file = open_unique_file(path);
-}
-
-TEST_CASE("Anonymous file can be created", "[file][blocking]")
-{
-	using namespace blocking;
-
-	//auto const path = test::get_temp_path();
-	auto const path = allio::path_view("C:\\Users\\vasama\\Downloads\\test");
-	auto const new_path = allio::path_view("C:\\Users\\vasama\\Downloads\\test\\file");
-
+	auto const path_1 = allio::path((stdfs_path / "1").string());
+	auto const path_2 = allio::path((stdfs_path / "2").string());
 	{
-		auto const file = open_anonymous_file(path);
-		file.write(0, as_write_buffer(std::string_view("hello")));
-		detail::link_at(file, new_path).value();
-	}
+		auto const file = open_file(path_1, file_opening::create_only);
+		REQUIRE(count_files(stdfs_path) == 1);
 
-	[[maybe_unused]] int x = 0;
+		link_at(file, path_2);
+		REQUIRE(count_files(stdfs_path) == 2);
+	}
+	REQUIRE(count_files(stdfs_path) == 2);
+	test::check_file_content(path_1, "");
+
+	test::write_file_content(path_1, "hello");
+	test::check_file_content(path_2, "hello");
 }
-#endif
+
+TEST_CASE("Files can be created with unique names", "[file][blocking]")
+{
+	using namespace blocking;
+
+	auto const stdfs_path = test::get_temp_stdfs_path();
+	vsm_assert(std::filesystem::create_directory(stdfs_path));
+	vsm_assert(count_files(stdfs_path) == 0);
+
+	auto const path = allio::path(stdfs_path.string());
+	{
+		auto const file_1 = open_unique_file(path);
+		REQUIRE(count_files(stdfs_path) == 1);
+
+		auto const file_2 = open_unique_file(path);
+		REQUIRE(count_files(stdfs_path) == 2);
+	}
+	REQUIRE(count_files(stdfs_path) == 2);
+}
+
+TEST_CASE("Anonymous files can be created and linked", "[file][blocking]")
+{
+	using namespace blocking;
+
+	auto const stdfs_path = test::get_temp_stdfs_path();
+	vsm_assert(std::filesystem::create_directory(stdfs_path));
+	vsm_assert(count_files(stdfs_path) == 0);
+
+	auto const base_path = allio::path(stdfs_path.string());
+	auto const link_path = allio::path((stdfs_path / "link").string());
+	{
+		auto const file = open_anonymous_file(base_path);
+		file.write(0, as_write_buffer(std::string_view("hello")));
+		link_at(file, link_path);
+	}
+	REQUIRE(count_files(stdfs_path) == 1);
+
+	test::check_file_content(link_path, "hello");
+}
 
 #if 0
 #include <allio/senders/sync_wait.hpp>

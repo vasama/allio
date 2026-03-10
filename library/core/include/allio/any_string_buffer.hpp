@@ -72,7 +72,7 @@ struct string_buffer_base
 
 	template<mutable_contiguous_range Container>
 	explicit string_buffer_base(Container&& container, encoding_family const encoding)
-		: string_buffer_base(container.data(), container.size())
+		: string_buffer_base(container.data(), container.size(), encoding)
 	{
 	}
 

@@ -1,10 +1,11 @@
 #pragma once
 
+#include <allio/any_path_buffer.hpp>
 #include <allio/detail/path.hpp>
-#include <allio/detail/path_fwd.hpp>
 #include <allio/detail/platform.h>
 #include <allio/path_char.hpp>
 #include <allio/path_literals.hpp>
+#include <allio/path_traits.hpp>
 
 #include <vsm/arrow.hpp>
 #include <vsm/assert.h>
@@ -14,185 +15,162 @@
 #include <span>
 #include <string_view>
 
+#include <allio/linux/detail/undef.i>
+#include vsm_pp_include(allio/vsm_os/path_traits.hpp)
+#include <allio/linux/detail/undef.i>
+
 namespace allio {
 
-template<typename Char, typename Encoding = void>
-class basic_path_view : public detail::path_encoding_base<Encoding>
+template<typename Char, typename Traits, typename Encoding = void>
+class foreign_path_view : public detail::path_encoding_base<Encoding>
 {
 public:
 	using string_view_type = std::basic_string_view<Char>;
 
 private:
-	template<typename String>
-	using path_template = basic_path_adaptor<Char, String, Encoding>;
-
 	string_view_type m_string_view;
 
+	template<bool Forward>
+	class basic_iterator : public Traits::iterator_base
+	{
+	public:
+		using iterator_category = std::bidirectional_iterator_tag;
+		using value_type = foreign_path_view;
+		using difference_type = ptrdiff_t;
+		using pointer = vsm::arrow<foreign_path_view>;
+		using reference = foreign_path_view;
+
+		[[nodiscard]] constexpr foreign_path_view operator*() const
+		{
+			return foreign_path_view(this->current());
+		}
+
+		[[nodiscard]] constexpr vsm::arrow<foreign_path_view> operator->() const
+		{
+			return foreign_path_view(this->current());
+		}
+
+		constexpr basic_iterator& operator++() &
+		{
+			if constexpr (Forward)
+			{
+				this->increment();
+			}
+			else
+			{
+				this->decrement();
+			}
+			return *this;
+		}
+
+		[[nodiscard]] constexpr basic_iterator operator++(int) &
+		{
+			basic_iterator it = *this;
+			if constexpr (Forward)
+			{
+				this->increment();
+			}
+			else
+			{
+				this->decrement();
+			}
+			return it;
+		}
+
+		constexpr basic_iterator& operator--() &
+		{
+			if constexpr (Forward)
+			{
+				this->decrement();
+			}
+			else
+			{
+				this->increment();
+			}
+			return *this;
+		}
+
+		[[nodiscard]] constexpr basic_iterator operator--(int) &
+		{
+			basic_iterator it = *this;
+			if constexpr (Forward)
+			{
+				this->decrement();
+			}
+			else
+			{
+				this->increment();
+			}
+			return it;
+		}
+
+		friend class foreign_path_view;
+	};
+
 public:
-	static constexpr Char preferred_separator = static_cast<Char>(
-#if vsm_os_win32
-		'\\'
-#else
-		'/'
-#endif
-	);
+	static constexpr Char preferred_separator = Traits::preferred_separator;
 
 	[[nodiscard]] static constexpr bool is_separator(Char const character)
 	{
-		return character == static_cast<Char>('/')
-#if vsm_os_win32
-			|| character == static_cast<Char>('\\')
-#endif
-		;
+		return Traits::is_separator(character);
 	}
 
 
 	using value_type = Char;
 
-	class iterator
-	{
-		static constexpr bool Reverse = false;
+	using iterator       = basic_iterator</* Forward: */ true>;
+	using const_iterator = basic_iterator</* Forward: */ true>;
 
-		Char const* m_sbeg;
-		Char const* m_send;
-		Char const* m_beg;
-		Char const* m_end;
-
-	public:
-		using iterator_category = std::bidirectional_iterator_tag;
-		using value_type = basic_path_view;
-		using difference_type = ptrdiff_t;
-		using pointer = vsm::arrow<basic_path_view>;
-		using reference = basic_path_view;
-
-		[[nodiscard]] constexpr basic_path_view operator*() const
-		{
-			return basic_path_view(string_view_type(
-				m_sbeg,
-				static_cast<size_t>(m_send - m_sbeg)));
-		}
-
-		[[nodiscard]] constexpr pointer operator->() const
-		{
-			return basic_path_view(string_view_type(
-				m_sbeg,
-				static_cast<size_t>(m_send - m_sbeg)));
-		}
-
-		constexpr iterator& operator++() &
-		{
-			increment();
-			return *this;
-		}
-
-		[[nodiscard]] constexpr iterator operator++(int) &
-		{
-			iterator it = *this;
-			increment();
-			return it;
-		}
-
-		constexpr iterator& operator--() &
-		{
-			decrement();
-			return *this;
-		}
-
-		[[nodiscard]] constexpr iterator operator--(int) &
-		{
-			iterator it = *this;
-			decrement();
-			return it;
-		}
-
-		[[nodiscard]] friend constexpr bool operator==(iterator const& lhs, iterator const& rhs)
-		{
-			return lhs.m_sbeg == rhs.m_sbeg;
-		}
-
-		[[nodiscard]] friend constexpr bool operator!=(iterator const& lhs, iterator const& rhs)
-		{
-			return lhs.m_sbeg != rhs.m_sbeg;
-		}
-
-	private:
-		constexpr void init_begin(Char const* const beg, Char const* const end);
-
-		constexpr void increment();
-		constexpr void decrement();
-
-		static constexpr iterator make_begin(Char const* const beg, Char const* const end)
-		{
-			iterator it;
-			it.m_sbeg = beg;
-			if (beg != end)
-			{
-				it.init_begin(beg, end);
-			}
-			return it;
-		}
-
-		static constexpr iterator make_end(Char const* const beg, Char const* const end)
-		{
-			iterator it;
-			it.m_beg = beg;
-			it.m_end = end;
-			it.m_sbeg = end;
-			it.m_send = end;
-			return it;
-		}
-
-		friend class basic_path_view;
-	};
-	using const_iterator = iterator;
-
-	using reverse_iterator = std::reverse_iterator<iterator>;
-	using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+	using reverse_iterator       = basic_iterator</* Forward: */ false>;
+	using const_reverse_iterator = basic_iterator</* Forward: */ false>;
 
 
-	basic_path_view() = default;
+	foreign_path_view() = default;
 
-	constexpr basic_path_view(basic_path_literal<Char> const literal)
+	constexpr foreign_path_view(basic_path_literal<Char> const literal)
 		: m_string_view(literal.string())
 	{
 	}
 
-	template<typename String>
-	constexpr basic_path_view(path_template<String> const& path)
-		: m_string_view(path.string())
-	{
-	}
-
-	explicit constexpr basic_path_view(string_view_type const string)
+	explicit constexpr foreign_path_view(string_view_type const string)
 		: m_string_view(string)
 	{
 	}
 
-	explicit constexpr basic_path_view(Char const* const c_str)
+	explicit foreign_path_view(decltype(nullptr) c_str) = delete;
+
+	explicit constexpr foreign_path_view(Char const* const c_str)
 		: m_string_view(c_str)
 	{
 	}
 
-	explicit constexpr basic_path_view(Char const* const data, size_t const size)
+	explicit foreign_path_view(decltype(nullptr) c_str, size_t size) = delete;
+
+	explicit constexpr foreign_path_view(Char const* const data, size_t const size)
 		: m_string_view(data, size)
 	{
 	}
 
 	template<std::contiguous_iterator Iterator, std::sized_sentinel_for<Iterator> Sentinel>
-	explicit constexpr basic_path_view(Iterator const iterator, Sentinel const sentinel)
-		//requires std::is_same_v<std::iterator_value_t<Iterator>, Char>
+		requires std::is_same_v<std::iter_value_t<Iterator>, Char>
+	explicit constexpr foreign_path_view(Iterator const iterator, Sentinel const sentinel)
 		: m_string_view(iterator, sentinel)
 	{
 	}
 
 	template<std::ranges::contiguous_range Range>
-	explicit constexpr basic_path_view(Range&& range)
-		//requires std::is_same_v<std::ranges::range_value_t<Range>, Char>
+		requires std::is_same_v<std::ranges::range_value_t<Range>, Char>
+	explicit constexpr foreign_path_view(Range&& range)
 		: m_string_view(static_cast<Range&&>(range))
 	{
 	}
 
-	basic_path_view(decltype(nullptr)) = delete;
+	template<path_like Path>
+	explicit(!detail::compatible_container_encoding<Path, Encoding>)
+	constexpr foreign_path_view(Path const& path)
+		: m_string_view(get_path_string(path))
+	{
+	}
 
 
 	[[nodiscard]] constexpr bool empty() const
@@ -206,203 +184,340 @@ public:
 	}
 
 
-	[[nodiscard]] constexpr bool is_absolute() const;
-
-	[[nodiscard]] constexpr bool is_relative() const
+	[[nodiscard]] bool is_absolute() const
 	{
-		return !is_absolute();
+		return Traits::is_absolute(m_string_view);
+	}
+
+	[[nodiscard]] bool is_relative() const
+	{
+		return !Traits::is_absolute(m_string_view);
 	}
 
 
-	[[nodiscard]] constexpr basic_path_view root_name() const;
-	[[nodiscard]] constexpr basic_path_view root_directory() const;
-	[[nodiscard]] constexpr basic_path_view root_path() const;
-	[[nodiscard]] constexpr basic_path_view relative_path() const;
-	[[nodiscard]] constexpr basic_path_view parent_path() const;
-	[[nodiscard]] constexpr basic_path_view filename() const;
-	[[nodiscard]] constexpr basic_path_view stem() const;
-	[[nodiscard]] constexpr basic_path_view extension() const;
-
-
-	[[nodiscard]] constexpr bool has_root_name() const
+	[[nodiscard]] foreign_path_view root_name() const
 	{
-		return !root_name().empty();
+		return foreign_path_view(Traits::root_name(m_string_view));
 	}
 
-	[[nodiscard]] constexpr bool has_root_directory() const
+	[[nodiscard]] foreign_path_view root_directory() const
 	{
-		return !root_directory().empty();
+		return foreign_path_view(Traits::root_directory(m_string_view));
 	}
 
-	[[nodiscard]] constexpr bool has_root_path() const
+	[[nodiscard]] foreign_path_view root_path() const
 	{
-		return !root_path().empty();
+		return foreign_path_view(Traits::root_path(m_string_view));
 	}
 
-	[[nodiscard]] constexpr bool has_relative_path() const
+	[[nodiscard]] foreign_path_view relative_path() const
 	{
-		return !relative_path().empty();
+		return foreign_path_view(Traits::relative_path(m_string_view));
 	}
 
-	[[nodiscard]] constexpr bool has_parent_path() const
+	[[nodiscard]] foreign_path_view parent_path() const
 	{
-		return !parent_path().empty();
+		return foreign_path_view(Traits::parent_path(m_string_view));
 	}
 
-	[[nodiscard]] constexpr bool has_filename() const
+	[[nodiscard]] foreign_path_view filename() const
 	{
-		return !filename().empty();
+		return foreign_path_view(Traits::filename(m_string_view));
 	}
 
-	[[nodiscard]] constexpr bool has_stem() const
+	[[nodiscard]] foreign_path_view stem() const
 	{
-		return !stem().empty();
+		return foreign_path_view(Traits::stem(m_string_view));
 	}
 
-	[[nodiscard]] constexpr bool has_extension() const
+	[[nodiscard]] foreign_path_view extension() const
 	{
-		return !extension().empty();
+		return foreign_path_view(Traits::extension(m_string_view));
 	}
 
 
-	[[nodiscard]] constexpr bool has_trailing_separators() const;
-	[[nodiscard]] constexpr basic_path_view without_trailing_separators() const;
-
-
-	[[nodiscard]] constexpr basic_path_view copy_lexically_normal(Char* buffer) const;
-
-	[[nodiscard]] constexpr basic_path_view copy_lexically_relative(
-		basic_path_view base,
-		Char* buffer) const;
-
-	[[nodiscard]] constexpr basic_path_view copy_lexically_proximate(
-		basic_path_view base,
-		Char* buffer) const;
-
-
-	[[nodiscard]] constexpr iterator begin() const
+	[[nodiscard]] bool has_root_name() const
 	{
-		Char const* const data = m_string_view.data();
-		return iterator::make_begin(data, data + m_string_view.size());
+		return !Traits::root_name(m_string_view).empty();
 	}
 
-	[[nodiscard]] constexpr iterator end() const
+	[[nodiscard]] bool has_root_directory() const
 	{
-		Char const* const data = m_string_view.data();
-		return iterator::make_end(data, data + m_string_view.size());
+		return !Traits::root_directory(m_string_view).empty();
 	}
 
-	[[nodiscard]] constexpr reverse_iterator rbegin() const
+	[[nodiscard]] bool has_root_path() const
 	{
-		return reverse_iterator(end());
+		return !Traits::root_path(m_string_view).empty();
 	}
 
-	[[nodiscard]] constexpr reverse_iterator rend() const
+	[[nodiscard]] bool has_relative_path() const
 	{
-		return reverse_iterator(begin());
+		return !Traits::relative_path(m_string_view).empty();
 	}
 
-
-	[[nodiscard]] constexpr std::strong_ordering compare(basic_path_view const other) const
+	[[nodiscard]] bool has_parent_path() const
 	{
-		return compare(*this, other);
+		return !Traits::parent_path(m_string_view).empty();
 	}
 
-	[[nodiscard]] friend constexpr bool operator==(
-		basic_path_view const lhs,
-		basic_path_view const rhs)
+	[[nodiscard]] bool has_filename() const
 	{
-		return equal(lhs, rhs);
+		return !Traits::filename(m_string_view).empty();
 	}
 
-	[[nodiscard]] friend constexpr bool operator!=(
-		basic_path_view const lhs,
-		basic_path_view const rhs)
+	[[nodiscard]] bool has_stem() const
 	{
-		return !equal(lhs, rhs);
+		return !Traits::stem(m_string_view).empty();
 	}
 
-	[[nodiscard]] friend constexpr auto operator<=>(
-		basic_path_view const lhs,
-		basic_path_view const rhs)
+	[[nodiscard]] bool has_extension() const
 	{
-		return compare(lhs, rhs);
+		return !Traits::extension(m_string_view).empty();
 	}
 
 
-#if 0
-	//TODO: Implement lexically_equivalent
-	/*[[nodiscard]]*/ friend constexpr bool lexically_equivalent(
-		basic_path_view const lhs,
-		basic_path_view const rhs);
-#endif
+	[[nodiscard]] bool has_trailing_separators() const
+	{
+		return Traits::has_trailing_separators(m_string_view);
+	}
+
+	[[nodiscard]] foreign_path_view without_trailing_separators() const
+	{
+		return foreign_path_view(Traits::without_trailing_separators(m_string_view));
+	}
+
+
+	[[nodiscard]] bool is_lexically_normal() const
+	{
+		return Traits::is_lexically_normal(m_string_view);
+	}
+
+	foreign_path_view copy_lexically_normal(path_buffer<Char, Encoding> const buffer) const
+	{
+		return foreign_path_view(detail::throw_on_error(Traits::copy_lexically_normal(
+			m_string_view,
+			buffer.string())));
+	}
+
+	foreign_path_view copy_lexically_relative(
+		foreign_path_view const base,
+		path_buffer<Char, Encoding> const buffer) const
+	{
+		return foreign_path_view(detail::throw_on_error(Traits::copy_lexically_relative(
+			m_string_view,
+			base.m_string_view,
+			buffer.string())));
+	}
+
+	foreign_path_view copy_lexically_proximate(
+		foreign_path_view const base,
+		path_buffer<Char, Encoding> const buffer) const
+	{
+		return foreign_path_view(detail::throw_on_error(Traits::copy_lexically_proximate(
+			m_string_view,
+			base.m_string_view,
+			buffer.string())));
+	}
+
+
+	[[nodiscard]] iterator begin() const
+	{
+		Char const* const beg = m_string_view.data();
+		Char const* const end = beg + m_string_view.size();
+
+		iterator it;
+		it.set_reverse_end(beg, end);
+		if (beg != end)
+		{
+			it.increment();
+		}
+		return it;
+	}
+
+	[[nodiscard]] iterator cbegin() const
+	{
+		Char const* const beg = m_string_view.data();
+		Char const* const end = beg + m_string_view.size();
+
+		iterator it;
+		it.set_reverse_end(beg, end);
+		if (beg != end)
+		{
+			it.increment();
+		}
+		return it;
+	}
+
+	[[nodiscard]] iterator end() const
+	{
+		Char const* const beg = m_string_view.data();
+		Char const* const end = beg + m_string_view.size();
+
+		iterator it;
+		it.set_forward_end(beg, end);
+		return it;
+	}
+
+	[[nodiscard]] iterator cend() const
+	{
+		Char const* const beg = m_string_view.data();
+		Char const* const end = beg + m_string_view.size();
+
+		iterator it;
+		it.set_forward_end(beg, end);
+		return it;
+	}
+
+	[[nodiscard]] reverse_iterator rbegin() const
+	{
+		Char const* const beg = m_string_view.data();
+		Char const* const end = beg + m_string_view.size();
+
+		reverse_iterator it;
+		it.set_forward_end(beg, end);
+		if (beg != end)
+		{
+			it.decrement();
+		}
+		return it;
+	}
+
+	[[nodiscard]] reverse_iterator crbegin() const
+	{
+		Char const* const beg = m_string_view.data();
+		Char const* const end = beg + m_string_view.size();
+
+		reverse_iterator it;
+		it.set_forward_end(beg, end);
+		if (beg != end)
+		{
+			it.decrement();
+		}
+		return it;
+	}
+
+	[[nodiscard]] reverse_iterator rend() const
+	{
+		Char const* const beg = m_string_view.data();
+		Char const* const end = beg + m_string_view.size();
+
+		reverse_iterator it;
+		it.set_reverse_end(beg, end);
+		return it;
+	}
+
+	[[nodiscard]] reverse_iterator crend() const
+	{
+		Char const* const beg = m_string_view.data();
+		Char const* const end = beg + m_string_view.size();
+
+		reverse_iterator it;
+		it.set_reverse_end(beg, end);
+		return it;
+	}
+
+
+	[[nodiscard]] std::strong_ordering compare(foreign_path_view const other) const
+	{
+		return Traits::compare(m_string_view, other.m_string_view);
+	}
+
+	[[nodiscard]] friend bool operator==(
+		foreign_path_view const lhs,
+		foreign_path_view const rhs)
+	{
+		return Traits::equal(lhs.m_string_view, rhs.m_string_view);
+	}
+
+	[[nodiscard]] friend bool operator!=(
+		foreign_path_view const lhs,
+		foreign_path_view const rhs)
+	{
+		return !Traits::equal(lhs.m_string_view, rhs.m_string_view);
+	}
+
+	[[nodiscard]] friend auto operator<=>(
+		foreign_path_view const lhs,
+		foreign_path_view const rhs)
+	{
+		return Traits::compare(lhs.m_string_view, rhs.m_string_view);
+	}
 
 private:
-	static constexpr bool equal(basic_path_view lhs, basic_path_view rhs);
-	static constexpr std::strong_ordering compare(basic_path_view lhs, basic_path_view rhs);
-
-	friend string_view_type tag_invoke(get_path_string_t, basic_path_view const& self)
+	friend string_view_type tag_invoke(get_path_string_t, foreign_path_view const& self)
 	{
 		return self.m_string_view;
 	}
 };
 
-
-//TODO: Make this variadic to allow combining N paths at once.
-template<typename Char, typename Encoding = void>
-class basic_path_combine_result
+template<typename Char, typename Traits, typename Encoding>
+[[nodiscard]] bool lexically_equivalent(
+	foreign_path_view<Char, Traits, Encoding> const lhs,
+	foreign_path_view<Char, Traits, Encoding> const rhs)
 {
-	std::basic_string_view<Char> m_lhs;
-	std::basic_string_view<Char> m_rhs;
-	bool m_requires_separator;
+	return Traits::lexically_equivalent(lhs.string(), rhs.string());
+}
+
+template<typename Char, typename Encoding = void>
+using basic_path_view = foreign_path_view<Char, native_path_traits<Char>, Encoding>;
+
+
+template<typename Char, typename Traits, typename Encoding = void>
+class foreign_path_combine_result : path_combine_result_base<Char>
+{
+	using path_view_type = foreign_path_view<Char, Traits, Encoding>;
+	using string_view_type = std::basic_string_view<Char>;
 
 public:
-	explicit constexpr basic_path_combine_result(
-		basic_path_view<Char> const path,
+	explicit constexpr foreign_path_combine_result(path_combine_result_base<Char> const base)
+		: path_combine_result_base<Char>(base)
+	{
+	}
+
+	explicit constexpr foreign_path_combine_result(
+		path_view_type const path,
 		bool const requires_separator = false)
-		: m_lhs(path.string())
-		, m_requires_separator(requires_separator)
+		: path_combine_result_base<Char>(path.string(), string_view_type(), requires_separator)
 	{
 	}
 
-	explicit constexpr basic_path_combine_result(
-		basic_path_view<Char> const lhs,
-		basic_path_view<Char> const rhs,
+	explicit constexpr foreign_path_combine_result(
+		path_view_type const lhs,
+		path_view_type const rhs,
 		bool const requires_separator = false)
-		: m_lhs(lhs.string())
-		, m_rhs(rhs.string())
-		, m_requires_separator(requires_separator)
+		: path_combine_result_base<Char>(lhs.string(), rhs.string(), requires_separator)
 	{
 	}
 
+	using path_combine_result_base<Char>::size;
+	using path_combine_result_base<Char>::first;
+	using path_combine_result_base<Char>::second;
+	using path_combine_result_base<Char>::requires_separator;
 
-	[[nodiscard]] constexpr size_t size() const
+	constexpr path_view_type copy(std::span<Char> const buffer) const
 	{
-		return m_lhs.size() + m_rhs.size() + m_requires_separator;
-	}
-
-	constexpr basic_path_view<Char> copy(std::span<Char> const buffer) const
-	{
-		vsm_assert(buffer.size() >= size()); //PRECONDITION
-
-		Char* const out_beg = buffer.data();
-		Char* out_end = out_beg;
-
-		out_end = std::copy(m_lhs.data(), m_lhs.data() + m_lhs.size(), out_end);
-		if (m_requires_separator)
-		{
-			*out_end++ = basic_path_view<Char>::preferred_separator;
-		}
-		out_end = std::copy(m_rhs.data(), m_rhs.data() + m_rhs.size(), out_end);
-
-		return basic_path_view<Char>(out_beg, out_end);
+		return path_view_type(path_combine_result_base<Char>::copy(
+			buffer.data(),
+			Traits::preferred_separator));
 	}
 };
 
-template<typename Char, typename Encoding>
-[[nodiscard]] constexpr basic_path_combine_result<Char, Encoding> combine_path(
-	basic_path_view<Char, Encoding> lhs,
-	basic_path_view<Char, Encoding> rhs);
+template<typename Char, typename Traits, typename Encoding>
+[[nodiscard]] foreign_path_combine_result<Char, Traits, Encoding> combine_path(
+	foreign_path_view<Char, Traits, Encoding> const lhs,
+	foreign_path_view<Char, Traits, Encoding> const rhs)
+{
+	return foreign_path_combine_result<Char, Traits, Encoding>(Traits::combine(
+		lhs.string(),
+		rhs.string()));
+}
+
+template<typename Char, typename Encoding = void>
+using basic_path_combine_result = foreign_path_combine_result<
+	Char,
+	native_path_traits<Char>,
+	Encoding>;
 
 
 using path_view = basic_path_view<char>;
@@ -425,7 +540,3 @@ using platform_path_view = native_path_view;
 using platform_path_combine_result = native_path_combine_result;
 
 } // namespace allio
-
-#include <allio/linux/detail/undef.i>
-#include vsm_pp_include(allio/vsm_os/detail/path_view.hpp)
-#include <allio/linux/detail/undef.i>

@@ -106,8 +106,10 @@ static vsm::result<void> do_byte_io_2(
 			{
 				if constexpr (decltype(is_read_buffer(a.buffers))::value)
 				{
-					if (status == STATUS_PIPE_BROKEN)
+					switch (status)
 					{
+					case STATUS_END_OF_FILE:
+					case STATUS_PIPE_BROKEN:
 						// For uniformity between Windows and POSIX, broken pipe on read is
 						// transformed into end_of_stream.
 						return vsm::unexpected(allio_error(error::end_of_stream));

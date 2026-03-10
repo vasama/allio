@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/impl/win32/kernel_path.hpp>
+#include <allio/impl/win32/path_traits_impl.hpp>
 
 #include <allio/error.hpp>
 #include <allio/impl/transcode.hpp>
@@ -16,7 +17,7 @@
 namespace allio::detail::kernel_path_impl {
 
 using namespace win32;
-using namespace path_impl;
+using namespace win32_path_traits_impl;
 
 template<typename Char>
 struct path_section
@@ -924,10 +925,10 @@ private:
 				beg[2] == '?' &&
 				(size == 3 || (size >= 4 && beg[3] == '\\')))
 			{
-				if (size <= 4)
+				if (size <= 4 || is_separator(beg[4]))
 				{
-					// Reject "\??", "\??\". Win32 APIs don't recognize these and convert them to
-					// e.g. "\??\C:\??" and "\??\C:\??\".
+					// Reject "\??", "\??\", "\??\\". Win32 APIs don't recognize
+					// these and convert them to "\??\C:\??" etc...
 					return vsm::unexpected(allio_error(error::invalid_path));
 				}
 

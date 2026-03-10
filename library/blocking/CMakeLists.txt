@@ -26,8 +26,6 @@ vsm_add_library(
 		include/allio/blocking/traits.hpp
 
 	SOURCES
-		source/allio/impl/exceptions.cpp
-
 		# Handles
 		source/allio/impl/handles/standard_stream.cpp
 

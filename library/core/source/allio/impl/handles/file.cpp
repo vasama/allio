@@ -10,7 +10,7 @@ vsm::result<void> file_t::open(
 	native_handle<file_t>& h,
 	io_parameters_t<file_t, open_t> const& a)
 {
-	return open_fs_object(h, a, open_kind::file);
+	return open_fs_object(h, open_kind::file, a);
 }
 
 vsm::result<void> file_t::serialize(

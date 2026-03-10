@@ -1,6 +1,8 @@
-#include <allio/path_view.hpp>
+#include <allio/path.hpp>
 
 #include <allio/test/reverse_iterator.hpp>
+
+#include <vsm/lift.hpp>
 
 #include <catch2/catch_all.hpp>
 
@@ -54,7 +56,8 @@ public:
 		{
 			Iterator const prev = m_it;
 			Iterator next = ++m_it;
-			CHECK(--next == prev);
+			--next;
+			CHECK(next == prev);
 		}
 		else
 		{
@@ -75,7 +78,8 @@ public:
 	{
 		Iterator const prev = m_it;
 		Iterator next = --m_it;
-		CHECK(++next == prev);
+		++next;
+		CHECK(next == prev);
 		return *this;
 	}
 
@@ -93,49 +97,14 @@ public:
 template<std::input_iterator Iterator>
 checked_iterator(Iterator) -> checked_iterator<Iterator>;
 
-template<std::input_iterator Iterator>
-class checked_range
-{
-	Iterator m_beg;
-	Iterator m_end;
-
-public:
-	checked_range(std::ranges::input_range auto&& range)
-		: m_beg(std::ranges::begin(range))
-		, m_end(std::ranges::end(range))
-	{
-	}
-
-	checked_iterator<Iterator> begin() const
-	{
-		return checked_iterator<Iterator>(m_beg);
-	}
-
-	checked_iterator<Iterator> end() const
-	{
-		return checked_iterator<Iterator>(m_end);
-	}
-
-	checked_iterator<reverse_iterator<Iterator>> rbegin() const
-	{
-		return checked_iterator<reverse_iterator<Iterator>>(m_end);
-	}
-
-	checked_iterator<reverse_iterator<Iterator>> rend() const
-	{
-		return checked_iterator<reverse_iterator<Iterator>>(m_beg);
-	}
-};
-
-template<std::ranges::input_range Range>
-checked_range(Range&&) -> checked_range<std::ranges::iterator_t<Range>>;
-
 } // namespace
 
 
 static void generate_separator(std::string& buffer, size_t const max_separators = 2)
 {
-	for (size_t i = 0, c = GENERATE_COPY(range(static_cast<size_t>(0), max_separators)); i <= c; ++i)
+	size_t const count = GENERATE_COPY(range<size_t>(0, max_separators));
+
+	for (size_t i = 0; i <= count; ++i)
 	{
 		char separator = '/';
 
@@ -156,12 +125,11 @@ static void generate_root(std::string& buffer)
 	if (GENERATE(0, 1))
 	{
 		buffer += GENERATE(
-			as<std::string_view>{},
-			"C:",
-			"\\??",
-			"\\\\.",
-			"\\\\?",
-			"\\\\server"
+			as<std::string_view>{}
+			, "C:"
+			, "\\\\."
+			, "\\\\?"
+			, "\\\\server"
 		);
 
 		if (GENERATE(0, 1))
@@ -174,9 +142,14 @@ static void generate_root(std::string& buffer)
 	generate_separator(buffer);
 }
 
-static void generate_relative(std::string& buffer, size_t const max_components = 2, size_t const max_separators = 2)
+static void generate_relative(
+	std::string& buffer,
+	size_t const max_components = 2,
+	size_t const max_separators = 2)
 {
-	for (size_t i = 0, c = GENERATE_COPY(range(static_cast<size_t>(0), max_components)); i <= c; ++i)
+	size_t const count = GENERATE_COPY(range<size_t>(0, max_components));
+
+	for (size_t i = 0; i <= count; ++i)
 	{
 		if (i > 0)
 		{
@@ -184,69 +157,95 @@ static void generate_relative(std::string& buffer, size_t const max_components =
 		}
 
 		buffer += GENERATE(
-			as<std::string_view>{},
-			".",
-			"..",
-			"name",
-			".hidden",
-			"dot.",
-			"file.ext",
-			"some.win32.cpp"
+			as<std::string_view>{}
+			, "."
+			, ".."
+			, "file"
+			, "file."
+			, "file.cpp"
+			, "file.generated.cpp"
+			, ".file"
+			, ".file.cpp"
 		);
 	}
 }
 
+static std::filesystem::path trim_trailing_separators(std::filesystem::path path)
+{
+	using native_type = std::filesystem::path::string_type;
+	using native_char = native_type::value_type;
 
-TEST_CASE("path_view standard compliance 1", "[path_view]")
+	constexpr native_char sep_1 = '/';
+	constexpr native_char sep_2 = std::filesystem::path::preferred_separator;
+
+	constexpr auto is_separator = [](native_char const character)
+	{
+		return character == sep_1 || character == sep_2;
+	};
+
+	native_type native = vsm_move(path).native();
+
+	if (native.size() >= 1 && is_separator(native.back()))
+	{
+		while (native.size() >= 2 && is_separator(native.end()[-2]))
+		{
+			native.pop_back();
+		}
+	}
+
+	return std::filesystem::path(vsm_move(native));
+}
+
+static std::filesystem::path trim_root_path_separators(std::filesystem::path path)
+{
+	auto root = trim_trailing_separators(path.root_path());
+	auto relative = path.relative_path();
+	return std::filesystem::path(vsm_move(root).native() + vsm_move(relative).native());
+}
+
+TEST_CASE("path_view standard compliance - decomposition", "[path_view]")
 {
 	std::string buffer;
 
-	if (GENERATE(0, 1))
+	if (vsm_os_win32 && GENERATE(0, 1))
 	{
-		generate_root(buffer);
-	}
+		// MSSTL has non-conforming handling of NT paths. For that reason, only paths of the
+		// following forms are tested:
+		// * /??/
+		// * /??/*
 
-	if (GENERATE(0, 1))
-	{
-		generate_relative(buffer);
+		generate_separator(buffer, 1);
+		buffer += "??";
+		generate_separator(buffer, 1);
 
 		if (GENERATE(0, 1))
 		{
-			generate_separator(buffer);
+			generate_relative(buffer);
+		}
+	}
+	else
+	{
+		if (GENERATE(0, 1))
+		{
+			generate_root(buffer);
+		}
+
+		if (GENERATE(0, 1))
+		{
+			generate_relative(buffer);
+
+			if (GENERATE(0, 1))
+			{
+				generate_separator(buffer);
+			}
 		}
 	}
 
 	CAPTURE(buffer);
 
 
-	path_view const a_path = path_view(std::string_view(buffer));
-	std::filesystem::path const s_path(buffer);
-	//std::string const& s_path_string = s_path.string();
-
-
-#if vsm_stdlib_libstdcxx
-	// libstdc++ incorrectly handles paths starting with multiple slashes.
-	// The presence of these bugs is detected automatically.
-
-	// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=106452
-	static bool const libstdcxx_bug_106452 = []()
-	{
-		return !( std::filesystem::path("//").begin()->string() == "/" );
-	}();
-
-	// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=106461
-	static bool const libstdcxx_bug_106461 = []()
-	{
-		return !( std::filesystem::path("//.").parent_path().string() == "//" );
-	}();
-
-	bool const libstdcxx_long_root = buffer.starts_with("//");
-	bool const libstdcxx_only_root = buffer.find_first_not_of("/") == std::string::npos;
-
-#	define allio_if_not_libstdcxx_bug(bug, ...) if (!(libstdcxx_bug_ ## bug) || !(__VA_ARGS__))
-#else
-#	define allio_if_not_libstdcxx_bug(bug, ...) if (true)
-#endif
+	auto const a_path = path_view(buffer);
+	auto const s_path = std::filesystem::path(buffer);
 
 
 	// Path properties
@@ -258,20 +257,19 @@ TEST_CASE("path_view standard compliance 1", "[path_view]")
 		allio_property(is_relative);
 #undef allio_property
 
+#define allio_property(transform, property) \
+	CHECK(a_path.property().string() == transform(s_path.property()).string())
+
+		allio_property(trim_trailing_separators, root_path);
+		allio_property(trim_trailing_separators, root_directory);
+		allio_property(trim_trailing_separators, parent_path);
+#undef allio_property
+
 #define allio_property(property) \
 	CHECK(a_path.property().string() == s_path.property().string())
 
-		allio_property(root_path);
-		allio_property(root_directory);
 		allio_property(root_name);
 		allio_property(relative_path);
-
-		// This bug affects cases such as "//." where a slash denoting the filesystem root
-		// directory is followed by one or more redundant slashes and one or more components.
-		allio_if_not_libstdcxx_bug(106452, libstdcxx_long_root && !libstdcxx_only_root)
-		{
-			allio_property(parent_path);
-		}
 
 		allio_property(filename);
 		allio_property(stem);
@@ -279,20 +277,49 @@ TEST_CASE("path_view standard compliance 1", "[path_view]")
 #undef allio_property
 	}
 
-	// This bug affects cases such as "//" where a slash denoting the filesystem root
-	// directory is followed by one or more redundant slashes and no other components.
-	allio_if_not_libstdcxx_bug(106461, libstdcxx_long_root && libstdcxx_only_root)
 	// Iteration
 	{
-		auto const predicate = [](path_view const lhs, std::filesystem::path const& rhs)
+		// ALLIO always trims root directory separators, but it is not guaranteed that the standard
+		// library do so. For that reason, the standard root path separators are trimmed manually.
+		auto const s_iterable_path = trim_root_path_separators(s_path);
+
+		// Forward iteration:
 		{
-			return lhs.string() == rhs.string();
-		};
+			auto const a_beg = checked_iterator(a_path.begin());
+			auto const a_end = checked_iterator(a_path.end());
 
-		checked_range const a_range = checked_range(a_path);
+			auto const s_beg = s_iterable_path.begin();
+			auto const s_end = s_iterable_path.end();
 
-		CHECK(std::ranges::equal(a_range, s_path, predicate));
-		CHECK(std::ranges::equal(reverse_range(a_range), reverse_range(s_path), predicate));
+			auto a_pos = a_beg;
+			auto s_pos = s_beg;
+
+			for (; a_pos != a_end && s_pos != s_end; ++a_pos, ++s_pos)
+			{
+				REQUIRE(a_pos->string() == s_pos->string());
+			}
+
+			REQUIRE((a_pos == a_end) == (s_pos == s_end));
+		}
+
+		// Reverse iteration:
+		{
+			auto const a_beg = checked_iterator(a_path.rbegin());
+			auto const a_end = checked_iterator(a_path.rend());
+
+			auto const s_beg = reverse_iterator(s_iterable_path.end());
+			auto const s_end = reverse_iterator(s_iterable_path.begin());
+
+			auto a_pos = a_beg;
+			auto s_pos = s_beg;
+
+			for (; a_pos != a_end && s_pos != s_end; ++a_pos, ++s_pos)
+			{
+				REQUIRE(a_pos->string() == s_pos->string());
+			}
+
+			REQUIRE((a_pos == a_end) == (s_pos == s_end));
+		}
 	}
 
 	// Trailing separators
@@ -313,43 +340,28 @@ TEST_CASE("path_view standard compliance 1", "[path_view]")
 		}
 	}
 
-#if 0
 	// Lexical normalization
 	{
-		std::string normal_buffer;
+		auto const a_normal = lexically_normal(a_path);
+		auto const s_normal = s_path.lexically_normal();
+		CHECK(a_normal.string() == s_normal.string());
 
-		normal_buffer.resize(a_path.string().size());
-		normal_buffer.resize(a_path.render_lexically_normal(normal_buffer.data()).string().size());
+		bool const a_is_lexically_normal = a_normal.string() == a_path.string();
+		CHECK(a_is_lexically_normal == a_path.is_lexically_normal());
 
-		path_view const a_normal = path_view(normal_buffer);
-		std::filesystem::path const s_normal = s_path.lexically_normal();
-		std::string const& s_normal_string = s_normal.string();
-
-		bool const a_is_lexically_normal = a_normal == a_path;
-		CHECK(a_path.is_lexically_normal() == a_is_lexically_normal);
-
-		bool const s_is_lexically_normal = s_normal_string == s_path_string;
+		bool const s_is_lexically_normal = s_normal.native() == s_path.native();
 		CHECK(a_is_lexically_normal == s_is_lexically_normal);
 
 		// Relative comparison
-		{
-			int const a_cmp = a_path.compare(a_normal);
-			int const s_cmp = s_path.compare(s_normal);
-			CHECK((a_cmp <=> 0) == (s_cmp <=> 0));
-		}
+		auto const a_cmp = a_path <=> a_normal;
+		auto const s_cmp = s_path <=> s_normal;
+		CHECK((a_cmp <=> 0) == (s_cmp <=> 0));
 
-		CHECK((lexically_equivalent(a_path, a_normal)
-#if vsm_os_win32
-			// On Windows some likely invalid paths beginning with "\??\\" are
-			// coincidentally normalized to valid NT paths beginning with "\??\".
-			|| (a_normal.root_name().string() == "\\??" && !a_path.has_root_name())
-#endif
-		));
+		CHECK(lexically_equivalent(a_path, a_normal));
 	}
-#endif
 }
 
-TEST_CASE("path_view standard compliance 2", "[path_view]")
+TEST_CASE("path_view standard compliance - combining", "[path_view]")
 {
 	std::string l_buffer;
 	std::string r_buffer;
@@ -360,8 +372,8 @@ TEST_CASE("path_view standard compliance 2", "[path_view]")
 	if (GENERATE(0, 1)) l_buffer += "foo";
 	if (GENERATE(0, 1)) r_buffer += "bar";
 
-	path_view const a_l_path = path_view(std::string_view(l_buffer));
-	path_view const a_r_path = path_view(std::string_view(r_buffer));
+	auto const a_l_path = path_view(std::string_view(l_buffer));
+	auto const a_r_path = path_view(std::string_view(r_buffer));
 
 	std::filesystem::path const s_l_path(l_buffer);
 	std::filesystem::path const s_r_path(r_buffer);
@@ -371,7 +383,7 @@ TEST_CASE("path_view standard compliance 2", "[path_view]")
 
 	// Path combining
 	{
-		path_combine_result const combine_result = combine_path(a_l_path, a_r_path);
+		auto const combine_result = combine_path(a_l_path, a_r_path);
 
 		size_t const combine_size = combine_result.size();
 		REQUIRE(combine_size <= l_buffer.size() + r_buffer.size() + 1);
@@ -379,9 +391,14 @@ TEST_CASE("path_view standard compliance 2", "[path_view]")
 		std::string combine_buffer;
 		combine_buffer.resize(combine_size);
 
-		path_view const a_path = combine_result.copy(combine_buffer);
-		std::filesystem::path const s_path = s_l_path / s_r_path;
+		auto const a_path = combine_result.copy(combine_buffer);
+		auto const s_path = s_l_path / s_r_path;
 
 		CHECK(a_path.string() == s_path.string());
 	}
+}
+
+TEST_CASE("path_view standard compliance - relations", "[path_view]")
+{
+	// TODO: test comparisons, lexically_relative, etc...
 }

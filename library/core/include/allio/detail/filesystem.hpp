@@ -80,7 +80,7 @@ struct fs_entry_info
 
 struct fs_path
 {
-	native_handle<fs_object_t> const* base;
+	native_handle<fs_object_t> const* base = nullptr;
 	any_path_view path;
 
 	fs_path() = default;
@@ -109,6 +109,9 @@ struct fs_path_t
 [[nodiscard]] vsm::result<fs_entry_info> get_fs_entry_info(fs_path path);
 
 [[nodiscard]] vsm::result<size_t> get_absolute_path(fs_path const& path);
+
+
+[[nodiscard]] bool is_null_device_path(any_path_view path);
 
 
 #if 0 // TODO: Move to a separate header

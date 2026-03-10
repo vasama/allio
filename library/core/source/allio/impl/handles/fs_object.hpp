@@ -4,24 +4,28 @@
 
 #include <allio/impl/handles/platform_object.hpp>
 
+#include vsm_pp_include(allio/impl/vsm_os/handles/fs_object_open.hpp)
+
 namespace allio::detail {
-namespace open_kind {
 
-inline constexpr open_options mask                  = open_options(3 << 6);
-inline constexpr open_options path                  = open_options(1 << 6);
-inline constexpr open_options file                  = open_options(2 << 6);
-inline constexpr open_options directory             = open_options(3 << 6);
+vsm::result<unique_handle> open_path_base(platform_handle_type base, any_path_view path);
 
-} // namespace open_kind
+vsm::result<handle_with_flags> open_file(
+	platform_handle_type base,
+	any_path_view path,
+	platform_open_options const& options);
 
-using open_parameters = fs_io::open_t::params_type;
+vsm::result<handle_with_flags> open_unique_file(
+	platform_handle_type base,
+	platform_open_options const& options);
 
-vsm::result<handle_with_flags> open_file(open_parameters const& a);
-vsm::result<handle_with_flags> open_unique_file(open_parameters const& a);
+vsm::result<handle_with_flags> open_anonymous_file(
+	platform_handle_type base,
+	platform_open_options const& options);
 
 vsm::result<void> open_fs_object(
 	native_handle<fs_object_t>& h,
-	io_parameters_t<fs_object_t, fs_io::open_t> const& a,
-	open_options kind);
+	open_kind kind,
+	fs_open_params_type const& args);
 
 } // namespace allio::detail

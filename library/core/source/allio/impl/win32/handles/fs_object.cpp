@@ -18,28 +18,25 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-vsm::result<open_info> open_info::make(open_parameters const& args)
+vsm::result<platform_open_options> platform_open_options::make(generic_open_options const& options)
 {
-	open_info info =
+	vsm_assert(options.opening != file_opening(0));
+
+	platform_open_options r =
 	{
-		//TODO: Is synchronize needed for path_handle?
+		// TODO: Is synchronize needed for path_handle?
 		.desired_access = SYNCHRONIZE,
 	};
 
-	if (vsm::any_flags(args.flags, io_flags::create_synchronous))
+	if (vsm::any_flags(options.flags, io_flags::create_synchronous))
 	{
-		info.create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
+		r.create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
 	}
 
-	switch (args.special & open_kind::mask)
+	switch (options.kind)
 	{
-		vsm_msvc_warning(push)
-
-		// Disable C4063: Case is not a valid value for switch of enum.
-		vsm_msvc_warning(disable: 4063)
-
 	case open_kind::path:
-		if (args.mode.value_or_zero() != file_mode::none)
+		if (options.mode != file_mode::none)
 		{
 			// When opening a path, it is not possible to specify a mode.
 			return vsm::unexpected(allio_error(error::invalid_argument));
@@ -47,81 +44,74 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 		break;
 
 	case open_kind::file:
-		info.create_options |= FILE_NON_DIRECTORY_FILE;
+		r.create_options |= FILE_NON_DIRECTORY_FILE;
 		break;
 
 	case open_kind::directory:
-		info.create_options |= FILE_DIRECTORY_FILE;
+		r.create_options |= FILE_DIRECTORY_FILE;
 		break;
-
-		vsm_msvc_warning(pop)
-
-	default:
-		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
-	if (args.mode.value_or_zero() != file_mode::none)
+	if (options.mode != file_mode::none)
 	{
-		info.desired_access |= READ_CONTROL;
+		r.desired_access |= READ_CONTROL;
 	}
-	if (vsm::any_flags(args.mode.value_or_zero(), file_mode::read_data))
+	if (vsm::any_flags(options.mode, file_mode::read_data))
 	{
-		info.desired_access |= FILE_GENERIC_READ;
+		r.desired_access |= FILE_GENERIC_READ;
 	}
-	if (vsm::any_flags(args.mode.value_or_zero(), file_mode::write_data))
+	if (vsm::any_flags(options.mode, file_mode::write_data))
 	{
-		info.desired_access |= FILE_GENERIC_WRITE | DELETE;
+		r.desired_access |= FILE_GENERIC_WRITE | DELETE;
 	}
-	if (vsm::any_flags(args.mode.value_or_zero(), file_mode::read_attributes))
+	if (vsm::any_flags(options.mode, file_mode::read_attributes))
 	{
-		info.desired_access |= FILE_READ_ATTRIBUTES | FILE_READ_EA;
+		r.desired_access |= FILE_READ_ATTRIBUTES | FILE_READ_EA;
 	}
-	if (vsm::any_flags(args.mode.value_or_zero(), file_mode::write_attributes))
+	if (vsm::any_flags(options.mode, file_mode::write_attributes))
 	{
-		info.desired_access |= FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA;
+		r.desired_access |= FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA;
 	}
 
-	switch (args.opening)
+	// Disposition
+	switch (options.opening)
 	{
 	case file_opening::open_existing:
-		info.create_disposition = FILE_OPEN;
+		r.create_disposition = FILE_OPEN;
 		break;
 
 	case file_opening::create_only:
-		info.create_disposition = FILE_CREATE;
+		r.create_disposition = FILE_CREATE;
 		break;
 
 	case file_opening::open_or_create:
-		info.create_disposition = FILE_OPEN_IF;
+		r.create_disposition = FILE_OPEN_IF;
 		break;
 
 	case file_opening::truncate_existing:
-		info.create_disposition = FILE_OVERWRITE;
+		r.create_disposition = FILE_OVERWRITE;
 		break;
 
 	case file_opening::replace_existing:
-		info.create_disposition = FILE_SUPERSEDE;
+		r.create_disposition = FILE_SUPERSEDE;
 		break;
-
-	default:
-		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
 	// Sharing
-	if (vsm::any_flags(args.sharing.value_or_zero(), file_sharing::unlink))
+	if (vsm::any_flags(options.sharing, file_sharing::unlink))
 	{
-		info.share_access |= FILE_SHARE_DELETE;
+		r.share_access |= FILE_SHARE_DELETE;
 	}
-	if (vsm::any_flags(args.sharing.value_or_zero(), file_sharing::read))
+	if (vsm::any_flags(options.sharing, file_sharing::read))
 	{
-		info.share_access |= FILE_SHARE_READ;
+		r.share_access |= FILE_SHARE_READ;
 	}
-	if (vsm::any_flags(args.sharing.value_or_zero(), file_sharing::write))
+	if (vsm::any_flags(options.sharing, file_sharing::write))
 	{
-		info.share_access |= FILE_SHARE_WRITE;
+		r.share_access |= FILE_SHARE_WRITE;
 	}
 
-	return info;
+	return r;
 }
 
 #if 0
@@ -147,13 +137,13 @@ vsm::result<handle_with_flags> win32::create_file(
 vsm::result<handle_with_flags> win32::create_file(
 	HANDLE const base_handle,
 	UNICODE_STRING path,
-	open_info const& info)
+	platform_open_options const& options)
 {
 	OBJECT_ATTRIBUTES object_attributes = {};
 	object_attributes.Length = sizeof(object_attributes);
 	object_attributes.RootDirectory = base_handle;
 	object_attributes.ObjectName = &path;
-	object_attributes.Attributes = info.object_attributes;
+	object_attributes.Attributes = options.object_attributes;
 
 	LARGE_INTEGER allocation_size;
 	allocation_size.QuadPart = 0;
@@ -163,14 +153,14 @@ vsm::result<handle_with_flags> win32::create_file(
 	unique_handle handle;
 	NTSTATUS const status = win32::NtCreateFile(
 		vsm::out_resource(handle),
-		info.desired_access,
+		options.desired_access,
 		&object_attributes,
 		&io_status_block,
 		&allocation_size,
-		info.attributes,
-		info.share_access,
-		info.create_disposition,
-		info.create_options,
+		options.attributes,
+		options.share_access,
+		options.create_disposition,
+		options.create_options,
 		/* EaBuffer: */ nullptr,
 		/* EaLength: */ 0);
 	vsm_assert(status != STATUS_PENDING);
@@ -181,7 +171,7 @@ vsm::result<handle_with_flags> win32::create_file(
 	}
 
 	auto h_flags = handle_flags::none;
-	if ((info.create_options & FILE_SYNCHRONOUS_IO_NONALERT) == 0)
+	if ((options.create_options & FILE_SYNCHRONOUS_IO_NONALERT) == 0)
 	{
 		h_flags |= platform_object_t::impl_type::flags::overlapped;
 		h_flags |= set_file_completion_notification_modes(handle.get());
@@ -194,28 +184,13 @@ vsm::result<handle_with_flags> win32::create_file(
 	});
 }
 
-vsm::result<handle_with_flags> win32::create_file(
-	HANDLE const base_handle,
-	any_path_view const path,
-	open_info const& info)
-{
-	kernel_path_storage path_storage;
-	vsm_try(kernel_path, make_kernel_path(path_storage,
-	{
-		.handle = base_handle,
-		.path = path,
-	}));
-
-	return create_file(kernel_path.handle, make_unicode_string(kernel_path.path), info);
-}
-
 vsm::result<handle_with_flags> win32::reopen_file(
 	HANDLE const handle,
-	open_info const& info)
+	platform_open_options const& options)
 {
 	vsm_assert(handle != NULL); //PRECONDITION
 
-	return create_file(handle, make_unicode_string(), info);
+	return create_file(handle, make_unicode_string(), options);
 }
 
 static constexpr size_t file_link_information_size(size_t const path_size)
@@ -226,7 +201,8 @@ static constexpr size_t file_link_information_size(size_t const path_size)
 vsm::result<void> win32::_link_file_at(
 	HANDLE const handle,
 	HANDLE const base_handle,
-	std::wstring_view const path)
+	std::wstring_view const path,
+	bool const replace_existing_file)
 {
 #if 0
 	// TODO: Just debugging
@@ -294,6 +270,7 @@ vsm::result<void> win32::_link_file_at(
 
 	auto const information = ::new (storage) FILE_LINK_INFORMATION
 	{
+		.ReplaceIfExists = replace_existing_file,
 		.RootDirectory = base_handle,
 		.FileNameLength = vsm::truncating(path.size() * sizeof(wchar_t)),
 	};
@@ -318,7 +295,8 @@ vsm::result<void> win32::_link_file_at(
 vsm::result<void> win32::link_file_at(
 	HANDLE const handle,
 	HANDLE const base_handle,
-	any_path_view const path)
+	any_path_view const path,
+	bool const replace_existing_file)
 {
 	kernel_path_storage path_storage;
 	vsm_try(kernel_path, make_kernel_path(path_storage,
@@ -327,7 +305,7 @@ vsm::result<void> win32::link_file_at(
 		.path = path,
 	}));
 
-	return _link_file_at(handle, kernel_path.handle, kernel_path.path);
+	return _link_file_at(handle, kernel_path.handle, kernel_path.path, replace_existing_file);
 }
 
 namespace {
@@ -531,93 +509,110 @@ static vsm::result<file_name_information_ptr> query_file_name_information(
 }
 
 
-static vsm::result<handle_with_flags> open_named_file(open_parameters const& a)
+static vsm::result<void> delete_file(HANDLE const handle, bool try_posix_semantics)
 {
-	vsm_try(info, open_info::make(a));
-
-	HANDLE const base = a.path.base == nullptr
-		? NULL
-		: unwrap_handle(a.path.base->platform_handle);
-
-	return win32::create_file(base, a.path.path, info);
-}
-
-static vsm::result<handle_with_flags> open_anonymous_file(open_parameters const& a)
-{
-	vsm_assert(vsm::any_flags(a.special, open_options::anonymous));
-	vsm_assert(a.path.path.empty());
-	vsm_assert(a.opening == file_opening(0));
-
-	//TODO: Reject arguments that doesn't allow the required sharing?
-
-	open_parameters local_a = a;
-	local_a.special &= ~open_options::anonymous;
-	local_a.special |= open_options::unique_name;
-
-	vsm_try(file, open_unique_file(local_a));
-
-	// Delete the file by reopening it and setting delete-on-close on the new handle.
+	while (true)
 	{
-		open_info const info =
+		FILE_DISPOSITION_INFORMATION_EX information =
 		{
-			.desired_access = SYNCHRONIZE | DELETE,
-			.share_access = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-			.create_options = FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+			.Flags = FILE_DISPOSITION_DELETE,
 		};
 
-		vsm_try(duplicate, win32::reopen_file(file.handle.get(), info));
-
-		for (bool const use_posix_semantics : {true, false})
+		if (try_posix_semantics)
 		{
-			FILE_DISPOSITION_INFORMATION_EX information =
-			{
-				.Flags = FILE_DISPOSITION_DELETE,
-			};
-
-			if (use_posix_semantics)
-			{
-				information.Flags |= FILE_DISPOSITION_POSIX_SEMANTICS;
-			}
-
-			IO_STATUS_BLOCK io_status_block;
-			NTSTATUS const status = NtSetInformationFile(
-				duplicate.handle.get(),
-				&io_status_block,
-				&information,
-				sizeof(information),
-				FileDispositionInformationEx);
-
-			if (!NT_SUCCESS(status))
-			{
-				if (use_posix_semantics && status == STATUS_INVALID_PARAMETER)
-				{
-					continue;
-				}
-
-				return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
-			}
-
-			// TODO: Hide file if not using POSIX semantics?
-			//       What about when the file is eventually linked somewhere?
-			//       Is it still hidden? Test all this.
-
-			break;
+			information.Flags |= FILE_DISPOSITION_POSIX_SEMANTICS;
 		}
-	}
 
-	return file;
+		IO_STATUS_BLOCK io_status_block;
+		NTSTATUS const status = NtSetInformationFile(
+			handle,
+			&io_status_block,
+			&information,
+			sizeof(information),
+			FileDispositionInformationEx);
+
+		if (NT_SUCCESS(status))
+		{
+			return {};
+		}
+
+		if (!try_posix_semantics || status != STATUS_INVALID_PARAMETER)
+		{
+			return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
+		}
+
+		try_posix_semantics = false;
+	}
 }
 
-vsm::result<handle_with_flags> detail::open_file(open_parameters const& a)
+[[maybe_unused]] // TODO: Not currently used
+static vsm::result<void> reopen_and_delete_file(HANDLE const handle, bool try_posix_semantics)
 {
-	if (vsm::any_flags(a.special, open_options::anonymous))
+	platform_open_options const duplicate_options =
 	{
-		return open_anonymous_file(a);
-	}
-	else
+		.desired_access = SYNCHRONIZE | DELETE,
+		.share_access = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+		.create_options = FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+	};
+
+	vsm_try(duplicate, win32::reopen_file(handle, duplicate_options));
+	return delete_file(duplicate.handle.get(), try_posix_semantics);
+}
+
+
+vsm::result<unique_handle> detail::open_path_base(
+	platform_handle_type const base,
+	any_path_view const path)
+{
+	platform_open_options const options =
 	{
-		return open_named_file(a);
+		.desired_access = SYNCHRONIZE,
+		.share_access = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+		.create_disposition = FILE_OPEN,
+		.create_options = FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+	};
+
+	vsm_try_bind((handle, flags), detail::open_file(base, path, options));
+
+	return vsm_move(handle);
+}
+
+vsm::result<handle_with_flags> detail::open_file(
+	platform_handle_type const base,
+	any_path_view const path,
+	platform_open_options const& options)
+{
+	kernel_path_storage path_storage;
+	vsm_try(kernel_path, make_kernel_path(path_storage,
+	{
+		.handle = base,
+		.path = path,
+	}));
+
+	return win32::create_file(kernel_path.handle, make_unicode_string(kernel_path.path), options);
+}
+
+vsm::result<handle_with_flags> detail::open_anonymous_file(
+	platform_handle_type const base,
+	platform_open_options const& options)
+{
+	platform_open_options unique_options = options;
+	unique_options.create_options |= FILE_DELETE_ON_CLOSE;
+
+	vsm_try(file, detail::open_unique_file(base, unique_options));
+
+	// TODO: Delete (with posix semantics) if intended for temporary usage.
+
+#if 0
+	if (vsm::any_flags(local_a.special, open_options::temporary))
+	{
+		vsm_try_void(reopen_and_delete_file(
+			file.handle.get(),
+			/* try_posix_semantics: */ true));
 	}
+#endif
+
+	return file;
 }
 
 
@@ -637,14 +632,19 @@ vsm::result<size_t> fs_object_t::get_current_path(
 	return copy_or_transcode_string(wide_path, a.buffer.string());
 }
 
-
-vsm::result<void> detail::_link_at(native_handle<fs_object_t> const& h, fs_path const& path)
+vsm::result<void> fs_object_t::link_at(
+	native_handle<fs_object_t> const& h,
+	io_parameters_t<fs_object_t, link_at_t> const& a)
 {
-	HANDLE const base_handle = path.base == nullptr
+	HANDLE const base_handle = a.path.base == nullptr
 		? NULL
-		: unwrap_handle(path.base->platform_handle);
+		: unwrap_handle(a.path.base->platform_handle);
 
-	return win32::link_file_at(unwrap_handle(h.platform_handle), base_handle, path.path);
+	return win32::link_file_at(
+		unwrap_handle(h.platform_handle),
+		base_handle,
+		a.path.path,
+		a.replace_existing_file);
 }
 
 

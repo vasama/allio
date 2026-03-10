@@ -16,13 +16,27 @@ template<vsm::non_ref T>
 	detail::handle_for<detail::file_t> auto const& file,
 	auto&&... args)
 {
-	return mapped<T>(map_file(file, vsm_forward(args)...));
+	if constexpr (std::is_const_v<T>)
+	{
+		return mapped<T>(map_file(file, detail::file_opening::open_existing, vsm_forward(args)...));
+	}
+	else
+	{
+		return mapped<T>(map_file(file, vsm_forward(args)...));
+	}
 }
 
 template<vsm::non_ref T>
 [[nodiscard]] mapped<T> map_file_as(detail::fs_path const& path, auto&&... args)
 {
-	return mapped<T>(map_file(path, vsm_forward(args)...));
+	if constexpr (std::is_const_v<T>)
+	{
+		return mapped<T>(map_file(path, detail::file_opening::open_existing, vsm_forward(args)...));
+	}
+	else
+	{
+		return mapped<T>(map_file(path, vsm_forward(args)...));
+	}
 }
 
 } // inline namespace mapping

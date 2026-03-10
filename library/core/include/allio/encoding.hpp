@@ -105,6 +105,7 @@ struct default_encoding_t
 	explicit default_encoding_t() = default;
 };
 
+
 template<bool HasEncoding>
 struct container_encoding;
 
@@ -171,6 +172,16 @@ constexpr encoding_family get_container_encoding(Encoding const& encoding)
 {
 	return detail::get_encoding<typename Container::value_type, Container>(encoding);
 }
+
+template<typename Encoding, typename RequiredEncoding>
+concept compatible_encoding =
+	std::is_same_v<RequiredEncoding, Encoding> ||
+	std::is_same_v<RequiredEncoding, void> ||
+	std::is_same_v<RequiredEncoding, no_encoding_t>;
+
+template<typename Container, typename RequiredEncoding>
+concept compatible_container_encoding =
+	compatible_encoding<container_encoding_or_t<Container, void>, RequiredEncoding>;
 
 
 template<vsm::character To, vsm::character From>

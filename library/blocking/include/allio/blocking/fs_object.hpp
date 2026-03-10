@@ -1,16 +1,16 @@
 #pragma once
 
+#include <allio/blocking/traits.hpp>
 #include <allio/handles/fs_object.hpp>
-#include <allio/nothrow/traits.hpp>
 
-namespace allio::nothrow {
+namespace allio::blocking {
 inline namespace fs_object {
 
 template<detail::handle_for<fs_object_t> Handle>
-[[nodiscard]] vsm::result<void> link_at(Handle const& handle, fs_path const& path, auto&&... args)
+void link_at(Handle const& handle, fs_path const& path, auto&&... args)
 {
 	return detail::_link_at<traits_type>(handle, path, vsm_forward(args)...);
 }
 
 } // inline namespace fs_object
-} // namespace allio::nothrow
+} // namespace allio::blocking

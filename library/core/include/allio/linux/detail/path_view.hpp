@@ -277,7 +277,7 @@ constexpr bool basic_path_view<Char, Encoding>::equal(basic_path_view const lhs,
 	Char const* const l_end = l_beg + lhs_string.size();
 
 	Char const* r_beg = rhs_string.data();
-	Char const* const r_end = r_beg + lhs_string.size();
+	Char const* const r_end = r_beg + rhs_string.size();
 
 	if (root_path_compare(l_beg, l_end, r_beg, r_end).first != 0)
 	{
