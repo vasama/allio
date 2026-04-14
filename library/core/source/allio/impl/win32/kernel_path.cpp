@@ -1,10 +1,13 @@
 #include <allio/impl/win32/kernel_path_impl.hpp>
 
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/win32/kernel.hpp>
+#include <allio/impl/win32/object.hpp>
 
 using namespace allio;
 using namespace allio::win32;
-using namespace detail::kernel_path_impl;
+using namespace allio::detail;
+using namespace allio::detail::kernel_path_impl;
 
 namespace {
 
@@ -15,7 +18,7 @@ struct peb_context
 
 	static unique_lock_type lock()
 	{
-		return unique_lock_type(true);
+		return unique_lock_type(/* lock: */ true);
 	}
 
 	static current_directory<peb_context> get_current_directory(unique_lock_type const& lock)
@@ -29,7 +32,9 @@ struct peb_context
 	}
 
 	// Scan the environment variables for a variable named '=X:', where X is the drive letter.
-	static std::optional<path_section<wchar_t>> get_current_directory_on_drive(unique_lock_type const& lock, wchar_t const drive)
+	static std::optional<path_section<wchar_t>> get_current_directory_on_drive(
+		unique_lock_type const& lock,
+		wchar_t const drive)
 	{
 		vsm_assert(L'A' <= drive && drive <= L'Z');
 
@@ -60,7 +65,22 @@ struct peb_context
 
 } // namespace
 
-vsm::result<kernel_path> win32::make_kernel_path(kernel_path_storage& storage, kernel_path_parameters const& args)
+vsm::result<std::wstring_view> win32::make_kernel_path(
+	kernel_path_storage_base& storage,
+	HANDLE const base,
+	any_path_view const path,
+	kernel_path_handle* const out_handle)
 {
-	return basic_kernel_path_converter<peb_context const>::make_path({}, storage, args);
+	return basic_kernel_path_converter<peb_context const>::make_path(
+		peb_context(),
+		storage,
+		base,
+		path,
+		out_handle);
+}
+
+vsm::result<unique_handle> kernel_path_handle::duplicate() const
+{
+	vsm_assert(get() != NULL);
+	return duplicate_handle(get());
 }

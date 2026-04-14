@@ -2,8 +2,6 @@
 
 #include <allio/test/reverse_iterator.hpp>
 
-#include <vsm/lift.hpp>
-
 #include <catch2/catch_all.hpp>
 
 #include <filesystem>
@@ -99,7 +97,6 @@ checked_iterator(Iterator) -> checked_iterator<Iterator>;
 
 } // namespace
 
-
 static void generate_separator(std::string& buffer, size_t const max_separators = 2)
 {
 	size_t const count = GENERATE_COPY(range<size_t>(0, max_separators));
@@ -108,12 +105,10 @@ static void generate_separator(std::string& buffer, size_t const max_separators 
 	{
 		char separator = '/';
 
-#if vsm_os_win32
-		if (GENERATE(0, 1))
+		if (vsm_os_win32 && GENERATE(0, 1))
 		{
 			separator = '\\';
 		}
-#endif
 
 		buffer.push_back(separator);
 	}
@@ -121,8 +116,7 @@ static void generate_separator(std::string& buffer, size_t const max_separators 
 
 static void generate_root(std::string& buffer)
 {
-#if vsm_os_win32
-	if (GENERATE(0, 1))
+	if (vsm_os_win32 && GENERATE(0, 1))
 	{
 		buffer += GENERATE(
 			as<std::string_view>{}
@@ -137,7 +131,6 @@ static void generate_root(std::string& buffer)
 			return;
 		}
 	}
-#endif
 
 	generate_separator(buffer);
 }
@@ -243,10 +236,8 @@ TEST_CASE("path_view standard compliance - decomposition", "[path_view]")
 
 	CAPTURE(buffer);
 
-
 	auto const a_path = path_view(buffer);
 	auto const s_path = std::filesystem::path(buffer);
-
 
 	// Path properties
 	{
@@ -372,14 +363,17 @@ TEST_CASE("path_view standard compliance - combining", "[path_view]")
 	if (GENERATE(0, 1)) l_buffer += "foo";
 	if (GENERATE(0, 1)) r_buffer += "bar";
 
-	auto const a_l_path = path_view(std::string_view(l_buffer));
-	auto const a_r_path = path_view(std::string_view(r_buffer));
-
-	std::filesystem::path const s_l_path(l_buffer);
-	std::filesystem::path const s_r_path(r_buffer);
+	generate_separator(l_buffer, 1);
+	generate_separator(r_buffer, 1);
 
 	CAPTURE(l_buffer);
 	CAPTURE(r_buffer);
+
+	auto const a_l_path = path(std::string_view(l_buffer));
+	auto const a_r_path = path(std::string_view(r_buffer));
+
+	std::filesystem::path const s_l_path(l_buffer);
+	std::filesystem::path const s_r_path(r_buffer);
 
 	// Path combining
 	{
@@ -400,5 +394,119 @@ TEST_CASE("path_view standard compliance - combining", "[path_view]")
 
 TEST_CASE("path_view standard compliance - relations", "[path_view]")
 {
-	// TODO: test comparisons, lexically_relative, etc...
+	std::string l_buffer;
+	std::string r_buffer;
+
+	if (GENERATE(0, 1))
+	{
+		l_buffer += "C:";
+		r_buffer += "D:";
+
+		generate_separator(l_buffer, 1);
+		generate_separator(r_buffer, 1);
+
+		if (GENERATE(0, 1)) l_buffer += "x";
+		if (GENERATE(0, 1)) r_buffer += "y";
+	}
+	else
+	{
+		auto const root = []() -> std::string_view
+		{
+			if (vsm_os_win32 && GENERATE(0, 1))
+			{
+				return GENERATE(
+					as<std::string_view>()
+					, "C:"
+					, "C:/"
+					, "/??/"
+				);
+			}
+
+			if (GENERATE(0, 1))
+			{
+				// On Windows, due to an MSSTL bug which causes a non-preferred separator to be
+				// preserved, root relative paths are only tested using the preferred separator.
+				return vsm_os_win32 ? "\\" : "/";
+			}
+
+			return std::string_view();
+		};
+
+		auto const relative = [](std::string_view const name) -> std::string_view
+		{
+			if (GENERATE(0, 1))
+			{
+				return name;
+			}
+			else
+			{
+				if (vsm_os_win32 && GENERATE(0, 1))
+				{
+					return "X:";
+				}
+
+				return GENERATE(
+					as<std::string_view>()
+					, "."
+					, ".."
+				);
+			}
+		};
+
+		auto const common_root = root();
+
+		l_buffer += common_root;
+		r_buffer += common_root;
+
+		auto const has_relative_path = [&](std::string_view const path)
+		{
+			return path.size() > common_root.size();
+		};
+
+		if (GENERATE(0, 1))
+		{
+			auto const common_relative_path = relative("x");
+
+			l_buffer += common_relative_path;
+			r_buffer += common_relative_path;
+		}
+
+		if (GENERATE(0, 1))
+		{
+			if (has_relative_path(l_buffer))
+			{
+				l_buffer += '/';
+			}
+			l_buffer += relative("y");
+		}
+
+		if (GENERATE(0, 1))
+		{
+			if (has_relative_path(r_buffer))
+			{
+				r_buffer += '/';
+			}
+			r_buffer += relative("z");
+		}
+
+		if (has_relative_path(l_buffer) && GENERATE(0, 1)) l_buffer += '/';
+		if (has_relative_path(r_buffer) && GENERATE(0, 1)) r_buffer += '/';
+	}
+
+	CAPTURE(l_buffer);
+	CAPTURE(r_buffer);
+
+	auto const a_l_path = path(std::string_view(l_buffer));
+	auto const a_r_path = path(std::string_view(r_buffer));
+
+	std::filesystem::path const s_l_path(l_buffer);
+	std::filesystem::path const s_r_path(r_buffer);
+
+	// lexically_relative
+	{
+		auto const a_relative_path = a_l_path.lexically_relative(a_r_path);
+		auto const s_relative_path = s_l_path.lexically_relative(s_r_path);
+
+		CHECK(a_relative_path.string() == s_relative_path.string());
+	}
 }

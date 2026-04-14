@@ -5,6 +5,7 @@
 #include <allio/senders/sync_wait.hpp>
 #include <allio/senders/task.hpp>
 #include <allio/test/filesystem.hpp>
+#include <allio/win32/path_format.hpp>
 
 #include <vsm/defer.hpp>
 
@@ -55,18 +56,25 @@ TEST_CASE("Directory current path can be read", "[directory][blocking]")
 {
 	using namespace blocking;
 
-	path_kind const kind = GENERATE(
-		path_kind::any
-		, path_kind::windows_nt
-		, path_kind::windows_volume_guid
-		, path_kind::windows_dos
-	);
+	auto formats = path_formats::any;
+
+	if (GENERATE(0, 1))
+	{
+		if (GENERATE(0, 1))
+		{
+			formats = formats | win32::dos_format;
+		}
+
+		formats = formats | win32::uid_format;
+	}
+
+	formats = formats | win32::dev_format;
 
 	auto const temp_path = test::get_temp_path();
 	REQUIRE(std::filesystem::create_directory(temp_path.string()));
 
 	auto const directory = open_directory(temp_path);
-	auto const current_path = directory.get_current_path(kind);
+	auto const current_path = directory.get_current_path(formats);
 
 	REQUIRE(std::filesystem::equivalent(
 		temp_path.string(),
@@ -183,7 +191,6 @@ TEST_CASE("Current directory", "[directory][this_process][blocking]")
 			REQUIRE(std::filesystem::equivalent(
 				temp_path.string(),
 				std::filesystem::current_path()));
-
 		}
 
 		SECTION("Current directory can be opened")

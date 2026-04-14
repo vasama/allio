@@ -107,6 +107,7 @@ enum class file_options : uint16_t
 };
 vsm_flag_enum(file_options);
 
+#if 0
 //TODO: Implement ordered path_kind to allow user to specify preference?
 
 enum class path_kind : uint8_t
@@ -117,15 +118,16 @@ enum class path_kind : uint8_t
 #	define allio_detail_windows_flag(x) 0
 #endif
 
-	windows_nt                          = allio_detail_windows_flag(0),
-	windows_volume_guid                 = allio_detail_windows_flag(1),
-	windows_dos                         = allio_detail_windows_flag(2),
+	windows_dos                         = allio_detail_windows_flag(0),
+	windows_guid                        = allio_detail_windows_flag(1),
+	windows_nt                          = allio_detail_windows_flag(2),
 
 #undef allio_detail_windows_flag
 
-	any = windows_nt | windows_volume_guid | windows_dos,
+	any = windows_dos | windows_guid | windows_nt,
 };
 vsm_flag_enum(path_kind);
+#endif
 
 enum class open_options : uint8_t
 {
@@ -136,6 +138,7 @@ enum class open_options : uint8_t
 vsm_flag_enum(open_options);
 
 
+#if 0
 struct path_kind_t
 {
 	path_kind kind = path_kind::any;
@@ -145,6 +148,7 @@ struct path_kind_t
 		kind = value;
 	}
 };
+#endif
 
 struct replace_existing_file_t : explicit_argument<replace_existing_file_t, bool> {};
 inline constexpr explicit_parameter<replace_existing_file_t> replace_existing_file = {};
@@ -222,11 +226,16 @@ struct get_current_path_t
 	struct params_type
 	{
 		any_path_buffer buffer;
-		path_kind kind = path_kind::any;
+		path_formats formats;
 
-		void set_argument(path_kind const value)
+		void set_argument(path_formats const value)
 		{
-			kind = value;
+			formats = value;
+		}
+
+		void set_argument(path_format const format)
+		{
+			formats = formats | format;
 		}
 	};
 

@@ -79,9 +79,11 @@ struct test_context
 };
 
 using test_path_converter = detail::kernel_path_impl::basic_kernel_path_converter<test_context>;
-using test_path_parameters = detail::kernel_path_impl::basic_kernel_path_parameters<test_handle>;
-using test_path_storage = detail::kernel_path_impl::basic_kernel_path_storage<unique_test_lock>;
-using test_path = detail::kernel_path_impl::basic_kernel_path<test_handle>;
+using test_path_storage = detail::basic_storage<wchar_t, 256>;
+
+using test_path_handle = detail::kernel_path_impl::basic_kernel_path_handle<
+	unique_test_lock,
+	test_handle>;
 
 } // namespace
 
@@ -100,9 +102,14 @@ static Char const(&test_string(char const(&utf8)[Size], wchar_t const(&wide)[Siz
 
 #define S(...) (::test_string<char_type>(__VA_ARGS__, L"" __VA_ARGS__))
 
-static vsm::result<test_path> make_test_path(test_context& context, test_path_storage& storage, test_path_parameters const& args)
+static vsm::result<std::wstring_view> make_test_path(
+	test_context& context,
+	test_path_storage& storage,
+	test_handle const base,
+	any_path_view const path,
+	test_path_handle* const out_handle)
 {
-	return test_path_converter::make_path(context, storage, args);
+	return test_path_converter::make_path(context, storage, base, path, out_handle);
 }
 
 TEMPLATE_TEST_CASE("win32::make_kernel_path", "[win32][kernel_path]", char, wchar_t)
@@ -231,16 +238,18 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path", "[win32][kernel_path]", char, wcha
 
 	CAPTURE(path);
 
-	auto const r = make_test_path(context, storage,
-	{
-		.path = basic_path_view<char_type>(path),
-	});
+	auto const r = make_test_path(
+		context,
+		storage,
+		test_handle(),
+		basic_path_view<char_type>(path),
+		/* out_handle: */ nullptr);
 
 	REQUIRE(static_cast<bool>(r) == static_cast<bool>(path_expectation));
 
 	if (r)
 	{
-		CHECK(r->path == *path_expectation);
+		CHECK(*r == *path_expectation);
 	}
 }
 
@@ -253,20 +262,20 @@ TEMPLATE_TEST_CASE("win32::make_kernel_path 2", "[win32][kernel_path]", char, wc
 	test_context context;
 	test_path_storage storage;
 
-	auto const make_path = [&](string_view_type const path) -> test_path
+	auto const make_path = [&](string_view_type const path) -> std::wstring_view
 	{
-		test_path_parameters const args =
-		{
-			.path = basic_path_view<char_type>(path),
-		};
-
-		return test_path_converter::make_path(context, storage, args).value();
+		return test_path_converter::make_path(
+			context,
+			storage,
+			test_handle(),
+			basic_path_view<char_type>(path),
+			/* out_handle: */ nullptr).value();
 	};
 
 	#define CHECK_CONVERSION(from, to) \
 		SECTION("Convert '" from "'") \
 		{ \
-			CHECK(make_path(S(from)).path == std::wstring_view(L"" to)); \
+			CHECK(make_path(S(from)) == std::wstring_view(L"" to)); \
 		}
 
 	#define CHECK_REJECTION(from) \

@@ -13,40 +13,39 @@ using namespace allio::win32;
 	X(ntdll) \
 
 #define allio_kernel_functions(X) \
-	X(ntdll,        RtlNtStatusToDosError,                  ERROR_NOT_SUPPORTED) \
-	X(ntdll,        RtlSetCurrentDirectory_U,               STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtClose,                                STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtDuplicateObject,                      STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtWaitForSingleObject,                  STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtWaitForMultipleObjects,               STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtQueryInformationFile,                 STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtSetInformationFile,                   STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtCreateFile,                           STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtReadFile,                             STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtWriteFile,                            STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtAllocateVirtualMemory,                STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtAssociateWaitCompletionPacket,        STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtCancelIoFileEx,                       STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtCancelWaitCompletionPacket,           STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtClose,                                STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtCreateEvent,                          STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtCreateFile,                           STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtCreateIoCompletion,                   STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtSetIoCompletion,                      STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtCreateNamedPipeFile,                  STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtCreateSection,                        STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtCreateWaitCompletionPacket,           STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtDeviceIoControlFile,                  STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtDuplicateObject,                      STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtFreeVirtualMemory,                    STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtMapViewOfSection,                     STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtProtectVirtualMemory,                 STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtQueryDirectoryFileEx,                 STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtQueryInformationFile,                 STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtQueryObject,                          STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtReadFile,                             STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtRemoveIoCompletion,                   STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtRemoveIoCompletionEx,                 STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtCreateWaitCompletionPacket,           STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtAssociateWaitCompletionPacket,        STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtCancelWaitCompletionPacket,           STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtQueryDirectoryFileEx,                 STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtQueryFullAttributesFile,              STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtAllocateVirtualMemory,                STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtFreeVirtualMemory,                    STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtProtectVirtualMemory,                 STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtCreateSection,                        STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtMapViewOfSection,                     STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtUnmapViewOfSection,                   STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtCreateEvent,                          STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtSetEvent,                             STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtResetEvent,                           STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtDeviceIoControlFile,                  STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtQueryObject,                          STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtSetEvent,                             STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtSetInformationFile,                   STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtSetIoCompletion,                      STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtTerminateProcess,                     STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtCreateNamedPipeFile,                  STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtUnmapViewOfSection,                   STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtWaitForMultipleObjects,               STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtWaitForSingleObject,                  STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtWriteFile,                            STATUS_NOT_SUPPORTED) \
+	X(ntdll,        RtlNtStatusToDosError,                  ERROR_NOT_SUPPORTED) \
+	X(ntdll,        RtlSetCurrentDirectory_U,               STATUS_NOT_SUPPORTED) \
 
 namespace {
 
@@ -66,7 +65,7 @@ struct kernel_function<R(NTAPI*)(P...)>
 		R DefaultValue>
 	static R NTAPI entry_point(P const... args)
 	{
-		auto _module = Module;
+		HMODULE _module = Module;
 
 		if (_module == NULL)
 		{
@@ -150,10 +149,7 @@ bool win32::io_cancel(HANDLE const handle, IO_STATUS_BLOCK& io_status_block)
 {
 	if (io_status_block.Status == STATUS_PENDING)
 	{
-		if (NT_SUCCESS(NtCancelIoFileEx(
-			handle,
-			&io_status_block,
-			&io_status_block)))
+		if (NT_SUCCESS(NtCancelIoFileEx(handle, &io_status_block, &io_status_block)))
 		{
 			return true;
 		}

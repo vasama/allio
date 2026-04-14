@@ -1,6 +1,6 @@
 #include <allio/handles/process.hpp>
 
-#include <allio/detail/default_sequence_container.hpp>
+#include <allio/detail/basic_storage.hpp>
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/api_string.hpp>
 #include <allio/impl/linux/error.hpp>
@@ -536,9 +536,9 @@ static vsm::result<size_t> get_current_executable_path(string_buffer<char> const
 template<typename Char>
 static vsm::result<size_t> get_current_executable_path(string_buffer<Char> const buffer)
 {
-	default_sequence_container<char, 512> container;
-	vsm_try(path_size, ::get_current_executable_path(container));
-	auto const string = std::string_view(container.begin(), path_size);
+	basic_storage<char, 512> storage;
+	vsm_try(path_size, ::get_current_executable_path(storage));
+	auto const string = std::string_view(storage.begin(), path_size);
 	return transcode_string(string, buffer);
 }
 

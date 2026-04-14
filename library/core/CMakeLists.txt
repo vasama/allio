@@ -171,6 +171,8 @@ vsm_configure(
 		source/allio/impl/win32/kernel.cpp
 		source/allio/impl/win32/kernel.hpp
 		source/allio/impl/win32/memory.cpp
+		source/allio/impl/win32/object.cpp
+		source/allio/impl/win32/object.hpp
 		source/allio/impl/win32/path.cpp
 		source/allio/impl/win32/path.hpp
 		source/allio/impl/win32/peb.cpp

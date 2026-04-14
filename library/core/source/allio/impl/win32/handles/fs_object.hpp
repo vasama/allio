@@ -6,21 +6,20 @@
 
 namespace allio::win32 {
 
+#if 0
 using detail::platform_open_options;
 
-#if 0
-vsm::result<handle_with_flags> create_file(
+vsm::result<handle_with_flags> old_create_file(
 	HANDLE hint_handle,
 	file_id_128 const& id,
 	platform_open_options const& options);
-#endif
 
-vsm::result<detail::handle_with_flags> create_file(
+vsm::result<detail::handle_with_flags> old_create_file(
 	HANDLE base_handle,
 	UNICODE_STRING path,
 	platform_open_options const& options);
 
-vsm::result<detail::handle_with_flags> reopen_file(
+vsm::result<detail::handle_with_flags> old_reopen_file(
 	HANDLE handle,
 	platform_open_options const& options);
 
@@ -35,5 +34,6 @@ vsm::result<void> link_file_at(
 	HANDLE base_handle,
 	any_path_view path,
 	bool replace_existing_file);
+#endif
 
 } // namespace allio::win32

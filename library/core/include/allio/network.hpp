@@ -1,7 +1,7 @@
 #pragma once
 
 #include <allio/any_path.hpp>
-#include <allio/detail/default_sequence_container.hpp>
+#include <allio/detail/basic_storage.hpp>
 #include <allio/detail/mutable_buffer.hpp>
 #include <allio/detail/parameters.hpp>
 
@@ -474,7 +474,7 @@ namespace detail {
 inline constexpr size_t endpoint_padding_size = vsm_os_win32 ? 16 : 0;
 inline constexpr size_t endpoint_storage_size = 112 + endpoint_padding_size;
 
-using platform_endpoint_container = default_sequence_container<
+using platform_endpoint_container = basic_storage<
 	std::byte,
 	endpoint_storage_size,
 	platform_endpoint_alignment>;

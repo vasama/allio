@@ -18,7 +18,7 @@ These paths are of the form `C:x/y/z`.
 They are prefixed with a drive letter (`C:`) which is not followed by a separator and is optionally followed by a relative path.
 Within a Windows user mode program, such paths are relative to the current working directory on the specified drive.
 
-### Absolute Paths
+### Root Relative Paths
 
 These paths are of the form `/x/y/z`.
 

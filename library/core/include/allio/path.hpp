@@ -353,14 +353,19 @@ public:
 	{
 		return path_view_type(detail::throw_on_error(Traits::copy_lexically_relative(
 			m_string,
-			base.m_string_view,
+			base.string(),
 			buffer.string())));
 	}
 
 	[[nodiscard]] foreign_path_adaptor lexically_relative(path_view_type const base) const
 	{
 		foreign_path_adaptor result;
-		result.resize(Traits::copy_lexically_relative(base, result).string().size());
+		auto const path = detail::throw_on_error(Traits::copy_lexically_relative(
+			m_string,
+			base.string(),
+			string_buffer<Char>(result.m_string)));
+
+		result.m_string.resize(path.size());
 		return result;
 	}
 
@@ -370,14 +375,19 @@ public:
 	{
 		return path_view_type(detail::throw_on_error(Traits::copy_lexically_proximate(
 			m_string,
-			base.m_string_view,
+			base.string(),
 			buffer.string())));
 	}
 
 	[[nodiscard]] foreign_path_adaptor lexically_proximate(path_view_type const base) const
 	{
 		foreign_path_adaptor result;
-		result.resize(Traits::copy_lexically_proximate(base, result).string().size());
+		auto const path = detail::throw_on_error(Traits::copy_lexically_proximate(
+			m_string,
+			base.string(),
+			string_buffer<Char>(result.m_string)));
+
+		result.m_string.resize(path.size());
 		return result;
 	}
 

@@ -9,7 +9,10 @@ using detail::file_opening;
 using detail::file_sharing;
 using detail::file_caching;
 using detail::file_options;
-using detail::path_kind;
+
+using detail::path_format;
+using detail::path_formats;
+
 using detail::replace_existing_file;
 
 using detail::fs_object_t;

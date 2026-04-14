@@ -5,10 +5,6 @@
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>
 
-#include <vsm/out_resource.hpp>
-
-#include <Windows.h>
-
 using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
@@ -27,16 +23,18 @@ bool win32::verify_object_type(HANDLE const handle, std::wstring_view const type
 		// In some versions of Windows for certain object types, ObjectTypeInformation may overrun
 		// the provided buffer by at least one WCHAR (null terminator). For this reason, a generous
 		// amount of padding is added after the actual information buffer.
-		UCHAR padding[8];
+		std::byte padding[8];
 	}
-	storage;
+	storage_with_padding;
+
+	auto& storage = storage_with_padding.storage;
 
 	ULONG returned_size;
 	NTSTATUS const status = win32::NtQueryObject(
 		handle,
 		ObjectTypeInformation,
 		&storage,
-		sizeof(storage.storage),
+		sizeof(storage),
 		&returned_size);
 
 	if (!NT_SUCCESS(status))
@@ -44,47 +42,7 @@ bool win32::verify_object_type(HANDLE const handle, std::wstring_view const type
 		return false;
 	}
 
-	return get_unicode_string(storage.storage.information.TypeName) == type;
-}
-
-vsm::result<ACCESS_MASK> win32::get_handle_access(HANDLE const handle)
-{
-	OBJECT_BASIC_INFORMATION information;
-
-	ULONG returned_size;
-	NTSTATUS const status = win32::NtQueryObject(
-		handle,
-		ObjectBasicInformation,
-		&information,
-		sizeof(information),
-		&returned_size);
-
-	if (!NT_SUCCESS(status))
-	{
-		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
-	}
-
-	return information.GrantedAccess;
-}
-
-vsm::result<unique_handle> win32::duplicate_handle(HANDLE const handle)
-{
-	HANDLE const process = GetCurrentProcess();
-
-	unique_handle duplicate;
-	if (!DuplicateHandle(
-		/* hSourceProcessHandle: */ process,
-		/* hSourceHandle: */ handle,
-		/* hTargetProcessHandle: */ process,
-		vsm::out_resource(duplicate),
-		/* dwDesiredAccess: */ 0,
-		/* bInheritHandle: */ false,
-		/* dwOptions: */ DUPLICATE_SAME_ACCESS))
-	{
-		return vsm::unexpected(allio_error(get_last_error()));
-	}
-
-	return duplicate;
+	return from_unicode_string(storage.information.TypeName) == type;
 }
 
 handle_flags win32::set_file_completion_notification_modes(HANDLE const handle)

@@ -265,9 +265,12 @@ private:
 	}
 };
 
-template<typename Char>
-class reverse_path_builder
+template<typename Char, bool Forward>
+class basic_path_builder
 {
+	static constexpr bool is_forward = Forward;
+	static constexpr bool is_reverse = !Forward;
+
 	string_buffer<Char> m_buffer;
 
 	Char* m_beg = nullptr;
@@ -277,7 +280,7 @@ class reverse_path_builder
 	size_t m_max_path_size;
 
 public:
-	explicit reverse_path_builder(
+	explicit basic_path_builder(
 		string_buffer<Char> const buffer,
 		size_t const max_path_size = static_cast<size_t>(-1))
 		: m_buffer(buffer)
@@ -306,13 +309,28 @@ public:
 		size_t const size = static_cast<size_t>(end - beg);
 		vsm_try(out, push_uninitialized(size + insert_trailing_separator));
 
-		if (insert_trailing_separator)
+		Char* const out_beg = out;
+		Char* out_end = out_beg;
+
+		if constexpr (is_reverse)
 		{
-			*out++ = '\\';
+			if (insert_trailing_separator)
+			{
+				*out_end++ = '/';
+			}
+
+			out_end = std::reverse_copy(beg, end, out_end);
 		}
 
-		Char* const out_beg = out;
-		Char* const out_end = std::reverse_copy(beg, end, out);
+		if constexpr (is_forward)
+		{
+			out_end = std::copy(beg, end, out_end);
+
+			if (insert_trailing_separator)
+			{
+				*out_end++ = '/';
+			}
+		}
 
 		return ptr_pair<Char>(out_beg, out_end);
 	}
@@ -327,26 +345,50 @@ public:
 			size_t const backtrack_n = backtrack_count - backtrack_1;
 			vsm_try(out, push_uninitialized(backtrack_n * 3 + backtrack_1 * 2));
 
-			if (backtrack_1 != 0)
+			if constexpr (is_reverse)
 			{
-				*out++ = '.';
-				*out++ = '.';
+				if (backtrack_1 != 0)
+				{
+					*out++ = '.';
+					*out++ = '.';
+				}
 			}
 
 			for (size_t i = 0; i < backtrack_n; ++i)
 			{
-				*out++ = '\\';
+				if constexpr (is_reverse)
+				{
+					*out++ = '/';
+				}
+
 				*out++ = '.';
 				*out++ = '.';
+
+				if constexpr (is_forward)
+				{
+					*out++ = '/';
+				}
+			}
+
+			if constexpr (is_forward)
+			{
+				if (backtrack_1 != 0)
+				{
+					*out++ = '.';
+					*out++ = '.';
+				}
 			}
 		}
 
 		return {};
 	}
 
-	[[nodiscard]] vsm::result<ptr_pair<Char>> finalize()
+	[[nodiscard]] vsm::result<string_view<Char>> finalize()
 	{
-		std::reverse(m_beg, m_pos);
+		if constexpr (is_reverse)
+		{
+			std::reverse(m_beg, m_pos);
+		}
 
 		if (m_pos != m_end)
 		{
@@ -354,11 +396,11 @@ public:
 			vsm_try_void(resize_buffer(size, size));
 		}
 
-		return ptr_pair<Char>(m_beg, m_pos);
+		return string_view<Char>(m_beg, m_pos);
 	}
 
 private:
-	[[nodiscard]] vsm::result<Char*> push_uninitialized(size_t const size)
+	vsm::result<Char*> push_uninitialized(size_t const size)
 	{
 		size_t const cur_size = static_cast<size_t>(m_pos - m_beg);
 		size_t const min_size = cur_size + size;
@@ -371,17 +413,32 @@ private:
 		return pos;
 	}
 
-	[[nodiscard]] vsm::result<void> resize_buffer(size_t const min_size, size_t const max_size)
+	vsm::result<void> resize_buffer(size_t const min_size, size_t const max_size)
 	{
 		vsm_try(new_buffer, m_buffer.resize(min_size, max_size));
+		size_t const size = static_cast<size_t>(m_pos - m_beg);
 
 		m_beg = new_buffer.data();
-		m_pos = new_buffer.data() + static_cast<size_t>(m_pos - m_beg);
+		m_pos = new_buffer.data() + size;
 		m_end = new_buffer.data() + new_buffer.size();
 
 		return {};
 	}
 };
+
+template<typename Char>
+using forward_path_builder = basic_path_builder<Char, /* Forward: */ true>;
+
+template<typename Char>
+using reverse_path_builder = basic_path_builder<Char, /* Forward: */ false>;
+
+template<typename Char>
+vsm::result<string_view<Char>> make_dot_path(string_buffer<Char> const buffer)
+{
+	vsm_try(storage, buffer.resize(1));
+	storage.front() = static_cast<Char>('.');
+	return string_view<Char>(storage);
+}
 
 } // namespace
 
@@ -757,15 +814,144 @@ vsm::result<string_view<Char>> posix_path_traits_base<Char>::copy_lexically_norm
 
 	if (builder.empty())
 	{
-		vsm_try(new_buffer, buffer.resize(1));
-		new_buffer.front() = static_cast<Char>('.');
-		return string_view<Char>(new_buffer);
+		return make_dot_path(buffer);
 	}
 	else
 	{
-		vsm_try_bind((out_beg, out_end), builder.finalize());
-		return string_view<Char>(out_beg, out_end);
+		return builder.finalize();
 	}
+}
+
+template<typename Char>
+vsm::result<string_view<Char>> posix_path_traits_base<Char>::copy_lexically_relative(
+	string_view<Char> const path_string,
+	string_view<Char> const base_string,
+	string_buffer<Char> const buffer)
+{
+	Char const* const path_beg = path_string.data();
+	Char const* const path_end = path_beg + path_string.size();
+
+	Char const* const base_beg = base_string.data();
+	Char const* const base_end = base_beg + base_string.size();
+
+	Char const* const path_root_end = skip_separators(path_beg, path_end);
+	Char const* const base_root_end = skip_separators(base_beg, base_end);
+
+	// No relative path exists if the path has a root directory and base does not, or vice versa.
+	if ((path_beg == path_root_end) != (base_beg == base_root_end))
+	{
+		return string_view<Char>();
+	}
+
+	Char const* path_mismatch = path_root_end;
+	Char const* base_mismatch = base_root_end;
+
+	while (true)
+	{
+		Char const* const path_separator = find_separator(path_mismatch, path_end);
+		Char const* const base_separator = find_separator(base_mismatch, base_end);
+
+		if (!std::equal(path_mismatch, path_separator, base_mismatch, base_separator))
+		{
+			break;
+		}
+
+		path_mismatch = path_separator;
+		base_mismatch = base_separator;
+
+		if ((path_separator == path_end) != (base_separator == base_end))
+		{
+			break;
+		}
+
+		path_mismatch = skip_separators(path_separator, path_end);
+		base_mismatch = skip_separators(base_separator, base_end);
+	}
+
+	if (path_mismatch == path_end && base_mismatch == base_end)
+	{
+		return make_dot_path(buffer);
+	}
+
+	path_mismatch = skip_separators(path_mismatch, path_end);
+	base_mismatch = skip_separators(base_mismatch, base_end);
+
+	ptrdiff_t base_component_count = 0;
+
+	while (base_mismatch != base_end)
+	{
+		Char const* const pos = base_mismatch;
+		Char const* const sep = find_separator(pos, base_end);
+
+		/**/ if (sep - pos == 1 && pos[0] == '.')
+		{
+		}
+		else if (sep - pos == 2 && pos[0] == '.' && pos[1] == '.')
+		{
+			--base_component_count;
+		}
+		else
+		{
+			++base_component_count;
+		}
+
+		base_mismatch = skip_separators(sep, base_end);
+	}
+
+	if (base_component_count < 0)
+	{
+		return string_view<Char>();
+	}
+
+	if (base_component_count == 0 && path_mismatch == path_end)
+	{
+		return make_dot_path(buffer);
+	}
+
+	forward_path_builder<Char> builder(buffer);
+
+	bool const insert_trailing_separator_after_backtracking =
+		path_mismatch != path_end ||
+		path_root_end != path_end && path_mismatch[-1] == '/';
+
+	vsm_try_void(builder.push_backtracking(
+		static_cast<size_t>(base_component_count),
+		insert_trailing_separator_after_backtracking));
+
+	while (path_mismatch != path_end)
+	{
+		Char const* const component_beg = path_mismatch;
+		Char const* const component_end = find_separator(component_beg, path_end);
+		path_mismatch = skip_separators(component_end, path_end);
+
+		vsm_try_discard(builder.push_component(
+			component_beg,
+			component_end,
+			/* insert_trailing_separator: */ component_end != path_end));
+	}
+
+	return builder.finalize();
+}
+
+template<typename Char>
+vsm::result<string_view<Char>> posix_path_traits_base<Char>::copy_lexically_proximate(
+	string_view<Char> const path_string,
+	string_view<Char> const base_string,
+	string_buffer<Char> const buffer)
+{
+	vsm_try(proximate_path, copy_lexically_relative(path_string, base_string, buffer));
+
+	if (proximate_path.empty())
+	{
+		vsm_try(storage, buffer.resize(path_string.size()));
+
+		Char* const out_beg = storage.data();
+		Char* const out_end = std::copy(path_string.begin(), path_string.end(), out_beg);
+
+		proximate_path = string_view<Char>(out_beg, out_end);
+	}
+
+	return proximate_path;
 }
 
 template<typename Char>

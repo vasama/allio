@@ -91,15 +91,15 @@ struct posix_path_traits_base
 		string_view<Char> string,
 		string_buffer<Char> buffer);
 
-#if 0
 	static vsm::result<string_view<Char>> copy_lexically_relative(
 		string_view<Char> string,
+		string_view<Char> base_string,
 		string_buffer<Char> buffer);
 
 	static vsm::result<string_view<Char>> copy_lexically_proximate(
 		string_view<Char> string,
+		string_view<Char> base_string,
 		string_buffer<Char> buffer);
-#endif
 
 	static path_combine_result_base<Char> combine(string_view<Char> lhs, string_view<Char> rhs);
 };

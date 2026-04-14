@@ -38,19 +38,19 @@ class basic_kernel_path_converter
 {
 	using handle_type = typename Context::handle_type;
 	using unique_lock_type = typename Context::unique_lock_type;
-	using storage_type = basic_kernel_path_storage<unique_lock_type>;
-	using parameters_type = basic_kernel_path_parameters<handle_type>;
-	using path_type = basic_kernel_path<handle_type>;
+	using path_handle_type = basic_kernel_path_handle<unique_lock_type, handle_type>;
+	using storage_type = basic_storage_base<wchar_t>;
 
 	static constexpr size_t max_path_size = 0x7fff;
+	static constexpr size_t max_root_size = 8;
 
 	Context& m_context;
-	typename Context::unique_lock_type m_lock;
+	unique_lock_type m_lock;
 
 	storage_type& m_storage;
 	handle_type m_handle;
 
-	bool m_win32_api_form = false;
+	bool m_has_out_handle = false;
 	bool m_reject_local_device_current_directory = false;
 	bool m_reject_dos_device_name = true;
 
@@ -58,83 +58,87 @@ class basic_kernel_path_converter
 	wchar_t* m_buffer_pos = nullptr;
 	wchar_t* m_buffer_end = nullptr;
 
+	wchar_t m_root[max_root_size];
+
 public:
 	basic_kernel_path_converter(basic_kernel_path_converter const&) = delete;
 	basic_kernel_path_converter& operator=(basic_kernel_path_converter const&) = delete;
 
-	static vsm::result<path_type> make_path(
+	static vsm::result<std::wstring_view> make_path(
 		Context& context,
 		storage_type& storage,
-		parameters_type const& args)
+		handle_type const base,
+		any_path_view const path,
+		path_handle_type* const out_handle)
 	{
-		// Win32 API form does not allow a directory handle.
-		vsm_assert(!(args.win32_api_form && args.handle));
+		// If a base handle is provided, a path handle output must also be provided.
+		vsm_assert(base == handle_type() || out_handle != nullptr);
 
-		if (args.path.empty())
+		if (path.empty())
 		{
 			return vsm::unexpected(allio_error(error::invalid_path));
 		}
 
-		basic_kernel_path_converter c(context, storage, args);
-		vsm_try_void(args.path.string().visit(vsm_lift_borrow(c._make_path_select)));
+		basic_kernel_path_converter c(context, storage, base, out_handle);
+		vsm_try_void(path.string().visit(vsm_lift_borrow(c._make_path_select)));
 
-		storage.m_lock = static_cast<unique_lock_type&&>(c.m_lock);
-		return path_type{ c.m_handle, { c.m_buffer_pos, c.m_buffer_end } };
+		if (out_handle != nullptr)
+		{
+			out_handle->set(c.m_handle, vsm_move(c.m_lock));
+		}
+		else
+		{
+			vsm_assert(c.m_handle == handle_type());
+		}
+
+		return std::wstring_view(c.m_buffer_pos, c.m_buffer_end);
 	}
 
 private:
 	explicit basic_kernel_path_converter(
 		Context& context,
 		storage_type& storage,
-		parameters_type const& args)
+		handle_type const base,
+		bool const has_out_handle)
 		: m_context(context)
 		, m_storage(storage)
-		, m_handle(args.handle)
-		, m_win32_api_form(args.win32_api_form)
+		, m_handle(base)
+		, m_has_out_handle(has_out_handle)
 	{
 	}
 
 
 	vsm::result<std::pair<wchar_t*, wchar_t*>> resize_buffer(size_t const new_data_size)
 	{
-		if (m_storage.m_dynamic != nullptr)
+		if (m_storage.size() >= max_path_size)
 		{
 			return vsm::unexpected(allio_error(error::filename_too_long));
 		}
 
-		wchar_t const* const old_beg = m_buffer_pos;
-		wchar_t const* const old_end = m_buffer_end;
-		size_t const old_data_size = static_cast<size_t>(old_end - old_beg);
+		bool const is_borrowed_buffer = m_buffer_beg != m_storage.data();
 
-		wchar_t* new_buffer_beg;
-		wchar_t* new_buffer_end;
+		size_t const old_data_size = static_cast<size_t>(m_buffer_end - m_buffer_pos);
 
-		if (old_data_size + new_data_size <= m_storage.small_path_size)
+		vsm_try(new_buffer, m_storage.resize(
+			max_path_size,
+			is_borrowed_buffer ? resize_mode::discard : resize_mode::prepend));
+
+		wchar_t* const new_buffer_beg = new_buffer.data();
+		wchar_t* const new_buffer_end = new_buffer.data() + max_path_size;
+
+		wchar_t* const new_data_end = new_buffer_end - old_data_size;
+		wchar_t* const new_data_beg = new_data_end - new_data_size;
+
+		if (is_borrowed_buffer)
 		{
-			new_buffer_beg = m_storage.m_static;
-			new_buffer_end = new_buffer_beg + m_storage.small_path_size;
+			std::copy(m_buffer_pos, m_buffer_end, new_data_end);
 		}
-		else
-		{
-			new_buffer_beg = new (std::nothrow) wchar_t[max_path_size];
-			if (new_buffer_beg == nullptr)
-			{
-				return vsm::unexpected(allio_error(error::not_enough_memory));
-			}
-			m_storage.m_dynamic.reset(new_buffer_beg);
-
-			new_buffer_end = new_buffer_beg + max_path_size;
-		}
-
-		wchar_t* const old_data_beg = new_buffer_end - old_data_size;
-		memcpy(old_data_beg, old_beg, old_data_size * sizeof(wchar_t));
-		wchar_t* const new_data_beg = old_data_beg - new_data_size;
 
 		m_buffer_beg = new_buffer_beg;
 		m_buffer_pos = new_data_beg;
 		m_buffer_end = new_buffer_end;
 
-		return std::pair<wchar_t*, wchar_t*>{ new_data_beg, old_data_beg };
+		return std::pair<wchar_t*, wchar_t*>{ new_data_beg, new_data_end };
 	}
 
 	vsm::result<std::pair<wchar_t*, wchar_t*>> push_buffer(size_t const new_data_size)
@@ -152,7 +156,10 @@ private:
 
 
 	template<typename Char>
-	vsm::result<void> push_literal(Char const* const beg, Char const* const end)
+	vsm::result<void> push_literal(
+		Char const* const beg,
+		Char const* const end,
+		bool const may_borrow = false)
 	{
 		if (beg == end)
 		{
@@ -172,7 +179,7 @@ private:
 				return vsm::unexpected(allio_error(error::invalid_encoding));
 			}
 
-			if (m_storage.m_dynamic != nullptr)
+			if (m_storage.size() >= max_path_size)
 			{
 				return vsm::unexpected(allio_error(error::filename_too_long));
 			}
@@ -207,7 +214,10 @@ private:
 		return {};
 	}
 
-	vsm::result<void> push_literal(wchar_t const* const beg, wchar_t const* const end)
+	vsm::result<void> push_literal(
+		wchar_t const* const beg,
+		wchar_t const* const end,
+		bool const may_borrow = false)
 	{
 		if (beg == end)
 		{
@@ -226,7 +236,7 @@ private:
 			memcpy(new_buffer_pos, beg, size * sizeof(wchar_t));
 			m_buffer_pos = new_buffer_pos;
 		}
-		else if (buffer_beg == m_buffer_end)
+		else if (may_borrow && buffer_beg == m_buffer_end)
 		{
 			// If this is the first piece, borrow it instead of copying.
 			// This avoids allocating for large paths if they can be borrowed.
@@ -473,26 +483,27 @@ private:
 	vsm::result<void> push_canonical(
 		Char const* const beg,
 		Char const* const end,
-		canonicalization_context& context)
+		canonicalization_context& context,
+		bool const may_borrow = false)
 	{
 		return push_canonical_impl(
 			beg,
 			end,
 			context,
-			[this]<typename C>(C const* const beg, C const* const end) -> vsm::result<void>
+			[=, this]<typename C>(C const* const beg, C const* const end) -> vsm::result<void>
 			{
-				return this->push_literal(beg, end);
-			}
-		);
+				return this->push_literal(beg, end, may_borrow);
+			});
 	}
 
 	template<typename Char>
 	vsm::result<void> push_canonical(
 		Char const* const beg,
-		Char const* const end)
+		Char const* const end,
+		bool const may_borrow = false)
 	{
 		canonicalization_context context(beg, end);
-		return push_canonical(beg, end, context);
+		return push_canonical(beg, end, context, may_borrow);
 	}
 
 	template<typename Char>
@@ -532,14 +543,13 @@ private:
 	path_section<wchar_t> store_drive_root(wchar_t const drive)
 	{
 		static constexpr std::wstring_view root_template = L"\\??\\X:\\";
-		static_assert(root_template.size() <= storage_type::max_root_size);
+		static_assert(root_template.size() <= max_root_size);
 		static constexpr size_t drive_offset = root_template.find(L'X');
 
-		wchar_t* const root_buffer = m_storage.m_root;
-		memcpy(root_buffer, root_template.data(), root_template.size() * sizeof(wchar_t));
-		root_buffer[drive_offset] = drive;
+		std::memcpy(m_root, root_template.data(), root_template.size() * sizeof(wchar_t));
+		m_root[drive_offset] = drive;
 
-		return { root_buffer, root_buffer + root_template.size() };
+		return { m_root, m_root + root_template.size() };
 	}
 
 	vsm::result<void> push_drive_root(wchar_t const drive)
@@ -849,7 +859,7 @@ private:
 	vsm::result<void> set_relative_from_handle(Char const* const beg, Char const* const end)
 	{
 		canonicalization_context context(beg, end);
-		vsm_try_void(push_canonical(beg, end, context));
+		vsm_try_void(push_canonical(beg, end, context, /* may_borrow: */ true));
 
 		if (context.backtrack != 0)
 		{
@@ -878,15 +888,17 @@ private:
 
 	template<typename Char>
 	vsm::result<void> set_relative_from_current(
-		Char const* const beg, Char const* const end,
-		handle_type const current_handle, auto const get_current_path)
+		Char const* const beg,
+		Char const* const end,
+		handle_type const current_handle,
+		auto const get_current_path)
 	{
 		vsm_assert(!m_handle);
 
 		canonicalization_context context(beg, end);
-		vsm_try_void(push_canonical(beg, end, context));
+		vsm_try_void(push_canonical(beg, end, context, /* may_borrow: */ true));
 
-		if (context.backtrack == 0 && current_handle && !m_win32_api_form)
+		if (context.backtrack == 0 && current_handle && m_has_out_handle)
 		{
 			m_handle = current_handle;
 		}
@@ -932,7 +944,7 @@ private:
 					return vsm::unexpected(allio_error(error::invalid_path));
 				}
 
-				return push_literal(beg, end);
+				return push_literal(beg, end, /* may_borrow: */ true);
 			}
 			[[fallthrough]];
 
@@ -976,7 +988,7 @@ private:
 	template<typename Char>
 	vsm::result<void> _make_path_select(std::basic_string_view<Char> const string)
 	{
-		if (m_win32_api_form)
+		if (!m_has_out_handle)
 		{
 			vsm_try_void(push_literal(std::wstring_view(L"\0")));
 		}
@@ -988,7 +1000,7 @@ private:
 		std::basic_string_view<Char> string,
 		std::same_as<null_terminated_t> auto...)
 	{
-		if (m_win32_api_form)
+		if (!m_has_out_handle)
 		{
 			vsm_assert(string.data()[string.size()] == Char(0));
 			string = std::basic_string_view<Char>(string.data(), string.size() + 1);

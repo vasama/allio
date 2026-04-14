@@ -152,6 +152,12 @@ template<vsm::utf_character SourceChar>
 	return _validate_utf<vsm::select_t<(sizeof(SourceChar) > 1), char8_t, char16_t>>(string);
 }
 
+template<vsm::character SourceChar>
+[[nodiscard]] vsm::result<void> validate_utf(std::basic_string_view<SourceChar> const string)
+{
+	return validate_utf(detail::reinterpret_as_utf(string));
+}
+
 
 template<vsm::utf_character SourceChar, vsm::utf_character TargetChar>
 [[nodiscard]] vsm::result<size_t> copy_or_transcode_string(

@@ -13,8 +13,7 @@
 
 namespace allio::win32 {
 
-template<bool Forward>
-class basic_api_string_builder;
+class api_string_builder;
 
 class api_string_storage_base
 {
@@ -31,11 +30,11 @@ protected:
 		: m_index(0)
 		, m_count(count)
 	{
+		vsm_assert(count < 0x100); //PRECONDITION
 	}
 
 private:
-	template<bool Forward>
-	friend class basic_api_string_builder;
+	friend api_string_builder;
 };
 
 class api_string_storage : public api_string_storage_base
@@ -46,19 +45,17 @@ public:
 	explicit api_string_storage(uint8_t const count = 1)
 		: api_string_storage_base(count)
 	{
-		vsm_assert(count > 0);
+		vsm_assert(count > 0); //PRECONDITION
 	}
 
 	api_string_storage(api_string_storage const&) = delete;
 	api_string_storage& operator=(api_string_storage const&) = delete;
 
 private:
-	template<bool Forward>
-	friend class basic_api_string_builder;
+	friend api_string_builder;
 };
 
-template<bool Forward>
-class basic_api_string_builder
+class api_string_builder
 {
 	// Limited by the range of UNICODE_STRING::Length.
 	static constexpr size_t max_string_size =
@@ -74,7 +71,7 @@ class basic_api_string_builder
 public:
 	using iterator_pair = std::pair<wchar_t*, wchar_t*>;
 
-	explicit basic_api_string_builder(api_string_storage& storage, bool const insert_null_terminator)
+	explicit api_string_builder(api_string_storage& storage, bool const insert_null_terminator)
 		: m_storage(storage)
 		, m_insert_null_terminator(insert_null_terminator)
 	{
@@ -95,8 +92,8 @@ public:
 		}
 	}
 
-	basic_api_string_builder(basic_api_string_builder const&) = delete;
-	basic_api_string_builder& operator=(basic_api_string_builder const&) = delete;
+	api_string_builder(api_string_builder const&) = delete;
+	api_string_builder& operator=(api_string_builder const&) = delete;
 
 
 	[[nodiscard]] vsm::result<void> allocate_dynamic_buffer()
@@ -263,9 +260,6 @@ private:
 		return vsm::unexpected(allio_error(error::argument_too_long));
 	}
 };
-
-using api_string_builder = basic_api_string_builder<true>;
-using api_string_reverse_builder = basic_api_string_builder<false>;
 
 vsm::result<wchar_t const*> make_api_string(api_string_storage& storage, any_string_view string);
 

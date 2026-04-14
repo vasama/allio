@@ -7,6 +7,7 @@
 #include <allio/impl/win32/peb.hpp>
 #include <allio/impl/win32/thread_event.hpp>
 #include <allio/win32/kernel_error.hpp>
+#include <allio/win32/path_format.hpp>
 
 #include <vsm/numeric.hpp>
 
@@ -293,10 +294,7 @@ vsm::result<size_t> this_process::get_current_directory(any_path_buffer const bu
 	unique_peb_lock peb_lock;
 
 	auto const& process_parameters = *NtCurrentPeb()->ProcessParameters;
-
-	auto const wide_path = std::wstring_view(
-		process_parameters.CurrentDirectoryPath.Buffer,
-		process_parameters.CurrentDirectoryPath.Length / sizeof(wchar_t));
+	auto const wide_path = from_unicode_string(process_parameters.CurrentDirectoryPath);
 
 	return transcode_string(wide_path, buffer);
 }
@@ -335,71 +333,84 @@ vsm::result<size_t> detail::_get_current_directory(any_path_buffer const buffer)
 	unique_peb_lock peb_lock;
 
 	auto const& process_parameters = *NtCurrentPeb()->ProcessParameters;
-
-	auto const wide_string = std::wstring_view(
-		process_parameters.CurrentDirectoryPath.Buffer,
-		process_parameters.CurrentDirectoryPath.Length / sizeof(wchar_t));
-
+	auto const wide_string = from_unicode_string(process_parameters.CurrentDirectoryPath);
 	auto const wide_path = wpath_view(wide_string).without_trailing_separators();
 
 	return copy_or_transcode_string(wide_path.string(), buffer.string());
 }
 
 
-vsm::result<void> detail::_set_current_directory(fs_path const& path)
+static vsm::result<void> set_current_directory_impl(HANDLE const base, std::wstring_view path)
 {
-	static constexpr size_t path_storage_size =
-		MAX_PATH // SetCurrentDirectoryW only accepts paths of at most MAX_PATH characters.
-		+ 4 // UNC prefix ( "\\?\" ) written by get_current_path.
-		+ 1 // Null terminator required by SetCurrentDirectoryW.
-		;
+	basic_storage<wchar_t, MAX_PATH> path_storage;
 
-	wchar_t path_storage[path_storage_size];
-
-	wchar_t* path_beg = path_storage;
-	wchar_t* base_path_end = path_storage;
-
-	if (path.base != nullptr)
+	if (base != NULL && !win32::path_traits<wchar_t>::is_absolute(path))
 	{
-		vsm_try(base_path_size, fs_object_t::get_current_path(
-			*path.base,
-			fs_io::get_current_path_t::params_type
-			{
-				.buffer = any_path_buffer(path_storage),
-				.kind = path_kind::windows_dos,
-			}));
+		vsm_try(base_path, query_file_name(path_storage, base, dos_format));
 
-		base_path_end = path_storage + base_path_size;
+		if (path.empty())
+		{
+			path = base_path;
+		}
+		else
+		{
+			vsm_try(storage, path_storage.resize(base_path.size() + path.size() + 1));
+
+			wchar_t* const path_beg = storage.data();
+			wchar_t* path_end = path_beg + base_path.size();
+
+			*path_end++ = L'\\';
+			path_end = std::copy(path.begin(), path.end(), path_end);
+
+			path = std::wstring_view(path_beg, path_end);
+		}
 	}
 
-	wchar_t* path_end = base_path_end;
-
-	if (!path.path.empty())
+	if (path.size() >= max_unicode_string_length)
 	{
-		vsm_try(relative_path_size, transcode_string(
-			path.path.string(),
-			string_buffer<wchar_t>(base_path_end, std::end(path_storage))));
-
-		path_end = base_path_end + relative_path_size;
+		return vsm::unexpected(allio_error(error::filename_too_long));
 	}
 
-	vsm_assert(path_end < std::end(path_storage));
-	*path_end++ = L'\0';
+	UNICODE_STRING unicode_path = make_unicode_string(path);
+	NTSTATUS const status = RtlSetCurrentDirectory_U(&unicode_path);
 
-	if (std::wstring_view(path_beg, path_end).starts_with(L"\\\\?\\"))
+	if (!NT_SUCCESS(status))
 	{
-		path_beg += 4;
-	}
-
-	if (!SetCurrentDirectoryW(path_beg))
-	{
-		return vsm::unexpected(allio_error(get_last_error()));
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
 	}
 
 	return {};
 }
 
-static vsm::result<handle_with_flags> open_current_directory_from_peb()
+vsm::result<void> detail::_set_current_directory(fs_path const& path)
+{
+	basic_storage<wchar_t, MAX_PATH> path_storage;
+
+	std::wstring_view relative_path;
+	if (auto const string = path.path.string(); !string.empty())
+	{
+		if (string.char_type() == char_type::_wchar_t)
+		{
+			relative_path = string.view<wchar_t>();
+		}
+		else
+		{
+			vsm_try(relative_path_size, transcode_string(
+				string,
+				string_buffer<wchar_t>(path_storage)));
+
+			relative_path = std::wstring_view(path_storage.data(), relative_path_size);
+		}
+	}
+
+	HANDLE const base_handle = path.base == nullptr
+		? NULL
+		: unwrap_handle(path.base->platform_handle);
+
+	return set_current_directory_impl(base_handle, relative_path);
+}
+
+static vsm::result<unique_handle> open_current_directory_from_peb()
 {
 	unique_peb_lock peb_lock;
 
@@ -419,21 +430,26 @@ static vsm::result<handle_with_flags> open_current_directory_from_peb()
 	}
 	else
 	{
-		return create_file(NULL, process_parameters.CurrentDirectoryPath, options);
+		return create_file(
+			/* base_handle: */ NULL,
+			from_unicode_string(process_parameters.CurrentDirectoryPath),
+			options);
 	}
 }
 
 vsm::result<basic_detached_handle<directory_t>> detail::_open_current_directory()
 {
-	vsm_try_bind((handle, flags), open_current_directory_from_peb());
-
-	native_handle<directory_t> h = {};
-
-	h.flags = object_t::flags::not_null | flags;
-	h.platform_handle = wrap_handle(handle.release());
+	vsm_try(handle, open_current_directory_from_peb());
 
 	return vsm::result<basic_detached_handle<directory_t>>(
 		vsm::result_value,
 		adopt_handle,
-		h);
+		native_handle<directory_t>
+		{
+			native_handle<object_t>
+			{
+				.flags = object_t::flags::not_null,
+			},
+			wrap_handle(handle.release()),
+		});
 }

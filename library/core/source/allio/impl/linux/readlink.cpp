@@ -1,6 +1,6 @@
 #include <allio/impl/linux/readlink.hpp>
 
-#include <allio/detail/default_sequence_container.hpp>
+#include <allio/detail/basic_storage.hpp>
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/stat.hpp>
@@ -78,9 +78,9 @@ static vsm::result<size_t> _read_link_path(
 	char const* const path,
 	string_buffer<Char> const buffer)
 {
-	default_sequence_container<char, 512> container;
-	vsm_try(path_size, _read_link_path(dirfd, path, container));
-	auto const string = std::string_view(container.data(), path_size);
+	basic_storage<char, 512> storage;
+	vsm_try(path_size, _read_link_path(dirfd, path, storage));
+	auto const string = std::string_view(storage.data(), path_size);
 	return copy_or_transcode_string(string, buffer);
 }
 

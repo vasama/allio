@@ -1,6 +1,7 @@
 #include <allio/impl/handles/fs_object.hpp>
 
 #include <allio/detail/handles/directory.hpp>
+#include <allio/impl/filesystem.hpp>
 #include <allio/impl/hexadecimal.hpp>
 #include <allio/impl/random.hpp>
 #include <allio/step_deadline.hpp>
@@ -41,7 +42,7 @@ public:
 
 } // namespace
 
-vsm::result<handle_with_flags> detail::open_unique_file(
+vsm::result<unique_handle> detail::open_unique_file(
 	HANDLE const base,
 	platform_open_options const& options)
 {
@@ -63,9 +64,10 @@ vsm::result<handle_with_flags> detail::open_unique_file(
 	}
 }
 
-static vsm::result<handle_with_flags> _open(
+static vsm::result<unique_handle> _open(
 	fs_path const& user_path,
-	generic_open_options const& options)
+	open_options const special,
+	platform_open_options const& options)
 {
 	platform_handle_type base = user_path.base == nullptr
 		? null_platform_handle
@@ -74,32 +76,33 @@ static vsm::result<handle_with_flags> _open(
 	any_path_view path = user_path.path;
 	unique_handle new_base_handle;
 
-	if (vsm::any_flags(options.special, open_options::unique_name | open_options::anonymous))
+	if (vsm::any_flags(special, open_options::unique_name | open_options::anonymous))
 	{
 		// TODO: Check if path is lexically equivalent to empty?
 
 		if (!path.empty())
 		{
-			vsm_try_assign(new_base_handle, open_path_base(base, path));
+			vsm_try_assign(new_base_handle, open_anchor_file(
+				base,
+				path,
+				/* may_open_leaf: */ false));
 
 			base = new_base_handle.get();
 			path = {};
 		}
 	}
 
-	vsm_try(platform_options, platform_open_options::make(options));
-
-	/**/ if (vsm::any_flags(options.special, open_options::unique_name))
+	/**/ if (vsm::any_flags(special, open_options::unique_name))
 	{
-		return detail::open_unique_file(base, platform_options);
+		return detail::open_unique_file(base, options);
 	}
-	else if (vsm::any_flags(options.special, open_options::anonymous))
+	else if (vsm::any_flags(special, open_options::anonymous))
 	{
-		return detail::open_anonymous_file(base, platform_options);
+		return detail::open_anonymous_file(base, options);
 	}
 	else
 	{
-		return detail::open_file(base, path, platform_options);
+		return detail::open_file(base, path, options);
 	}
 }
 
@@ -196,14 +199,17 @@ vsm::result<void> detail::open_fs_object(
 		}
 	}
 
-	auto const options = make_open_options(kind, args);
-	vsm_try_bind((handle, flags), _open(args.path, options));
+	auto const generic_options = make_open_options(kind, args);
+	vsm_try(platform_options, make_platform_open_options(generic_options));
+	vsm_try(handle, _open(args.path, generic_options.special, platform_options));
 
-	if (vsm::any_flags(options.mode, file_mode::read_data))
+	vsm_try(flags, configure_file(handle.get(), platform_options));
+
+	if (vsm::any_flags(generic_options.mode, file_mode::read_data))
 	{
 		flags |= fs_object_t::flags::readable;
 	}
-	if (vsm::any_flags(options.mode, file_mode::write_data))
+	if (vsm::any_flags(generic_options.mode, file_mode::write_data))
 	{
 		flags |= fs_object_t::flags::writable;
 	}
@@ -212,4 +218,19 @@ vsm::result<void> detail::open_fs_object(
 	h.platform_handle = wrap_handle(handle.release());
 
 	return {};
+}
+
+vsm::result<void> fs_object_t::link_at(
+	native_handle<fs_object_t> const& h,
+	io_parameters_t<fs_object_t, link_at_t> const& a)
+{
+	HANDLE const base_handle = a.path.base == nullptr
+		? NULL
+		: unwrap_handle(a.path.base->platform_handle);
+
+	return link_file_at(
+		unwrap_handle(h.platform_handle),
+		base_handle,
+		a.path.path,
+		a.replace_existing_file);
 }

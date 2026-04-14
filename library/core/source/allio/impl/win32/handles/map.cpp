@@ -5,6 +5,7 @@
 #include <allio/impl/win32/handles/platform_object.hpp>
 #include <allio/impl/win32/memory.hpp>
 #include <allio/impl/win32/kernel.hpp>
+#include <allio/impl/win32/object.hpp>
 #include <allio/win32/kernel_error.hpp>
 
 #include <vsm/lazy.hpp>

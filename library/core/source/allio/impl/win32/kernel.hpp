@@ -11,70 +11,104 @@
 
 #include <Windows.h>
 #include <winternl.h>
+#include <ntstatus.h>
 
 namespace allio::win32 {
 
-inline constexpr NTSTATUS STATUS_SUCCESS                        = 0;
-inline constexpr NTSTATUS STATUS_NO_MORE_FILES                  = static_cast<NTSTATUS>(0x80000006);
-inline constexpr NTSTATUS STATUS_INFO_LENGTH_MISMATCH           = static_cast<NTSTATUS>(0xC0000004);
-inline constexpr NTSTATUS STATUS_END_OF_FILE                    = static_cast<NTSTATUS>(0xC0000011);
-inline constexpr NTSTATUS STATUS_ACCESS_DENIED                  = static_cast<NTSTATUS>(0xC0000022);
-inline constexpr NTSTATUS STATUS_BUFFER_TOO_SMALL               = static_cast<NTSTATUS>(0xC0000023);
-inline constexpr NTSTATUS STATUS_OBJECT_TYPE_MISMATCH           = static_cast<NTSTATUS>(0xC0000024);
-inline constexpr NTSTATUS STATUS_OBJECT_NAME_INVALID            = static_cast<NTSTATUS>(0xC0000033);
-inline constexpr NTSTATUS STATUS_OBJECT_NAME_NOT_FOUND          = static_cast<NTSTATUS>(0xC0000034);
-inline constexpr NTSTATUS STATUS_OBJECT_NAME_COLLISION          = static_cast<NTSTATUS>(0xC0000035);
-inline constexpr NTSTATUS STATUS_OBJECT_PATH_INVALID            = static_cast<NTSTATUS>(0xC0000039);
-inline constexpr NTSTATUS STATUS_OBJECT_PATH_NOT_FOUND          = static_cast<NTSTATUS>(0xC000003A);
-inline constexpr NTSTATUS STATUS_OBJECT_PATH_SYNTAX_BAD         = static_cast<NTSTATUS>(0xC000003B);
-inline constexpr NTSTATUS STATUS_NOT_SUPPORTED                  = static_cast<NTSTATUS>(0xC00000BB);
-inline constexpr NTSTATUS STATUS_PROCESS_IS_TERMINATING         = static_cast<NTSTATUS>(0xC000010A);
-inline constexpr NTSTATUS STATUS_CANCELLED                      = static_cast<NTSTATUS>(0xC0000120);
-inline constexpr NTSTATUS STATUS_INVALID_ADDRESS                = static_cast<NTSTATUS>(0xC0000141);
-inline constexpr NTSTATUS STATUS_PIPE_BROKEN                    = static_cast<NTSTATUS>(0xC000014B);
-inline constexpr NTSTATUS STATUS_NOT_FOUND                      = static_cast<NTSTATUS>(0xC0000225);
-inline constexpr NTSTATUS STATUS_HANDLE_NOT_CLOSABLE            = static_cast<NTSTATUS>(0xC0000325);
+/* Status and error management */
+
+extern ULONG(NTAPI* RtlNtStatusToDosError)(
+	_In_ NTSTATUS Status);
 
 
-[[nodiscard]] inline bool is_kernel_success(NTSTATUS const status)
-{
-	vsm_assert(status != STATUS_PENDING);
+/* General I/O */
 
-	if (!NT_SUCCESS(status))
-	{
-		return false;
-	}
-
-	switch (status)
-	{
-	case STATUS_TIMEOUT:
-		return false;
-	}
-
-	return true;
-}
-
-[[nodiscard]] inline std::error_code get_kernel_error_code(NTSTATUS const status)
-{
-	return is_kernel_success(status)
-		? std::error_code()
-		: std::error_code(static_cast<kernel_error>(status));
-}
-
-
-inline constexpr ULONG SL_RESTART_SCAN                          = 0x00000001u;
-
-
-inline constexpr ULONG FILE_DISPOSITION_DO_NOT_DELETE           = 0x00000000u;
-inline constexpr ULONG FILE_DISPOSITION_DELETE                  = 0x00000001u;
-inline constexpr ULONG FILE_DISPOSITION_POSIX_SEMANTICS         = 0x00000002u;
-inline constexpr ULONG FILE_DISPOSITION_ON_CLOSE                = 0x00000008u;
-
-
+#if 0
 typedef void(NTAPI* PIO_APC_ROUTINE)(
 	_In_ PVOID ApcContext,
 	_In_ PIO_STATUS_BLOCK IoStatusBlock,
 	_In_ ULONG Reserved);
+#endif
+
+extern NTSTATUS(NTAPI* NtCancelIoFileEx)(
+	_In_ HANDLE FileHandle,
+	_Out_ PIO_STATUS_BLOCK IoRequestToCancel,
+	_Out_ PIO_STATUS_BLOCK IoStatusBlock);
+
+extern NTSTATUS(NTAPI* NtDeviceIoControlFile)(
+	_In_ HANDLE FileHandle,
+	_In_opt_ HANDLE Event,
+	_In_opt_ PIO_APC_ROUTINE ApcRoutine,
+	_In_opt_ PVOID ApcContext,
+	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+	_In_ ULONG IoControlCode,
+	_In_opt_ PVOID InputBuffer,
+	_In_ ULONG InputBufferLength,
+	_Out_opt_ PVOID OutputBuffer,
+	_In_ ULONG OutputBufferLength);
+
+
+/* Virtual memory management */
+
+extern NTSTATUS(NTAPI* NtAllocateVirtualMemory)(
+	_In_ HANDLE ProcessHandle,
+	_Inout_ PVOID* BaseAddress,
+	_In_ ULONG_PTR ZeroBits,
+	_Inout_ PSIZE_T RegionSize,
+	_In_ ULONG AllocationType,
+	_In_ ULONG Protect);
+
+extern NTSTATUS(NTAPI* NtFreeVirtualMemory)(
+	_In_ HANDLE ProcessHandle,
+	_Inout_ PVOID* BaseAddress,
+	_Inout_ PSIZE_T RegionSize,
+	_In_ ULONG FreeType);
+
+extern NTSTATUS(NTAPI* NtProtectVirtualMemory)(
+	_In_ HANDLE ProcessHandle,
+	_Inout_ PVOID* BaseAddress,
+	_Inout_ PSIZE_T RegionSize,
+	_In_ ULONG NewProtect,
+	_Out_ PULONG OldProtect);
+
+
+/* Object management */
+
+enum _OBJECT_WAIT_TYPE
+{
+	WaitAllObject,
+	WaitAnyObject,
+}
+typedef OBJECT_WAIT_TYPE;
+
+extern NTSTATUS(NTAPI* NtClose)(
+	_In_ HANDLE Handle);
+
+extern NTSTATUS(NTAPI* NtDuplicateObject)(
+	_In_ HANDLE SourceProcessHandle,
+	_In_ HANDLE SourceHandle,
+	_In_opt_ HANDLE TargetProcessHandle,
+	_Out_opt_ PHANDLE TargetHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_ ULONG HandleAttributes,
+	_In_ ULONG Options);
+
+extern NTSTATUS(NTAPI* NtWaitForSingleObject)(
+	_In_ HANDLE Handle,
+	_In_ BOOLEAN Alertable,
+	_In_opt_ PLARGE_INTEGER Timeout);
+
+extern NTSTATUS(NTAPI* NtWaitForMultipleObjects)(
+	_In_ ULONG HandleCount,
+	_In_ HANDLE const* Handles,
+	_In_ OBJECT_WAIT_TYPE WaitType,
+	_In_ BOOLEAN Alertable,
+	_In_opt_ PLARGE_INTEGER Timeout);
+
+
+/* NtQueryObject */
+
+inline constexpr auto ObjectNameInformation = OBJECT_INFORMATION_CLASS(1);
 
 struct _OBJECT_BASIC_INFORMATION
 {
@@ -95,6 +129,12 @@ struct _OBJECT_BASIC_INFORMATION
 typedef OBJECT_BASIC_INFORMATION, *POBJECT_BASIC_INFORMATION;
 
 static_assert(sizeof(OBJECT_BASIC_INFORMATION) == sizeof(PUBLIC_OBJECT_BASIC_INFORMATION));
+
+struct _OBJECT_NAME_INFORMATION
+{
+	UNICODE_STRING Name;
+}
+typedef OBJECT_NAME_INFORMATION, *POBJECT_NAME_INFORMATION;
 
 struct _OBJECT_TYPE_INFORMATION
 {
@@ -125,6 +165,16 @@ struct _OBJECT_TYPE_INFORMATION
 typedef OBJECT_TYPE_INFORMATION, *POBJECT_TYPE_INFORMATION;
 
 static_assert(sizeof(OBJECT_TYPE_INFORMATION) == sizeof(PUBLIC_OBJECT_TYPE_INFORMATION));
+
+extern NTSTATUS(NTAPI* NtQueryObject)(
+	_In_opt_ HANDLE Handle,
+	_In_ OBJECT_INFORMATION_CLASS ObjectInformationClass,
+	_Out_writes_bytes_opt_(ObjectInformationLength) PVOID ObjectInformation,
+	_In_ ULONG ObjectInformationLength,
+	_Out_opt_ PULONG ReturnLength);
+
+
+/* NtQueryInformationFile & NtSetInformationFile */
 
 enum _FILE_INFORMATION_CLASS
 {
@@ -207,13 +257,6 @@ enum _FILE_INFORMATION_CLASS
 }
 typedef FILE_INFORMATION_CLASS, *PFILE_INFORMATION_CLASS;
 
-struct _FILE_NAME_INFORMATION
-{
-	ULONG FileNameLength;
-	WCHAR FileName[1];
-}
-typedef FILE_NAME_INFORMATION, *PFILE_NAME_INFORMATION;
-
 struct _FILE_STANDARD_INFORMATION
 {
 	LARGE_INTEGER AllocationSize;
@@ -224,17 +267,47 @@ struct _FILE_STANDARD_INFORMATION
 }
 typedef FILE_STANDARD_INFORMATION, *PFILE_STANDARD_INFORMATION;
 
-struct _FILE_ALLOCATION_INFORMATION
+struct _FILE_NAME_INFORMATION
 {
-	LARGE_INTEGER AllocationSize;
+	ULONG FileNameLength;
+	WCHAR FileName[1];
 }
-typedef FILE_ALLOCATION_INFORMATION, *PFILE_ALLOCATION_INFORMATION;
+typedef FILE_NAME_INFORMATION, *PFILE_NAME_INFORMATION;
+
+struct _FILE_LINK_INFORMATION
+{
+	union {
+		BOOLEAN ReplaceIfExists;
+		ULONG Flags;
+	} DUMMYUNIONNAME;
+
+	HANDLE RootDirectory;
+	ULONG FileNameLength;
+	WCHAR FileName[1];
+}
+typedef FILE_LINK_INFORMATION, *PFILE_LINK_INFORMATION;
 
 struct _FILE_POSITION_INFORMATION
 {
 	LARGE_INTEGER CurrentByteOffset;
 }
 typedef FILE_POSITION_INFORMATION, *PFILE_POSITION_INFORMATION;
+
+struct _FILE_FULL_EA_INFORMATION
+{
+	ULONG NextEntryOffset;
+	UCHAR Flags;
+	UCHAR EaNameLength;
+	USHORT EaValueLength;
+	CHAR EaName[1];
+}
+typedef FILE_FULL_EA_INFORMATION, *PFILE_FULL_EA_INFORMATION;
+
+struct _FILE_ALLOCATION_INFORMATION
+{
+	LARGE_INTEGER AllocationSize;
+}
+typedef FILE_ALLOCATION_INFORMATION, *PFILE_ALLOCATION_INFORMATION;
 
 struct _FILE_END_OF_FILE_INFORMATION
 {
@@ -248,33 +321,6 @@ struct _FILE_COMPLETION_INFORMATION
 	PVOID Key;
 }
 typedef FILE_COMPLETION_INFORMATION, *PFILE_COMPLETION_INFORMATION;
-
-struct _FILE_IO_COMPLETION_NOTIFICATION_INFORMATION
-{
-	ULONG Flags;
-}
-typedef FILE_IO_COMPLETION_NOTIFICATION_INFORMATION, *PFILE_IO_COMPLETION_NOTIFICATION_INFORMATION;
-
-struct _FILE_IO_COMPLETION_INFORMATION
-{
-	PVOID KeyContext;
-	PVOID ApcContext;
-	IO_STATUS_BLOCK IoStatusBlock;
-}
-typedef FILE_IO_COMPLETION_INFORMATION, *PFILE_IO_COMPLETION_INFORMATION;
-
-struct _FILE_NETWORK_OPEN_INFORMATION
-{
-	LARGE_INTEGER CreationTime;
-	LARGE_INTEGER LastAccessTime;
-	LARGE_INTEGER LastWriteTime;
-	LARGE_INTEGER ChangeTime;
-	LARGE_INTEGER AllocationSize;
-	LARGE_INTEGER EndOfFile;
-	ULONG FileAttributes;
-	ULONG Reserved;
-}
-typedef FILE_NETWORK_OPEN_INFORMATION, *PFILE_NETWORK_OPEN_INFORMATION;
 
 struct _FILE_ID_FULL_DIR_INFORMATION
 {
@@ -295,6 +341,12 @@ struct _FILE_ID_FULL_DIR_INFORMATION
 }
 typedef FILE_ID_FULL_DIR_INFORMATION, *PFILE_ID_FULL_DIR_INFORMATION;
 
+struct _FILE_IO_COMPLETION_NOTIFICATION_INFORMATION
+{
+	ULONG Flags;
+}
+typedef FILE_IO_COMPLETION_NOTIFICATION_INFORMATION, *PFILE_IO_COMPLETION_NOTIFICATION_INFORMATION;
+
 struct _FILE_ID_EXTD_DIR_INFORMATION
 {
 	ULONG NextEntryOffset;
@@ -314,15 +366,10 @@ struct _FILE_ID_EXTD_DIR_INFORMATION
 }
 typedef FILE_ID_EXTD_DIR_INFORMATION, *PFILE_ID_EXTD_DIR_INFORMATION;
 
-struct _FILE_FULL_EA_INFORMATION
-{
-	ULONG NextEntryOffset;
-	UCHAR Flags;
-	UCHAR EaNameLength;
-	USHORT EaValueLength;
-	CHAR EaName[1];
-}
-typedef FILE_FULL_EA_INFORMATION, *PFILE_FULL_EA_INFORMATION;
+inline constexpr ULONG FILE_DISPOSITION_DO_NOT_DELETE           = 0x00000000u;
+inline constexpr ULONG FILE_DISPOSITION_DELETE                  = 0x00000001u;
+inline constexpr ULONG FILE_DISPOSITION_POSIX_SEMANTICS         = 0x00000002u;
+inline constexpr ULONG FILE_DISPOSITION_ON_CLOSE                = 0x00000008u;
 
 struct _FILE_DISPOSITION_INFORMATION_EX
 {
@@ -330,18 +377,225 @@ struct _FILE_DISPOSITION_INFORMATION_EX
 }
 typedef FILE_DISPOSITION_INFORMATION_EX, *PFILE_DISPOSITION_INFORMATION_EX;
 
-struct _FILE_LINK_INFORMATION
-{
-	union {
-		BOOLEAN ReplaceIfExists;
-		ULONG Flags;
-	} DUMMYUNIONNAME;
+extern NTSTATUS(NTAPI* NtQueryInformationFile)(
+	_In_ HANDLE FileHandle,
+	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+	_Out_ PVOID FileInformation,
+	_In_ ULONG Length,
+	_In_ FILE_INFORMATION_CLASS FileInformationClass);
 
-	HANDLE RootDirectory;
-	ULONG FileNameLength;
-	WCHAR FileName[1];
+extern NTSTATUS(NTAPI* NtSetInformationFile)(
+	_In_ HANDLE FileHandle,
+	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+	_In_ PVOID FileInformation,
+	_In_ ULONG Length,
+	_In_ FILE_INFORMATION_CLASS FileInformationClass);
+
+
+/* I/O Completion Port */
+
+struct _FILE_IO_COMPLETION_INFORMATION
+{
+	PVOID KeyContext;
+	PVOID ApcContext;
+	IO_STATUS_BLOCK IoStatusBlock;
 }
-typedef FILE_LINK_INFORMATION, *PFILE_LINK_INFORMATION;
+typedef FILE_IO_COMPLETION_INFORMATION, *PFILE_IO_COMPLETION_INFORMATION;
+
+extern NTSTATUS(NTAPI* NtCreateIoCompletion)(
+	_Out_ PHANDLE IoCompletionHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_opt_ ULONG Count);
+
+extern NTSTATUS(NTAPI* NtSetIoCompletion)(
+	_In_ HANDLE IoCompletionPort,
+	_In_ PVOID CompletionKey,
+	_In_ PVOID ApcContext,
+	_In_ NTSTATUS CompletionStatus,
+	_In_ ULONG CompletionInformation);
+
+extern NTSTATUS(NTAPI* NtRemoveIoCompletion)(
+	_In_ HANDLE IoCompletionHandle,
+	_Out_ PVOID *CompletionKey,
+	_Out_ PVOID *ApcContext,
+	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+	_In_opt_ PLARGE_INTEGER Timeout);
+
+extern NTSTATUS(NTAPI* NtRemoveIoCompletionEx)(
+	_In_ HANDLE IoCompletionHandle,
+	_Out_writes_to_(Count, *NumEntriesRemoved) PFILE_IO_COMPLETION_INFORMATION IoCompletionInformation,
+	_In_ ULONG Count,
+	_Out_ PULONG NumEntriesRemoved,
+	_In_opt_ PLARGE_INTEGER Timeout,
+	_In_ BOOLEAN Alertable);
+
+
+/* Wait Completion Packet */
+
+extern NTSTATUS(NTAPI* NtCreateWaitCompletionPacket)(
+	_Out_ PHANDLE WaitCompletionPacketHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes);
+
+extern NTSTATUS(NTAPI* NtAssociateWaitCompletionPacket)(
+	_In_ HANDLE WaitCompletionPacketHandle,
+	_In_ HANDLE IoCompletionHandle,
+	_In_ HANDLE TargetObjectHandle,
+	_In_opt_ PVOID KeyContext,
+	_In_opt_ PVOID ApcContext,
+	_In_ NTSTATUS IoStatus,
+	_In_ ULONG_PTR IoStatusInformation,
+	_Out_opt_ PBOOLEAN AlreadySignaled);
+
+extern NTSTATUS(NTAPI* NtCancelWaitCompletionPacket)(
+	_In_ HANDLE WaitCompletionPacketHandle,
+	_In_ BOOLEAN RemoveSignaledPacket);
+
+
+/* Event management */
+
+enum _EVENT_TYPE
+{
+	NotificationEvent,
+	SynchronizationEvent
+}
+typedef EVENT_TYPE;
+
+extern NTSTATUS(NTAPI* NtCreateEvent)(
+	_Out_ PHANDLE EventHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_ EVENT_TYPE EventType,
+	_In_ BOOLEAN InitialState);
+
+extern NTSTATUS(NTAPI* NtSetEvent)(
+	_In_ HANDLE EventHandle,
+	_Out_opt_ PLONG PreviousState);
+
+extern NTSTATUS(NTAPI* NtResetEvent)(
+	_In_ HANDLE EventHandle,
+	_Out_opt_ PLONG PreviousState);
+
+
+/* Section management */
+
+enum _SECTION_INHERIT
+{
+	ViewShare = 1,
+	ViewUnmap = 2,
+}
+typedef SECTION_INHERIT;
+
+extern NTSTATUS(NTAPI* NtOpenSection)(
+	_Out_ PHANDLE SectionHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_ POBJECT_ATTRIBUTES ObjectAttributes);
+
+extern NTSTATUS(NTAPI* NtCreateSection)(
+	_Out_ PHANDLE SectionHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_opt_ PLARGE_INTEGER MaximumSize,
+	_In_ ULONG SectionPageProtection,
+	_In_ ULONG AllocationAttributes,
+	_In_opt_ HANDLE FileHandle);
+
+extern NTSTATUS(NTAPI* NtMapViewOfSection)(
+	_In_ HANDLE SectionHandle,
+	_In_ HANDLE ProcessHandle,
+	_Inout_ PVOID* BaseAddress,
+	_In_ ULONG_PTR ZeroBits,
+	_In_ SIZE_T CommitSize,
+	_Inout_opt_ PLARGE_INTEGER SectionOffset,
+	_In_opt_ PSIZE_T RegionSize,
+	_In_ SECTION_INHERIT InheritDisposition,
+	_In_ ULONG AllocationType,
+	_In_ ULONG Protect);
+
+extern NTSTATUS(NTAPI* NtUnmapViewOfSection)(
+	_In_ HANDLE ProcessHandle,
+	_In_opt_ PVOID BaseAddress);
+
+
+/* File management */
+
+extern NTSTATUS(NTAPI* NtCreateFile)(
+	_Out_ PHANDLE FileHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+	_In_opt_ PLARGE_INTEGER AllocationSize,
+	_In_ ULONG FileAttributes,
+	_In_ ULONG ShareAccess,
+	_In_ ULONG CreateDisposition,
+	_In_ ULONG CreateOptions,
+	_In_opt_ PVOID EaBuffer,
+	_In_ ULONG EaLength);
+
+extern NTSTATUS(NTAPI* NtReadFile)(
+	_In_ HANDLE FileHandle,
+	_In_opt_ HANDLE Event,
+	_In_opt_ PIO_APC_ROUTINE ApcRoutine,
+	_In_opt_ PVOID ApcContext,
+	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+	_Out_ PVOID Buffer,
+	_In_ ULONG Length,
+	_In_opt_ PLARGE_INTEGER ByteOffset,
+	_In_opt_ PULONG Key);
+
+extern NTSTATUS(NTAPI* NtWriteFile)(
+	_In_ HANDLE FileHandle,
+	_In_opt_ HANDLE Event,
+	_In_opt_ PIO_APC_ROUTINE ApcRoutine,
+	_In_opt_ PVOID ApcContext,
+	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+	_In_ PVOID Buffer,
+	_In_ ULONG Length,
+	_In_opt_ PLARGE_INTEGER ByteOffset,
+	_In_opt_ PULONG Key);
+
+
+/* Directory management */
+
+inline constexpr ULONG SL_RESTART_SCAN = 0x00000001u;
+
+extern NTSTATUS(NTAPI* NtQueryDirectoryFileEx)(
+	_In_ HANDLE FileHandle,
+	_In_opt_ HANDLE Event,
+	_In_opt_ PIO_APC_ROUTINE ApcRoutine,
+	_In_opt_ PVOID ApcContext,
+	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+	_Out_writes_bytes_(Length) PVOID FileInformation,
+	_In_ ULONG Length,
+	FILE_INFORMATION_CLASS FileInformationClass,
+	_In_ ULONG QueryFlags,
+	_In_opt_ PUNICODE_STRING FileName);
+
+extern NTSTATUS(NTAPI* RtlSetCurrentDirectory_U)(
+	_In_ PUNICODE_STRING PathName);
+
+
+/* Pipe management */
+
+extern NTSTATUS(NTAPI* NtCreateNamedPipeFile)(
+	_Out_ PHANDLE FileHandle,
+	_In_ ULONG DesiredAccess,
+	_In_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+	_In_ ULONG ShareAccess,
+	_In_ ULONG CreateDisposition,
+	_In_ ULONG CreateOptions,
+	_In_ ULONG NamedPipeType,
+	_In_ ULONG ReadMode,
+	_In_ ULONG CompletionMode,
+	_In_ ULONG MaximumInstances,
+	_In_ ULONG InboundQuota,
+	_In_ ULONG OutboundQuota,
+	_In_opt_ PLARGE_INTEGER DefaultTimeout);
+
+
+/* Process management */
 
 struct _RTL_RELATIVE_NAME
 {
@@ -453,280 +707,9 @@ struct _PEB
 }
 typedef PEB, *PPEB;
 
-enum _SECTION_INHERIT
-{
-	ViewShare = 1,
-	ViewUnmap = 2,
-}
-typedef SECTION_INHERIT;
-
-enum _EVENT_TYPE
-{
-	NotificationEvent,
-	SynchronizationEvent
-}
-typedef EVENT_TYPE;
-
-enum _OBJECT_WAIT_TYPE
-{
-	WaitAllObject,
-	WaitAnyObject,
-}
-typedef OBJECT_WAIT_TYPE;
-
-
-extern ULONG(NTAPI* RtlNtStatusToDosError)(
-	_In_ NTSTATUS Status);
-
-extern NTSTATUS(NTAPI* RtlSetCurrentDirectory_U)(
-	_In_ PUNICODE_STRING PathName);
-
-extern NTSTATUS(NTAPI* NtClose)(
-	_In_ HANDLE Handle);
-
-extern NTSTATUS(NTAPI* NtDuplicateObject)(
-	_In_ HANDLE SourceProcessHandle,
-	_In_ HANDLE SourceHandle,
-	_In_opt_ HANDLE TargetProcessHandle,
-	_Out_opt_ PHANDLE TargetHandle,
-	_In_ ACCESS_MASK DesiredAccess,
-	_In_ ULONG HandleAttributes,
-	_In_ ULONG Options);
-
-extern NTSTATUS(NTAPI* NtWaitForSingleObject)(
-	_In_ HANDLE Handle,
-	_In_ BOOLEAN Alertable,
-	_In_opt_ PLARGE_INTEGER Timeout);
-
-extern NTSTATUS(NTAPI* NtWaitForMultipleObjects)(
-	_In_ ULONG HandleCount,
-	_In_ HANDLE const* Handles,
-	_In_ OBJECT_WAIT_TYPE WaitType,
-	_In_ BOOLEAN Alertable,
-	_In_opt_ PLARGE_INTEGER Timeout);
-
-extern NTSTATUS(NTAPI* NtQueryInformationFile)(
-	_In_ HANDLE FileHandle,
-	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
-	_Out_ PVOID FileInformation,
-	_In_ ULONG Length,
-	_In_ FILE_INFORMATION_CLASS FileInformationClass);
-
-extern NTSTATUS(NTAPI* NtSetInformationFile)(
-	_In_ HANDLE FileHandle,
-	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
-	_In_ PVOID FileInformation,
-	_In_ ULONG Length,
-	_In_ FILE_INFORMATION_CLASS FileInformationClass);
-
-extern NTSTATUS(NTAPI* NtCreateFile)(
-	_Out_ PHANDLE FileHandle,
-	_In_ ACCESS_MASK DesiredAccess,
-	_In_ POBJECT_ATTRIBUTES ObjectAttributes,
-	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
-	_In_opt_ PLARGE_INTEGER AllocationSize,
-	_In_ ULONG FileAttributes,
-	_In_ ULONG ShareAccess,
-	_In_ ULONG CreateDisposition,
-	_In_ ULONG CreateOptions,
-	_In_opt_ PVOID EaBuffer,
-	_In_ ULONG EaLength);
-
-extern NTSTATUS(NTAPI* NtReadFile)(
-	_In_ HANDLE FileHandle,
-	_In_opt_ HANDLE Event,
-	_In_opt_ PIO_APC_ROUTINE ApcRoutine,
-	_In_opt_ PVOID ApcContext,
-	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
-	_Out_ PVOID Buffer,
-	_In_ ULONG Length,
-	_In_opt_ PLARGE_INTEGER ByteOffset,
-	_In_opt_ PULONG Key);
-
-extern NTSTATUS(NTAPI* NtWriteFile)(
-	_In_ HANDLE FileHandle,
-	_In_opt_ HANDLE Event,
-	_In_opt_ PIO_APC_ROUTINE ApcRoutine,
-	_In_opt_ PVOID ApcContext,
-	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
-	_In_ PVOID Buffer,
-	_In_ ULONG Length,
-	_In_opt_ PLARGE_INTEGER ByteOffset,
-	_In_opt_ PULONG Key);
-
-extern NTSTATUS(NTAPI* NtCancelIoFileEx)(
-	_In_ HANDLE FileHandle,
-	_Out_ PIO_STATUS_BLOCK IoRequestToCancel,
-	_Out_ PIO_STATUS_BLOCK IoStatusBlock);
-
-extern NTSTATUS(NTAPI* NtCreateIoCompletion)(
-	_Out_ PHANDLE IoCompletionHandle,
-	_In_ ACCESS_MASK DesiredAccess,
-	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
-	_In_opt_ ULONG Count);
-
-extern NTSTATUS(NTAPI* NtSetIoCompletion)(
-	_In_ HANDLE IoCompletionPort,
-	_In_ PVOID CompletionKey,
-	_In_ PVOID ApcContext,
-	_In_ NTSTATUS CompletionStatus,
-	_In_ ULONG CompletionInformation);
-
-extern NTSTATUS(NTAPI* NtRemoveIoCompletion)(
-	_In_ HANDLE IoCompletionHandle,
-	_Out_ PVOID *CompletionKey,
-	_Out_ PVOID *ApcContext,
-	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
-	_In_opt_ PLARGE_INTEGER Timeout);
-
-extern NTSTATUS(NTAPI* NtRemoveIoCompletionEx)(
-	_In_ HANDLE IoCompletionHandle,
-	_Out_writes_to_(Count, *NumEntriesRemoved) PFILE_IO_COMPLETION_INFORMATION IoCompletionInformation,
-	_In_ ULONG Count,
-	_Out_ PULONG NumEntriesRemoved,
-	_In_opt_ PLARGE_INTEGER Timeout,
-	_In_ BOOLEAN Alertable);
-
-extern NTSTATUS(NTAPI* NtCreateWaitCompletionPacket)(
-	_Out_ PHANDLE WaitCompletionPacketHandle,
-	_In_ ACCESS_MASK DesiredAccess,
-	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes);
-
-extern NTSTATUS(NTAPI* NtAssociateWaitCompletionPacket)(
-	_In_ HANDLE WaitCompletionPacketHandle,
-	_In_ HANDLE IoCompletionHandle,
-	_In_ HANDLE TargetObjectHandle,
-	_In_opt_ PVOID KeyContext,
-	_In_opt_ PVOID ApcContext,
-	_In_ NTSTATUS IoStatus,
-	_In_ ULONG_PTR IoStatusInformation,
-	_Out_opt_ PBOOLEAN AlreadySignaled);
-
-extern NTSTATUS(NTAPI* NtCancelWaitCompletionPacket)(
-	_In_ HANDLE WaitCompletionPacketHandle,
-	_In_ BOOLEAN RemoveSignaledPacket);
-
-extern NTSTATUS(NTAPI* NtQueryDirectoryFileEx)(
-	_In_ HANDLE FileHandle,
-	_In_opt_ HANDLE Event,
-	_In_opt_ PIO_APC_ROUTINE ApcRoutine,
-	_In_opt_ PVOID ApcContext,
-	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
-	_Out_writes_bytes_(Length) PVOID FileInformation,
-	_In_ ULONG Length,
-	FILE_INFORMATION_CLASS FileInformationClass,
-	_In_ ULONG QueryFlags,
-	_In_opt_ PUNICODE_STRING FileName);
-
-extern NTSTATUS(NTAPI* NtQueryFullAttributesFile)(
-	_In_ POBJECT_ATTRIBUTES ObjectAttributes,
-	_Out_ PFILE_NETWORK_OPEN_INFORMATION FileInformation);
-
-extern NTSTATUS(NTAPI* NtAllocateVirtualMemory)(
-	_In_ HANDLE ProcessHandle,
-	_Inout_ PVOID* BaseAddress,
-	_In_ ULONG_PTR ZeroBits,
-	_Inout_ PSIZE_T RegionSize,
-	_In_ ULONG AllocationType,
-	_In_ ULONG Protect);
-
-extern NTSTATUS(NTAPI* NtFreeVirtualMemory)(
-	_In_ HANDLE ProcessHandle,
-	_Inout_ PVOID* BaseAddress,
-	_Inout_ PSIZE_T RegionSize,
-	_In_ ULONG FreeType);
-
-extern NTSTATUS(NTAPI* NtProtectVirtualMemory)(
-	_In_ HANDLE ProcessHandle,
-	_Inout_ PVOID* BaseAddress,
-	_Inout_ PSIZE_T RegionSize,
-	_In_ ULONG NewProtect,
-	_Out_ PULONG OldProtect);
-
-extern NTSTATUS(NTAPI* NtOpenSection)(
-	_Out_ PHANDLE SectionHandle,
-	_In_ ACCESS_MASK DesiredAccess,
-	_In_ POBJECT_ATTRIBUTES ObjectAttributes);
-
-extern NTSTATUS(NTAPI* NtCreateSection)(
-	_Out_ PHANDLE SectionHandle,
-	_In_ ACCESS_MASK DesiredAccess,
-	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
-	_In_opt_ PLARGE_INTEGER MaximumSize,
-	_In_ ULONG SectionPageProtection,
-	_In_ ULONG AllocationAttributes,
-	_In_opt_ HANDLE FileHandle);
-
-extern NTSTATUS(NTAPI* NtMapViewOfSection)(
-	_In_ HANDLE SectionHandle,
-	_In_ HANDLE ProcessHandle,
-	_Inout_ PVOID* BaseAddress,
-	_In_ ULONG_PTR ZeroBits,
-	_In_ SIZE_T CommitSize,
-	_Inout_opt_ PLARGE_INTEGER SectionOffset,
-	_In_opt_ PSIZE_T RegionSize,
-	_In_ SECTION_INHERIT InheritDisposition,
-	_In_ ULONG AllocationType,
-	_In_ ULONG Protect);
-
-extern NTSTATUS(NTAPI* NtUnmapViewOfSection)(
-	_In_ HANDLE ProcessHandle,
-	_In_opt_ PVOID BaseAddress);
-
-extern NTSTATUS(NTAPI* NtCreateEvent)(
-	_Out_ PHANDLE EventHandle,
-	_In_ ACCESS_MASK DesiredAccess,
-	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
-	_In_ EVENT_TYPE EventType,
-	_In_ BOOLEAN InitialState);
-
-extern NTSTATUS(NTAPI* NtSetEvent)(
-	_In_ HANDLE EventHandle,
-	_Out_opt_ PLONG PreviousState);
-
-extern NTSTATUS(NTAPI* NtResetEvent)(
-	_In_ HANDLE EventHandle,
-	_Out_opt_ PLONG PreviousState);
-
-extern NTSTATUS(NTAPI* NtDeviceIoControlFile)(
-	_In_ HANDLE FileHandle,
-	_In_opt_ HANDLE Event,
-	_In_opt_ PIO_APC_ROUTINE ApcRoutine,
-	_In_opt_ PVOID ApcContext,
-	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
-	_In_ ULONG IoControlCode,
-	_In_opt_ PVOID InputBuffer,
-	_In_ ULONG InputBufferLength,
-	_Out_opt_ PVOID OutputBuffer,
-	_In_ ULONG OutputBufferLength);
-
 extern NTSTATUS(NTAPI* NtTerminateProcess)(
 	_In_ HANDLE ProcessHandle,
 	_In_ NTSTATUS ExitStatus);
-
-extern NTSTATUS(NTAPI* NtQueryObject)(
-	_In_opt_ HANDLE Handle,
-	_In_ OBJECT_INFORMATION_CLASS ObjectInformationClass,
-	_Out_writes_bytes_opt_(ObjectInformationLength) PVOID ObjectInformation,
-	_In_ ULONG ObjectInformationLength,
-	_Out_opt_ PULONG ReturnLength);
-
-extern NTSTATUS(NTAPI* NtCreateNamedPipeFile)(
-	_Out_ PHANDLE FileHandle,
-	_In_ ULONG DesiredAccess,
-	_In_ POBJECT_ATTRIBUTES ObjectAttributes,
-	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
-	_In_ ULONG ShareAccess,
-	_In_ ULONG CreateDisposition,
-	_In_ ULONG CreateOptions,
-	_In_ ULONG NamedPipeType,
-	_In_ ULONG ReadMode,
-	_In_ ULONG CompletionMode,
-	_In_ ULONG MaximumInstances,
-	_In_ ULONG InboundQuota,
-	_In_ ULONG OutboundQuota,
-	_In_opt_ PLARGE_INTEGER DefaultTimeout);
-
 
 [[nodiscard]] inline TEB* NtCurrentTeb()
 {
@@ -747,6 +730,72 @@ extern NTSTATUS(NTAPI* NtCreateNamedPipeFile)(
 }
 
 
+/* MountPointManager device */
+
+inline constexpr ULONG MOUNTMGRCONTROLTYPE = 'm';
+
+inline constexpr ULONG IOCTL_MOUNTMGR_QUERY_POINTS =
+	CTL_CODE(MOUNTMGRCONTROLTYPE, 2, METHOD_BUFFERED, FILE_ANY_ACCESS);
+
+inline constexpr ULONG IOCTL_MOUNTMGR_QUERY_DOS_VOLUME_PATH =
+	CTL_CODE(MOUNTMGRCONTROLTYPE, 12, METHOD_BUFFERED, FILE_ANY_ACCESS);
+
+struct _MOUNTDEV_NAME
+{
+	USHORT NameLength;
+	WCHAR Name[1];
+}
+typedef MOUNTDEV_NAME, *PMOUNTDEV_NAME;
+
+struct _MOUNTMGR_MOUNT_POINT
+{
+	ULONG  SymbolicLinkNameOffset;
+	USHORT SymbolicLinkNameLength;
+	USHORT Reserved1;
+	ULONG  UniqueIdOffset;
+	USHORT UniqueIdLength;
+	USHORT Reserved2;
+	ULONG  DeviceNameOffset;
+	USHORT DeviceNameLength;
+	USHORT Reserved3;
+}
+typedef MOUNTMGR_MOUNT_POINT, *PMOUNTMGR_MOUNT_POINT;
+
+struct _MOUNTMGR_MOUNT_POINTS
+{
+	ULONG Size;
+	ULONG NumberOfMountPoints;
+	MOUNTMGR_MOUNT_POINT MountPoints[1];
+}
+typedef MOUNTMGR_MOUNT_POINTS, *PMOUNTMGR_MOUNT_POINTS;
+
+struct _MOUNTMGR_VOLUME_PATHS
+{
+	ULONG MultiSzLength;
+	WCHAR MultiSz[1];
+}
+typedef MOUNTMGR_VOLUME_PATHS, *PMOUNTMGR_VOLUME_PATHS;
+
+
+[[nodiscard]] inline bool is_kernel_success(NTSTATUS const status)
+{
+	vsm_assert(status != STATUS_PENDING);
+
+	if (!NT_SUCCESS(status))
+	{
+		return false;
+	}
+
+	switch (status)
+	{
+	case STATUS_TIMEOUT:
+		return false;
+	}
+
+	return true;
+}
+
+
 [[nodiscard]] inline LARGE_INTEGER make_large_integer(int64_t const value)
 {
 	return LARGE_INTEGER
@@ -754,6 +803,9 @@ extern NTSTATUS(NTAPI* NtCreateNamedPipeFile)(
 		.QuadPart = value,
 	};
 }
+
+
+inline constexpr size_t max_unicode_string_length = 0x7FFF;
 
 [[nodiscard]] inline UNICODE_STRING make_unicode_string()
 {
@@ -766,19 +818,17 @@ extern NTSTATUS(NTAPI* NtCreateNamedPipeFile)(
 
 [[nodiscard]] inline UNICODE_STRING make_unicode_string(std::wstring_view const string)
 {
-	using size_type = decltype(UNICODE_STRING::Length);
-	static constexpr size_t max_size = std::numeric_limits<size_type>::max() / sizeof(wchar_t);
-	vsm_assert(string.size() <= max_size); //PRECONDITION
+	vsm_assert(string.size() <= max_unicode_string_length); //PRECONDITION
 
 	UNICODE_STRING unicode_string;
 	unicode_string.Buffer = const_cast<wchar_t*>(string.data());
-	unicode_string.Length = static_cast<size_type>(string.size() * sizeof(wchar_t));
+	unicode_string.Length = static_cast<USHORT>(string.size() * sizeof(wchar_t));
 	unicode_string.MaximumLength = unicode_string.Length;
 
 	return unicode_string;
 }
 
-[[nodiscard]] inline std::wstring_view get_unicode_string(UNICODE_STRING const& unicode_string)
+[[nodiscard]] inline std::wstring_view from_unicode_string(UNICODE_STRING const& unicode_string)
 {
 	vsm_assert(unicode_string.Length % sizeof(wchar_t) == 0); //PRECONDITION
 	return std::wstring_view(unicode_string.Buffer, unicode_string.Length / sizeof(wchar_t));

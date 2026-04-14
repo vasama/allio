@@ -8,6 +8,7 @@
 #include <allio/impl/win32/environment_block.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>
+#include <allio/impl/win32/object.hpp>
 #include <allio/impl/win32/path.hpp>
 #include <allio/win32/kernel_error.hpp>
 

@@ -6,6 +6,9 @@
 
 namespace allio::detail {
 
+// TODO: Get rid of this header
+
+#if 0
 struct platform_open_options
 {
 	ACCESS_MASK desired_access;
@@ -17,5 +20,6 @@ struct platform_open_options
 
 	static vsm::result<platform_open_options> make(generic_open_options const& args);
 };
+#endif
 
 } // namespace allio::detail
