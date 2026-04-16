@@ -54,7 +54,7 @@ public:
 		vsm_assert((static_cast<unsigned_type>(value) & flag) == 0);
 	}
 
-	[[nodiscard]] constexpr void operator->() const = delete;
+	constexpr void operator->() const = delete;
 
 	[[nodiscard]] constexpr T operator*() const
 	{

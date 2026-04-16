@@ -205,8 +205,13 @@ protected:
 	}
 
 	template<typename Callable>
-	static auto _enter(M& m, H& h, C& c, S& s, io_handler<M>& handler, Callable&& callable)
-		-> io_result<typename std::invoke_result_t<Callable>::value_type::value_type>
+	static io_result<typename std::invoke_result_t<Callable>::value_type::value_type> _enter(
+		M& m,
+		H& h,
+		C& c,
+		S& s,
+		io_handler<M>& handler,
+		Callable&& callable)
 	{
 		using value_type = typename std::invoke_result_t<Callable>::value_type::value_type;
 
@@ -222,6 +227,7 @@ protected:
 				auto rw_args = io_parameters_t<RawSocket, byte_io::stream_write_t>{};
 				rw_args.buffers = rw_h.openssl->get_write_buffer();
 
+				fprintf(stderr, "%p submit r %zu\n", rw_args.)
 				vsm_try(transferred, detail::submit_io(
 					m,
 					rw_h,

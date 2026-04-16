@@ -17,7 +17,7 @@ static bool is_supported_address_kind(network_address_kind const kind)
 	//      endpoint returned from receive_from is empty in that case. This should be fixed once the
 	//      networking operations are changed to take pre-transformed opaque platform addresses.
 
-#if vsm_os_win32 || 1
+#if vsm_os_win32
 	if (kind == network_address_kind::local)
 	{
 		// Windows does not support unix datagram sockets.

@@ -141,9 +141,7 @@ public:
 		}
 
 		set_storage_ptr(new_data);
-
-		m_size = new_size;
-		m_is_non_local = true;
+		set_size(new_size, true);
 
 		return std::span<T>(new_data, new_size);
 	}
@@ -155,6 +153,17 @@ protected:
 	~basic_storage_base() = default;
 
 private:
+	void set_size(size_t const size, bool const is_non_local)
+	{
+		vsm_gcc_diagnostic(push)
+		vsm_gcc_diagnostic(ignored "-Wconversion")
+
+		m_size = size;
+		m_is_non_local = is_non_local;
+
+		vsm_gcc_diagnostic(pop)
+	}
+
 	[[nodiscard]] T* get_storage() const
 	{
 		return const_cast<T*>(reinterpret_cast<T const*>(this + 1));
@@ -165,7 +174,7 @@ private:
 		return *reinterpret_cast<T* const*>(this + 1);
 	}
 
-	[[nodiscard]] void set_storage_ptr(T* const ptr)
+	void set_storage_ptr(T* const ptr)
 	{
 		*reinterpret_cast<T**>(this + 1) = ptr;
 	}
@@ -207,23 +216,19 @@ public:
 	basic_storage()
 	{
 		::new (this->m_storage) T[Size];
-
-		this->m_size = Size;
-		this->m_is_non_local = false;
+		this->set_size(Size, false);
 	}
 
 	basic_storage(basic_storage&& other)
 	{
-		this->m_size = other.m_size;
-		this->m_is_non_local = other.m_is_non_local;
+		this->set_size(other.m_size, other.m_is_non_local);
 
 		if (other.m_is_non_local)
 		{
 			this->m_storage_ptr = other.m_storage_ptr;
 			::new (other.m_storage) T[Size];
 
-			other.m_size = Size;
-			other.m_is_non_local = false;
+			other.set_size(Size, false);
 		}
 		else
 		{
@@ -244,21 +249,15 @@ public:
 					allio_allocation_strategy_generic);
 
 				::new (this->m_storage) T[Size];
-
-				this->m_size = Size;
-				this->m_is_non_local = false;
 			}
 
-			this->m_size = other.m_size;
-			this->m_is_non_local = other.m_is_non_local;
+			this->set_size(other.m_size, other.m_is_non_local);
 
 			if (other.m_is_non_local)
 			{
 				this->m_storage_ptr = other.m_storage_ptr;
 				::new (other.m_storage) T[Size];
-
-				other.m_size = Size;
-				other.m_is_non_local = false;
+				this->set_size(Size, false);
 			}
 			else
 			{

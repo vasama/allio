@@ -203,9 +203,11 @@ TEST_CASE("path_view standard compliance - decomposition", "[path_view]")
 	if (vsm_os_win32 && GENERATE(0, 1))
 	{
 		// MSSTL has non-conforming handling of NT paths. For that reason, only paths of the
-		// following forms are tested:
-		// * /??/
-		// * /??/*
+		// following forms are tested (quotes added to avoid backslash trigraph at end of line):
+		// * `/??/`
+		// * `/??/*`
+		//
+		// Specifically avoided are paths of the form `/??//*`.
 
 		generate_separator(buffer, 1);
 		buffer += "??";
@@ -334,7 +336,7 @@ TEST_CASE("path_view standard compliance - decomposition", "[path_view]")
 	// Lexical normalization
 	{
 		auto const a_normal = lexically_normal(a_path);
-		auto const s_normal = s_path.lexically_normal();
+		auto const s_normal = trim_root_path_separators(s_path).lexically_normal();
 		CHECK(a_normal.string() == s_normal.string());
 
 		bool const a_is_lexically_normal = a_normal.string() == a_path.string();
@@ -397,7 +399,7 @@ TEST_CASE("path_view standard compliance - relations", "[path_view]")
 	std::string l_buffer;
 	std::string r_buffer;
 
-	if (GENERATE(0, 1))
+	if (vsm_os_win32 && GENERATE(0, 1))
 	{
 		l_buffer += "C:";
 		r_buffer += "D:";
@@ -418,7 +420,7 @@ TEST_CASE("path_view standard compliance - relations", "[path_view]")
 					as<std::string_view>()
 					, "C:"
 					, "C:/"
-					, "/??/"
+					, "/??" /* The string is split to avoid the use of a trigraph. */ "/"
 				);
 			}
 

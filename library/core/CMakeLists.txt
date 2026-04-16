@@ -72,6 +72,7 @@ vsm_add_library(
 		source/allio/impl/error.cpp
 		source/allio/impl/exceptions.cpp
 		source/allio/impl/fd_tree.hpp
+		source/allio/impl/filesystem.cpp
 		source/allio/impl/network.cpp
 		source/allio/impl/new.cpp
 		source/allio/impl/random.hpp
@@ -111,6 +112,7 @@ vsm_add_library(
 		vsm::result
 		vsm::tag_ptr
 		vsm::unique_resource
+		vsm::intrusive
 
 	TEST_SOURCES
 		source/allio/test/reverse_iterator.hpp
@@ -226,9 +228,6 @@ vsm_configure(
 	HEADER_DEPENDENCIES
 		vsm::intrusive_ptr
 
-	SOURCE_DEPENDENCIES
-		vsm::intrusive
-
 	TEST_SOURCES
 		#source/allio/test/win32/environment_block.cpp
 		#source/allio/test/win32/timer2.cpp
@@ -272,6 +271,8 @@ vsm_configure(
 		source/allio/impl/linux/error.cpp
 		source/allio/impl/linux/error.hpp
 		source/allio/impl/linux/fcntl.hpp
+		source/allio/impl/linux/filesystem.cpp
+		source/allio/impl/linux/filesystem.hpp
 		source/allio/impl/linux/fork_exec.cpp
 		source/allio/impl/linux/fork_exec.hpp
 		source/allio/impl/linux/io_uring.hpp
@@ -331,9 +332,6 @@ vsm_configure(
 
 	TEST_SOURCES
 		source/allio/test/linux/io_uring.cpp
-
-	SOURCE_DEPENDENCIES
-		vsm::intrusive
 )
 
 allio_add_error_encoding(core core_error_encoding allio::core)

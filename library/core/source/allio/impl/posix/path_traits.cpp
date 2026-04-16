@@ -487,16 +487,21 @@ string_view<Char> posix_path_traits_base<Char>::parent_path(string_view<Char> co
 {
 	Char const* const beg = string.data();
 	Char const* end = beg + string.size();
-	Char const* const rel = skip_separators(beg, end);
+	Char const* const root_end = skip_separators(beg, end);
 
-	while (end != rel && end[-1] != '/')
+	while (end != root_end && end[-1] != '/')
 	{
 		--end;
 	}
 
-	while (end != rel && end[-1] == '/')
+	while (end != root_end && end[-1] == '/')
 	{
 		--end;
+	}
+
+	if (beg != root_end && root_end == end)
+	{
+		end = beg + 1;
 	}
 
 	return string_view<Char>(beg, end);
@@ -714,7 +719,7 @@ bool posix_path_traits_base<Char>::is_lexically_normal(string_view<Char> const s
 	Char const* const root_end = skip_separators(beg, end);
 
 	// A root path composed of more than a single slash is not lexically normal.
-	if (beg != root_end && root_end - beg == 1)
+	if (root_end - beg > 1)
 	{
 		return false;
 	}
@@ -846,20 +851,12 @@ vsm::result<string_view<Char>> posix_path_traits_base<Char>::copy_lexically_rela
 	Char const* path_mismatch = path_root_end;
 	Char const* base_mismatch = base_root_end;
 
-	while (true)
+	while (path_mismatch != path_end && base_mismatch != base_end)
 	{
 		Char const* const path_separator = find_separator(path_mismatch, path_end);
 		Char const* const base_separator = find_separator(base_mismatch, base_end);
 
 		if (!std::equal(path_mismatch, path_separator, base_mismatch, base_separator))
-		{
-			break;
-		}
-
-		path_mismatch = path_separator;
-		base_mismatch = base_separator;
-
-		if ((path_separator == path_end) != (base_separator == base_end))
 		{
 			break;
 		}
@@ -873,7 +870,6 @@ vsm::result<string_view<Char>> posix_path_traits_base<Char>::copy_lexically_rela
 		return make_dot_path(buffer);
 	}
 
-	path_mismatch = skip_separators(path_mismatch, path_end);
 	base_mismatch = skip_separators(base_mismatch, base_end);
 
 	ptrdiff_t base_component_count = 0;
@@ -1032,7 +1028,8 @@ void posix_path_iterator_base<Char>::increment()
 		return;
 	}
 
-	if (m_cur_end == end)
+	// N+1 is the forward end position.
+	if (cur_end == end)
 	{
 		m_cur_beg = end;
 		m_cur_end = end;
@@ -1067,12 +1064,11 @@ void posix_path_iterator_base<Char>::decrement()
 	Char const* const end = m_end;
 
 	Char const* const cur_beg = m_cur_beg;
-	Char const* const cur_end = m_cur_end;
 
 	Char const* const root_end = skip_separators(beg, end);
 
 	// N-1 is the reverse end position.
-	if (cur_end == root_end)
+	if (beg == cur_beg)
 	{
 		m_cur_beg = beg;
 		m_cur_end = beg;

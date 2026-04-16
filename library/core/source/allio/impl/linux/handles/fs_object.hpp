@@ -10,6 +10,7 @@
 
 namespace allio::linux {
 
+#if 0
 using detail::platform_open_options;
 
 vsm::result<detail::unique_handle> open_file(
@@ -43,6 +44,7 @@ inline vsm::result<detail::unique_handle> reopen_file(
 {
 	return reopen_file(fd, { flags, mode });
 }
+#endif
 
 } // namespace allio::linux
 

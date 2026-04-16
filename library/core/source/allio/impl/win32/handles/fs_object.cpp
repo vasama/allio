@@ -19,6 +19,18 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
+file_sharing detail::default_file_sharing(open_options const options)
+{
+	if (vsm::any_flags(options, open_options::anonymous))
+	{
+		return file_sharing::none;
+	}
+	else
+	{
+		return file_sharing::all;
+	}
+}
+
 vsm::result<platform_open_options> detail::make_platform_open_options(
 	generic_open_options const& options)
 {
@@ -390,45 +402,6 @@ vsm::result<unique_handle> detail::open_path_base(HANDLE const base, any_path_vi
 }
 #endif
 
-vsm::result<unique_handle> detail::open_file(
-	HANDLE const base,
-	any_path_view const path,
-	platform_open_options const& options)
-{
-	kernel_path_storage path_storage;
-	kernel_path_handle path_handle;
-
-	vsm_try(kernel_path, make_kernel_path(
-		path_storage,
-		base,
-		path,
-		&path_handle));
-
-	return win32::create_file(path_handle.get(), kernel_path, options);
-}
-
-vsm::result<unique_handle> detail::open_anonymous_file(
-	HANDLE const base,
-	platform_open_options const& options)
-{
-	platform_open_options unique_options = options;
-	unique_options.create_options |= FILE_DELETE_ON_CLOSE;
-
-	vsm_try(file, detail::open_unique_file(base, unique_options));
-
-	// TODO: Delete (with posix semantics) if intended for temporary usage.
-
-#if 0
-	if (vsm::any_flags(local_a.special, open_options::temporary))
-	{
-		vsm_try_void(reopen_and_delete_file(
-			file.handle.get(),
-			/* try_posix_semantics: */ true));
-	}
-#endif
-
-	return file;
-}
 
 vsm::result<handle_flags> detail::configure_file(
 	HANDLE const handle,
@@ -444,7 +417,6 @@ vsm::result<handle_flags> detail::configure_file(
 
 	return h_flags;
 }
-
 
 vsm::result<size_t> fs_object_t::get_current_path(
 	native_handle<fs_object_t> const& h,

@@ -531,7 +531,7 @@ struct rebind_traits<basic_attached_handle<Object, MultiplexerHandle>, basic_det
 
 
 template<object Object>
-vsm_always_inline void verify_handle(native_handle<Object> const& h)
+inline vsm_always_inline void verify_handle(native_handle<Object> const& h)
 {
 	if constexpr (requires { Object::verify_handle(h); })
 	{

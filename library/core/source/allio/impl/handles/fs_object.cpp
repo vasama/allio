@@ -1,68 +1,11 @@
 #include <allio/impl/handles/fs_object.hpp>
 
 #include <allio/detail/handles/directory.hpp>
+#include <allio/impl/error_encoding.hpp>
 #include <allio/impl/filesystem.hpp>
-#include <allio/impl/hexadecimal.hpp>
-#include <allio/impl/random.hpp>
-#include <allio/step_deadline.hpp>
 
 using namespace allio;
 using namespace allio::detail;
-
-namespace {
-
-class unique_file_name
-{
-	using char_type = platform_path_view::value_type;
-
-	static constexpr size_t data_bits = 128;
-	static constexpr size_t data_size = data_bits / CHAR_BIT;
-	static constexpr size_t name_size = hexadecimal_size(data_size);
-
-	char_type m_name[name_size + 1];
-
-public:
-	unique_file_name() = default;
-
-	unique_file_name(unique_file_name const&) = delete;
-	unique_file_name& operator=(unique_file_name const&) = delete;
-
-	[[nodiscard]] vsm::result<any_path_view> generate() &
-	{
-		std::byte data[data_size];
-		vsm_try_void(secure_random_fill(data));
-
-		vsm_verify(make_hexadecimal(data, std::span(m_name, name_size)) == name_size);
-		m_name[name_size] = char_type('\0');
-
-		//TODO: Set null terminated flag.
-		return any_path_view(platform_path_view(m_name, name_size));
-	}
-};
-
-} // namespace
-
-vsm::result<unique_handle> detail::open_unique_file(
-	HANDLE const base,
-	platform_open_options const& options)
-{
-	//TODO: Deadline
-	deadline const relative_deadline = deadline::never();
-	step_deadline absolute_deadline(relative_deadline);
-
-	unique_file_name name;
-
-	while (true)
-	{
-		vsm_try_discard(absolute_deadline.step());
-		vsm_try(random_file_name, name.generate());
-
-		if (auto r = detail::open_file(base, random_file_name, options))
-		{
-			return r;
-		}
-	}
-}
 
 static vsm::result<unique_handle> _open(
 	fs_path const& user_path,
@@ -76,6 +19,8 @@ static vsm::result<unique_handle> _open(
 	any_path_view path = user_path.path;
 	unique_handle new_base_handle;
 
+	// TODO: Pass the path to open_anonymous_file and let platform-specific code decide whether the
+	//       child directory (if any) should be opened separately - this is only needed on Windows.
 	if (vsm::any_flags(special, open_options::unique_name | open_options::anonymous))
 	{
 		// TODO: Check if path is lexically equivalent to empty?
@@ -137,18 +82,6 @@ static file_opening default_file_opening(open_options const options, file_mode c
 	else
 	{
 		return file_opening::open_existing;
-	}
-}
-
-static file_sharing default_file_sharing(open_options const options)
-{
-	if (vsm::any_flags(options, open_options::anonymous))
-	{
-		return file_sharing::none;
-	}
-	else
-	{
-		return file_sharing::all;
 	}
 }
 
@@ -224,8 +157,8 @@ vsm::result<void> fs_object_t::link_at(
 	native_handle<fs_object_t> const& h,
 	io_parameters_t<fs_object_t, link_at_t> const& a)
 {
-	HANDLE const base_handle = a.path.base == nullptr
-		? NULL
+	platform_handle_type const base_handle = a.path.base == nullptr
+		? null_platform_handle
 		: unwrap_handle(a.path.base->platform_handle);
 
 	return link_file_at(

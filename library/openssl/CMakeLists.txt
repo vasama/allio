@@ -17,6 +17,7 @@ vsm_add_library(
 
 	SOURCES
 		source/allio/impl/openssl/openssl.cpp
+		source/allio/impl/openssl/openssl.hpp
 
 	HEADER_DEPENDENCIES
 		vsm::intrusive
@@ -32,6 +33,22 @@ vsm_add_library(
 	TEST_DEPENDENCIES
 		allio::blocking
 		allio::senders
+)
+
+vsm_configure(
+	allio::openssl
+	PLATFORM Windows
+
+	SOURCES
+		source/allio/impl/openssl/openssl_win32.cpp
+)
+
+vsm_configure(
+	allio::openssl
+	PLATFORM Linux
+
+	SOURCES
+		source/allio/impl/openssl/openssl_posix.cpp
 )
 
 # TODO: Handle allio.openssl include paths a little smarter:

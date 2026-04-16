@@ -54,12 +54,16 @@ public:
 	using win32_path_iterator_base<Char>::increment;
 	using win32_path_iterator_base<Char>::decrement;
 
-	[[nodiscard]] friend bool operator==(win32_path_iterator const& lhs, win32_path_iterator const& rhs)
+	[[nodiscard]] friend bool operator==(
+		win32_path_iterator const& lhs,
+		win32_path_iterator const& rhs)
 	{
 		return lhs.m_cur_beg == rhs.m_cur_beg && lhs.m_cur_end == rhs.m_cur_end;
 	}
 
-	[[nodiscard]] friend bool operator!=(win32_path_iterator const& lhs, win32_path_iterator const& rhs)
+	[[nodiscard]] friend bool operator!=(
+		win32_path_iterator const& lhs,
+		win32_path_iterator const& rhs)
 	{
 		return lhs.m_cur_beg != rhs.m_cur_beg || lhs.m_cur_end != rhs.m_cur_end;
 	}

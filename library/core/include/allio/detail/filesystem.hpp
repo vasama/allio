@@ -146,7 +146,7 @@ public:
 		uint8_t const _2 = m_bits & 0b00110000;
 		uint8_t const _3 = m_bits & 0b11000000;
 
-		return (_0 != 0) + (_1 != 0) + (_2 != 0) + (_3 != 0);
+		return static_cast<size_t>((_0 != 0) + (_1 != 0) + (_2 != 0) + (_3 != 0));
 	}
 
 

@@ -54,12 +54,16 @@ public:
 	using posix_path_iterator_base<Char>::increment;
 	using posix_path_iterator_base<Char>::decrement;
 
-	[[nodiscard]] friend bool operator==(posix_path_iterator const& lhs, posix_path_iterator const& rhs)
+	[[nodiscard]] friend bool operator==(
+		posix_path_iterator const& lhs,
+		posix_path_iterator const& rhs)
 	{
 		return lhs.m_cur_beg == rhs.m_cur_beg && lhs.m_cur_end == rhs.m_cur_end;
 	}
 
-	[[nodiscard]] friend bool operator!=(posix_path_iterator const& lhs, posix_path_iterator const& rhs)
+	[[nodiscard]] friend bool operator!=(
+		posix_path_iterator const& lhs,
+		posix_path_iterator const& rhs)
 	{
 		return lhs.m_cur_beg != rhs.m_cur_beg || lhs.m_cur_end != rhs.m_cur_end;
 	}

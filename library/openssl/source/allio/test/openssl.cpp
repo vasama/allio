@@ -52,7 +52,8 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 			tls_private_key(allio_test_secret_path "/server-private-key.pem"_path))).value();
 
 	auto const client_ssl_ctx = openssl_create_client_ssl_ctx(
-		make_args<security_context_parameters>()).value();
+		make_args<security_context_parameters>(
+			tls_peer_certificate(allio_test_secret_path "/server-certificate.pem"_path))).value();
 
 
 	openssl_socket server_socket;

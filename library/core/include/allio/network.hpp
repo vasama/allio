@@ -366,13 +366,11 @@ public:
 	{
 	}
 
-	template<std::ranges::contiguous_range Range>
-		requires vsm::byte_type<std::ranges::range_value_t<Range>>
-	explicit(!detail::_platform_endpoint<Range>)
-	any_endpoint_view(Range&& range)
+	template<detail::_platform_endpoint Endpoint>
+	any_endpoint_view(Endpoint&& endpoint)
 		: any_endpoint_view(
-			std::ranges::data(range),
-			std::ranges::size(range),
+			std::ranges::data(endpoint),
+			std::ranges::size(endpoint),
 			make_kind_ctrl(platform_type))
 	{
 	}

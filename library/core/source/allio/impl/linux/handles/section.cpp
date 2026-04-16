@@ -1,6 +1,7 @@
 #include <allio/detail/handles/section.hpp>
 
 #include <allio/impl/error_encoding.hpp>
+#include <allio/impl/linux/filesystem.hpp>
 #include <allio/impl/linux/handles/fs_object.hpp>
 
 #include <allio/linux/detail/undef.i>
@@ -146,7 +147,7 @@ static vsm::result<void> _create_with_backing_directory(
 		open_flags |= O_CLOEXEC;
 	}
 
-	vsm_try(fd, linux::open_file(
+	vsm_try(fd, linux::create_file(
 		unwrap_handle(backing_h.platform_handle),
 		"",
 		open_flags));

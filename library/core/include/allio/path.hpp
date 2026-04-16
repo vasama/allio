@@ -519,21 +519,21 @@ public:
 		return !Traits::equal(lhs.string(), rhs.m_string);
 	}
 
-	[[nodiscard]] friend auto operator<=>(
+	[[nodiscard]] friend std::strong_ordering operator<=>(
 		foreign_path_adaptor const& lhs,
 		foreign_path_adaptor const& rhs)
 	{
 		return Traits::compare(lhs.m_string, rhs.m_string);
 	}
 
-	[[nodiscard]] friend auto operator<=>(
+	[[nodiscard]] friend std::strong_ordering operator<=>(
 		foreign_path_adaptor const& lhs,
 		path_view_type const rhs)
 	{
 		return Traits::compare(lhs.m_string, rhs.string());
 	}
 
-	[[nodiscard]] friend auto operator<=>(
+	[[nodiscard]] friend std::strong_ordering operator<=>(
 		path_view_type const lhs,
 		foreign_path_adaptor const& rhs)
 	{

@@ -385,7 +385,26 @@ template<typename M, typename RawListenSocket>
 struct async_operation<M, openssl_listen_socket_t<RawListenSocket>, close_t>
 	: async_operation_t<M, RawListenSocket, close_t>
 {
-	//TODO: release ssl ctx
+	using H = native_handle<openssl_listen_socket_t<RawListenSocket>>;
+	using C = async_connector_t<M, openssl_listen_socket_t<RawListenSocket>>;
+	using S = async_operation_t<M, openssl_listen_socket_t<RawListenSocket>, close_t>;
+	using A = io_parameters_t<openssl_listen_socket_t<RawListenSocket>, close_t>;
+
+	static io_result<void> submit(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler)
+	{
+		vsm_assert(h.ssl_ctx != nullptr);
+
+		detail::openssl_release_ssl_ctx(h.ssl_ctx);
+		h.ssl_ctx = nullptr;
+
+		return detail::submit_io(
+			m,
+			static_cast<native_handle<RawListenSocket>&>(h),
+			static_cast<async_connector_t<M, RawListenSocket>&>(c),
+			static_cast<async_operation_t<M, RawListenSocket, close_t>&>(s),
+			a,
+			handler);
+	}
 };
 
 } // namespace allio::detail

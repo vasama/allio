@@ -4,7 +4,6 @@
 
 #include <allio/detail/basic_storage.hpp>
 #include <allio/impl/win32/kernel.hpp>
-#include <allio/impl/win32/open_options.hpp>
 
 namespace allio::win32 {
 

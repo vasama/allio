@@ -26,9 +26,9 @@ public:
 	{
 	}
 
-	template<detail::any_mutable_path Path, typename Encoding = detail::default_encoding_t>
-		requires detail::explicit_container_encoding_for<Encoding, path_string_t<Path>>
-	path_buffer(Path& path, Encoding const encoding = Encoding())
+	template<detail::any_mutable_path Path, typename E = detail::default_encoding_t>
+		requires detail::explicit_container_encoding_for<E, path_string_t<Path>>
+	path_buffer(Path& path, E const encoding = E())
 		: m_string_buffer(get_path_string(path), encoding)
 	{
 	}

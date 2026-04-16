@@ -1,4 +1,5 @@
-#include <allio/openssl/detail/openssl.hpp>
+#include <allio/impl/openssl/openssl.hpp>
+
 #include <allio/error.hpp>
 #include <allio/impl/new.hpp>
 #include <allio/nothrow/file.hpp>
@@ -171,7 +172,6 @@ static vsm::result<openssl_make_ptr_t<Make, Free, Args...>> openssl_make(Args co
 
 	if (ptr == nullptr)
 	{
-		ERR_print_errors_fp(stderr); //TODO: Debugging
 		return vsm::unexpected(get_last_openssl_error());
 	}
 
@@ -475,46 +475,51 @@ using x509_ptr = openssl_ptr<X509, X509_free>;
 
 static vsm::result<x509_ptr> read_x509(tls_secret const& secret)
 {
-	return read_secret(secret, [&](BIO* const bio, secret_format const format) -> vsm::result<x509_ptr>
-	{
-		switch (format)
+	return read_secret(
+		secret,
+		[&](BIO* const bio, secret_format const format) -> vsm::result<x509_ptr>
 		{
-		case secret_format::der:
-			break;
+			switch (format)
+			{
+			case secret_format::der:
+				break;
 
-		case secret_format::pem:
-			return openssl_make<PEM_read_bio_X509, X509_free>(
-				bio,
-				/* out: */ nullptr,
-				/* password callback: */ nullptr,
-				/* password callback userdata:*/ nullptr);
-		}
+			case secret_format::pem:
+				return openssl_make<PEM_read_bio_X509, X509_free>(
+					bio,
+					/* out: */ nullptr,
+					/* password callback: */ nullptr,
+					/* password callback userdata:*/ nullptr);
+			}
 
-		return vsm::unexpected(error::unsupported_input_format);
-	});
+			return vsm::unexpected(error::unsupported_input_format);
+		});
 }
+
 
 using pkey_ptr = openssl_ptr<EVP_PKEY, EVP_PKEY_free>;
 
 static vsm::result<pkey_ptr> read_pkey(tls_secret const& secret)
 {
-	return read_secret(secret, [&](BIO* const bio, secret_format const format) -> vsm::result<pkey_ptr>
-	{
-		switch (format)
+	return read_secret(
+		secret,
+		[&](BIO* const bio, secret_format const format) -> vsm::result<pkey_ptr>
 		{
-		case secret_format::der:
-			break;
+			switch (format)
+			{
+			case secret_format::der:
+				break;
 
-		case secret_format::pem:
-			return openssl_make<PEM_read_bio_PrivateKey, EVP_PKEY_free>(
-				bio,
-				/* out: */ nullptr,
-				/* password callback: */ nullptr,
-				/* password callback userdata:*/ nullptr);
-		}
+			case secret_format::pem:
+				return openssl_make<PEM_read_bio_PrivateKey, EVP_PKEY_free>(
+					bio,
+					/* out: */ nullptr,
+					/* password callback: */ nullptr,
+					/* password callback userdata:*/ nullptr);
+			}
 
-		return vsm::unexpected(error::unsupported_input_format);
-	});
+			return vsm::unexpected(error::unsupported_input_format);
+		});
 }
 
 
@@ -540,7 +545,6 @@ static vsm::result<openssl_result<int>> ssl_try(SSL* const ssl, auto const... ar
 		return vsm::success(vsm::unexpected(std::monostate()));
 	}
 
-	ERR_print_errors_fp(stderr); //TODO: Debugging
 	return vsm::unexpected(static_cast<ssl_error>(e));
 }
 
@@ -652,14 +656,15 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(
 			{
 				if (vsm::any_flags(args.options, tls_options::use_system_certificates))
 				{
-					//TODO: Use the system trust store on Windows.
 					if (!SSL_CTX_set_default_verify_paths(ssl_ctx.get()))
 					{
 						return vsm::unexpected(get_last_openssl_error());
 					}
+
+					vsm_try_void(openssl_load_system_certificates(ssl_ctx.get()));
 				}
 
-#if 1 //TODO: Just for testing
+#if 0 //TODO: Just for testing
 				if (!SSL_CTX_load_verify_file(
 					ssl_ctx.get(),
 					"D:\\Code\\allio\\build\\msvc-asan\\library\\openssl\\allio-test-secrets\\server-certificate.pem"))
@@ -671,7 +676,15 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(
 
 			if (args.peer_certificate)
 			{
-				//TODO: Load peer certificate
+				X509_STORE* const ssl_ctx_store = SSL_CTX_get_cert_store(ssl_ctx.get());
+				vsm_assert(ssl_ctx_store != nullptr);
+
+				vsm_try(x509, read_x509(args.peer_certificate));
+
+				if (!X509_STORE_add_cert(ssl_ctx_store, x509.get()))
+				{
+					return vsm::unexpected(get_last_openssl_error());
+				}
 			}
 		}
 	}
@@ -815,6 +828,27 @@ struct openssl_socket::bio_type
 	}
 };
 
+openssl_socket::~openssl_socket()
+{
+	if (m_flags & flag_owns_read)
+	{
+		allio_release_storage(
+			m_read_buffer,
+			m_read_buffer_size,
+			/* min_alignment: */ 1,
+			allio_allocation_strategy_buffering);
+	}
+
+	if (m_flags & flag_owns_write)
+	{
+		allio_release_storage(
+			m_write_buffer,
+			m_write_buffer_size,
+			/* min_alignment: */ 1,
+			allio_allocation_strategy_buffering);
+	}
+}
+
 vsm::result<void> openssl_socket::initialize(openssl_ssl_ctx* const _ssl_ctx)
 {
 	auto const ssl_ctx = reinterpret_cast<SSL_CTX*>(_ssl_ctx);
@@ -834,24 +868,42 @@ vsm::result<void> openssl_socket::allocate_buffers()
 {
 	static constexpr size_t min_rw_buffer_size = 4096;
 
-	auto const allocation = allio_acquire_storage(
-		min_rw_buffer_size * 2,
+	auto const r_allocation = allio_acquire_storage(
+		min_rw_buffer_size,
 		static_cast<size_t>(-1),
 		/* min_alignment: */ 1,
 		allio_allocation_strategy_buffering);
 
-	if (allocation.storage == nullptr)
+	if (r_allocation.storage == nullptr)
 	{
 		return vsm::unexpected(error::not_enough_memory);
 	}
 
-	auto const storage = static_cast<std::byte*>(allocation.storage);
+	unique_storage_ptr<void> r_allocation_owner(
+		r_allocation.storage,
+		storage_deleter(r_allocation.size));
 
-	size_t const r_buffer_size = allocation.size / 2;
-	size_t const w_buffer_size = allocation.size - r_buffer_size;
+	auto const w_allocation = allio_acquire_storage(
+		min_rw_buffer_size,
+		static_cast<size_t>(-1),
+		/* min_alignment: */ 1,
+		allio_allocation_strategy_buffering);
 
-	set_read_buffer(std::span(storage, r_buffer_size));
-	set_write_buffer(std::span(storage + r_buffer_size, w_buffer_size));
+	if (r_allocation.storage == nullptr)
+	{
+		return vsm::unexpected(error::not_enough_memory);
+	}
+
+	auto const r_storage = static_cast<std::byte*>(r_allocation.storage);
+	auto const w_storage = static_cast<std::byte*>(w_allocation.storage);
+
+	set_read_buffer(std::span(r_storage, r_allocation.size));
+	set_write_buffer(std::span(w_storage, w_allocation.size));
+
+	m_flags |= flag_owns_read;
+	m_flags |= flag_owns_write;
+
+	(void)r_allocation_owner.release();
 
 	return {};
 }

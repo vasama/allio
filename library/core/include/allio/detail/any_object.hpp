@@ -1,6 +1,7 @@
 #pragma once
 
 #include <allio/detail/handle.hpp>
+#include <allio/detail/multiplexer.hpp>
 #include <allio/detail/new.h>
 #include <allio/detail/type_list.hpp>
 
@@ -206,7 +207,7 @@ struct any_object_detached_functions_2
 
 	template<std::same_as<Multiplexer>>
 	vsm::result<void> attach_handle(
-		multiplexer_handle<Multiplexer> auto&& m,
+		multiplexer_handle auto&& m,
 		native_handle<AnyObject> const& h,
 		async_connector_t<Multiplexer, AnyObject>& c) const
 	{
@@ -262,7 +263,7 @@ struct any_object_attached_functions_1
 
 	template<std::same_as<Operation>>
 	vsm::result<result_type> submit(
-		multiplexer_handle_for<Multiplexer> auto&& m,
+		multiplexer_handle_for<AnyObject> auto&& m,
 		const_t<native_handle<AnyObject>>& h,
 		const_t<async_connector_t<Multiplexer, AnyObject>>& c,
 		async_operation_t<Multiplexer, AnyObject, Operation>& s,
@@ -274,7 +275,7 @@ struct any_object_attached_functions_1
 
 	template<std::same_as<Operation>>
 	vsm::result<result_type> notify(
-		multiplexer_handle_for<Multiplexer> auto&& m,
+		multiplexer_handle_for<AnyObject> auto&& m,
 		const_t<native_handle<AnyObject>>& h,
 		const_t<async_connector_t<Multiplexer, AnyObject>>& c,
 		async_operation_t<Multiplexer, AnyObject, Operation>& s,
@@ -287,7 +288,7 @@ struct any_object_attached_functions_1
 
 	template<std::same_as<Operation>>
 	void cancel(
-		multiplexer_handle_for<Multiplexer> auto&& m,
+		multiplexer_handle_for<AnyObject> auto&& m,
 		native_handle<AnyObject> const& h,
 		async_connector_t<Multiplexer, AnyObject> const& c,
 		async_operation_t<Multiplexer, AnyObject, Operation>& s) const
@@ -313,7 +314,7 @@ struct any_object_attached_functions<AnyObject, type_list<Operations...>, Multip
 		async_connector<Multiplexer, AnyObject>& c);
 
 	vsm::result<void> detach_handle(
-		multiplexer_handle<Multiplexer> auto&& m,
+		multiplexer_handle_for<AnyObject> auto&& m,
 		native_handle<AnyObject> const& h,
 		async_connector_t<Multiplexer, AnyObject>& c) const
 	{

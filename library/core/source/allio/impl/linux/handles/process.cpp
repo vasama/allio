@@ -5,6 +5,7 @@
 #include <allio/impl/linux/api_string.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/fcntl.hpp>
+#include <allio/impl/linux/filesystem.hpp>
 #include <allio/impl/linux/fork_exec.hpp>
 #include <allio/impl/linux/handles/fs_object.hpp>
 #include <allio/impl/linux/pidfd.hpp>
@@ -272,7 +273,7 @@ vsm::result<void> process_t::create(
 			// descriptor is passed to exec instead.
 			if (a.executable_path.base == nullptr && path_view(exec_path).is_relative())
 			{
-				vsm_try_assign(exec_fd, linux::open_file(
+				vsm_try_assign(exec_fd, linux::create_file(
 					/* dir_fd: */ -1,
 					exec_path.data(),
 					O_PATH | O_CLOEXEC));

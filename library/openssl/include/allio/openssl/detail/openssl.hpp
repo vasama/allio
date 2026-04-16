@@ -90,6 +90,9 @@ class openssl_socket
 	static constexpr uint32_t flag_want_read                = 1 << 0;
 	static constexpr uint32_t flag_want_write               = 1 << 1;
 
+	static constexpr uint32_t flag_owns_read                = 1 << 2;
+	static constexpr uint32_t flag_owns_write               = 1 << 3;
+
 	openssl_ssl_ptr m_ssl;
 	uint32_t m_flags = 0;
 
@@ -118,6 +121,11 @@ class openssl_socket
 	};
 
 public:
+	openssl_socket() = default;
+	openssl_socket(openssl_socket const&) = delete;
+	openssl_socket& operator=(openssl_socket const&) = delete;
+	~openssl_socket();
+
 	vsm::result<void> initialize(openssl_ssl_ctx* ssl_ctx);
 
 	vsm::result<void> allocate_buffers();

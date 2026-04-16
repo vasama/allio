@@ -12,5 +12,6 @@ using detail::tls_secret;
 using detail::tls_min_version;
 using detail::tls_certificate;
 using detail::tls_private_key;
+using detail::tls_peer_certificate;
 
 } // namespace allio

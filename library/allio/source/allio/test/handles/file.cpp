@@ -3,6 +3,8 @@
 
 #include <allio/test/filesystem.hpp>
 
+#include <vsm/numeric.hpp>
+
 #include <catch2/catch_all.hpp>
 
 #include <cstring>
@@ -11,7 +13,7 @@ using namespace allio;
 
 static size_t count_files(std::filesystem::path const& path)
 {
-	return std::ranges::distance(std::filesystem::directory_iterator(path));
+	return vsm::truncating(std::ranges::distance(std::filesystem::directory_iterator(path)));
 }
 
 TEST_CASE("Files can be read", "[file][blocking]")
@@ -46,6 +48,7 @@ TEST_CASE("Files can be written", "[file][blocking]")
 	test::check_file_content(path, "allio");
 }
 
+#if vsm_os_win32 // link_at requires special permissions on Linux.
 TEST_CASE("File can be linked into the filesystem", "[file][blocking]")
 {
 	using namespace blocking;
@@ -69,25 +72,6 @@ TEST_CASE("File can be linked into the filesystem", "[file][blocking]")
 	test::check_file_content(path_2, "hello");
 }
 
-TEST_CASE("Files can be created with unique names", "[file][blocking]")
-{
-	using namespace blocking;
-
-	auto const stdfs_path = test::get_temp_stdfs_path();
-	vsm_assert(std::filesystem::create_directory(stdfs_path));
-	vsm_assert(count_files(stdfs_path) == 0);
-
-	auto const path = allio::path(stdfs_path.string());
-	{
-		auto const file_1 = open_unique_file(path);
-		REQUIRE(count_files(stdfs_path) == 1);
-
-		auto const file_2 = open_unique_file(path);
-		REQUIRE(count_files(stdfs_path) == 2);
-	}
-	REQUIRE(count_files(stdfs_path) == 2);
-}
-
 TEST_CASE("Anonymous files can be created and linked", "[file][blocking]")
 {
 	using namespace blocking;
@@ -106,6 +90,26 @@ TEST_CASE("Anonymous files can be created and linked", "[file][blocking]")
 	REQUIRE(count_files(stdfs_path) == 1);
 
 	test::check_file_content(link_path, "hello");
+}
+#endif
+
+TEST_CASE("Files can be created with unique names", "[file][blocking]")
+{
+	using namespace blocking;
+
+	auto const stdfs_path = test::get_temp_stdfs_path();
+	vsm_assert(std::filesystem::create_directory(stdfs_path));
+	vsm_assert(count_files(stdfs_path) == 0);
+
+	auto const path = allio::path(stdfs_path.string());
+	{
+		auto const file_1 = open_unique_file(path);
+		REQUIRE(count_files(stdfs_path) == 1);
+
+		auto const file_2 = open_unique_file(path);
+		REQUIRE(count_files(stdfs_path) == 2);
+	}
+	REQUIRE(count_files(stdfs_path) == 2);
 }
 
 #if 0

@@ -110,7 +110,7 @@ vsm::result<unique_handle> win32::reopen_file(
 vsm::result<unique_handle> win32::open_anchor_file(
 	HANDLE const base_handle,
 	std::wstring_view const path,
-	bool const file)
+	bool const may_open_leaf)
 {
 	platform_open_options options =
 	{
@@ -120,7 +120,7 @@ vsm::result<unique_handle> win32::open_anchor_file(
 		.create_options = FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
 	};
 
-	if (file)
+	if (may_open_leaf)
 	{
 		options.create_options |= FILE_NON_DIRECTORY_FILE;
 	}
@@ -143,6 +143,46 @@ vsm::result<unique_handle> detail::open_anchor_file(
 		&path_handle));
 
 	return win32::open_anchor_file(path_handle.get(), kernel_path, may_open_leaf);
+}
+
+vsm::result<unique_handle> detail::open_file(
+	HANDLE const base,
+	any_path_view const path,
+	platform_open_options const& options)
+{
+	kernel_path_storage path_storage;
+	kernel_path_handle path_handle;
+
+	vsm_try(kernel_path, make_kernel_path(
+		path_storage,
+		base,
+		path,
+		&path_handle));
+
+	return win32::create_file(path_handle.get(), kernel_path, options);
+}
+
+vsm::result<unique_handle> detail::open_anonymous_file(
+	HANDLE const base,
+	platform_open_options const& options)
+{
+	platform_open_options unique_options = options;
+	unique_options.create_options |= FILE_DELETE_ON_CLOSE;
+
+	vsm_try(file, detail::open_unique_file(base, unique_options));
+
+	// TODO: Delete (with posix semantics) if intended for temporary usage.
+
+#if 0
+	if (vsm::any_flags(local_a.special, open_options::temporary))
+	{
+		vsm_try_void(reopen_and_delete_file(
+			file.handle.get(),
+			/* try_posix_semantics: */ true));
+	}
+#endif
+
+	return file;
 }
 
 

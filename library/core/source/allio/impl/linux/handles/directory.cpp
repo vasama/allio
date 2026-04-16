@@ -3,6 +3,7 @@
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/api_string.hpp>
 #include <allio/impl/linux/error.hpp>
+#include <allio/impl/linux/filesystem.hpp>
 #include <allio/impl/linux/handles/fs_object.hpp>
 #include <allio/impl/transcode.hpp>
 
@@ -324,7 +325,7 @@ vsm::result<void> detail::_set_current_directory(fs_path const& path)
 		//TODO: Use lexically_equivalent(path, ".")?
 		if (!path_string.empty())
 		{
-			vsm_try(new_fd, linux::open_file(
+			vsm_try(new_fd, linux::create_file(
 				fd,
 				path_string.data(),
 				O_PATH | O_DIRECTORY | O_CLOEXEC));
@@ -343,7 +344,7 @@ vsm::result<void> detail::_set_current_directory(fs_path const& path)
 
 vsm::result<basic_detached_handle<directory_t>> detail::_open_current_directory()
 {
-	vsm_try(fd, linux::open_file(
+	vsm_try(fd, linux::create_file(
 		/* dir_fd: */ -1,
 		".",
 		O_RDONLY | O_DIRECTORY | O_CLOEXEC));

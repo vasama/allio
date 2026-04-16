@@ -14,24 +14,28 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::linux;
 
-vsm::result<open_info> open_info::make(open_parameters const& args)
+file_sharing detail::default_file_sharing(open_options const options)
 {
-	open_info info = {};
+	return file_sharing::all;
+}
+
+vsm::result<platform_open_options> detail::make_platform_open_options(
+	generic_open_options const& options)
+{
+	platform_open_options r = {};
 
 	// Linux does not provide file sharing restrictions.
-	if (!vsm::all_flags(args.sharing, file_sharing::all))
+	if (!vsm::all_flags(options.sharing, file_sharing::all))
 	{
 		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
 	auto maximum_mode = file_mode::read_write;
 
-	vsm_gnu_diagnostic(push)
-	vsm_gnu_diagnostic(ignored "-Wswitch")
-	switch (args.special & open_kind::mask)
+	switch (options.kind)
 	{
 	case open_kind::path:
-		info.flags |= O_PATH;
+		r.flags |= O_PATH;
 		maximum_mode = file_mode::none;
 		break;
 
@@ -39,213 +43,86 @@ vsm::result<open_info> open_info::make(open_parameters const& args)
 		break;
 
 	case open_kind::directory:
-		info.flags |= O_DIRECTORY;
+		r.flags |= O_DIRECTORY;
 		maximum_mode = file_mode::read;
 		break;
 	}
-	vsm_gnu_diagnostic(pop)
 
-	if (info.flags & (O_PATH | O_DIRECTORY))
+	if (r.flags & (O_PATH | O_DIRECTORY))
 	{
-		if (args.opening != file_opening::open_existing)
+		if (options.opening != file_opening::open_existing)
 		{
 			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
 	}
 
-	if (!vsm::all_flags(maximum_mode, args.mode))
+	if (!vsm::all_flags(maximum_mode, options.mode))
 	{
 		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
-	if (vsm::no_flags(args.flags, io_flags::create_inheritable))
+	if (vsm::no_flags(options.flags, io_flags::create_inheritable))
 	{
-		info.flags |= O_CLOEXEC;
+		r.flags |= O_CLOEXEC;
 	}
 
-	switch (args.mode)
+	switch (options.mode)
 	{
 	case file_mode::none:
 		break;
 
 	case file_mode::read:
-		info.flags |= O_RDONLY;
+		r.flags |= O_RDONLY;
 		break;
 
 	case file_mode::write:
-		info.flags |= O_WRONLY;
+		r.flags |= O_WRONLY;
 		break;
 
 	case file_mode::read_write:
-		info.flags |= O_RDWR;
+		r.flags |= O_RDWR;
 		break;
 
 	default:
 		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
-	switch (args.opening)
+	switch (options.opening)
 	{
 	case file_opening::open_existing:
 		break;
 
 	case file_opening::create_only:
-		info.flags |= O_CREAT | O_EXCL;
+		r.flags |= O_CREAT | O_EXCL;
 		break;
 
 	case file_opening::open_or_create:
-		info.flags |= O_CREAT;
+		r.flags |= O_CREAT;
 		break;
 
 	case file_opening::truncate_existing:
-		info.flags |= O_CREAT | O_TRUNC;
+		r.flags |= O_CREAT | O_TRUNC;
 		break;
 
 	default:
 		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
-	if (info.flags & O_CREAT)
+	if (r.flags & O_CREAT)
 	{
 		// Apply read/write permissions for owner, group and other by default.
-		info.mode = 0666;
+		r.mode = 0b110'110'110;
 	}
 
-	return info;
+	return r;
 }
 
-vsm::result<unique_handle> linux::open_file(
-	int dir_fd,
-	char const* const path,
-	open_info const& info)
+vsm::result<handle_flags> detail::configure_file(
+	platform_handle_type const handle,
+	platform_open_options const& options)
 {
-	if (dir_fd == -1)
-	{
-		dir_fd = AT_FDCWD;
-	}
-
-	int const fd = openat(
-		dir_fd,
-		path,
-		info.flags,
-		info.mode);
-
-	if (fd == -1)
-	{
-		return vsm::unexpected(allio_error(get_last_error()));
-	}
-
-	return vsm_lazy(unique_handle(fd));
+	return handle_flags::none;
 }
-
-vsm::result<unique_handle> linux::open_file(
-	int const dir_fd,
-	any_path_view const path,
-	open_info const& info)
-{
-	api_string_storage storage;
-	vsm_try(path_c_str, make_api_c_string(storage, path.string()));
-	return open_file(dir_fd, path_c_str, info);
-}
-
-vsm::result<unique_handle> linux::reopen_file(
-	int const fd,
-	open_info const& info)
-{
-	if (info.flags & O_DIRECTORY)
-	{
-		return linux::open_file(
-			fd,
-			".",
-			info.flags,
-			info.mode);
-	}
-
-	char link_path[32];
-	vsm_verify(snprintf(link_path, sizeof(link_path), "/proc/self/fd/%d", fd) > 0);
-
-	int const new_fd = open(
-		link_path,
-		info.flags,
-		info.mode);
-
-	if (new_fd == -1)
-	{
-		return vsm::unexpected(allio_error(get_last_error()));
-	}
-
-	return vsm_lazy(unique_handle(new_fd));
-}
-
-
-static vsm::result<open_info> make_anonymous_open_info(open_parameters const& args)
-{
-	//TODO: Should a non-zero mode be assigned?
-
-	open_info info =
-	{
-		.flags = O_TMPFILE,
-	};
-
-	// Linux does not provide file sharing restrictions.
-	if (!vsm::all_flags(args.sharing, file_sharing::all))
-	{
-		return vsm::unexpected(allio_error(error::unsupported_operation));
-	}
-
-	if (vsm::no_flags(args.flags, io_flags::create_inheritable))
-	{
-		info.flags |= O_CLOEXEC;
-	}
-
-	vsm_gnu_diagnostic(push)
-	vsm_gnu_diagnostic(ignored "-Wswitch")
-	switch (args.mode)
-	{
-	case file_mode::write:
-		info.mode = O_WRONLY;
-		break;
-
-	case file_mode(0):
-	case file_mode::read_write:
-		info.mode = O_RDWR;
-		break;
-
-	default:
-		return vsm::unexpected(allio_error(error::invalid_argument));
-	}
-	vsm_gnu_diagnostic(pop)
-
-	if (args.opening != file_opening(0))
-	{
-		return vsm::unexpected(allio_error(error::invalid_argument));
-	}
-
-	return info;
-}
-
-vsm::result<handle_with_flags> detail::open_file(open_parameters const& a)
-{
-	open_info info;
-
-	if (vsm::any_flags(a.special, open_options::anonymous))
-	{
-		vsm_try_assign(info, make_anonymous_open_info(a));
-	}
-	else
-	{
-		vsm_try_assign(info, open_info::make(a));
-	}
-
-	auto const base = a.path.base == nullptr
-		? -1
-		: unwrap_handle(a.path.base->platform_handle);
-
-	vsm_try(fd, linux::open_file(base, a.path.path, info));
-
-	return vsm::result<handle_with_flags>(vsm::result_value, vsm_move(fd), handle_flags::none);
-}
-
 
 static vsm::result<size_t> _readlink(char const* const path, std::span<char> const buffer)
 {

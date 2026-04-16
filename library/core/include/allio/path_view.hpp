@@ -22,90 +22,107 @@
 namespace allio {
 
 template<typename Char, typename Traits, typename Encoding = void>
+class foreign_path_view;
+
+namespace detail {
+
+template<typename Char, typename Traits, typename Encoding, bool Forward>
+class path_view_iterator : Traits::iterator_base
+{
+public:
+	using iterator_category = std::bidirectional_iterator_tag;
+	using value_type = foreign_path_view<Char, Traits, Encoding>;
+	using difference_type = ptrdiff_t;
+	using pointer = vsm::arrow<value_type>;
+	using reference = value_type;
+
+	[[nodiscard]] constexpr value_type operator*() const
+	{
+		return value_type(this->current());
+	}
+
+	[[nodiscard]] constexpr vsm::arrow<value_type> operator->() const
+	{
+		return value_type(this->current());
+	}
+
+	constexpr path_view_iterator& operator++() &
+	{
+		if constexpr (Forward)
+		{
+			this->increment();
+		}
+		else
+		{
+			this->decrement();
+		}
+		return *this;
+	}
+
+	[[nodiscard]] constexpr path_view_iterator operator++(int) &
+	{
+		path_view_iterator it = *this;
+		if constexpr (Forward)
+		{
+			this->increment();
+		}
+		else
+		{
+			this->decrement();
+		}
+		return it;
+	}
+
+	constexpr path_view_iterator& operator--() &
+	{
+		if constexpr (Forward)
+		{
+			this->decrement();
+		}
+		else
+		{
+			this->increment();
+		}
+		return *this;
+	}
+
+	[[nodiscard]] constexpr path_view_iterator operator--(int) &
+	{
+		path_view_iterator it = *this;
+		if constexpr (Forward)
+		{
+			this->decrement();
+		}
+		else
+		{
+			this->increment();
+		}
+		return it;
+	}
+
+	[[nodiscard]] friend bool operator==(
+		path_view_iterator const&,
+		path_view_iterator const&) = default;
+
+private:
+	using Traits::iterator_base::iterator_base;
+
+	friend foreign_path_view<Char, Traits, Encoding>;
+};
+
+} // namespace detail
+
+template<typename Char, typename Traits, typename Encoding>
 class foreign_path_view : public detail::path_encoding_base<Encoding>
 {
+	template<bool Forward>
+	using basic_iterator = detail::path_view_iterator<Char, Traits, Encoding, Forward>;
+
 public:
 	using string_view_type = std::basic_string_view<Char>;
 
 private:
 	string_view_type m_string_view;
-
-	template<bool Forward>
-	class basic_iterator : public Traits::iterator_base
-	{
-	public:
-		using iterator_category = std::bidirectional_iterator_tag;
-		using value_type = foreign_path_view;
-		using difference_type = ptrdiff_t;
-		using pointer = vsm::arrow<foreign_path_view>;
-		using reference = foreign_path_view;
-
-		[[nodiscard]] constexpr foreign_path_view operator*() const
-		{
-			return foreign_path_view(this->current());
-		}
-
-		[[nodiscard]] constexpr vsm::arrow<foreign_path_view> operator->() const
-		{
-			return foreign_path_view(this->current());
-		}
-
-		constexpr basic_iterator& operator++() &
-		{
-			if constexpr (Forward)
-			{
-				this->increment();
-			}
-			else
-			{
-				this->decrement();
-			}
-			return *this;
-		}
-
-		[[nodiscard]] constexpr basic_iterator operator++(int) &
-		{
-			basic_iterator it = *this;
-			if constexpr (Forward)
-			{
-				this->increment();
-			}
-			else
-			{
-				this->decrement();
-			}
-			return it;
-		}
-
-		constexpr basic_iterator& operator--() &
-		{
-			if constexpr (Forward)
-			{
-				this->decrement();
-			}
-			else
-			{
-				this->increment();
-			}
-			return *this;
-		}
-
-		[[nodiscard]] constexpr basic_iterator operator--(int) &
-		{
-			basic_iterator it = *this;
-			if constexpr (Forward)
-			{
-				this->decrement();
-			}
-			else
-			{
-				this->increment();
-			}
-			return it;
-		}
-
-		friend class foreign_path_view;
-	};
 
 public:
 	static constexpr Char preferred_separator = Traits::preferred_separator;
@@ -445,7 +462,9 @@ public:
 	}
 
 private:
-	friend string_view_type tag_invoke(get_path_string_t, foreign_path_view const& self)
+	friend string_view_type tag_invoke(
+		get_path_string_t,
+		std::same_as<foreign_path_view> auto const& self)
 	{
 		return self.m_string_view;
 	}

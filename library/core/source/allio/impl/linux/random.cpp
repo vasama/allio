@@ -1,6 +1,7 @@
 #include <allio/impl/random.hpp>
 
 #include <allio/impl/linux/error.hpp>
+#include <allio/impl/linux/filesystem.hpp>
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/handles/fs_object.hpp>
 
@@ -14,7 +15,7 @@ using namespace allio::linux;
 
 static vsm::result<int> get_urandom_fd()
 {
-	static vsm::result<unique_handle> const file = open_file(
+	static vsm::result<unique_handle> const file = linux::create_file(
 		-1,
 		"/dev/urandom",
 		O_RDONLY | O_CLOEXEC);

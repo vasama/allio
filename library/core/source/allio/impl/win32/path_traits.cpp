@@ -1228,6 +1228,7 @@ void win32_path_iterator_base<Char>::increment()
 		cur_end = skip_separators(cur_end, end);
 	}
 
+	// N+1 is the forward end position.
 	if (cur_end == end)
 	{
 		m_cur_beg = end;
