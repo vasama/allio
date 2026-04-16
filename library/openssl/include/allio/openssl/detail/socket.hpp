@@ -227,7 +227,6 @@ protected:
 				auto rw_args = io_parameters_t<RawSocket, byte_io::stream_write_t>{};
 				rw_args.buffers = rw_h.openssl->get_write_buffer();
 
-				fprintf(stderr, "%p submit r %zu\n", rw_args.)
 				vsm_try(transferred, detail::submit_io(
 					m,
 					rw_h,

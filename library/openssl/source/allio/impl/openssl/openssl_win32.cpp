@@ -2,7 +2,7 @@
 
 #include <allio/impl/win32/error.hpp>
 
-#include <vsm/unique_resource.hpp
+#include <vsm/unique_resource.hpp>
 
 #include <wincrypt.h>
 
@@ -10,6 +10,7 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
+#if 0
 namespace {
 
 struct cert_store_deleter
@@ -23,7 +24,7 @@ struct cert_store_deleter
 using unique_cert_store = vsm::unique_resource<
 	HCERTSTORE,
 	cert_store_deleter,
-	NULL>;
+	static_cast<HCERTSTORE>(NULL)>;
 
 static unique_cert_store open_root_cert_store()
 {
@@ -100,5 +101,12 @@ vsm::result<void> detail::openssl_load_system_certificates(SSL_CTX* const ssl_ct
 		}
 	}
 
+	return {};
+}
+#endif
+
+// TODO: Finish the above implementation.
+vsm::result<void> detail::openssl_load_system_certificates(SSL_CTX* const ssl_ctx)
+{
 	return {};
 }
