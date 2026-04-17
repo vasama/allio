@@ -141,6 +141,45 @@ void connect_s::cancel(M&, H const&, C const&, S& s)
 }
 
 
+using disconnect_s = async_operation_t<M, raw_socket_t, disconnect_t>;
+using disconnect_a = io_parameters_t<raw_socket_t, disconnect_t>;
+
+io_result<void> disconnect_s::submit(
+	M& m,
+	H const& h,
+	C const& c,
+	disconnect_s& s,
+	disconnect_a const& a,
+	io_handler<M>& handler)
+{
+	if (a.deadline != deadline::never())
+	{
+		return vsm::unexpected(allio_error(error::unsupported_operation));
+	}
+
+	return posix::socket_disconnect(
+		posix::unwrap_socket(h.platform_handle),
+		posix::socket_disconnect_rw);
+}
+
+io_result<void> disconnect_s::notify(
+	M& m,
+	H const& h,
+	C const& c,
+	disconnect_s& s,
+	disconnect_a const& a,
+	io_handler<M>&,
+	M::io_status_type const status)
+{
+	vsm_unreachable();
+}
+
+void disconnect_s::cancel(M& m, H const&, C const&, S& s)
+{
+	vsm_unreachable();
+}
+
+
 static size_t get_transfer_result(H const& h, M::overlapped& overlapped)
 {
 	DWORD transferred;

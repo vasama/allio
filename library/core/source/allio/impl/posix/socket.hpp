@@ -241,6 +241,8 @@ struct socket_with_flags
 	socket_address_view addr,
 	deadline deadline);
 
+[[nodiscard]] vsm::result<void> socket_disconnect(socket_type socket, int how);
+
 [[nodiscard]] vsm::result<socket_poll_mask> socket_poll(
 	socket_type socket,
 	socket_poll_mask mask,

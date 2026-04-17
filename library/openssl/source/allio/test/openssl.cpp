@@ -146,5 +146,7 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 		}
 	}
 
+	// TODO: Test disconnect as well.
+
 	REQUIRE(std::memcmp(read_buffer, write_buffer, sizeof(read_buffer)) == 0);
 }

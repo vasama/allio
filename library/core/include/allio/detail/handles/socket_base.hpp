@@ -44,13 +44,13 @@ struct connect_t
 
 struct disconnect_t
 {
-	using operation_concept = consumer_t;
-	using params_type = no_parameters_t;
+	using operation_concept = void;
+	using params_type = deadline_t;
 	using result_type = void;
 
 	template<object Object>
 	static vsm::result<void> blocking_io(
-		native_handle<Object>& h,
+		native_handle<Object> const& h,
 		io_parameters_t<Object, disconnect_t> const& args)
 		requires requires { Object::disconnect(h, args); }
 	{
@@ -82,6 +82,12 @@ struct socket_base_t : common_socket_base_t<BaseObject>
 		: base_type::template facade<Handle, Traits>
 		, byte_io::stream_facade<Handle, Traits>
 	{
+		[[nodiscard]] auto disconnect(auto&&... args) const
+		{
+			auto a = io_parameters_t<typename Handle::object_type, disconnect_t>();
+			(set_argument(a, vsm_forward(args)), ...);
+			return Traits::template observe<disconnect_t>(static_cast<Handle const&>(*this), a);
+		}
 	};
 };
 

@@ -147,7 +147,10 @@ vsm::result<void> linux::link_file_at(
 		dir_fd = AT_FDCWD;
 	}
 
-	int const r = linkat(fd, "", dir_fd, path, AT_EMPTY_PATH);
+	char link_path[32];
+	vsm_verify(snprintf(link_path, sizeof(link_path), "/proc/self/fd/%d", fd) > 0);
+
+	int const r = linkat(-1, link_path, dir_fd, path, AT_SYMLINK_FOLLOW);
 
 	if (r == -1)
 	{

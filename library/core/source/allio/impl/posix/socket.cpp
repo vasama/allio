@@ -427,3 +427,13 @@ vsm::result<void> posix::socket_connect(
 
 	return {};
 }
+
+vsm::result<void> posix::socket_disconnect(socket_type const socket, int const how)
+{
+	if (::shutdown(socket, how) == socket_error_value)
+	{
+		return vsm::unexpected(allio_error(get_last_socket_error()));
+	}
+
+	return {};
+}

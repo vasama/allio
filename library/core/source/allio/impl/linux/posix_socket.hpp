@@ -33,6 +33,10 @@ using socket_poll_mask = short;
 inline constexpr socket_poll_mask socket_poll_r = POLLIN;
 inline constexpr socket_poll_mask socket_poll_w = POLLOUT;
 
+inline constexpr int socket_disconnect_r = SHUT_RD;
+inline constexpr int socket_disconnect_w = SHUT_WR;
+inline constexpr int socket_disconnect_rw = SHUT_RDWR;
+
 
 using socket_error = linux::system_error;
 

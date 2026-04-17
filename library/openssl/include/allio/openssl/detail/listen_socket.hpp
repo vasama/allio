@@ -334,7 +334,9 @@ class async_operation<M, openssl_listen_socket_t<RawListenSocket>, accept_t>
 
 	static io_result<void> _continue(M& m, H& h, C& c, S& s, A const&, io_handler<M>& handler)
 	{
-		return base::_enter(m, h, c, s, handler, [&]()
+		vsm_assert(s.m_socket_h.openssl != nullptr);
+
+		return base::_enter(m, h, c, s, handler, [&]() -> typename base::enter_result
 		{
 			return s.m_socket_h.openssl->accept();
 		});

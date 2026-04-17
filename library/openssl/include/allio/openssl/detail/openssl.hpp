@@ -68,8 +68,13 @@ struct openssl_ssl_deleter
 using openssl_ssl_ptr = std::unique_ptr<openssl_ssl, openssl_ssl_deleter>;
 
 
+struct openssl_pending_t
+{
+	explicit openssl_pending_t() = default;
+};
+
 template<typename T>
-using openssl_result = vsm::result<T, std::monostate>;
+using openssl_result = vsm::result<T, openssl_pending_t>;
 
 struct openssl_operation_base : vsm::intrusive::mpsc_queue_link
 {

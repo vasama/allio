@@ -72,6 +72,8 @@ TEST_CASE(
 		std::system_error,
 		match_error(std::errc::timed_out));
 #endif
+
+	client_socket.disconnect();
 }
 
 TEST_CASE(
@@ -93,46 +95,39 @@ TEST_CASE(
 
 		auto const server_task = [&]() -> task<void>
 		{
-			fprintf(stderr, "          LINE: %d\n", __LINE__);
 			auto const socket = co_await listen_socket.accept();
 
-			fprintf(stderr, "          LINE: %d\n", __LINE__);
 			// Wait for a request from the client:
 			signed char request_data;
 			size_t const rs = co_await socket.read_some(as_read_buffer(&request_data, 1));
 			REQUIRE(rs == 1);
 
-			fprintf(stderr, "          LINE: %d\n", __LINE__);
 			// Send a reply to the client:
 			signed char const reply_data = -request_data;
 			size_t const ws = co_await socket.write_some(as_write_buffer(&reply_data, 1));
 			REQUIRE(ws == 1);
-
-			fprintf(stderr, "          LINE: %d\n", __LINE__);
 		};
 
 		auto const client_task = [&]() -> task<void>
 		{
-			fprintf(stderr, "LINE: %d\n", __LINE__);
 			// Connect to the server:
 			auto const socket = co_await detail::connect<openssl::socket_t, traits_type>(
 				endpoint,
 				make_client_security_context());
 
-			fprintf(stderr, "LINE: %d\n", __LINE__);
 			// Send a request to the server:
 			signed char const request_data = 42;
 			size_t const ws = co_await socket.write_some(as_write_buffer(&request_data, 1));
 			REQUIRE(ws == 1);
 
-			fprintf(stderr, "LINE: %d\n", __LINE__);
 			// Wait for a reply from the server:
 			signed char reply_data;
 			size_t const rs = co_await socket.read_some(as_read_buffer(&reply_data, 1));
 			REQUIRE(rs == 1);
 
-			fprintf(stderr, "LINE: %d\n", __LINE__);
 			REQUIRE(reply_data == -42);
+
+			co_await socket.disconnect();
 		};
 
 		co_await ex::when_all(server_task(), client_task());

@@ -542,7 +542,7 @@ static vsm::result<openssl_result<int>> ssl_try(SSL* const ssl, auto const... ar
 	{
 	case SSL_ERROR_WANT_READ:
 	case SSL_ERROR_WANT_WRITE:
-		return vsm::success(vsm::unexpected(std::monostate()));
+		return vsm::success(vsm::unexpected(openssl_pending_t()));
 	}
 
 	return vsm::unexpected(static_cast<ssl_error>(e));
@@ -723,8 +723,6 @@ void detail::openssl_release_ssl(openssl_ssl* const ssl)
 	SSL_free(reinterpret_cast<SSL*>(ssl));
 }
 
-
-static thread_local char const* debug_context;
 
 struct openssl_socket::bio_type
 {
@@ -924,12 +922,11 @@ vsm::result<openssl_result<void>> openssl_socket::accept()
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
-	debug_context = "accept:  ";
 	vsm_try(r, ssl_try<SSL_accept, /* SuccessThreshold: */ 0>(ssl));
 
 	if (!r)
 	{
-		return vsm::success(vsm::unexpected(std::monostate()));
+		return vsm::success(vsm::unexpected(openssl_pending_t()));
 	}
 
 	if (*r == 0)
@@ -944,12 +941,11 @@ vsm::result<openssl_result<void>> openssl_socket::connect()
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
-	debug_context = "connect: ";
 	vsm_try(r, ssl_try<SSL_connect, /* SuccessThreshold: */ 0>(ssl));
 
 	if (!r)
 	{
-		return vsm::success(vsm::unexpected(std::monostate()));
+		return vsm::success(vsm::unexpected(openssl_pending_t()));
 	}
 
 	if (*r == 0)
@@ -968,7 +964,7 @@ vsm::result<openssl_result<void>> openssl_socket::disconnect()
 
 	if (!r)
 	{
-		return vsm::success(vsm::unexpected(std::monostate()));
+		return vsm::success(vsm::unexpected(openssl_pending_t()));
 	}
 
 	//TODO: What to do on 0 result from SSL_shutdown?
@@ -987,7 +983,7 @@ vsm::result<openssl_result<size_t>> openssl_socket::read_some(read_buffer const 
 
 	if (!r)
 	{
-		return vsm::success(vsm::unexpected(std::monostate()));
+		return vsm::success(vsm::unexpected(openssl_pending_t()));
 	}
 
 	if (*r == 0)
@@ -1009,7 +1005,7 @@ vsm::result<openssl_result<size_t>> openssl_socket::write_some(write_buffer cons
 
 	if (!r)
 	{
-		return vsm::success(vsm::unexpected(std::monostate()));
+		return vsm::success(vsm::unexpected(openssl_pending_t()));
 	}
 
 	if (*r == 0)

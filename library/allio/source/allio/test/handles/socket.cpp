@@ -82,6 +82,8 @@ TEST_CASE("Blocking stream sockets can exchange data", "[socket][blocking]")
 			std::system_error,
 			match_error(error::end_of_stream));
 	}
+
+	client_socket.disconnect();
 }
 
 TEST_CASE("Stream socket can be connected asynchronously", "[socket][senders]")
@@ -128,6 +130,8 @@ TEST_CASE("Stream socket can be connected asynchronously", "[socket][senders]")
 		REQUIRE(rs == 1);
 
 		REQUIRE(reply_data == -request_data);
+
+		co_await socket.disconnect();
 	};
 
 	senders::sync_wait(multiplexer, client_task());
@@ -151,6 +155,8 @@ TEST_CASE("Stream socket can be accepted asynchronously", "[socket][senders]")
 
 		signed char reply_data;
 		socket.read(as_read_buffer(&reply_data, 1));
+
+		socket.disconnect();
 
 		return reply_data;
 	});
@@ -278,6 +284,8 @@ TEST_CASE("Asynchronous stream sockets can exchange data", "[socket][async]")
 			REQUIRE(rs == 1);
 
 			REQUIRE(reply_data == -42);
+
+			co_await socket.disconnect();
 		};
 
 		co_await ex::when_all(server_task(), client_task());

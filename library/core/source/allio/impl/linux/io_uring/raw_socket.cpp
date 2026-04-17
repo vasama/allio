@@ -113,6 +113,66 @@ void connect_s::cancel(M& m, H const&, C const&, S& s)
 }
 
 
+using disconnect_s = async_operation_t<M, raw_socket_t, disconnect_t>;
+using disconnect_a = io_parameters_t<raw_socket_t, disconnect_t>;
+
+io_result<void> disconnect_s::submit(
+	M& m,
+	H const& h,
+	C const& c,
+	disconnect_s& s,
+	disconnect_a const& a,
+	io_handler<M>& handler)
+{
+	io_uring_record_context ctx(m, a.deadline);
+
+	vsm_try_ptr(sqe, ctx.push());
+
+	sqe =
+	{
+		.opcode = IORING_OP_SHUTDOWN,
+		.fd = unwrap_handle(h.platform_handle),
+		.len = SHUT_RDWR,
+		.user_data = ctx.get_user_data(s),
+	};
+
+	if (a.deadline != deadline::never())
+	{
+		vsm_try_void(ctx.link_timeout(s.timeout.set(a.deadline)));
+	}
+
+	s.set_handler(handler);
+	ctx.commit();
+
+	return vsm::unexpected(io_notify_status::submitted);
+}
+
+io_result<void> disconnect_s::notify(
+	M& m,
+	H const& h,
+	C const& c,
+	disconnect_s& s,
+	disconnect_a const& a,
+	io_handler<M>&,
+	M::io_status_type const status)
+{
+	// This operation uses no io_slots.
+	vsm_assert(status.slot == nullptr);
+
+	if (status.result < 0)
+	{
+		return vsm::unexpected(allio_error(static_cast<system_error>(-status.result)));
+	}
+
+	return {};
+}
+
+void disconnect_s::cancel(M& m, H const&, C const&, S& s)
+{
+	(void)m.cancel_io(s);
+}
+
+
 using recv_t = byte_io::stream_read_t;
 using recv_s = async_operation_t<M, raw_socket_t, recv_t>;
 using recv_a = io_parameters_t<raw_socket_t, recv_t>;

@@ -48,7 +48,6 @@ TEST_CASE("Files can be written", "[file][blocking]")
 	test::check_file_content(path, "allio");
 }
 
-#if vsm_os_win32 // link_at requires special permissions on Linux.
 TEST_CASE("File can be linked into the filesystem", "[file][blocking]")
 {
 	using namespace blocking;
@@ -66,7 +65,9 @@ TEST_CASE("File can be linked into the filesystem", "[file][blocking]")
 		REQUIRE(count_files(stdfs_path) == 2);
 	}
 	REQUIRE(count_files(stdfs_path) == 2);
+
 	test::check_file_content(path_1, "");
+	test::check_file_content(path_2, "");
 
 	test::write_file_content(path_1, "hello");
 	test::check_file_content(path_2, "hello");
@@ -91,7 +92,6 @@ TEST_CASE("Anonymous files can be created and linked", "[file][blocking]")
 
 	test::check_file_content(link_path, "hello");
 }
-#endif
 
 TEST_CASE("Files can be created with unique names", "[file][blocking]")
 {

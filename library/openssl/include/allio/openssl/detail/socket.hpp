@@ -204,8 +204,10 @@ protected:
 		return c;
 	}
 
+	using enter_result = vsm::result<openssl_result<void>>;
+
 	template<typename Callable>
-	static io_result<typename std::invoke_result_t<Callable>::value_type::value_type> _enter(
+	static io_result<void> _enter(
 		M& m,
 		H& h,
 		C& c,
@@ -213,7 +215,7 @@ protected:
 		io_handler<M>& handler,
 		Callable&& callable)
 	{
-		using value_type = typename std::invoke_result_t<Callable>::value_type::value_type;
+		static_assert(std::is_same_v<std::invoke_result_t<Callable>, enter_result>);
 
 		while (true)
 		{
@@ -256,18 +258,10 @@ protected:
 
 			if (r)
 			{
-				if constexpr (std::is_void_v<value_type>)
-				{
-					return {};
-				}
-				else
-				{
-					return vsm_move(*r);
-				}
+				return {};
 			}
 		}
 	}
-
 
 	template<typename RawState>
 	static io_result<void> _notify(
@@ -437,7 +431,7 @@ class async_operation<M, openssl_socket_t<RawSocket>, connect_t>
 	}
 
 	// TODO: Is disconnecting needed when an error occurs?
-	// Notify while the raw close operation is active:
+	// Notify while a raw read or write operation is active:
 	using base::_notify;
 
 	// Notify while the raw connect operation is active:
@@ -493,7 +487,7 @@ class async_operation<M, openssl_socket_t<RawSocket>, connect_t>
 	{
 		vsm_assert(h.openssl != nullptr);
 
-		return base::_enter(m, h, c, s, handler, [&]()
+		return base::_enter(m, h, c, s, handler, [&]() -> typename base::enter_result
 		{
 			return h.openssl->connect();
 		});
@@ -531,6 +525,62 @@ class async_operation<M, openssl_socket_t<RawSocket>, connect_t>
 	friend base;
 };
 
+template<typename M, typename RawSocket>
+class async_operation<M, openssl_socket_t<RawSocket>, disconnect_t>
+	: public openssl_socket_operation<M, RawSocket, disconnect_t, disconnect_t>
+{
+	using base = openssl_socket_operation<M, RawSocket, disconnect_t, disconnect_t>;
+
+	using H = native_handle<openssl_socket_t<RawSocket>> const;
+	using C = async_connector_t<M, openssl_socket_t<RawSocket>> const;
+	using S = async_operation_t<M, openssl_socket_t<RawSocket>, disconnect_t>;
+	using A = io_parameters_t<openssl_socket_t<RawSocket>, disconnect_t>;
+
+	using raw_disconnect = async_operation_t<M, RawSocket, disconnect_t>;
+
+	static io_result<void> _submit(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler)
+	{
+		vsm_assert(h.openssl != nullptr);
+
+		return {};
+	}
+
+	static io_result<void> _continue(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler)
+	{
+		if (std::holds_alternative<raw_disconnect>(s.m_raw_state))
+		{
+			return {};
+		}
+
+		vsm_try_void(base::_enter(m, h, c, s, handler, [&]() -> typename base::enter_result
+		{
+			return h.openssl->disconnect();
+		}));
+		
+		return detail::submit_io(
+			m,
+			h,
+			c,
+			s.m_raw_state.template emplace<raw_disconnect>(),
+			a,
+			handler);
+	}
+
+	static io_result<void> _on_error(
+		M&,
+		H&,
+		C&,
+		S& s,
+		A const&,
+		io_handler<M>&,
+		std::error_code const e)
+	{
+		return vsm::unexpected(e);
+	}
+
+	friend base;
+};
+
 template<
 	typename M,
 	typename RawSocket,
@@ -555,7 +605,7 @@ class async_operation<M, openssl_socket_t<RawSocket>, Operation>
 		s.buffer_offset = 0;
 		s.transferred = 0;
 
-		return _continue(m, h, c, s, a, handler);
+		return {};
 	}
 
 	static io_result<void> _continue(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler)
@@ -575,36 +625,50 @@ class async_operation<M, openssl_socket_t<RawSocket>, Operation>
 				buffers[static_cast<ptrdiff_t>(s.buffer_index)],
 				buffer_layout);
 
-			vsm_assert(s.buffer_offset < buffer.size());
+			vsm_assert(s.buffer_offset <= buffer.size());
 
 			auto const remaining_data = buffer.data() + s.buffer_offset;
 			auto const remaining_size = buffer.size() - s.buffer_offset;
 
-			vsm_try(transferred, base::_enter(m, h, c, s, handler, [&]()
+			vsm_try_void(base::_enter(m, h, c, s, handler, [&]() -> typename base::enter_result
 			{
-				if constexpr (std::is_same_v<Operation, byte_io::stream_read_t>)
+				if (remaining_size != 0)
 				{
-					return h.openssl->read_some(read_buffer(remaining_data, remaining_size));
-				}
-				else
-				{
-					return h.openssl->write_some(write_buffer(remaining_data, remaining_size));
-				}
-			}));
+					openssl_result<size_t> r;
 
-			vsm_assert(transferred <= remaining_size);
-			s.transferred += transferred;
+					if constexpr (std::is_same_v<Operation, byte_io::stream_read_t>)
+					{
+						vsm_try_assign(
+							r,
+							h.openssl->read_some(read_buffer(remaining_data, remaining_size)));
+					}
+					else
+					{
+						vsm_try_assign(
+							r,
+							h.openssl->write_some(write_buffer(remaining_data, remaining_size)));
+					}
 
-			if (transferred == remaining_size)
-			{
-				++s.buffer_index;
+					if (!r)
+					{
+						return {};
+					}
+
+					size_t const transferred = *r;
+					vsm_assert(transferred <= remaining_size);
+
+					s.transferred += transferred;
+					s.buffer_offset += transferred;
+				}
+
+				s.buffer_index += 1;
 				s.buffer_offset = 0;
-			}
-			else
-			{
-				s.buffer_offset += transferred;
-			}
+
+				return {};
+			}));
 		}
+
+		vsm_assert(!h.openssl->want_read() && !h.openssl->want_write());
 
 		return {};
 	}

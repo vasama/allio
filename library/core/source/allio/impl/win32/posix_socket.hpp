@@ -34,6 +34,10 @@ using socket_poll_mask = SHORT;
 inline constexpr socket_poll_mask socket_poll_r = POLLRDNORM;
 inline constexpr socket_poll_mask socket_poll_w = POLLWRNORM;
 
+inline constexpr int socket_disconnect_r = SD_RECEIVE;
+inline constexpr int socket_disconnect_w = SD_SEND;
+inline constexpr int socket_disconnect_rw = SD_BOTH;
+
 
 enum class socket_error : int
 {
