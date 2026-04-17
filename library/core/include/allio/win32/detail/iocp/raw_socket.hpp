@@ -44,6 +44,8 @@ struct async_operation<iocp_multiplexer, raw_socket_t, disconnect_t>
 	using S = async_operation_t<M, raw_socket_t, disconnect_t>;
 	using A = io_parameters_t<raw_socket_t, disconnect_t>;
 
+	iocp_multiplexer::overlapped overlapped;
+
 	static io_result<void> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
 	static io_result<void> notify(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);
 	static void cancel(M& m, H const& h, C const& c, S& s);

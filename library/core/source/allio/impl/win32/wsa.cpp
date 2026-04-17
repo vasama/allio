@@ -13,6 +13,7 @@ using namespace allio::win32;
 #define allio_msw_functions(X) \
 	X(AcceptEx,                         FALSE,              WSAID_ACCEPTEX) \
 	X(ConnectEx,                        FALSE,              WSAID_CONNECTEX) \
+	X(DisconnectEx,                     FALSE,              WSAID_DISCONNECTEX) \
 	X(WSASendMsg,                       SOCKET_ERROR,       WSAID_WSASENDMSG) \
 	X(WSARecvMsg,                       SOCKET_ERROR,       WSAID_WSARECVMSG) \
 
@@ -301,6 +302,22 @@ DWORD win32::wsa_connect_ex(
 	return 0;
 }
 
+
+DWORD win32::wsa_disconnect_ex(
+	SOCKET const socket,
+	DWORD const flags,
+	LPOVERLAPPED const overlapped)
+{
+	if (!win32::DisconnectEx(
+		socket,
+		overlapped,
+		flags,
+		/* dwReserved: */ 0))
+	{
+		return static_cast<DWORD>(WSAGetLastError());
+	}
+	return 0;
+}
 
 static DWORD wsa_send_msg(
 	SOCKET const socket,

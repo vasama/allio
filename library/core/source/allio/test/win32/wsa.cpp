@@ -61,7 +61,7 @@ public:
 
 TEST_CASE("WSA supports unix stream sockets", "[windows][wsa][socket]")
 {
-	REQUIRE(posix::create_socket(AF_UNIX, SOCK_STREAM, 0, io_flags::none));
+	REQUIRE(posix::create_socket(AF_UNIX, SOCK_STREAM, /* protocol: */ 0, io_flags::none));
 }
 
 TEST_CASE("WSA asynchronous connect and accept", "[windows][wsa][socket][async]")

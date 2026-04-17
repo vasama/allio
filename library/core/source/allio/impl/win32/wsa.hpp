@@ -34,6 +34,7 @@ allio_wsa_functions(allio_x_entry)
 
 extern LPFN_ACCEPTEX AcceptEx;
 extern LPFN_CONNECTEX ConnectEx;
+extern LPFN_DISCONNECTEX DisconnectEx;
 extern LPFN_WSASENDMSG WSASendMsg;
 extern LPFN_WSARECVMSG WSARecvMsg;
 
@@ -182,13 +183,18 @@ DWORD wsa_accept_ex(
 	SOCKET listen_socket,
 	SOCKET accept_socket,
 	PVOID address_storage,
-	DWORD address_Storage_size,
+	DWORD address_storage_size,
 	LPOVERLAPPED overlapped);
 
 DWORD wsa_connect_ex(
 	SOCKET socket,
 	sockaddr const* address,
 	posix::socket_address_size_type address_size,
+	LPOVERLAPPED overlapped);
+
+DWORD wsa_disconnect_ex(
+	SOCKET socket,
+	DWORD flags,
 	LPOVERLAPPED overlapped);
 
 DWORD wsa_send_msg(

@@ -136,14 +136,49 @@ vsm::result<void> raw_socket_t::disconnect(
 	native_handle<raw_socket_t> const& h,
 	io_parameters_t<raw_socket_t, disconnect_t> const& a)
 {
-	if (a.deadline != deadline::never())
-	{
-		return vsm::unexpected(allio_error(error::unsupported_operation));
-	}
+	SOCKET const socket = posix::unwrap_socket(h.platform_handle);
 
-	return posix::socket_disconnect(
-		posix::unwrap_socket(h.platform_handle),
-		posix::socket_disconnect_rw);
+	if (h.flags[platform_object_t::impl_type::flags::overlapped])
+	{
+		vsm_try(overlapped, wsa_thread_overlapped::get());
+
+		DWORD const e = wsa_disconnect_ex(
+			socket,
+			/* flags: */ 0,
+			overlapped);
+
+		if (e == WSA_IO_PENDING)
+		{
+			DWORD transferred;
+			DWORD dummy_flags;
+
+			vsm_try_void(overlapped.wait(
+				socket,
+				a.deadline,
+				&transferred,
+				&dummy_flags));
+
+			vsm_assert(transferred == 0);
+			vsm_assert(dummy_flags == 0);
+		}
+		else if (e != 0)
+		{
+			return vsm::unexpected(allio_error(static_cast<posix::socket_error>(e)));
+		}
+
+		return {};
+	}
+	else
+	{
+		if (a.deadline != deadline::never())
+		{
+			return vsm::unexpected(allio_error(error::unsupported_operation));
+		}
+
+		return posix::socket_disconnect(
+			socket,
+			posix::socket_disconnect_rw);
+	}
 }
 
 vsm::result<size_t> raw_socket_t::stream_read(

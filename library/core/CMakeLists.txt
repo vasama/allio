@@ -191,6 +191,7 @@ vsm_configure(
 		source/allio/impl/win32/wait_packet.hpp
 		source/allio/impl/win32/wsa.cpp
 		source/allio/impl/win32/wsa.hpp
+		source/allio/impl/win32/wsa_thread_event.hpp
 
 		# Handles
 		source/allio/impl/win32/handles/raw_datagram_socket.cpp

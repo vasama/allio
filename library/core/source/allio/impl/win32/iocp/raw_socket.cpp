@@ -152,14 +152,27 @@ io_result<void> disconnect_s::submit(
 	disconnect_a const& a,
 	io_handler<M>& handler)
 {
-	if (a.deadline != deadline::never())
+	SOCKET const socket = posix::unwrap_socket(h.platform_handle);
+
+	OVERLAPPED& overlapped = *s.overlapped;
+	overlapped.Pointer = nullptr;
+	overlapped.hEvent = NULL;
+
+	s.overlapped.bind(handler);
+
+	// If using a multithreaded completion port, after this call another thread will race to
+	// complete this operation.
+	vsm_try(already_completed, submit_socket_io(m, h, [&]()
 	{
-		return vsm::unexpected(allio_error(error::unsupported_operation));
+		return wsa_disconnect_ex(socket, /* flags: */ 0, &overlapped);
+	}));
+
+	if (already_completed)
+	{
+		return {};
 	}
 
-	return posix::socket_disconnect(
-		posix::unwrap_socket(h.platform_handle),
-		posix::socket_disconnect_rw);
+	return vsm::unexpected(io_notify_status::submitted);
 }
 
 io_result<void> disconnect_s::notify(
@@ -171,7 +184,14 @@ io_result<void> disconnect_s::notify(
 	io_handler<M>&,
 	M::io_status_type const status)
 {
-	vsm_unreachable();
+	vsm_assert(&status.slot == &s.overlapped);
+
+	if (!NT_SUCCESS(status.status))
+	{
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
+	}
+
+	return {};
 }
 
 void disconnect_s::cancel(M& m, H const&, C const&, S& s)

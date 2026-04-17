@@ -70,20 +70,18 @@ TEST_CASE("Blocking stream sockets can exchange data", "[socket][blocking]")
 		signed char value = 0;
 		REQUIRE(client_socket.read_some(as_read_buffer(&value, 1)) == 1);
 		REQUIRE(value == -42);
-
-		client_socket.close();
-	}
-
-	// The server can no longer read after client close:
-	{
-		signed char value = 0;
-		REQUIRE_THROWS_MATCHES(
-			server_socket.read_some(as_read_buffer(&value, 1)),
-			std::system_error,
-			match_error(error::end_of_stream));
 	}
 
 	client_socket.disconnect();
+
+	// The server can no longer read after client disconnect:
+	{
+		signed char value = 0;
+		REQUIRE_THROWS_MATCHES(
+			server_socket.read_some(as_read_buffer(&value, 1), deadline::instant()),
+			std::system_error,
+			match_error(error::end_of_stream));
+	}
 }
 
 TEST_CASE("Stream socket can be connected asynchronously", "[socket][senders]")
