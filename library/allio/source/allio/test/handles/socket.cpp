@@ -239,6 +239,7 @@ TEST_CASE("Asynchronous stream sockets can exchange data", "[socket][async]")
 
 			// Any further read should result in an error:
 			{
+				#if 0 // TODO: Why was this song and dance required?
 				allio_test_catch_exception(
 					exception,
 					co_await socket.read_some(as_read_buffer(&request_data, 1)));
@@ -247,7 +248,15 @@ TEST_CASE("Asynchronous stream sockets can exchange data", "[socket][async]")
 					test::rethrow_exception(exception),
 					std::system_error,
 					match_error(error::end_of_stream));
+				#endif
 			}
+
+			REQUIRE_THROWS_MATCHES(
+				co_await socket.read_some(as_read_buffer(&request_data, 1)),
+				std::system_error,
+				match_error(error::end_of_stream));
+
+			co_await socket.disconnect();
 		};
 
 		auto const client_task = [&]() -> task<void>

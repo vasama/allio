@@ -12,39 +12,6 @@ namespace allio::detail {
 struct no_parameters_t {};
 
 
-template<typename P, P PointerToMember, typename U>
-class assign_member_t;
-
-template<typename T, typename C, T(C::* PointerToMember), typename U>
-	requires std::is_assignable_v<T, U>
-class assign_member_t<T(C::*), PointerToMember, U>
-{
-	U&& m_value;
-
-public:
-	explicit assign_member_t(U&& value)
-		: m_value(value)
-	{
-	}
-
-	void set_argument_on(C& arguments) const&
-	{
-		(arguments.*PointerToMember) = m_value;
-	}
-
-	void set_argument_on(C& arguments) const&&
-	{
-		(arguments.*PointerToMember) = vsm_move(*this).m_value;
-	}
-};
-
-template<auto Member, typename T>
-auto assign_member(T&& value)
-{
-	return assign_member_t<decltype(Member), Member, T>(vsm_forward(value));
-}
-
-
 struct set_argument_t
 {
 	template<typename Parameters, typename Argument>
@@ -52,7 +19,7 @@ struct set_argument_t
 		Parameters& arguments,
 		Argument&& new_argument) vsm_static_operator_const
 	{
-		if constexpr (vsm::any_cvref_of<Argument, Parameters>)
+		/**/ if constexpr (vsm::any_cvref_of<Argument, Parameters>)
 		{
 			arguments = vsm_forward(new_argument);
 		}
@@ -82,8 +49,18 @@ struct explicit_parameter
 {
 	static_assert(std::is_object_v<typename P::value_type>);
 
+	explicit explicit_parameter() = default;
+	explicit_parameter(explicit_parameter const&) = delete;
+	explicit_parameter& operator=(explicit_parameter const&) = delete;
+
 	template<std::convertible_to<typename P::value_type> Value>
 	vsm_static_operator P operator()(Value&& value) vsm_static_operator_const
+	{
+		return { explicit_argument<P, typename P::value_type>{ vsm_forward(value) } };
+	}
+
+	template<std::convertible_to<typename P::value_type> Value>
+	[[nodiscard]] P operator=(Value&& value) const
 	{
 		return { explicit_argument<P, typename P::value_type>{ vsm_forward(value) } };
 	}
@@ -94,7 +71,16 @@ struct explicit_reference_parameter
 {
 	static_assert(std::is_pointer_v<typename P::value_type>);
 
+	explicit explicit_reference_parameter() = default;
+	explicit_reference_parameter(explicit_reference_parameter const&) = delete;
+	explicit_reference_parameter& operator=(explicit_reference_parameter const&) = delete;
+
 	vsm_static_operator P operator()(std::remove_pointer_t<typename P::value_type>& value) vsm_static_operator_const
+	{
+		return { explicit_argument<P, typename P::value_type>{ &value } };
+	}
+
+	[[nodiscard]] P operator=(std::remove_pointer_t<typename P::value_type>& value) const
 	{
 		return { explicit_argument<P, typename P::value_type>{ &value } };
 	}

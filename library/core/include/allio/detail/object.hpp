@@ -27,13 +27,13 @@ vsm_flag_enum(io_flags);
 
 
 struct inheritable_t : explicit_argument<inheritable_t, bool> {};
-inline constexpr explicit_parameter<inheritable_t> inheritable = {};
+inline constexpr explicit_parameter<inheritable_t> inheritable{};
 
 struct synchronous_t : explicit_argument<synchronous_t, bool> {};
-inline constexpr explicit_parameter<synchronous_t> synchronous = {};
+inline constexpr explicit_parameter<synchronous_t> synchronous{};
 
 struct non_blocking_t : explicit_argument<non_blocking_t, bool> {};
-inline constexpr explicit_parameter<non_blocking_t> non_blocking = {};
+inline constexpr explicit_parameter<non_blocking_t> non_blocking{};
 
 struct set_io_flags_t : explicit_argument<set_io_flags_t, io_flags> {};
 
@@ -41,7 +41,7 @@ struct io_flags_t
 {
 	io_flags flags = {};
 
-	void set_argument(explicit_parameter<inheritable_t>)
+	void set_argument(explicit_parameter<inheritable_t> const&)
 	{
 		flags |= io_flags::create_inheritable;
 	}
@@ -54,7 +54,7 @@ struct io_flags_t
 		}
 	}
 
-	void set_argument(explicit_parameter<synchronous_t>)
+	void set_argument(explicit_parameter<synchronous_t> const&)
 	{
 		flags |= io_flags::create_synchronous;
 	}
@@ -67,7 +67,7 @@ struct io_flags_t
 		}
 	}
 
-	void set_argument(explicit_parameter<non_blocking_t>)
+	void set_argument(explicit_parameter<non_blocking_t> const&)
 	{
 		flags |= io_flags::create_non_blocking;
 	}

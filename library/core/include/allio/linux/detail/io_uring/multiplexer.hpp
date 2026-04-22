@@ -40,13 +40,13 @@ namespace io_uring {
 bool is_supported();
 
 struct kernel_thread_t : explicit_argument<kernel_thread_t, io_uring_multiplexer const*> {};
-inline constexpr explicit_reference_parameter<kernel_thread_t> kernel_thread = {};
+inline constexpr explicit_reference_parameter<kernel_thread_t> kernel_thread{};
 
 struct submission_queue_size_t : explicit_argument<submission_queue_size_t, uint32_t> {};
-inline constexpr explicit_parameter<submission_queue_size_t> submission_queue_size = {};
+inline constexpr explicit_parameter<submission_queue_size_t> submission_queue_size{};
 
 struct completion_queue_size_t : explicit_argument<completion_queue_size_t, uint32_t> {};
-inline constexpr explicit_parameter<completion_queue_size_t> completion_queue_size = {};
+inline constexpr explicit_parameter<completion_queue_size_t> completion_queue_size{};
 
 } // namespace io_uring
 
@@ -384,7 +384,7 @@ private:
 		size_t submission_queue_size;
 		size_t completion_queue_size;
 
-		void set_argument(explicit_reference_parameter<io_uring::kernel_thread_t>)
+		void set_argument(explicit_reference_parameter<io_uring::kernel_thread_t> const&)
 		{
 			options |= io_uring_options::kernel_thread;
 		}

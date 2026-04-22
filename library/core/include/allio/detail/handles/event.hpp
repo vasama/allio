@@ -14,7 +14,7 @@ enum class event_options : uint8_t
 vsm_flag_enum(event_options);
 
 struct initially_signaled_t : explicit_argument<initially_signaled_t, bool> {};
-inline constexpr explicit_parameter<initially_signaled_t> initially_signaled = {};
+inline constexpr explicit_parameter<initially_signaled_t> initially_signaled{};
 
 struct event_t : platform_object_t
 {
@@ -35,7 +35,7 @@ struct event_t : platform_object_t
 
 			using io_flags_t::set_argument;
 
-			void set_argument(explicit_parameter<initially_signaled_t>)
+			void set_argument(explicit_parameter<initially_signaled_t> const&)
 			{
 				options |= event_options::initially_signaled;
 			}

@@ -18,7 +18,7 @@ namespace allio::detail {
 namespace iocp {
 
 struct max_concurrent_threads_t : explicit_argument<max_concurrent_threads_t, size_t> {};
-inline constexpr explicit_parameter<max_concurrent_threads_t> max_concurrent_threads = {};
+inline constexpr explicit_parameter<max_concurrent_threads_t> max_concurrent_threads{};
 
 } // namespace iocp
 

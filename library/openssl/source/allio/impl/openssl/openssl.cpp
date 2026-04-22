@@ -125,9 +125,9 @@ static std::error_code make_error_code(ssl_error const e)
 	return std::error_code(static_cast<int>(e), ssl_error_category_instance);
 }
 
-static ssl_error get_ssl_error(SSL* const ssl, int const r)
+static ssl_error get_ssl_error(SSL* const ssl, int const e)
 {
-	return static_cast<ssl_error>(SSL_get_error(ssl, r));
+	return static_cast<ssl_error>(SSL_get_error(ssl, e));
 }
 
 } // namespace
@@ -526,28 +526,6 @@ static vsm::result<pkey_ptr> read_pkey(tls_secret const& secret)
 using ssl_ctx_ptr = openssl_ptr<SSL_CTX, SSL_CTX_free>;
 using ssl_ptr = openssl_ptr<SSL, SSL_free>;
 
-template<auto Function, int SuccessThreshold>
-static vsm::result<openssl_result<int>> ssl_try(SSL* const ssl, auto const... args)
-{
-	int const r = Function(ssl, args...);
-
-	if (r >= SuccessThreshold)
-	{
-		return r;
-	}
-
-	int const e = SSL_get_error(ssl, r);
-
-	switch (e)
-	{
-	case SSL_ERROR_WANT_READ:
-	case SSL_ERROR_WANT_WRITE:
-		return vsm::success(vsm::unexpected(openssl_pending_t()));
-	}
-
-	return vsm::unexpected(static_cast<ssl_error>(e));
-}
-
 } // namespace
 
 void detail::openssl_acquire_ssl_ctx(openssl_ssl_ctx* const ssl_ctx)
@@ -724,11 +702,14 @@ void detail::openssl_release_ssl(openssl_ssl* const ssl)
 }
 
 
-struct openssl_socket::bio_type
-{
-	static constexpr char name[] = "ALLIO_SOCKET_BIO";
+// TODO: Debugging
+inline bool enable_debug;
 
-	using data_type = openssl_socket;
+struct openssl_stream::bio_type
+{
+	static constexpr char name[] = "ALLIO_BIO";
+
+	using data_type = openssl_stream;
 
 	static int read_ex(
 		data_type& data,
@@ -737,33 +718,49 @@ struct openssl_socket::bio_type
 		size_t const requested_size,
 		size_t* const transferred)
 	{
-		vsm_assert(data.m_read_buffer_size != 0);
+		vsm_assert(data.m_r_buffer_size != 0);
 
-		size_t const beg_offset = data.m_read_beg_offset;
-		size_t const total_size = data.m_read_end_offset - beg_offset;
+		BIO_clear_retry_flags(bio);
+
+		if (data.m_last_error)
+		{
+			return 0;
+		}
+
+		size_t const beg_offset = data.m_r_beg_offset;
+		size_t const total_size = data.m_r_end_offset - beg_offset;
 
 		size_t const transfer_size = std::min(
 			total_size,
 			requested_size);
 
+		if (enable_debug)
+			fprintf(stderr, "%p requested bio read  (%zu)\n", &data, requested_size);
+
 		if (transfer_size != 0)
 		{
 			std::memcpy(
 				buffer,
-				data.m_read_buffer + beg_offset,
+				data.m_r_buffer_data + beg_offset,
 				transfer_size);
 
-			data.m_read_beg_offset = beg_offset + transfer_size;
+			data.m_r_beg_offset = beg_offset + transfer_size;
 			*transferred = transfer_size;
+
+			if (enable_debug)
+				fprintf(stderr, "%p completed bio read  (%zu)\n", &data, transfer_size);
 		}
 
 		if (transfer_size != requested_size)
 		{
-			data.m_flags |= flag_want_read;
-			data.m_read_beg_offset = 0;
-			data.m_read_end_offset = 0;
+			data.m_r_beg_offset = 0;
+			data.m_r_end_offset = 0;
+			data.m_r_io_desired = true;
 
 			BIO_set_retry_read(bio);
+
+			if (enable_debug)
+				fprintf(stderr, "%p submitted bio read  (%zu)\n", &data, transfer_size);
 		}
 
 		return transfer_size != 0;
@@ -776,31 +773,47 @@ struct openssl_socket::bio_type
 		size_t const available_size,
 		size_t* const transferred)
 	{
-		vsm_assert(data.m_write_buffer_size != 0);
+		vsm_assert(data.m_w_buffer_size != 0);
 
-		size_t const end_offset = data.m_write_end_offset;
-		size_t const space_size = data.m_write_buffer_size - end_offset;
+		BIO_clear_retry_flags(bio);
+
+		if (data.m_last_error)
+		{
+			return 0;
+		}
+
+		size_t const end_offset = data.m_w_end_offset;
+		size_t const space_size = data.m_w_buffer_size - end_offset;
 
 		size_t const transfer_size = std::min(
 			space_size,
 			available_size);
 
+		if (enable_debug)
+			fprintf(stderr, "%p requested bio write (%zu)\n", &data, available_size);
+
 		if (transfer_size != 0)
 		{
 			std::memcpy(
-				data.m_write_buffer + end_offset,
+				data.m_w_buffer_data + end_offset,
 				buffer,
 				transfer_size);
 
-			data.m_write_end_offset = end_offset + transfer_size;
+			data.m_w_end_offset = end_offset + transfer_size;
 			*transferred = transfer_size;
 
-			data.m_flags |= flag_want_write;
+			data.m_w_io_desired = true;
+
+			if (enable_debug)
+				fprintf(stderr, "%p completed bio write (%zu)\n", &data, transfer_size);
 		}
 
 		if (transfer_size != available_size)
 		{
 			BIO_set_retry_write(bio);
+
+			if (enable_debug)
+				fprintf(stderr, "%p submitted bio write (%zu)\n", &data, transfer_size);
 		}
 
 		return transfer_size != 0;
@@ -815,43 +828,46 @@ struct openssl_socket::bio_type
 		switch (cmd)
 		{
 		case BIO_CTRL_EOF:
+			return data.m_r_end_of_stream;
+
 		case BIO_CTRL_PUSH:
 		case BIO_CTRL_POP:
 			return 0;
 
 		case BIO_CTRL_FLUSH:
+			// TODO: Handle OpenSSL BIO flush?
 			return 1;
 		}
 		return -1;
 	}
 };
 
-openssl_socket::~openssl_socket()
+openssl_stream::~openssl_stream()
 {
-	if (m_flags & flag_owns_read)
+	if (m_r_unique_buffer)
 	{
 		allio_release_storage(
-			m_read_buffer,
-			m_read_buffer_size,
+			m_r_buffer_data,
+			m_r_buffer_size,
 			/* min_alignment: */ 1,
 			allio_allocation_strategy_buffering);
 	}
 
-	if (m_flags & flag_owns_write)
+	if (m_w_unique_buffer)
 	{
 		allio_release_storage(
-			m_write_buffer,
-			m_write_buffer_size,
+			m_w_buffer_data,
+			m_w_buffer_size,
 			/* min_alignment: */ 1,
 			allio_allocation_strategy_buffering);
 	}
 }
 
-vsm::result<void> openssl_socket::initialize(openssl_ssl_ctx* const _ssl_ctx)
+vsm::result<void> openssl_stream::initialize(openssl_ssl_ctx* const _ssl_ctx)
 {
 	auto const ssl_ctx = reinterpret_cast<SSL_CTX*>(_ssl_ctx);
 
-	vsm_try(bio, create_bio<openssl_socket::bio_type>(*this));
+	vsm_try(bio, create_bio<openssl_stream::bio_type>(*this));
 	vsm_try(ssl, openssl_make<SSL_new, SSL_free>(ssl_ctx));
 
 	auto const p_bio = bio.release();
@@ -862,7 +878,7 @@ vsm::result<void> openssl_socket::initialize(openssl_ssl_ctx* const _ssl_ctx)
 	return {};
 }
 
-vsm::result<void> openssl_socket::allocate_buffers()
+vsm::result<void> openssl_stream::allocate_buffers()
 {
 	static constexpr size_t min_rw_buffer_size = 4096;
 
@@ -895,30 +911,62 @@ vsm::result<void> openssl_socket::allocate_buffers()
 	auto const r_storage = static_cast<std::byte*>(r_allocation.storage);
 	auto const w_storage = static_cast<std::byte*>(w_allocation.storage);
 
-	set_read_buffer(std::span(r_storage, r_allocation.size));
-	set_write_buffer(std::span(w_storage, w_allocation.size));
+	set_r_buffer(std::span(r_storage, r_allocation.size));
+	set_w_buffer(std::span(w_storage, w_allocation.size));
 
-	m_flags |= flag_owns_read;
-	m_flags |= flag_owns_write;
+	m_r_unique_buffer = true;
+	m_w_unique_buffer = true;
 
 	(void)r_allocation_owner.release();
 
 	return {};
 }
 
-vsm::result<openssl_socket*> detail::new_openssl_socket(openssl_ssl_ctx* const ssl_ctx)
+vsm::result<openssl_stream*> detail::new_openssl_socket(openssl_ssl_ctx* const ssl_ctx)
 {
-	vsm_try(socket, detail::make_unique<openssl_socket>());
+	vsm_try(socket, detail::make_unique<openssl_stream>());
 	vsm_try_void(socket->initialize(ssl_ctx));
 	return socket.release();
 }
 
-void detail::delete_openssl_socket(openssl_socket* const socket)
+void detail::delete_openssl_socket(openssl_stream* const socket)
 {
 	detail::delete_object(socket);
 }
 
-vsm::result<openssl_result<void>> openssl_socket::accept()
+void openssl_stream::read_completed(vsm::result<size_t> const result)
+{
+	if (result)
+	{
+		m_r_end_offset += *result;
+		m_r_io_desired = false;
+	}
+	else
+	{
+		set_last_error(result.error());
+	}
+}
+
+void openssl_stream::write_completed(vsm::result<size_t> const result)
+{
+	if (result)
+	{
+		m_w_beg_offset += *result;
+
+		if (m_w_beg_offset == m_w_end_offset)
+		{
+			m_w_beg_offset = 0;
+			m_w_end_offset = 0;
+			m_w_io_desired = false;
+		}
+	}
+	else
+	{
+		set_last_error(result.error());
+	}
+}
+
+vsm::result<openssl_result<void>> openssl_stream::accept()
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
@@ -931,13 +979,13 @@ vsm::result<openssl_result<void>> openssl_socket::accept()
 
 	if (*r == 0)
 	{
-		return vsm::unexpected(get_ssl_error(ssl, *r));
+		return vsm::unexpected(get_ssl_error(ssl, 0));
 	}
 
 	return {};
 }
 
-vsm::result<openssl_result<void>> openssl_socket::connect()
+vsm::result<openssl_result<void>> openssl_stream::connect()
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
@@ -950,29 +998,42 @@ vsm::result<openssl_result<void>> openssl_socket::connect()
 
 	if (*r == 0)
 	{
-		return vsm::unexpected(get_ssl_error(ssl, *r));
+		return vsm::unexpected(get_ssl_error(ssl, 0));
 	}
 
 	return {};
 }
 
-vsm::result<openssl_result<void>> openssl_socket::disconnect()
+vsm::result<openssl_result<void>> openssl_stream::disconnect()
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
-	vsm_try(r, ssl_try<SSL_shutdown, /* SuccessThreshold: */ 0>(ssl));
+	int const r = SSL_shutdown(ssl);
 
-	if (!r)
+	if (r < 0)
 	{
-		return vsm::success(vsm::unexpected(openssl_pending_t()));
-	}
+		switch (int const e = SSL_get_error(ssl, r))
+		{
+		case SSL_ERROR_SYSCALL:
+			return vsm::unexpected(m_last_error);
 
-	//TODO: What to do on 0 result from SSL_shutdown?
+		case SSL_ERROR_ZERO_RETURN:
+			// End of stream is not considered an error during disconnect.
+			break;
+
+		case SSL_ERROR_WANT_READ:
+		case SSL_ERROR_WANT_WRITE:
+			return vsm::success(vsm::unexpected(openssl_pending_t()));
+
+		default:
+			return vsm::unexpected(static_cast<ssl_error>(e));
+		}
+	}
 
 	return {};
 }
 
-vsm::result<openssl_result<size_t>> openssl_socket::read_some(read_buffer const buffer)
+vsm::result<openssl_result<size_t>> openssl_stream::read_some(read_buffer const buffer)
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
@@ -986,15 +1047,12 @@ vsm::result<openssl_result<size_t>> openssl_socket::read_some(read_buffer const 
 		return vsm::success(vsm::unexpected(openssl_pending_t()));
 	}
 
-	if (*r == 0)
-	{
-		return vsm::unexpected(get_ssl_error(ssl, *r));
-	}
+	vsm_assert(*r != 0);
 
 	return static_cast<size_t>(*r);
 }
 
-vsm::result<openssl_result<size_t>> openssl_socket::write_some(write_buffer const buffer)
+vsm::result<openssl_result<size_t>> openssl_stream::write_some(write_buffer const buffer)
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
@@ -1008,10 +1066,49 @@ vsm::result<openssl_result<size_t>> openssl_socket::write_some(write_buffer cons
 		return vsm::success(vsm::unexpected(openssl_pending_t()));
 	}
 
-	if (*r == 0)
-	{
-		return vsm::unexpected(get_ssl_error(ssl, *r));
-	}
+	vsm_assert(*r != 0);
 
 	return static_cast<size_t>(*r);
+}
+
+void openssl_stream::set_last_error(std::error_code const error)
+{
+	if (!m_r_end_of_stream)
+	{
+		if (error.default_error_condition() == make_error_condition(error::end_of_stream))
+		{
+			m_r_end_of_stream = true;
+		}
+	}
+
+	m_last_error = error;
+}
+
+template<auto Function, int SuccessThreshold, typename SSL>
+vsm::result<openssl_result<int>> openssl_stream::ssl_try(SSL* const ssl, auto const... args)
+{
+	static_assert(std::is_same_v<SSL, ::SSL>);
+
+	int const r = Function(ssl, args...);
+
+	if (r >= SuccessThreshold)
+	{
+		return r;
+	}
+
+	switch (int const e = SSL_get_error(ssl, r))
+	{
+	case SSL_ERROR_SYSCALL:
+		return vsm::unexpected(m_last_error);
+
+	case SSL_ERROR_ZERO_RETURN:
+		return vsm::unexpected(error::end_of_stream);
+
+	case SSL_ERROR_WANT_READ:
+	case SSL_ERROR_WANT_WRITE:
+		return vsm::success(vsm::unexpected(openssl_pending_t()));
+
+	default:
+		return vsm::unexpected(static_cast<ssl_error>(e));
+	}
 }

@@ -12,7 +12,7 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 	auto const enter = [&](
 		stream& read_stream,
 		stream& write_stream,
-		openssl_socket& socket,
+		openssl_stream& socket,
 		auto const p_member,
 		auto&&... args)
 	{
@@ -56,8 +56,8 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 			tls_peer_certificate(allio_test_secret_path "/server-certificate.pem"_path))).value();
 
 
-	openssl_socket server_socket;
-	openssl_socket client_socket;
+	openssl_stream server_socket;
+	openssl_stream client_socket;
 
 	server_socket.initialize(server_ssl_ctx.get()).value();
 	client_socket.initialize(client_ssl_ctx.get()).value();
@@ -89,16 +89,16 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 	static constexpr size_t buffer_size = 64;
 
 	std::byte server_read_buffer[buffer_size];
-	server_socket.set_read_buffer(server_read_buffer);
+	server_socket.set_r_buffer(server_read_buffer);
 
 	std::byte server_write_buffer[buffer_size];
-	server_socket.set_write_buffer(server_write_buffer);
+	server_socket.set_w_buffer(server_write_buffer);
 
 	std::byte client_read_buffer[buffer_size];
-	client_socket.set_read_buffer(client_read_buffer);
+	client_socket.set_r_buffer(client_read_buffer);
 
 	std::byte client_write_buffer[buffer_size];
-	client_socket.set_write_buffer(client_write_buffer);
+	client_socket.set_w_buffer(client_write_buffer);
 
 
 	bool accept_pending = true;
@@ -108,12 +108,12 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 	{
 		if (accept_pending)
 		{
-			accept_pending = enter_server(&openssl_socket::accept);
+			accept_pending = enter_server(&openssl_stream::accept);
 		}
 
 		if (connect_pending)
 		{
-			connect_pending = enter_client(&openssl_socket::connect);
+			connect_pending = enter_client(&openssl_stream::connect);
 		}
 	}
 
@@ -134,14 +134,14 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 		if (read_pending)
 		{
 			read_pending = enter_server(
-				&openssl_socket::read_some,
+				&openssl_stream::read_some,
 				as_read_buffer(read_buffer));
 		}
 
 		if (write_pending)
 		{
 			write_pending = enter_client(
-				&openssl_socket::write_some,
+				&openssl_stream::write_some,
 				as_write_buffer(write_buffer));
 		}
 	}

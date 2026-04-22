@@ -6,6 +6,7 @@
 #include <allio/senders/task.hpp>
 #include <allio/test/network.hpp>
 #include <allio/test/spawn.hpp>
+#include <allio/test/match_error.hpp>
 
 #include <catch2/catch_all.hpp>
 
@@ -19,8 +20,8 @@ static auto make_server_security_context()
 	using namespace path_literals;
 
 	return openssl::create_listen_socket_security_context(
-		tls_certificate(allio_test_secret_path "/server-certificate.pem"_path),
-		tls_private_key(allio_test_secret_path "/server-private-key.pem"_path)).value();
+		tls_certificate = allio_test_secret_path "/server-certificate.pem"_path,
+		tls_private_key = allio_test_secret_path "/server-private-key.pem"_path).value();
 }
 
 static auto make_client_security_context()
@@ -28,7 +29,7 @@ static auto make_client_security_context()
 	using namespace path_literals;
 
 	return openssl::create_socket_security_context(
-		tls_peer_certificate(allio_test_secret_path "/server-certificate.pem"_path)).value();
+		tls_peer_certificate = allio_test_secret_path "/server-certificate.pem"_path).value();
 }
 
 TEST_CASE(
@@ -66,14 +67,12 @@ TEST_CASE(
 
 	REQUIRE(std::string_view(read_buffer) == std::string_view(write_buffer));
 
-#if 0 // TODO: Enable this. Requires match_error from allio/source/test...
-	REQUIRE_THROWS_MATCHES(
-		client_socket.read_some(as_read_buffer(read_buffer), deadline::instant()),
-		std::system_error,
-		match_error(std::errc::timed_out));
-#endif
-
 	client_socket.disconnect();
+
+	REQUIRE_THROWS_MATCHES(
+		server_socket.read_some(as_read_buffer(read_buffer)),
+		std::system_error,
+		match_error(error::end_of_stream));
 }
 
 TEST_CASE(
@@ -84,6 +83,7 @@ TEST_CASE(
 
 	auto multiplexer = default_multiplexer::create().value();
 
+	//enable_debug = true;
 	auto const combined_task = []() -> task<void>
 	{
 		auto const endpoint = test::generate_endpoint();
@@ -106,6 +106,13 @@ TEST_CASE(
 			signed char const reply_data = -request_data;
 			size_t const ws = co_await socket.write_some(as_write_buffer(&reply_data, 1));
 			REQUIRE(ws == 1);
+
+			REQUIRE_THROWS_MATCHES(
+				co_await socket.read_some(as_read_buffer(&request_data, 1)),
+				std::system_error,
+				match_error(error::end_of_stream));
+
+			co_await socket.disconnect();
 		};
 
 		auto const client_task = [&]() -> task<void>
@@ -133,5 +140,6 @@ TEST_CASE(
 		co_await ex::when_all(server_task(), client_task());
 	};
 
-	senders::sync_wait(multiplexer, combined_task());
+	// TODO: Why are exceptions from the inner coroutines not propagated to here?
+	(void)senders::sync_wait(multiplexer, combined_task()).value();
 }

@@ -34,7 +34,7 @@ enum class process_options : uint8_t
 vsm_flag_enum(process_options);
 
 struct inherit_handles_t : explicit_argument<inherit_handles_t, bool> {};
-inline constexpr explicit_parameter<inherit_handles_t> inherit_handles = {};
+inline constexpr explicit_parameter<inherit_handles_t> inherit_handles{};
 
 //TODO: Implement explicit inherit_handles(a, b, c) or equivalent
 #if 0
@@ -46,16 +46,16 @@ inline constexpr inherit_handles_parameter inherit_handles = {};
 #endif
 
 struct wait_on_close_t : explicit_argument<wait_on_close_t, bool> {};
-inline constexpr explicit_parameter<wait_on_close_t> wait_on_close = {};
+inline constexpr explicit_parameter<wait_on_close_t> wait_on_close{};
 
 struct process_arguments_t : explicit_argument<process_arguments_t, any_string_span> {};
-inline constexpr explicit_parameter<process_arguments_t> process_arguments = {};
+inline constexpr explicit_parameter<process_arguments_t> process_arguments{};
 
 struct working_directory_t : explicit_argument<working_directory_t, fs_path> {};
-inline constexpr explicit_parameter<working_directory_t> working_directory = {};
+inline constexpr explicit_parameter<working_directory_t> working_directory{};
 
 struct process_environment_t : explicit_argument<process_environment_t, any_string_span> {};
-inline constexpr explicit_parameter<process_environment_t> process_environment = {};
+inline constexpr explicit_parameter<process_environment_t> process_environment{};
 
 template<int Stream>
 struct redirect_stream_t : explicit_argument<
@@ -77,7 +77,7 @@ inline constexpr redirect_stream_parameter<1> redirect_stdout = {};
 inline constexpr redirect_stream_parameter<2> redirect_stderr = {};
 
 struct with_exit_code_t : explicit_argument<with_exit_code_t, process_exit_code> {};
-inline constexpr explicit_parameter<with_exit_code_t> with_exit_code = {};
+inline constexpr explicit_parameter<with_exit_code_t> with_exit_code{};
 
 class process_wait_result
 {
@@ -379,7 +379,7 @@ struct process_t : platform_object_t
 
 			using io_flags_t::set_argument;
 
-			void set_argument(explicit_parameter<inherit_handles_t>)
+			void set_argument(explicit_parameter<inherit_handles_t> const&)
 			{
 				options |= process_options::inherit_handles;
 			}
@@ -392,7 +392,7 @@ struct process_t : platform_object_t
 				}
 			}
 
-			void set_argument(explicit_parameter<wait_on_close_t>)
+			void set_argument(explicit_parameter<wait_on_close_t> const&)
 			{
 				options |= process_options::wait_on_close;
 			}

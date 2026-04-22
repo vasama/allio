@@ -1,5 +1,6 @@
 #pragma once
 
+#include <allio/linux/detail/alias.hpp>
 #include <allio/posix/path_traits.hpp>
 
 #include <allio/linux/detail/undef.i>

@@ -88,31 +88,32 @@ struct openssl_operation_base : vsm::intrusive::mpsc_queue_link
 };
 
 
-class openssl_socket
+class openssl_stream
 {
 	struct bio_type;
 
-	static constexpr uint32_t flag_want_read                = 1 << 0;
-	static constexpr uint32_t flag_want_write               = 1 << 1;
-
-	static constexpr uint32_t flag_owns_read                = 1 << 2;
-	static constexpr uint32_t flag_owns_write               = 1 << 3;
-
 	openssl_ssl_ptr m_ssl;
-	uint32_t m_flags = 0;
 
-	size_t m_read_beg_offset = 0;
-	size_t m_read_end_offset = 0;
+	uint32_t m_r_io_desired : 1 = 0;
+	uint32_t m_w_io_desired : 1 = 0;
 
-	size_t m_write_beg_offset = 0;
-	size_t m_write_end_offset = 0;
+	uint32_t m_r_unique_buffer : 1 = 0;
+	uint32_t m_w_unique_buffer : 1 = 0;
+
+	uint32_t m_r_end_of_stream : 1 = 0;
+
+	size_t m_r_beg_offset = 0;
+	size_t m_r_end_offset = 0;
+
+	size_t m_w_beg_offset = 0;
+	size_t m_w_end_offset = 0;
 
 	union
 	{
 		struct
 		{
-			std::byte* m_read_buffer;
-			size_t m_read_buffer_size;
+			std::byte* m_r_buffer_data;
+			size_t m_r_buffer_size;
 		};
 	};
 
@@ -120,81 +121,69 @@ class openssl_socket
 	{
 		struct
 		{
-			std::byte* m_write_buffer;
-			size_t m_write_buffer_size;
+			std::byte* m_w_buffer_data;
+			size_t m_w_buffer_size;
 		};
 	};
+
+	std::error_code m_last_error;
 
 public:
-	openssl_socket() = default;
-	openssl_socket(openssl_socket const&) = delete;
-	openssl_socket& operator=(openssl_socket const&) = delete;
-	~openssl_socket();
+	openssl_stream() = default;
+	openssl_stream(openssl_stream const&) = delete;
+	openssl_stream& operator=(openssl_stream const&) = delete;
+	~openssl_stream();
 
 	vsm::result<void> initialize(openssl_ssl_ctx* ssl_ctx);
 
 	vsm::result<void> allocate_buffers();
 
-	void set_read_buffer(std::span<std::byte> const buffer)
+	void set_r_buffer(std::span<std::byte> const buffer)
 	{
-		vsm_assert(m_read_beg_offset == m_read_end_offset);
+		vsm_assert(m_r_beg_offset == m_r_end_offset);
 
-		m_read_buffer = buffer.data();
-		m_read_buffer_size = buffer.size();
+		m_r_buffer_data = buffer.data();
+		m_r_buffer_size = buffer.size();
 
-		m_read_beg_offset = 0;
-		m_read_end_offset = 0;
+		m_r_beg_offset = 0;
+		m_r_end_offset = 0;
 	}
 
-	void set_write_buffer(std::span<std::byte> const buffer)
+	void set_w_buffer(std::span<std::byte> const buffer)
 	{
-		vsm_assert(m_write_beg_offset == m_write_end_offset);
+		vsm_assert(m_w_beg_offset == m_w_end_offset);
 
-		m_write_buffer = buffer.data();
-		m_write_buffer_size = buffer.size();
+		m_w_buffer_data = buffer.data();
+		m_w_buffer_size = buffer.size();
 
-		m_write_beg_offset = 0;
-		m_write_end_offset = 0;
+		m_w_beg_offset = 0;
+		m_w_end_offset = 0;
 	}
 
 	bool want_read() const
 	{
-		return m_flags & flag_want_read;
+		return m_r_io_desired;
 	}
 
 	bool want_write() const
 	{
-		return m_flags & flag_want_write;
+		return m_w_io_desired;
 	}
 
 	read_buffer get_read_buffer() const
 	{
-		vsm_assert(m_read_beg_offset == m_read_end_offset);
-		return read_buffer(m_read_buffer, m_read_buffer_size);
+		vsm_assert(m_r_beg_offset == m_r_end_offset);
+		return read_buffer(m_r_buffer_data, m_r_buffer_size);
 	}
 
 	write_buffer get_write_buffer() const
 	{
-		return write_buffer(m_write_buffer, m_write_buffer_size)
-			.subspan(m_write_beg_offset, m_write_end_offset - m_write_beg_offset);
+		return write_buffer(m_w_buffer_data, m_w_buffer_size)
+			.subspan(m_w_beg_offset, m_w_end_offset - m_w_beg_offset);
 	}
 
-	void read_completed(size_t const size)
-	{
-		m_read_end_offset += size;
-		m_flags &= ~flag_want_read;
-	}
-
-	void write_completed(size_t const size)
-	{
-		m_write_beg_offset += size;
-		if (m_write_beg_offset == m_write_end_offset)
-		{
-			m_flags &= ~flag_want_write;
-			m_write_beg_offset = 0;
-			m_write_end_offset = 0;
-		}
-	}
+	void read_completed(vsm::result<size_t> result);
+	void write_completed(vsm::result<size_t> result);
 
 	vsm::result<openssl_result<void>> accept();
 	vsm::result<openssl_result<void>> connect();
@@ -202,10 +191,16 @@ public:
 
 	vsm::result<openssl_result<size_t>> read_some(read_buffer user_buffer);
 	vsm::result<openssl_result<size_t>> write_some(write_buffer user_buffer);
+
+private:
+	void set_last_error(std::error_code error);
+
+	template<auto Function, int SuccessThreshold, typename SSL>
+	vsm::result<openssl_result<int>> ssl_try(SSL* const ssl, auto const... args);
 };
 
-vsm::result<openssl_socket*> new_openssl_socket(openssl_ssl_ctx* ssl_ctx);
-void delete_openssl_socket(openssl_socket* socket);
+vsm::result<openssl_stream*> new_openssl_socket(openssl_ssl_ctx* ssl_ctx);
+void delete_openssl_socket(openssl_stream* socket);
 
 
 #if 0

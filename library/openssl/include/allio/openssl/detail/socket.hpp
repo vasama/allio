@@ -9,6 +9,9 @@
 
 #include <variant>
 
+// TODO: Debugging
+inline bool enable_debug;
+
 namespace allio::detail {
 
 class openssl_socket_security_context : public openssl_security_context
@@ -44,7 +47,7 @@ struct openssl_socket_t : socket_base_t<object_t>
 template<typename RawSocket>
 struct native_handle<openssl_socket_t<RawSocket>> : native_handle<RawSocket>
 {
-	openssl_socket* openssl;
+	openssl_stream* openssl;
 };
 
 template<typename M, typename RawSocket>
@@ -229,15 +232,26 @@ protected:
 				auto rw_args = io_parameters_t<RawSocket, byte_io::stream_write_t>{};
 				rw_args.buffers = rw_h.openssl->get_write_buffer();
 
-				vsm_try(transferred, detail::submit_io(
+				auto const r = detail::submit_io(
 					m,
 					rw_h,
 					rw_c,
 					s.m_raw_state.template emplace<raw_write>(),
 					rw_args,
-					handler));
+					handler);
 
-				rw_h.openssl->write_completed(transferred);
+				if (enable_debug) {
+					fprintf(stderr, "%p submitted raw w ...", &s);
+					getchar();
+				}
+				if (detail::get_io_notify_status(r) == io_notify_status::submitted)
+				{
+					return vsm::unexpected(r.error());
+				}
+
+				if (enable_debug)
+					fprintf(stderr, "%p completed raw w (%zu) (synchronously)\n", &s, r.value());
+				rw_h.openssl->write_completed(r);
 			}
 
 			if (rw_h.openssl->want_read())
@@ -245,15 +259,26 @@ protected:
 				auto rw_args = io_parameters_t<RawSocket, byte_io::stream_read_t>{};
 				rw_args.buffers = rw_h.openssl->get_read_buffer();
 
-				vsm_try(transferred, detail::submit_io(
+				auto const r = detail::submit_io(
 					m,
 					rw_h,
 					rw_c,
 					s.m_raw_state.template emplace<raw_read>(),
 					rw_args,
-					handler));
+					handler);
 
-				rw_h.openssl->read_completed(transferred);
+				if (enable_debug) {
+					fprintf(stderr, "%p submitted raw r ...\n", &s);
+					getchar();
+				}
+				if (detail::get_io_notify_status(r) == io_notify_status::submitted)
+				{
+					return vsm::unexpected(r.error());
+				}
+
+				if (enable_debug)
+					fprintf(stderr, "%p completed raw r (%zu) (synchronously)\n", &s, r.value());
+				rw_h.openssl->read_completed(r);
 			}
 
 			if (r)
@@ -300,16 +325,29 @@ protected:
 		auto rw_args = io_parameters_t<RawSocket, byte_io::stream_read_t>{};
 		rw_args.buffers = rw_h.openssl->get_read_buffer();
 
-		vsm_try(transferred, detail::notify_io(
+		auto const r = detail::notify_io(
 			m,
 			rw_h,
 			rw_c,
 			raw_state,
 			rw_args,
 			handler,
-			vsm_move(status)));
+			vsm_move(status));
 
-		rw_h.openssl->read_completed(transferred);
+		if (detail::get_io_notify_status(r) == io_notify_status::submitted)
+		{
+			return vsm::unexpected(r.error());
+		}
+
+		if (enable_debug) {
+			if (r) {
+				fprintf(stderr, "%p completed raw r (%zu)\n", &s, r.value());
+			} else {
+				fprintf(stderr, "%p completed raw r (%s)\n", &s, r.error().message().c_str());
+			}
+		}
+		rw_h.openssl->read_completed(r);
+
 		return {};
 	}
 
@@ -329,16 +367,29 @@ protected:
 		auto rw_args = io_parameters_t<RawSocket, byte_io::stream_write_t>{};
 		rw_args.buffers = rw_h.openssl->get_write_buffer();
 
-		vsm_try(transferred, detail::notify_io(
+		auto const r = detail::notify_io(
 			m,
 			rw_h,
 			rw_c,
 			raw_state,
 			rw_args,
 			handler,
-			vsm_move(status)));
+			vsm_move(status));
 
-		rw_h.openssl->write_completed(transferred);
+		if (detail::get_io_notify_status(r) == io_notify_status::submitted)
+		{
+			return vsm::unexpected(r.error());
+		}
+
+		if (enable_debug) {
+			if (r) {
+				fprintf(stderr, "%p completed raw w (%zu)\n", &s, r.value());
+			} else {
+				fprintf(stderr, "%p completed raw w (%s)\n", &s, r.error().message().c_str());
+			}
+		}
+		rw_h.openssl->write_completed(r);
+
 		return {};
 	}
 
@@ -540,6 +591,8 @@ class async_operation<M, openssl_socket_t<RawSocket>, disconnect_t>
 
 	static io_result<void> _submit(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler)
 	{
+		if (enable_debug)
+			fprintf(stderr, "%p submitted ssl disconnect (%p)\n", &s, h.openssl);
 		vsm_assert(h.openssl != nullptr);
 
 		return {};
@@ -556,7 +609,9 @@ class async_operation<M, openssl_socket_t<RawSocket>, disconnect_t>
 		{
 			return h.openssl->disconnect();
 		}));
-		
+
+		if (enable_debug)
+			fprintf(stderr, "%p submitted raw disconnect\n", &s);
 		return detail::submit_io(
 			m,
 			h,
@@ -564,6 +619,39 @@ class async_operation<M, openssl_socket_t<RawSocket>, disconnect_t>
 			s.m_raw_state.template emplace<raw_disconnect>(),
 			a,
 			handler);
+	}
+
+	// TODO: Just for debugging...
+	using base::_notify;
+	static io_result<void> _notify(
+		M& m,
+		H& h,
+		C& c,
+		S& s,
+		A const& a,
+		io_handler<M>& handler,
+		M::io_status_type&& status,
+		raw_disconnect& raw_state)
+	{
+		auto const r = detail::notify_io(
+			m,
+			h,
+			c,
+			raw_state,
+			a,
+			handler,
+			vsm_move(status));
+
+		if (enable_debug) {
+			if (detail::get_io_notify_status(r) != io_notify_status::submitted) {
+				if (r) {
+					fprintf(stderr, "%p completed raw disconnect\n", &s);
+				} else {
+					fprintf(stderr, "%p completed raw disconnect (%s)\n", &s, r.error().message().c_str());
+				}
+			}
+		}
+		return r;
 	}
 
 	static io_result<void> _on_error(
@@ -601,6 +689,18 @@ class async_operation<M, openssl_socket_t<RawSocket>, Operation>
 
 	static io_result<void> _submit(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler)
 	{
+		if (enable_debug)
+		{
+			if constexpr (std::is_same_v<Operation, byte_io::stream_read_t>)
+			{
+				fprintf(stderr, "%p submitted ssl read       (%p)\n", &s, h.openssl);
+			}
+			else
+			{
+				fprintf(stderr, "%p submitted ssl write      (%p)\n", &s, h.openssl);
+			}
+		}
+
 		s.buffer_index = 0;
 		s.buffer_offset = 0;
 		s.transferred = 0;

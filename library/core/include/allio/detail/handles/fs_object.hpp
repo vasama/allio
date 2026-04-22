@@ -151,7 +151,7 @@ struct path_kind_t
 #endif
 
 struct replace_existing_file_t : explicit_argument<replace_existing_file_t, bool> {};
-inline constexpr explicit_parameter<replace_existing_file_t> replace_existing_file = {};
+inline constexpr explicit_parameter<replace_existing_file_t> replace_existing_file{};
 
 namespace fs_io {
 
@@ -260,7 +260,7 @@ struct link_at_t
 		fs_path path;
 		bool replace_existing_file = false;
 
-		void set_argument(explicit_parameter<replace_existing_file_t>)
+		void set_argument(explicit_parameter<replace_existing_file_t> const&)
 		{
 			replace_existing_file = true;
 		}

@@ -19,10 +19,10 @@ enum class map_options : uint8_t
 vsm_flag_enum(map_options);
 
 struct initial_commit_t : explicit_argument<initial_commit_t, bool> {};
-inline constexpr explicit_parameter<initial_commit_t> initial_commit = {};
+inline constexpr explicit_parameter<initial_commit_t> initial_commit{};
 
 struct at_fixed_address_t : explicit_argument<at_fixed_address_t, uintptr_t> {};
-inline constexpr explicit_parameter<at_fixed_address_t> at_fixed_address = {};
+inline constexpr explicit_parameter<at_fixed_address_t> at_fixed_address{};
 
 namespace map_io {
 

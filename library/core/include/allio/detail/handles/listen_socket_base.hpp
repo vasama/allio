@@ -7,7 +7,7 @@
 namespace allio::detail {
 
 struct listen_backlog_t : explicit_argument<listen_backlog_t, uint32_t> {};
-inline constexpr explicit_parameter<listen_backlog_t> listen_backlog = {};
+inline constexpr explicit_parameter<listen_backlog_t> listen_backlog{};
 
 struct listen_t
 {

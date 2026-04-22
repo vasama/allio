@@ -123,16 +123,16 @@ public:
 
 
 struct tls_min_version_t : explicit_argument<tls_min_version_t, tls_version> {};
-inline constexpr explicit_parameter<tls_min_version_t> tls_min_version = {};
+inline constexpr explicit_parameter<tls_min_version_t> tls_min_version{};
 
 struct tls_certificate_t : explicit_argument<tls_certificate_t, tls_secret> {};
-inline constexpr explicit_parameter<tls_certificate_t> tls_certificate = {};
+inline constexpr explicit_parameter<tls_certificate_t> tls_certificate{};
 
 struct tls_private_key_t : explicit_argument<tls_private_key_t, tls_secret> {};
-inline constexpr explicit_parameter<tls_private_key_t> tls_private_key = {};
+inline constexpr explicit_parameter<tls_private_key_t> tls_private_key{};
 
 struct tls_peer_certificate_t : explicit_argument<tls_peer_certificate_t, tls_secret> {};
-inline constexpr explicit_parameter<tls_peer_certificate_t> tls_peer_certificate = {};
+inline constexpr explicit_parameter<tls_peer_certificate_t> tls_peer_certificate{};
 
 
 struct security_context_parameters
