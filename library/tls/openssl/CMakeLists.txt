@@ -52,9 +52,9 @@ vsm_configure(
 )
 
 # TODO: Handle allio.openssl include paths a little smarter:
-target_include_directories(allio_openssl PRIVATE ../core/source)
-target_include_directories(allio_openssl_test_suite PRIVATE ../core/source)
-target_include_directories(allio_openssl_test_suite PRIVATE ../allio/source)
+target_include_directories(allio_openssl PRIVATE ../../core/source)
+target_include_directories(allio_openssl_test_suite PRIVATE ../../core/source)
+target_include_directories(allio_openssl_test_suite PRIVATE ../../allio/source)
 
 
 # Generate private keys and certificates for testing purposes:

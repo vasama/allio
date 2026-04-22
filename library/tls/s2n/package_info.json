@@ -1,0 +1,20 @@
+{
+	"package": "allio.s2n",
+	"version": "0.1",
+	"package_type": "header-library",
+	"requirements": [
+		{
+			"package": "allio.core",
+			"version": "0.1"
+		},
+		{
+			"package": "vsm.intrusive",
+			"version": "0.1"
+		},
+		{
+			"package": "s2n",
+			"version": "1.5.27",
+			"configs": ["source-library", "test-tooling"]
+		}
+	]
+}

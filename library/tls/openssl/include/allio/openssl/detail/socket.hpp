@@ -222,7 +222,7 @@ protected:
 
 		while (true)
 		{
-			vsm_try(r, callable());
+			vsm_try(r_enter, callable());
 
 			auto& rw_h = S::_get_rw_h(h, s);
 			auto& rw_c = S::_get_rw_c(c, s);
@@ -281,7 +281,7 @@ protected:
 				rw_h.openssl->read_completed(r);
 			}
 
-			if (r)
+			if (r_enter)
 			{
 				return {};
 			}
@@ -726,6 +726,9 @@ class async_operation<M, openssl_socket_t<RawSocket>, Operation>
 				buffer_layout);
 
 			vsm_assert(s.buffer_offset <= buffer.size());
+
+			// TODO: Is this correct?
+			//       Consider SSL_MODE_ENABLE_PARTIAL_WRITE.
 
 			auto const remaining_data = buffer.data() + s.buffer_offset;
 			auto const remaining_size = buffer.size() - s.buffer_offset;
