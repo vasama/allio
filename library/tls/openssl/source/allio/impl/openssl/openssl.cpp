@@ -125,9 +125,9 @@ static std::error_code make_error_code(ssl_error const e)
 	return std::error_code(static_cast<int>(e), ssl_error_category_instance);
 }
 
-static ssl_error get_ssl_error(SSL* const ssl, int const e)
+static ssl_error get_ssl_error(SSL* const ssl, int const r)
 {
-	return static_cast<ssl_error>(SSL_get_error(ssl, e));
+	return static_cast<ssl_error>(SSL_get_error(ssl, r));
 }
 
 } // namespace
@@ -702,125 +702,298 @@ void detail::openssl_release_ssl(openssl_ssl* const ssl)
 }
 
 
-// TODO: Debugging
-inline bool enable_debug;
+namespace {
 
-struct openssl_stream::bio_type
+static allio_allocation allocate_buffer(size_t const min_size)
 {
-	static constexpr char name[] = "ALLIO_BIO";
+	return allio_acquire_storage(
+		min_size,
+		static_cast<size_t>(-1),
+		/* min_alignment: */ 1,
+		allio_allocation_strategy_buffering);
+}
 
-	using data_type = openssl_stream;
+static void deallocate_buffer(std::byte* const storage, size_t const size)
+{
+	allio_release_storage(
+		storage,
+		size,
+		/* min_alignment: */ 1,
+		allio_allocation_strategy_buffering);
+}
+
+struct buffer_deleter
+{
+	size_t m_size;
+
+public:
+	buffer_deleter() = default;
+
+	explicit buffer_deleter(size_t const size)
+		: m_size(size)
+	{
+	}
+
+	[[nodiscard]] size_t size() const
+	{
+		return m_size;
+	}
+
+	void operator()(std::byte* const storage) const
+	{
+		deallocate_buffer(storage, m_size);
+	}
+};
+
+using unique_buffer_ptr = std::unique_ptr<std::byte, buffer_deleter>;
+
+static vsm::result<unique_buffer_ptr> allocate_unique_buffer(size_t const min_size)
+{
+	auto const allocation = allocate_buffer(min_size);
+
+	if (allocation.storage == nullptr)
+	{
+		return vsm::unexpected(error::not_enough_memory);
+	}
+
+	return vsm::result<unique_buffer_ptr>(
+		vsm::result_value,
+		static_cast<std::byte*>(allocation.storage),
+		buffer_deleter(allocation.size));
+}
+
+} // namespace
+
+tunnel_io::~tunnel_io()
+{
+	if (m_read_buffer_allocated)
+	{
+		deallocate_buffer(m_read_buffer_data, m_read_buffer_size);
+	}
+
+	if (m_write_buffer_allocated)
+	{
+		deallocate_buffer(m_write_buffer_data, m_write_buffer_size);
+	}
+}
+
+vsm::result<void> tunnel_io::allocate_buffers(
+	size_t const min_read_buffer_size,
+	size_t const min_write_buffer_size)
+{
+	unique_buffer_ptr read_buffer;
+	unique_buffer_ptr write_buffer;
+
+	if (min_read_buffer_size != 0)
+	{
+		vsm_try_assign(read_buffer, allocate_unique_buffer(min_read_buffer_size));
+	}
+
+	if (min_write_buffer_size != 0)
+	{
+		vsm_try_assign(write_buffer, allocate_unique_buffer(min_write_buffer_size));
+	}
+
+	if (read_buffer)
+	{
+		m_read_buffer_size = read_buffer.get_deleter().size();
+		m_read_buffer_data = read_buffer.release();
+		m_read_buffer_allocated = true;
+	}
+
+	if (write_buffer)
+	{
+		m_write_buffer_size = write_buffer.get_deleter().size();
+		m_write_buffer_data = write_buffer.release();
+		m_write_buffer_allocated = true;
+	}
+
+	return {};
+}
+
+tunnel_io_result<read_result> tunnel_io::read_some(read_buffer const buffer)
+{
+	if (m_read_error)
+	{
+		m_read_last = true;
+		return vsm::unexpected(tunnel_io_status::io_failure);
+	}
+
+	if (m_read_eof)
+	{
+		return detail::end_of_stream;
+	}
+
+	size_t const beg_offset = m_read_beg_offset;
+	size_t const total_size = m_read_end_offset - beg_offset;
+
+	size_t const transfer_size = std::min(
+		total_size,
+		buffer.size());
+
+	if (transfer_size != 0)
+	{
+		std::memcpy(
+			buffer.data(),
+			m_read_buffer_data + beg_offset,
+			transfer_size);
+
+		m_read_beg_offset = beg_offset + transfer_size;
+	}
+
+	if (transfer_size != buffer.size())
+	{
+		m_read_beg_offset = 0;
+		m_read_end_offset = 0;
+		m_read_needed = true;
+	}
+
+	if (transfer_size == 0)
+	{
+		return vsm::unexpected(tunnel_io_status::io_needed);
+	}
+
+	return transfer_size;
+}
+
+tunnel_io_result<size_t> tunnel_io::write_some(write_buffer const buffer)
+{
+	if (m_write_error)
+	{
+		m_read_last = false;
+		return vsm::unexpected(tunnel_io_status::io_failure);
+	}
+
+	size_t const end_offset = m_write_end_offset;
+	size_t const space_size = m_write_buffer_size - end_offset;
+
+	size_t const transfer_size = std::min(
+		space_size,
+		buffer.size());
+
+	if (transfer_size != 0)
+	{
+		std::memcpy(
+			m_write_buffer_data + end_offset,
+			buffer.data(),
+			transfer_size);
+
+		m_write_end_offset = end_offset + transfer_size;
+		m_write_needed = true;
+	}
+
+	if (transfer_size == 0)
+	{
+		return vsm::unexpected(tunnel_io_status::io_needed);
+	}
+
+	return transfer_size;
+}
+
+void tunnel_io::read_completed(vsm::result<read_result> const& result)
+{
+	if (result)
+	{
+		if (result->is_end_of_stream())
+		{
+			m_read_eof = true;
+		}
+		else
+		{
+			m_read_end_offset += result->size();
+		}
+
+		m_read_needed = false;
+	}
+	else
+	{
+		m_read_error = result.error();
+	}
+}
+
+void tunnel_io::write_completed(vsm::result<size_t> const& result)
+{
+	if (result)
+	{
+		m_write_beg_offset += *result;
+
+		if (m_write_beg_offset == m_write_end_offset)
+		{
+			m_write_beg_offset = 0;
+			m_write_end_offset = 0;
+			m_write_needed = false;
+		}
+	}
+	else
+	{
+		m_write_error = result.error();
+	}
+}
+
+
+namespace {
+
+struct tunnel_bio
+{
+	static constexpr char name[] = "ALLIO_TUNNEL_BIO";
+
+	using data_type = tunnel_io;
 
 	static int read_ex(
-		data_type& data,
+		tunnel_io& io,
 		BIO* const bio,
 		char* const buffer,
 		size_t const requested_size,
 		size_t* const transferred)
 	{
-		vsm_assert(data.m_r_buffer_size != 0);
+		auto const r = io.read_some(as_read_buffer(buffer, requested_size));
 
-		BIO_clear_retry_flags(bio);
+		if (!r && r.error() == tunnel_io_status::io_needed)
+		{
+			BIO_set_retry_read(bio);
+		}
+		else
+		{
+			BIO_clear_retry_flags(bio);
+		}
 
-		if (data.m_last_error)
+		if (!r || r->is_end_of_stream())
 		{
 			return 0;
 		}
 
-		size_t const beg_offset = data.m_r_beg_offset;
-		size_t const total_size = data.m_r_end_offset - beg_offset;
-
-		size_t const transfer_size = std::min(
-			total_size,
-			requested_size);
-
-		if (enable_debug)
-			fprintf(stderr, "%p requested bio read  (%zu)\n", &data, requested_size);
-
-		if (transfer_size != 0)
-		{
-			std::memcpy(
-				buffer,
-				data.m_r_buffer_data + beg_offset,
-				transfer_size);
-
-			data.m_r_beg_offset = beg_offset + transfer_size;
-			*transferred = transfer_size;
-
-			if (enable_debug)
-				fprintf(stderr, "%p completed bio read  (%zu)\n", &data, transfer_size);
-		}
-
-		if (transfer_size != requested_size)
-		{
-			data.m_r_beg_offset = 0;
-			data.m_r_end_offset = 0;
-			data.m_r_io_desired = true;
-
-			BIO_set_retry_read(bio);
-
-			if (enable_debug)
-				fprintf(stderr, "%p submitted bio read  (%zu)\n", &data, transfer_size);
-		}
-
-		return transfer_size != 0;
+		*transferred = r->size();
+		return 1;
 	}
 
 	static int write_ex(
-		data_type& data,
+		tunnel_io& io,
 		BIO* const bio,
 		char const* const buffer,
 		size_t const available_size,
 		size_t* const transferred)
 	{
-		vsm_assert(data.m_w_buffer_size != 0);
+		auto const r = io.write_some(as_write_buffer(buffer, available_size));
 
-		BIO_clear_retry_flags(bio);
-
-		if (data.m_last_error)
-		{
-			return 0;
-		}
-
-		size_t const end_offset = data.m_w_end_offset;
-		size_t const space_size = data.m_w_buffer_size - end_offset;
-
-		size_t const transfer_size = std::min(
-			space_size,
-			available_size);
-
-		if (enable_debug)
-			fprintf(stderr, "%p requested bio write (%zu)\n", &data, available_size);
-
-		if (transfer_size != 0)
-		{
-			std::memcpy(
-				data.m_w_buffer_data + end_offset,
-				buffer,
-				transfer_size);
-
-			data.m_w_end_offset = end_offset + transfer_size;
-			*transferred = transfer_size;
-
-			data.m_w_io_desired = true;
-
-			if (enable_debug)
-				fprintf(stderr, "%p completed bio write (%zu)\n", &data, transfer_size);
-		}
-
-		if (transfer_size != available_size)
+		if (!r && r.error() == tunnel_io_status::io_needed)
 		{
 			BIO_set_retry_write(bio);
-
-			if (enable_debug)
-				fprintf(stderr, "%p submitted bio write (%zu)\n", &data, transfer_size);
+		}
+		else
+		{
+			BIO_clear_retry_flags(bio);
 		}
 
-		return transfer_size != 0;
+		if (r)
+		{
+			*transferred = *r;
+		}
+
+		return r.has_value();
 	}
 
 	static long ctrl(
-		data_type& data,
+		tunnel_io& io,
 		int const cmd,
 		long const larg,
 		void* const parg)
@@ -828,7 +1001,7 @@ struct openssl_stream::bio_type
 		switch (cmd)
 		{
 		case BIO_CTRL_EOF:
-			return data.m_r_end_of_stream;
+			return io.end_of_stream();
 
 		case BIO_CTRL_PUSH:
 		case BIO_CTRL_POP:
@@ -842,32 +1015,16 @@ struct openssl_stream::bio_type
 	}
 };
 
-openssl_stream::~openssl_stream()
-{
-	if (m_r_unique_buffer)
-	{
-		allio_release_storage(
-			m_r_buffer_data,
-			m_r_buffer_size,
-			/* min_alignment: */ 1,
-			allio_allocation_strategy_buffering);
-	}
+} // namespace
 
-	if (m_w_unique_buffer)
-	{
-		allio_release_storage(
-			m_w_buffer_data,
-			m_w_buffer_size,
-			/* min_alignment: */ 1,
-			allio_allocation_strategy_buffering);
-	}
-}
-
-vsm::result<void> openssl_stream::initialize(openssl_ssl_ctx* const _ssl_ctx)
+vsm::result<void> openssl_tunnel::initialize(
+	tunnel_io& io,
+	tunnel_mode const mode,
+	openssl_ssl_ctx* const _ssl_ctx)
 {
 	auto const ssl_ctx = reinterpret_cast<SSL_CTX*>(_ssl_ctx);
 
-	vsm_try(bio, create_bio<openssl_stream::bio_type>(*this));
+	vsm_try(bio, create_bio<tunnel_bio>(io));
 	vsm_try(ssl, openssl_make<SSL_new, SSL_free>(ssl_ctx));
 
 	auto const p_bio = bio.release();
@@ -878,144 +1035,52 @@ vsm::result<void> openssl_stream::initialize(openssl_ssl_ctx* const _ssl_ctx)
 	return {};
 }
 
-vsm::result<void> openssl_stream::allocate_buffers()
-{
-	static constexpr size_t min_rw_buffer_size = 4096;
-
-	auto const r_allocation = allio_acquire_storage(
-		min_rw_buffer_size,
-		static_cast<size_t>(-1),
-		/* min_alignment: */ 1,
-		allio_allocation_strategy_buffering);
-
-	if (r_allocation.storage == nullptr)
-	{
-		return vsm::unexpected(error::not_enough_memory);
-	}
-
-	unique_storage_ptr<void> r_allocation_owner(
-		r_allocation.storage,
-		storage_deleter(r_allocation.size));
-
-	auto const w_allocation = allio_acquire_storage(
-		min_rw_buffer_size,
-		static_cast<size_t>(-1),
-		/* min_alignment: */ 1,
-		allio_allocation_strategy_buffering);
-
-	if (r_allocation.storage == nullptr)
-	{
-		return vsm::unexpected(error::not_enough_memory);
-	}
-
-	auto const r_storage = static_cast<std::byte*>(r_allocation.storage);
-	auto const w_storage = static_cast<std::byte*>(w_allocation.storage);
-
-	set_r_buffer(std::span(r_storage, r_allocation.size));
-	set_w_buffer(std::span(w_storage, w_allocation.size));
-
-	m_r_unique_buffer = true;
-	m_w_unique_buffer = true;
-
-	(void)r_allocation_owner.release();
-
-	return {};
-}
-
-vsm::result<openssl_stream*> detail::new_openssl_socket(openssl_ssl_ctx* const ssl_ctx)
-{
-	vsm_try(socket, detail::make_unique<openssl_stream>());
-	vsm_try_void(socket->initialize(ssl_ctx));
-	return socket.release();
-}
-
-void detail::delete_openssl_socket(openssl_stream* const socket)
-{
-	detail::delete_object(socket);
-}
-
-void openssl_stream::read_completed(vsm::result<size_t> const result)
-{
-	if (result)
-	{
-		m_r_end_offset += *result;
-		m_r_io_desired = false;
-	}
-	else
-	{
-		set_last_error(result.error());
-	}
-}
-
-void openssl_stream::write_completed(vsm::result<size_t> const result)
-{
-	if (result)
-	{
-		m_w_beg_offset += *result;
-
-		if (m_w_beg_offset == m_w_end_offset)
-		{
-			m_w_beg_offset = 0;
-			m_w_end_offset = 0;
-			m_w_io_desired = false;
-		}
-	}
-	else
-	{
-		set_last_error(result.error());
-	}
-}
-
-vsm::result<openssl_result<void>> openssl_stream::accept()
+vsm::result<tunnel_result<void>> openssl_tunnel::connect(tunnel_io& io, tunnel_mode const mode)
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
-	vsm_try(r, ssl_try<SSL_accept, /* SuccessThreshold: */ 0>(ssl));
-
-	if (!r)
-	{
-		return vsm::success(vsm::unexpected(openssl_pending_t()));
-	}
-
-	if (*r == 0)
-	{
-		return vsm::unexpected(get_ssl_error(ssl, 0));
-	}
-
-	return {};
-}
-
-vsm::result<openssl_result<void>> openssl_stream::connect()
-{
-	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
-
-	vsm_try(r, ssl_try<SSL_connect, /* SuccessThreshold: */ 0>(ssl));
-
-	if (!r)
-	{
-		return vsm::success(vsm::unexpected(openssl_pending_t()));
-	}
-
-	if (*r == 0)
-	{
-		return vsm::unexpected(get_ssl_error(ssl, 0));
-	}
-
-	return {};
-}
-
-vsm::result<openssl_result<void>> openssl_stream::disconnect()
-{
-	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
-
-	int const r = SSL_shutdown(ssl);
+	int const r = mode == tunnel_mode::server
+		? SSL_accept(ssl)
+		: SSL_connect(ssl);
 
 	if (r < 0)
 	{
 		switch (int const e = SSL_get_error(ssl, r))
 		{
 		case SSL_ERROR_SYSCALL:
-			return vsm::unexpected(m_last_error);
+			return vsm::unexpected(io.consume_last_error());
+
+		case SSL_ERROR_WANT_READ:
+		case SSL_ERROR_WANT_WRITE:
+			return vsm::success(vsm::unexpected(tunnel_io_needed()));
+
+		default:
+			return vsm::unexpected(static_cast<ssl_error>(e));
+		}
+	}
+
+	if (r != 1)
+	{
+		return vsm::unexpected(get_ssl_error(ssl, r));
+	}
+
+	return {};
+}
+
+vsm::result<tunnel_result<bool>> openssl_tunnel::disconnect(
+	tunnel_io& io,
+	bool const full_disconnect)
+{
+	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
+
+	int r = SSL_shutdown(ssl);
+
+	if (r < 0)
+	{
+		switch (int const e = SSL_get_error(ssl, r))
+		{
+		case SSL_ERROR_SYSCALL:
+			return vsm::unexpected(io.consume_last_error());
 
 		case SSL_ERROR_ZERO_RETURN:
 			// End of stream is not considered an error during disconnect.
@@ -1023,92 +1088,75 @@ vsm::result<openssl_result<void>> openssl_stream::disconnect()
 
 		case SSL_ERROR_WANT_READ:
 		case SSL_ERROR_WANT_WRITE:
-			return vsm::success(vsm::unexpected(openssl_pending_t()));
+			return vsm::success(vsm::unexpected(tunnel_io_needed()));
 
 		default:
 			return vsm::unexpected(static_cast<ssl_error>(e));
 		}
 	}
 
-	return {};
+	return r == 1;
 }
 
-vsm::result<openssl_result<size_t>> openssl_stream::read_some(read_buffer const buffer)
+vsm::result<tunnel_result<read_result>> openssl_tunnel::read_some(
+	tunnel_io& io,
+	read_buffer const buffer)
 {
 	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
-	vsm_try(r, ssl_try<SSL_read, /* SuccessThreshold: */ 1>(
+	int const r = SSL_read(
 		ssl,
 		buffer.data(),
-		vsm::saturating(buffer.size())));
+		vsm::saturating(buffer.size()));
 
-	if (!r)
+	if (r < 1)
 	{
-		return vsm::success(vsm::unexpected(openssl_pending_t()));
-	}
-
-	vsm_assert(*r != 0);
-
-	return static_cast<size_t>(*r);
-}
-
-vsm::result<openssl_result<size_t>> openssl_stream::write_some(write_buffer const buffer)
-{
-	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
-
-	vsm_try(r, ssl_try<SSL_write, /* SuccessThreshold: */ 1>(
-		ssl,
-		buffer.data(),
-		vsm::saturating(buffer.size())));
-
-	if (!r)
-	{
-		return vsm::success(vsm::unexpected(openssl_pending_t()));
-	}
-
-	vsm_assert(*r != 0);
-
-	return static_cast<size_t>(*r);
-}
-
-void openssl_stream::set_last_error(std::error_code const error)
-{
-	if (!m_r_end_of_stream)
-	{
-		if (error.default_error_condition() == make_error_condition(error::end_of_stream))
+		switch (int const e = SSL_get_error(ssl, r))
 		{
-			m_r_end_of_stream = true;
+		case SSL_ERROR_SYSCALL:
+			return vsm::unexpected(io.consume_last_error());
+
+		case SSL_ERROR_ZERO_RETURN:
+			return end_of_stream;
+
+		case SSL_ERROR_WANT_READ:
+		case SSL_ERROR_WANT_WRITE:
+			return vsm::success(vsm::unexpected(tunnel_io_needed()));
+
+		default:
+			return vsm::unexpected(static_cast<ssl_error>(e));
 		}
 	}
 
-	m_last_error = error;
+	return static_cast<size_t>(r);
 }
 
-template<auto Function, int SuccessThreshold, typename SSL>
-vsm::result<openssl_result<int>> openssl_stream::ssl_try(SSL* const ssl, auto const... args)
+vsm::result<tunnel_result<size_t>> openssl_tunnel::write_some(
+	tunnel_io& io,
+	write_buffer const buffer)
 {
-	static_assert(std::is_same_v<SSL, ::SSL>);
+	auto const ssl = reinterpret_cast<SSL*>(m_ssl.get());
 
-	int const r = Function(ssl, args...);
+	int const r = SSL_write(
+		ssl,
+		buffer.data(),
+		vsm::saturating(buffer.size()));
 
-	if (r >= SuccessThreshold)
+	if (r < 1)
 	{
-		return r;
+		switch (int const e = SSL_get_error(ssl, r))
+		{
+		case SSL_ERROR_SYSCALL:
+			return vsm::unexpected(io.consume_last_error());
+
+		case SSL_ERROR_WANT_READ:
+		case SSL_ERROR_WANT_WRITE:
+			return vsm::success(vsm::unexpected(tunnel_io_needed()));
+
+		default:
+			return vsm::unexpected(static_cast<ssl_error>(e));
+		}
 	}
 
-	switch (int const e = SSL_get_error(ssl, r))
-	{
-	case SSL_ERROR_SYSCALL:
-		return vsm::unexpected(m_last_error);
-
-	case SSL_ERROR_ZERO_RETURN:
-		return vsm::unexpected(error::end_of_stream);
-
-	case SSL_ERROR_WANT_READ:
-	case SSL_ERROR_WANT_WRITE:
-		return vsm::success(vsm::unexpected(openssl_pending_t()));
-
-	default:
-		return vsm::unexpected(static_cast<ssl_error>(e));
-	}
+	return static_cast<size_t>(r);
 }

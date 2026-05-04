@@ -603,9 +603,6 @@ void detail::a_s2n_release_connection(a_s2n_connection* const connection)
 }
 
 
-// TODO: Debugging
-inline bool enable_debug;
-
 static int a_s2n_recv_callback(
 	void* const context,
 	uint8_t* const buffer,

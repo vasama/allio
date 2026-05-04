@@ -195,6 +195,13 @@ static vsm::result<socket_address_view> get_socket_address_1(
 }
 
 static vsm::result<socket_address_view> get_socket_address_1(
+	automatic_endpoint const endpoint,
+	storage_provider_ref const storage_provider)
+{
+	return vsm::unexpected(allio_error(error::invalid_argument));
+}
+
+static vsm::result<socket_address_view> get_socket_address_1(
 	std::error_code const error,
 	storage_provider_ref const storage_provider)
 {
@@ -431,6 +438,19 @@ vsm::result<void> posix::socket_connect(
 vsm::result<void> posix::socket_disconnect(socket_type const socket, int const how)
 {
 	if (::shutdown(socket, how) == socket_error_value)
+	{
+		return vsm::unexpected(allio_error(get_last_socket_error()));
+	}
+
+	return {};
+}
+
+vsm::result<void> posix::socket_get_address(
+	socket_type const socket,
+	sockaddr* const addr,
+	socket_address_size_type* const addr_size)
+{
+	if (::getsockname(socket, addr, addr_size))
 	{
 		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}

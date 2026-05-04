@@ -69,10 +69,8 @@ TEST_CASE(
 
 	client_socket.disconnect();
 
-	REQUIRE_THROWS_MATCHES(
-		server_socket.read_some(as_read_buffer(read_buffer)),
-		std::system_error,
-		match_error(error::end_of_stream));
+	// The server can no longer read after client disconnect:
+	REQUIRE(server_socket.read_some(as_read_buffer(read_buffer)) == end_of_stream);
 }
 
 TEST_CASE(
@@ -83,7 +81,6 @@ TEST_CASE(
 
 	auto multiplexer = default_multiplexer::create().value();
 
-	//enable_debug = true;
 	auto const combined_task = []() -> task<void>
 	{
 		auto const endpoint = test::generate_endpoint();
@@ -99,7 +96,7 @@ TEST_CASE(
 
 			// Wait for a request from the client:
 			signed char request_data;
-			size_t const rs = co_await socket.read_some(as_read_buffer(&request_data, 1));
+			auto const rs = co_await socket.read_some(as_read_buffer(&request_data, 1));
 			REQUIRE(rs == 1);
 
 			// Send a reply to the client:
@@ -107,10 +104,7 @@ TEST_CASE(
 			size_t const ws = co_await socket.write_some(as_write_buffer(&reply_data, 1));
 			REQUIRE(ws == 1);
 
-			REQUIRE_THROWS_MATCHES(
-				co_await socket.read_some(as_read_buffer(&request_data, 1)),
-				std::system_error,
-				match_error(error::end_of_stream));
+			REQUIRE(co_await socket.read_some(as_read_buffer(&request_data, 1)) == end_of_stream);
 
 			co_await socket.disconnect();
 		};
@@ -129,7 +123,7 @@ TEST_CASE(
 
 			// Wait for a reply from the server:
 			signed char reply_data;
-			size_t const rs = co_await socket.read_some(as_read_buffer(&reply_data, 1));
+			auto const rs = co_await socket.read_some(as_read_buffer(&reply_data, 1));
 			REQUIRE(rs == 1);
 
 			REQUIRE(reply_data == -42);
@@ -140,6 +134,5 @@ TEST_CASE(
 		co_await ex::when_all(server_task(), client_task());
 	};
 
-	// TODO: Why are exceptions from the inner coroutines not propagated to here?
-	(void)senders::sync_wait(multiplexer, combined_task()).value();
+	senders::sync_wait(multiplexer, combined_task()).value();
 }

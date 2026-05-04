@@ -1,6 +1,6 @@
 #pragma once
 
-#include <allio/byte_io_buffers.hpp>
+#include <allio/byte_io.hpp>
 #include <allio/error.hpp>
 #include <allio/deadline.hpp>
 #include <allio/detail/handle_flags.hpp>
@@ -243,6 +243,11 @@ struct socket_with_flags
 
 [[nodiscard]] vsm::result<void> socket_disconnect(socket_type socket, int how);
 
+[[nodiscard]] vsm::result<void> socket_get_address(
+	socket_type socket,
+	sockaddr* addr,
+	socket_address_size_type* addr_size);
+
 [[nodiscard]] vsm::result<socket_poll_mask> socket_poll(
 	socket_type socket,
 	socket_poll_mask mask,
@@ -267,7 +272,7 @@ struct socket_with_flags
 	socket_type socket,
 	bool non_blocking);
 
-[[nodiscard]] vsm::result<size_t> socket_scatter_read(
+[[nodiscard]] vsm::result<read_result> socket_scatter_read(
 	socket_type socket,
 	detail::new_read_buffers buffers);
 

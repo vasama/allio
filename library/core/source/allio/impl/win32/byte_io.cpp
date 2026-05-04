@@ -1,6 +1,7 @@
 #include <allio/impl/win32/byte_io.hpp>
 
 #include <allio/detail/byte_io_buffer_range.hpp>
+#include <allio/detail/byte_io_state.hpp>
 #include <allio/detail/unique_handle.hpp>
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/win32/kernel.hpp>
@@ -15,6 +16,8 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
+namespace {
+
 static constexpr fs_size max_file_extent =
 	static_cast<fs_size>(std::numeric_limits<LONGLONG>::max());
 
@@ -22,10 +25,10 @@ template<vsm::any_cv_of<std::byte> T>
 static auto is_read_buffer(io_buffers<T> const&) -> std::bool_constant<vsm::non_cv<T>>;
 
 template<auto const& Syscall, typename Arguments>
-static vsm::result<void> do_byte_io_2(
+static vsm::result<byte_io_status> do_byte_io_1(
 	native_handle<platform_object_t> const& h,
 	Arguments const& a,
-	size_t& transferred)
+	byte_io_state& io_state)
 {
 	static constexpr bool is_random_access = requires { a.offset; };
 
@@ -35,7 +38,6 @@ static vsm::result<void> do_byte_io_2(
 		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
-	//TODO: Apply event based overlapped I/O to other synchronous I/O operations.
 	vsm_try(event, thread_event::get_for(h));
 
 	step_deadline absolute_deadline = a.deadline;
@@ -72,7 +74,7 @@ static vsm::result<void> do_byte_io_2(
 			// The maximum transfer size is limited by the range of size_t transferred.
 			size_t const max_transfer_size_dynamic = std::min(
 				buffer.size(),
-				std::numeric_limits<size_t>::max() - transferred);
+				std::numeric_limits<size_t>::max() - io_state.transferred());
 
 			// The maximum transfer size is limited by the range of the ULONG Length parameter.
 			ULONG const max_transfer_size = static_cast<ULONG>(std::min(
@@ -112,7 +114,7 @@ static vsm::result<void> do_byte_io_2(
 					case STATUS_PIPE_BROKEN:
 						// For uniformity between Windows and POSIX, broken pipe on read is
 						// transformed into end_of_stream.
-						return vsm::unexpected(allio_error(error::end_of_stream));
+						return byte_io_status::end_of_stream;
 					}
 				}
 
@@ -123,10 +125,10 @@ static vsm::result<void> do_byte_io_2(
 
 			if (transfer_size == 0)
 			{
-				return vsm::unexpected(allio_error(error::end_of_stream));
+				return byte_io_status::end_of_stream;
 			}
 
-			transferred += transfer_size;
+			io_state.transfer_completed(transfer_size);
 			buffer = buffer.subspan(transfer_size);
 
 			if (transfer_size != max_transfer_size)
@@ -135,7 +137,7 @@ static vsm::result<void> do_byte_io_2(
 				// completed, or an error is encountered.
 				if (vsm::no_flags(a.flags, io_flags::greedy_byte_io))
 				{
-					return {};
+					return byte_io_status::success;
 				}
 			}
 
@@ -146,50 +148,44 @@ static vsm::result<void> do_byte_io_2(
 		}
 	}
 
-	return {};
+	return byte_io_status::success;
 }
 
-template<auto const& Syscall>
-static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h, auto const& a)
+template<typename Result, auto const& Syscall>
+static vsm::result<Result> do_byte_io(native_handle<platform_object_t> const& h, auto const& a)
 {
-	size_t transferred = 0;
-
-	if (auto const r = do_byte_io_2<Syscall>(h, a, transferred); !r)
-	{
-		// The error is ignored if some data was transferred and greedy I/O was not requested.
-		if (transferred == 0 || vsm::any_flags(a.flags, io_flags::greedy_byte_io))
-		{
-			return vsm::unexpected(r.error());
-		}
-	}
-
-	return transferred;
+	byte_io_state io_state = {};
+	return io_state.finalize<Result>(
+		a,
+		do_byte_io_1<Syscall>(h, a, io_state));
 }
+
+} // namespace
 
 vsm::result<size_t> win32::random_read(
 	native_handle<platform_object_t> const& h,
 	byte_io::random_parameters_t<std::byte> const& a)
 {
-	return do_byte_io<win32::NtReadFile>(h, a);
+	return do_byte_io<size_t, win32::NtReadFile>(h, a);
 }
 
 vsm::result<size_t> win32::random_write(
 	native_handle<platform_object_t> const& h,
 	byte_io::random_parameters_t<std::byte const> const& a)
 {
-	return do_byte_io<win32::NtWriteFile>(h, a);
+	return do_byte_io<size_t, win32::NtWriteFile>(h, a);
 }
 
-vsm::result<size_t> win32::stream_read(
+vsm::result<read_result> win32::stream_read(
 	native_handle<platform_object_t> const& h,
 	byte_io::stream_parameters_t<std::byte> const& a)
 {
-	return do_byte_io<win32::NtReadFile>(h, a);
+	return do_byte_io<read_result, win32::NtReadFile>(h, a);
 }
 
 vsm::result<size_t> win32::stream_write(
 	native_handle<platform_object_t> const& h,
 	byte_io::stream_parameters_t<std::byte const> const& a)
 {
-	return do_byte_io<win32::NtWriteFile>(h, a);
+	return do_byte_io<size_t, win32::NtWriteFile>(h, a);
 }

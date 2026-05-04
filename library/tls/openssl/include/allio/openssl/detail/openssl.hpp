@@ -68,273 +68,330 @@ struct openssl_ssl_deleter
 using openssl_ssl_ptr = std::unique_ptr<openssl_ssl, openssl_ssl_deleter>;
 
 
-struct openssl_pending_t
+struct tunnel_io_needed
 {
-	explicit openssl_pending_t() = default;
+	explicit tunnel_io_needed() = default;
 };
 
 template<typename T>
-using openssl_result = vsm::result<T, openssl_pending_t>;
+using tunnel_result = vsm::result<T, tunnel_io_needed>;
 
-struct openssl_operation_base : vsm::intrusive::mpsc_queue_link
+
+enum class tunnel_io_status : bool
 {
-	enum class state_flags : uint8_t
-	{
-		active                  = 1 << 0,
-		cancel                  = 1 << 1,
-	};
-
-	vsm::atomic<state_flags> m_state_flags;
+	io_needed,
+	io_failure,
 };
 
+template<typename T>
+using tunnel_io_result = vsm::result<T, tunnel_io_status>;
 
-class openssl_stream
+class tunnel_io
 {
-	struct bio_type;
+protected:
+	bool m_is_initialized : 1 = false;
+	bool m_is_connected : 1 = false;
 
-	openssl_ssl_ptr m_ssl;
+	bool m_is_tunnel_writable : 1 = false;
 
-	uint32_t m_r_io_desired : 1 = 0;
-	uint32_t m_w_io_desired : 1 = 0;
+	bool m_is_transport_readable : 1 = false;
+	bool m_is_transport_writable : 1 = false;
 
-	uint32_t m_r_unique_buffer : 1 = 0;
-	uint32_t m_w_unique_buffer : 1 = 0;
+	bool m_read_needed : 1 = false;
+	bool m_write_needed : 1 = false;
 
-	uint32_t m_r_end_of_stream : 1 = 0;
+	bool m_read_buffer_allocated : 1 = false;
+	bool m_write_buffer_allocated : 1 = false;
 
-	size_t m_r_beg_offset = 0;
-	size_t m_r_end_offset = 0;
+	bool m_read_eof : 1 = false;
+	bool m_read_last : 1 = false;
 
-	size_t m_w_beg_offset = 0;
-	size_t m_w_end_offset = 0;
+	size_t m_read_beg_offset = 0;
+	size_t m_read_end_offset = 0;
 
-	union
-	{
-		struct
-		{
-			std::byte* m_r_buffer_data;
-			size_t m_r_buffer_size;
-		};
-	};
+	size_t m_write_beg_offset = 0;
+	size_t m_write_end_offset = 0;
 
-	union
-	{
-		struct
-		{
-			std::byte* m_w_buffer_data;
-			size_t m_w_buffer_size;
-		};
-	};
+	size_t m_read_buffer_size = 0;
+	size_t m_write_buffer_size = 0;
 
-	std::error_code m_last_error;
+	std::byte* m_read_buffer_data = nullptr;
+	std::byte* m_write_buffer_data = nullptr;
+
+	std::error_code m_read_error;
+	std::error_code m_write_error;
 
 public:
-	openssl_stream() = default;
-	openssl_stream(openssl_stream const&) = delete;
-	openssl_stream& operator=(openssl_stream const&) = delete;
-	~openssl_stream();
-
-	vsm::result<void> initialize(openssl_ssl_ctx* ssl_ctx);
-
-	vsm::result<void> allocate_buffers();
-
-	void set_r_buffer(std::span<std::byte> const buffer)
+	[[nodiscard]] std::error_code consume_last_error()
 	{
-		vsm_assert(m_r_beg_offset == m_r_end_offset);
+		std::error_code& e = m_read_last ? m_read_error : m_write_error;
+		vsm_assert(e);
 
-		m_r_buffer_data = buffer.data();
-		m_r_buffer_size = buffer.size();
-
-		m_r_beg_offset = 0;
-		m_r_end_offset = 0;
+		return std::exchange(e, std::error_code());
 	}
 
-	void set_w_buffer(std::span<std::byte> const buffer)
+	[[nodiscard]] bool end_of_stream() const
 	{
-		vsm_assert(m_w_beg_offset == m_w_end_offset);
-
-		m_w_buffer_data = buffer.data();
-		m_w_buffer_size = buffer.size();
-
-		m_w_beg_offset = 0;
-		m_w_end_offset = 0;
+		return m_read_eof;
 	}
 
-	bool want_read() const
-	{
-		return m_r_io_desired;
-	}
+	[[nodiscard]] tunnel_io_result<read_result> read_some(read_buffer buffer);
+	[[nodiscard]] tunnel_io_result<size_t> write_some(write_buffer buffer);
 
-	bool want_write() const
-	{
-		return m_w_io_desired;
-	}
+protected:
+	tunnel_io() = default;
+	tunnel_io(tunnel_io const&) = delete;
+	tunnel_io& operator=(tunnel_io const&) = delete;
+	~tunnel_io();
 
-	read_buffer get_read_buffer() const
-	{
-		vsm_assert(m_r_beg_offset == m_r_end_offset);
-		return read_buffer(m_r_buffer_data, m_r_buffer_size);
-	}
+	[[nodiscard]] vsm::result<void> allocate_buffers(
+		size_t min_read_buffer_size,
+		size_t min_write_buffer_size);
 
-	write_buffer get_write_buffer() const
-	{
-		return write_buffer(m_w_buffer_data, m_w_buffer_size)
-			.subspan(m_w_beg_offset, m_w_end_offset - m_w_beg_offset);
-	}
-
-	void read_completed(vsm::result<size_t> result);
-	void write_completed(vsm::result<size_t> result);
-
-	vsm::result<openssl_result<void>> accept();
-	vsm::result<openssl_result<void>> connect();
-	vsm::result<openssl_result<void>> disconnect();
-
-	vsm::result<openssl_result<size_t>> read_some(read_buffer user_buffer);
-	vsm::result<openssl_result<size_t>> write_some(write_buffer user_buffer);
-
-private:
-	void set_last_error(std::error_code error);
-
-	template<auto Function, int SuccessThreshold, typename SSL>
-	vsm::result<openssl_result<int>> ssl_try(SSL* const ssl, auto const... args);
+	void read_completed(vsm::result<read_result> const& result);
+	void write_completed(vsm::result<size_t> const& result);
 };
 
-vsm::result<openssl_stream*> new_openssl_socket(openssl_ssl_ctx* ssl_ctx);
-void delete_openssl_socket(openssl_stream* socket);
+
+enum class tunnel_mode : bool
+{
+	client,
+	server,
+};
+
+template<typename Tunnel>
+concept tls_tunnel_provider = requires (Tunnel& tunnel, tunnel_io& io)
+{
+	typename Tunnel::config_type;
+
+	{
+		tunnel.initialize(
+			io,
+			tunnel_mode(),
+			std::declval<typename Tunnel::config_type const&>())
+	} -> std::same_as<vsm::result<void>>;
+
+	{
+		tunnel.connect(io, tunnel_mode())
+	} -> std::same_as<vsm::result<tunnel_result<void>>>;
+
+	{
+		tunnel.disconnect(io, /* full_disconnect: */ false)
+	} -> std::same_as<vsm::result<tunnel_result<bool>>>;
+
+	{
+		tunnel.read_some(io, read_buffer())
+	} -> std::same_as<vsm::result<tunnel_result<read_result>>>;
+
+	{
+		tunnel.write_some(io, write_buffer())
+	} -> std::same_as<vsm::result<tunnel_result<size_t>>>;
+};
+
+template<tls_tunnel_provider Tunnel>
+class tunnel_state : tunnel_io
+{
+	Tunnel m_tunnel;
+
+public:
+	[[nodiscard]] vsm::result<void> allocate_buffers(
+		size_t const min_read_buffer_size,
+		size_t const min_write_buffer_size)
+	{
+		return tunnel_io::allocate_buffers(min_read_buffer_size, min_write_buffer_size);
+	}
+
+	void set_read_buffer(std::span<std::byte> const buffer)
+	{
+		m_read_buffer_data = buffer.data();
+		m_read_buffer_size = buffer.size();
+	}
+
+	void set_write_buffer(std::span<std::byte> const buffer)
+	{
+		m_write_buffer_data = buffer.data();
+		m_write_buffer_size = buffer.size();
+	}
+
+	[[nodiscard]] read_buffer get_read_buffer()
+	{
+		vsm_assert(m_read_beg_offset == m_read_end_offset);
+		return read_buffer(m_read_buffer_data, m_read_buffer_size);
+	}
+
+	[[nodiscard]] write_buffer get_write_buffer()
+	{
+		return write_buffer(m_write_buffer_data, m_write_buffer_size)
+			.subspan(m_write_beg_offset, m_write_end_offset - m_write_beg_offset);
+	}
+
+	[[nodiscard]] bool read_needed() const
+	{
+		return m_read_needed;
+	}
+
+	[[nodiscard]] bool write_needed() const
+	{
+		return m_write_needed;
+	}
 
 
-#if 0
-struct openssl_socket_state_base
+	[[nodiscard]] bool is_transport_readable() const
+	{
+		return m_is_transport_readable;
+	}
+
+	[[nodiscard]] bool is_transport_writable() const
+	{
+		return m_is_transport_writable;
+	}
+
+	void read_completed(vsm::result<read_result> const& result)
+	{
+		tunnel_io::read_completed(result);
+	}
+
+	void write_completed(vsm::result<size_t> const& result)
+	{
+		tunnel_io::write_completed(result);
+	}
+
+	void disconnect_completed(bool const read, bool const write)
+	{
+		m_is_transport_readable = !read;
+		m_is_transport_writable = !write;
+	}
+
+
+	[[nodiscard]] bool is_tunnel_connected() const
+	{
+		return m_is_connected;
+	}
+
+	[[nodiscard]] bool is_tunnel_readable() const
+	{
+		vsm_assert(m_is_connected); //PRECONDITION
+		return m_is_connected;
+	}
+
+	[[nodiscard]] bool is_tunnel_writable() const
+	{
+		vsm_assert(m_is_connected); //PRECONDITION
+		return m_is_tunnel_writable;
+	}
+
+	[[nodiscard]] vsm::result<void> initialize(
+		tunnel_mode const mode,
+		typename Tunnel::config_type const& config)
+	{
+		vsm_assert(!m_is_initialized); //PRECONDITION
+
+		auto const r = m_tunnel.initialize(
+			static_cast<tunnel_io&>(*this),
+			mode,
+			config);
+
+		if (r)
+		{
+			m_is_initialized = true;
+		}
+
+		return r;
+	}
+
+	[[nodiscard]] vsm::result<tunnel_result<void>> connect(tunnel_mode const mode)
+	{
+		vsm_assert(m_is_initialized); //PRECONDITION
+		vsm_assert(!m_is_connected); //PRECONDITION
+
+		auto const r = m_tunnel.connect(static_cast<tunnel_io&>(*this), mode);
+		if (r && *r)
+		{
+			m_is_connected = true;
+			m_is_tunnel_writable = true;
+		}
+		return r;
+	}
+
+	[[nodiscard]] vsm::result<tunnel_result<void>> disconnect(
+		bool const disconnect_read,
+		bool const disconnect_write)
+	{
+		vsm_assert(m_is_connected); //PRECONDITION
+
+		if (!disconnect_write)
+		{
+			if (disconnect_read)
+			{
+				return vsm::unexpected(error::unsupported_operation);
+			}
+			else
+			{
+				return vsm::unexpected(error::invalid_argument);
+			}
+		}
+
+		if (!m_is_tunnel_writable && (m_is_transport_writable || !disconnect_read))
+		{
+			return {};
+		}
+
+		auto const r_1 = m_tunnel.disconnect(
+			static_cast<tunnel_io&>(*this),
+			/* full_disconnect: */ disconnect_read);
+
+		if (!r_1)
+		{
+			return vsm::unexpected(r_1.error());
+		}
+
+		auto const& r_2 = *r_1;
+
+		if (!r_2)
+		{
+			return vsm::success(vsm::unexpected(r_2.error()));
+		}
+
+		m_is_tunnel_writable = false;
+
+		if (*r_2)
+		{
+			m_is_connected = false;
+		}
+
+		return {};
+	}
+
+	[[nodiscard]] vsm::result<tunnel_result<read_result>> read_some(read_buffer const buffer)
+	{
+		vsm_assert(m_is_connected); //PRECONDITION
+		return m_tunnel.read_some(static_cast<tunnel_io&>(*this), buffer);
+	}
+
+	[[nodiscard]] vsm::result<tunnel_result<size_t>> write_some(write_buffer const buffer)
+	{
+		vsm_assert(m_is_connected); //PRECONDITION
+		return m_tunnel.write_some(static_cast<tunnel_io&>(*this), buffer);
+	}
+};
+
+
+class openssl_tunnel
 {
 	openssl_ssl_ptr m_ssl;
 
-	vsm::result<openssl_result<void>> accept();
-	vsm::result<openssl_result<void>> connect();
-	vsm::result<openssl_result<void>> disconnect();
+public:
+	using config_type = openssl_ssl_ctx*;
 
-	vsm::result<openssl_result<size_t>> read(read_buffer user_buffer);
-	vsm::result<openssl_result<size_t>> write(write_buffer user_buffer);
+	vsm::result<void> initialize(tunnel_io& io, tunnel_mode mode, openssl_ssl_ctx* ssl_ctx);
+
+	vsm::result<tunnel_result<void>> connect(tunnel_io& io, tunnel_mode mode);
+	vsm::result<tunnel_result<bool>> disconnect(tunnel_io& io, bool full_disconnect);
+
+	vsm::result<tunnel_result<read_result>> read_some(tunnel_io& io, read_buffer buffer);
+	vsm::result<tunnel_result<size_t>> write_some(tunnel_io& io, write_buffer buffer);
 };
 
-template<typename RawSocket>
-struct openssl_socket_state
-{
-	native_handle<RawSocket> m_raw_h;
-};
-
-
-struct openssl_listen_socket_state_base
-{
-	openssl_ssl_ptr m_ssl;
-};
-
-template<typename Multiplexer, typename RawSocketObject>
-struct openssl_listen_socket_state : openssl_listen_socket_state_base
-{
-	async_operation_t<Multiplexer, RawSocketObject, listen_t> m_raw_state;
-};
-
-
-
-struct openssl_object_base
-{
-	struct bio_type;
-
-	openssl_ssl_ptr m_ssl;
-
-	std::byte* m_r_beg = nullptr;
-	std::byte* m_r_pos = nullptr;
-	std::byte* m_r_end = nullptr;
-
-	std::byte* m_w_beg = nullptr;
-	std::byte* m_w_pos = nullptr;
-	std::byte* m_w_end = nullptr;
-
-	bool m_want_read = false;
-	bool m_want_write = false;
-
-	vsm::intrusive::mpsc_queue<openssl_operation_base> m_queue;
-
-	openssl_object_base() = default;
-	openssl_object_base(openssl_object_base const&) = delete;
-	openssl_object_base& operator=(openssl_object_base const&) = delete;
-	virtual ~openssl_object_base() = default;
-
-	vsm::result<void> initialize(openssl_ssl_ctx* ssl_ctx);
-
-	vsm::result<openssl_result<void>> accept();
-	vsm::result<openssl_result<void>> connect();
-	vsm::result<openssl_result<void>> disconnect();
-
-	vsm::result<openssl_result<size_t>> read(read_buffer user_buffer);
-	vsm::result<openssl_result<size_t>> write(write_buffer user_buffer);
-
-	read_buffer get_read_buffer()
-	{
-		return read_buffer(m_r_beg, m_r_end);
-	}
-
-	void read_completed(size_t const transferred)
-	{
-		m_want_read = false;
-	}
-
-	write_buffer get_write_buffer()
-	{
-		return write_buffer(m_w_beg, m_w_pos);
-	}
-
-	void write_completed(size_t const transferred)
-	{
-		m_want_write = false;
-	}
-
-	void delete_context();
-};
-
-template<typename Multiplexer, typename RawSocket>
-struct openssl_socket_object : openssl_object_base
-{
-	template<typename Operation>
-	using operation_state = async_operation_t<Multiplexer, RawSocket, Operation>;
-
-	native_handle<RawSocket> m_h;
-	async_connector_t<Multiplexer, RawSocket> m_c;
-
-	operation_state<byte_io::stream_read_t> m_r_state;
-	operation_state<byte_io::stream_write_t> m_w_state;
-
-	using openssl_object_base::openssl_object_base;
-};
-
-vsm::result<void*> allocate_openssl_socket(size_t size);
-
-template<typename Multiplexer, typename RawSocket>
-vsm::result<openssl_socket_object<Multiplexer, RawSocket>*> create_openssl_socket(
-	openssl_ssl_ctx* const ssl_ctx)
-{
-	using object_type = openssl_socket_object<Multiplexer, RawSocket>;
-	static_assert(alignof(object_type) <= alignof(std::max_align_t));
-
-	vsm_try(object, detail::make_unique<object_type>());
-	vsm_try_void(object->initialize(ssl_ctx));
-
-	return object.release();
-}
-
-template<typename... States>
-struct openssl_listen_socket_object : openssl_object_base
-{
-	std::variant<States...> m_raw_states;
-};
-
-template<typename... RawOperationStates>
-struct openssl_object : openssl_object_base
-{
-	std::variant<RawOperationStates...> m_raw_state;
-
-	static vsm::result<openssl_object*> create(openssl_ssl_ctx* const ssl_ctx);
-};
-#endif
+using openssl_tunnel_state = tunnel_state<openssl_tunnel>;
 
 } // namespace allio::detail

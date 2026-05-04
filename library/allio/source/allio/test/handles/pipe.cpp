@@ -122,11 +122,11 @@ TEST_CASE("Asynchronous pipe pair can send and receive data", "[pipe][senders][a
 			{
 				unsigned char r_buffer = 0;
 
-				size_t const rs_1 = co_await r.read_some(as_read_buffer(&r_buffer, 1));
+				auto const rs_1 = co_await r.read_some(as_read_buffer(&r_buffer, 1));
 				REQUIRE(rs_1 == 1);
 				REQUIRE(r_buffer == 1);
 
-				size_t const rs_2 = co_await r.read_some(as_read_buffer(&r_buffer, 1));
+				auto const rs_2 = co_await r.read_some(as_read_buffer(&r_buffer, 1));
 				REQUIRE(rs_2 == 1);
 				REQUIRE(r_buffer == 2);
 			}(),

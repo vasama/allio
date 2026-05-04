@@ -59,7 +59,7 @@ vsm::result<size_t> random_write(
 	detail::native_handle<detail::platform_object_t> const& h,
 	detail::byte_io::random_parameters_t<std::byte const> const& a);
 
-vsm::result<size_t> stream_read(
+vsm::result<read_result> stream_read(
 	detail::native_handle<detail::platform_object_t> const& h,
 	detail::byte_io::stream_parameters_t<std::byte> const& a);
 

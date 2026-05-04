@@ -235,6 +235,22 @@ public:
 	}
 };
 
+class automatic_endpoint
+{
+	network_address_kind const m_kind;
+
+public:
+	explicit automatic_endpoint(network_address_kind const kind) noexcept
+		: m_kind(kind)
+	{
+	}
+
+	[[nodiscard]] network_address_kind kind() const noexcept
+	{
+		return m_kind;
+	}
+};
+
 
 namespace detail {
 
@@ -291,33 +307,34 @@ class any_endpoint_view
 		explicit local_t() = default;
 	};
 
-	static constexpr uint32_t ctrl_bits = 32;
+	static constexpr size_t ctrl_bits = sizeof(size_t) * CHAR_BIT;
 
-	static constexpr uint32_t type_bits = 4;
-	static constexpr uint32_t type_mask = (static_cast<uint32_t>(1) << type_bits) - 1;
+	static constexpr size_t type_bits = 4;
+	static constexpr size_t type_mask = (static_cast<size_t>(1) << type_bits) - 1;
 
-	static constexpr uint32_t size_bits = ctrl_bits - type_bits;
-	static constexpr uint32_t size_mask = (static_cast<uint32_t>(1) << size_bits) - 1;
+	static constexpr size_t size_bits = ctrl_bits - type_bits;
+	static constexpr size_t size_mask = (static_cast<size_t>(1) << size_bits) - 1;
 
-	static constexpr uint32_t error_type                        = 0;
-	static constexpr uint32_t platform_type                     = 1;
-	static constexpr uint32_t generic_type_offset               = 2;
+	static constexpr size_t error_type                          = 0;
+	static constexpr size_t platform_type                       = 1;
+	static constexpr size_t automatic_type                      = 2;
+	static constexpr size_t generic_type_offset                 = 3;
 
 	void const* m_data;
-	uint32_t m_ctrl;
+	size_t m_ctrl;
 
 
-	static consteval uint32_t make_kind_type(network_address_kind const kind)
+	static consteval size_t make_kind_type(network_address_kind const kind)
 	{
-		return static_cast<uint32_t>(kind) + generic_type_offset;
+		return static_cast<size_t>(kind) + generic_type_offset;
 	}
 
-	static consteval uint32_t make_kind_ctrl(uint32_t const type)
+	static consteval size_t make_kind_ctrl(size_t const type)
 	{
 		return type << size_bits;
 	}
 
-	static consteval uint32_t make_kind_ctrl(network_address_kind const kind)
+	static consteval size_t make_kind_ctrl(network_address_kind const kind)
 	{
 		return make_kind_ctrl(make_kind_type(kind));
 	}
@@ -355,6 +372,11 @@ public:
 			&endpoint,
 			sizeof(endpoint),
 			make_kind_ctrl(network_address_kind::ipv6))
+	{
+	}
+
+	any_endpoint_view(automatic_endpoint const endpoint)
+		: any_endpoint_view(nullptr, static_cast<size_t>(endpoint.kind()), automatic_type)
 	{
 	}
 
@@ -408,6 +430,19 @@ public:
 		return *static_cast<ipv6_endpoint const*>(m_data);
 	}
 
+
+	[[nodiscard]] bool is_automatic_endpoint() const
+	{
+		return m_ctrl >> size_bits == automatic_type;
+	}
+
+	[[nodiscard]] automatic_endpoint get_automatic_endpoint() const
+	{
+		vsm_assert(is_automatic_endpoint()); //PRECONDITION
+		return automatic_endpoint(static_cast<network_address_kind>(m_ctrl & size_mask));
+	}
+
+
 	[[nodiscard]] bool is_platform_endpoint() const
 	{
 		return m_ctrl >> size_bits == platform_type;
@@ -421,12 +456,16 @@ public:
 			m_ctrl & size_mask);
 	}
 
+
 	[[nodiscard]] decltype(auto) visit(auto&& visitor) const
 	{
 		switch (m_ctrl >> size_bits)
 		{
 		case platform_type:
 			return vsm_forward(visitor)(get_platform_endpoint());
+
+		case automatic_type:
+			return vsm_forward(visitor)(get_automatic_endpoint());
 
 		case make_kind_type(network_address_kind::null):
 			return vsm_forward(visitor)(null_endpoint_t());
@@ -449,9 +488,9 @@ private:
 	explicit any_endpoint_view(
 		void const* const data,
 		size_t const size,
-		uint32_t const ctrl)
+		size_t const ctrl)
 		: m_data(data)
-		, m_ctrl(size > size_mask ? 0 : ctrl | static_cast<uint32_t>(size))
+		, m_ctrl(size > size_mask ? 0 : ctrl | size)
 	{
 	}
 

@@ -44,7 +44,7 @@ vsm::result<void> raw_socket_t::disconnect(
 	return socket_disconnect(unwrap_socket(h.platform_handle), socket_disconnect_rw);
 }
 
-vsm::result<size_t> raw_socket_t::stream_read(
+vsm::result<read_result> raw_socket_t::stream_read(
 	native_handle<raw_socket_t> const& h,
 	io_parameters_t<raw_socket_t, stream_read_t> const& a)
 {

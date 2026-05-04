@@ -1,15 +1,25 @@
 #pragma once
 
 #include <allio/byte_io.hpp>
+#include <allio/detail/any_endpoint_buffer.hpp>
 #include <allio/detail/handles/common_socket_base.hpp>
 #include <allio/detail/deadline.hpp>
 #include <allio/detail/handles/socket_params.hpp>
 #include <allio/detail/object.hpp>
+#include <allio/detail/optional_flags.hpp>
 #include <allio/network.hpp>
 
 #include <vsm/platform.h>
 
 namespace allio::detail {
+
+enum class disconnect_mode : uint8_t
+{
+	read                        = 1 << 1,
+	write                       = 1 << 2,
+	both                        = read | write,
+};
+vsm_flag_enum(disconnect_mode);
 
 struct connect_t
 {
@@ -45,7 +55,12 @@ struct connect_t
 struct disconnect_t
 {
 	using operation_concept = void;
-	using params_type = deadline_t;
+
+	struct params_type : deadline_t
+	{
+		optional_flags<disconnect_mode> mode;
+	};
+
 	using result_type = void;
 
 	template<object Object>
@@ -55,6 +70,27 @@ struct disconnect_t
 		requires requires { Object::disconnect(h, args); }
 	{
 		return Object::disconnect(h, args);
+	}
+};
+
+struct get_address_t
+{
+	using operation_concept = void;
+
+	struct params_type
+	{
+		any_endpoint_buffer endpoint;
+	};
+
+	using result_type = void;
+
+	template<object Object>
+	static vsm::result<void> blocking_io(
+		native_handle<Object> const& h,
+		io_parameters_t<Object, get_address_t> const& args)
+		requires requires { Object::get_address(h, args); }
+	{
+		return Object::get_address(h, args);
 	}
 };
 
@@ -87,6 +123,13 @@ struct socket_base_t : common_socket_base_t<BaseObject>
 			auto a = io_parameters_t<typename Handle::object_type, disconnect_t>();
 			(set_argument(a, vsm_forward(args)), ...);
 			return Traits::template observe<disconnect_t>(static_cast<Handle const&>(*this), a);
+		}
+
+		[[nodiscard]] auto get_address(any_endpoint_buffer const endpoint, auto&&... args) const
+		{
+			auto a = io_parameters_t<typename Handle::object_type, get_address_t>();
+			(set_argument(a, vsm_forward(args)), ...);
+			return Traits::template observe<get_address_t>(static_cast<Handle const&>(*this), a);
 		}
 	};
 };

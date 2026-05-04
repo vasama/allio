@@ -32,7 +32,7 @@ struct pipe_t : platform_object_t
 
 	static byte_io_limits get_byte_io_limits(native_handle<pipe_t> const& h);
 
-	static vsm::result<size_t> stream_read(
+	static vsm::result<read_result> stream_read(
 		native_handle<pipe_t> const& h,
 		io_parameters_t<pipe_t, stream_read_t> const& a);
 

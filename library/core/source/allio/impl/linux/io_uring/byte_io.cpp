@@ -17,8 +17,10 @@ using H = native_handle<platform_object_t> const;
 using C = io_uring_multiplexer::connector_type const;
 using S = io_uring_byte_io_state_2;
 
-template<uint8_t Opcode, typename Arguments>
-static io_result<size_t> _submit(
+// TODO: Implement greedy I/O.
+
+template<typename Result, uint8_t Opcode, typename Arguments>
+static io_result<Result> _submit(
 	M& m,
 	H& h,
 	C& c,
@@ -68,8 +70,8 @@ static io_result<size_t> _submit(
 	return vsm::unexpected(io_notify_status::submitted);
 }
 
-template<typename Arguments>
-static io_result<size_t> _notify(
+template<typename Result, typename Arguments>
+static io_result<Result> _notify(
 	M& m,
 	H& h,
 	C& c,
@@ -88,26 +90,39 @@ static io_result<size_t> _notify(
 		return vsm::unexpected(allio_error(static_cast<system_error>(-status.result)));
 	}
 
-	if (status.result == 0 && !io_buffers_is_empty(a.buffers))
+	if constexpr (std::is_same_v<Result, read_result>)
 	{
-		return vsm::unexpected(allio_error(error::end_of_stream));
+		if (status.result == 0 && !io_buffers_is_empty(a.buffers))
+		{
+			return end_of_stream;
+		}
 	}
 
 	return static_cast<size_t>(status.result);
 }
 
 
+namespace {
+
 template<typename T>
-static constexpr uint8_t select_opcode = 0;
+struct select_opcode;
 
 template<vsm::any_of<byte_io::stream_read_t, byte_io::random_read_t> T>
-static constexpr uint8_t select_opcode<T> = IORING_OP_READV;
+struct select_opcode<T>
+{
+	static constexpr uint8_t value = IORING_OP_READV;
+};
 
 template<vsm::any_of<byte_io::stream_write_t, byte_io::random_write_t> T>
-static constexpr uint8_t select_opcode<T> = IORING_OP_WRITEV;
+struct select_opcode<T>
+{
+	static constexpr uint8_t value = IORING_OP_WRITEV;
+};
+
+} // namespace
 
 template<typename Operation>
-io_result<size_t> io_uring_byte_io_state_1<Operation>::submit(
+io_result<typename Operation::result_type> io_uring_byte_io_state_1<Operation>::submit(
 	M& m,
 	H& h,
 	C& c,
@@ -115,11 +130,11 @@ io_result<size_t> io_uring_byte_io_state_1<Operation>::submit(
 	A const& a,
 	io_handler<M>& handler)
 {
-	return _submit<select_opcode<Operation>>(m, h, c, s, a, handler);
+	return _submit<R, select_opcode<Operation>::value>(m, h, c, s, a, handler);
 }
 
 template<typename Operation>
-io_result<size_t> io_uring_byte_io_state_1<Operation>::notify(
+io_result<typename Operation::result_type> io_uring_byte_io_state_1<Operation>::notify(
 	M& m,
 	H& h,
 	C& c,
@@ -128,7 +143,7 @@ io_result<size_t> io_uring_byte_io_state_1<Operation>::notify(
 	io_handler<M>& handler,
 	M::io_status_type const status)
 {
-	return _notify(m, h, c, s, a, handler, status);
+	return _notify<R>(m, h, c, s, a, handler, status);
 }
 
 void io_uring_byte_io_state_2::cancel(M& m, H const&, C const&, S& s)

@@ -12,34 +12,34 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 	auto const enter = [&](
 		stream& read_stream,
 		stream& write_stream,
-		openssl_stream& socket,
+		openssl_tunnel_state& tunnel,
 		auto const p_member,
 		auto&&... args)
 	{
-		if (socket.want_read())
+		if (tunnel.read_needed())
 		{
 			if (read_stream.empty())
 			{
 				return true;
 			}
 
-			auto const buffer = socket.get_read_buffer();
+			auto const buffer = tunnel.get_read_buffer();
 			size_t const transfer_size = std::min(buffer.size(), read_stream.size());
 			std::memcpy(buffer.data(), read_stream.data(), transfer_size);
-			socket.read_completed(transfer_size);
+			tunnel.read_completed(transfer_size);
 
 			read_stream.erase(
 				read_stream.begin(),
 				read_stream.begin() + static_cast<ptrdiff_t>(transfer_size));
 		}
 
-		auto const r = (socket.*p_member)(vsm_forward(args)...).value();
+		auto const r = (tunnel.*p_member)(vsm_forward(args)...).value();
 
-		if (socket.want_write())
+		if (tunnel.write_needed())
 		{
-			auto const buffer = socket.get_write_buffer();
+			auto const buffer = tunnel.get_write_buffer();
 			write_stream.insert(write_stream.end(), buffer.begin(), buffer.end());
-			socket.write_completed(buffer.size());
+			tunnel.write_completed(buffer.size());
 		}
 
 		return !r.has_value();
@@ -48,19 +48,19 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 	using namespace path_literals;
 	auto const server_ssl_ctx = openssl_create_server_ssl_ctx(
 		make_args<security_context_parameters>(
-			tls_certificate(allio_test_secret_path "/server-certificate.pem"_path),
-			tls_private_key(allio_test_secret_path "/server-private-key.pem"_path))).value();
+			tls_certificate = allio_test_secret_path "/server-certificate.pem"_path,
+			tls_private_key = allio_test_secret_path "/server-private-key.pem"_path)).value();
 
 	auto const client_ssl_ctx = openssl_create_client_ssl_ctx(
 		make_args<security_context_parameters>(
-			tls_peer_certificate(allio_test_secret_path "/server-certificate.pem"_path))).value();
+			tls_peer_certificate = allio_test_secret_path "/server-certificate.pem"_path)).value();
 
 
-	openssl_stream server_socket;
-	openssl_stream client_socket;
+	openssl_tunnel_state server_socket;
+	openssl_tunnel_state client_socket;
 
-	server_socket.initialize(server_ssl_ctx.get()).value();
-	client_socket.initialize(client_ssl_ctx.get()).value();
+	server_socket.initialize(tunnel_mode::server, server_ssl_ctx.get()).value();
+	client_socket.initialize(tunnel_mode::client, client_ssl_ctx.get()).value();
 
 	stream client_to_server;
 	stream server_to_client;
@@ -89,31 +89,35 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 	static constexpr size_t buffer_size = 64;
 
 	std::byte server_read_buffer[buffer_size];
-	server_socket.set_r_buffer(server_read_buffer);
+	server_socket.set_read_buffer(server_read_buffer);
 
 	std::byte server_write_buffer[buffer_size];
-	server_socket.set_w_buffer(server_write_buffer);
+	server_socket.set_write_buffer(server_write_buffer);
 
 	std::byte client_read_buffer[buffer_size];
-	client_socket.set_r_buffer(client_read_buffer);
+	client_socket.set_read_buffer(client_read_buffer);
 
 	std::byte client_write_buffer[buffer_size];
-	client_socket.set_w_buffer(client_write_buffer);
+	client_socket.set_write_buffer(client_write_buffer);
 
 
-	bool accept_pending = true;
-	bool connect_pending = true;
+	bool server_connect_pending = true;
+	bool client_connect_pending = true;
 
-	while (accept_pending || connect_pending)
+	while (server_connect_pending || client_connect_pending)
 	{
-		if (accept_pending)
+		if (server_connect_pending)
 		{
-			accept_pending = enter_server(&openssl_stream::accept);
+			server_connect_pending = enter_server(
+				&openssl_tunnel_state::connect,
+				tunnel_mode::server);
 		}
 
-		if (connect_pending)
+		if (client_connect_pending)
 		{
-			connect_pending = enter_client(&openssl_stream::connect);
+			client_connect_pending = enter_client(
+				&openssl_tunnel_state::connect,
+				tunnel_mode::client);
 		}
 	}
 
@@ -134,14 +138,14 @@ TEST_CASE("OpenSSL can asynchronously perform a TLS handshake", "[openssl]")
 		if (read_pending)
 		{
 			read_pending = enter_server(
-				&openssl_stream::read_some,
+				&openssl_tunnel_state::read_some,
 				as_read_buffer(read_buffer));
 		}
 
 		if (write_pending)
 		{
 			write_pending = enter_client(
-				&openssl_stream::write_some,
+				&openssl_tunnel_state::write_some,
 				as_write_buffer(write_buffer));
 		}
 	}

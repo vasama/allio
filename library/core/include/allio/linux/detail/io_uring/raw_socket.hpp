@@ -2,6 +2,7 @@
 
 #include <allio/detail/handles/raw_socket.hpp>
 #include <allio/linux/detail/io_uring/multiplexer.hpp>
+#include <allio/linux/detail/io_uring/raw_socket_base.hpp>
 
 namespace allio::detail {
 
@@ -50,6 +51,12 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, disconnect_t>
 };
 
 template<>
+struct async_operation<io_uring_multiplexer, raw_socket_t, get_address_t>
+	: io_uring_raw_socket_get_address<raw_socket_t>
+{
+};
+
+template<>
 struct async_operation<io_uring_multiplexer, raw_socket_t, byte_io::stream_read_t>
 	: async_extension
 	, io_uring_multiplexer::operation_type
@@ -62,8 +69,8 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, byte_io::stream_read_
 
 	M::timeout timeout;
 
-	static io_result<size_t> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
-	static io_result<size_t> notify(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);
+	static io_result<read_result> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
+	static io_result<read_result> notify(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 

@@ -59,12 +59,7 @@ using socket_error = linux::system_error;
 
 inline void close_socket(socket_type const socket)
 {
-	static_assert(vsm_os_linux, "Check close behaviour on EINTR");
-
-	if (::close(socket) == -1)
-	{
-		unrecoverable_error(allio_error(get_last_socket_error()));
-	}
+	detail::close_platform_handle(socket);
 }
 
 using unique_socket = detail::unique_handle;

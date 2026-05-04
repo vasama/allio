@@ -95,7 +95,7 @@ namespace allio::posix {
 }
 
 
-[[nodiscard]] inline void close_socket(socket_type const socket)
+inline void close_socket(socket_type const socket)
 {
 	if (::closesocket(socket) == socket_error_value)
 	{

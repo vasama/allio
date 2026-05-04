@@ -329,6 +329,7 @@ vsm_configure(
 		source/allio/impl/linux/io_uring/pipe.cpp
 		source/allio/impl/linux/io_uring/raw_datagram_socket.cpp
 		source/allio/impl/linux/io_uring/raw_listen_socket.cpp
+		source/allio/impl/linux/io_uring/raw_socket_base.cpp
 		source/allio/impl/linux/io_uring/raw_socket.cpp
 
 	TEST_SOURCES

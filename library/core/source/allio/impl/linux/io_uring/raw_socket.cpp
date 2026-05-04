@@ -177,7 +177,7 @@ using recv_t = byte_io::stream_read_t;
 using recv_s = async_operation_t<M, raw_socket_t, recv_t>;
 using recv_a = io_parameters_t<raw_socket_t, recv_t>;
 
-io_result<size_t> recv_s::submit(
+io_result<read_result> recv_s::submit(
 	M& m,
 	H const& h,
 	C const& c,
@@ -217,7 +217,7 @@ io_result<size_t> recv_s::submit(
 	return vsm::unexpected(io_notify_status::submitted);
 }
 
-io_result<size_t> recv_s::notify(
+io_result<read_result> recv_s::notify(
 	M& m,
 	H const& h,
 	C const& c,
@@ -238,7 +238,7 @@ io_result<size_t> recv_s::notify(
 
 	if (status.result == 0 && !io_buffers_is_empty(a.buffers))
 	{
-		return vsm::unexpected(allio_error(error::end_of_stream));
+		return end_of_stream;
 	}
 
 	return static_cast<size_t>(status.result);

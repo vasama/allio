@@ -223,7 +223,7 @@ private:
 						{
 							// For uniformity between Windows and POSIX, broken pipe on read is
 							// transformed into end_of_stream.
-							return vsm::unexpected(allio_error(error::end_of_stream));
+							return end_of_stream;
 						}
 					}
 
@@ -299,7 +299,8 @@ private:
 
 		if (m_state.transferred == 0)
 		{
-			return vsm::unexpected(allio_error(error::end_of_stream));
+			// TODO: Is m_state.transferred == 0 possible due to empty request buffer?
+			return end_of_stream;
 		}
 
 		return m_state.transferred;

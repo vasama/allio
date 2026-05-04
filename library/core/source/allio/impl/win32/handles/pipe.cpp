@@ -209,7 +209,7 @@ byte_io_limits pipe_t::get_byte_io_limits(native_handle<pipe_t> const& h)
 	};
 }
 
-vsm::result<size_t> pipe_t::stream_read(
+vsm::result<read_result> pipe_t::stream_read(
 	native_handle<pipe_t> const& h,
 	io_parameters_t<pipe_t, stream_read_t> const& a)
 {

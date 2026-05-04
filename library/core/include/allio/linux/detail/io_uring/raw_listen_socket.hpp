@@ -2,6 +2,7 @@
 
 #include <allio/detail/handles/raw_listen_socket.hpp>
 #include <allio/linux/detail/io_uring/multiplexer.hpp>
+#include <allio/linux/detail/io_uring/raw_socket_base.hpp>
 
 namespace allio::detail {
 
@@ -47,6 +48,12 @@ struct async_operation<io_uring_multiplexer, raw_listen_socket_t, accept_t>
 	static io_result<R> submit(M& m, H const& h, C const& c, S& s, A const& a, io_handler<M>& handler);
 	static io_result<R> notify(M& m, H const& h, C const& c, S& s, A const& a, io_handler<M>&, M::io_status_type status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
+};
+
+template<>
+struct async_operation<io_uring_multiplexer, raw_listen_socket_t, get_address_t>
+	: io_uring_raw_socket_get_address<raw_listen_socket_t>
+{
 };
 
 template<>

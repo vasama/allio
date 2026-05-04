@@ -127,7 +127,7 @@ struct file_t : fs_object_t
 		native_handle<file_t> const& h,
 		io_parameters_t<file_t, set_maximum_extent_t> const& args);
 
-	static vsm::result<size_t> stream_read(
+	static vsm::result<read_result> stream_read(
 		native_handle<file_t> const& h,
 		io_parameters_t<file_t, stream_read_t> const& args);
 

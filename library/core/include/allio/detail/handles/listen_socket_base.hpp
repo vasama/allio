@@ -1,6 +1,5 @@
 #pragma once
 
-#include <allio/detail/any_endpoint_buffer.hpp>
 #include <allio/detail/handle.hpp>
 #include <allio/detail/handles/socket_base.hpp>
 

@@ -178,33 +178,36 @@ class async_operation<M, openssl_listen_socket_t<RawListenSocket>, listen_t>
 		return {};
 	}
 
-	static io_result<void> _on_error(
+	static io_result<void> _finalize(
 		M& m,
 		H& h,
 		C& c,
 		S& s,
 		A const&,
 		io_handler<M>& handler,
-		std::error_code const e)
+		io_result<void> const& r)
 	{
-		if (h.ssl_ctx != nullptr)
+		if (!r)
 		{
-			detail::openssl_release_ssl_ctx(h.ssl_ctx);
-			h.ssl_ctx = nullptr;
-		}
-	
-		if (h.flags[object_t::flags::not_null])
-		{
-			vsm_try_void(detail::submit_io(
-				m,
-				h,
-				c,
-				s.m_raw_state.template emplace<raw_close>(e),
-				make_args<io_parameters_t<RawListenSocket, close_t>>(),
-				handler));
+			if (h.ssl_ctx != nullptr)
+			{
+				detail::openssl_release_ssl_ctx(h.ssl_ctx);
+				h.ssl_ctx = nullptr;
+			}
+
+			if (h.flags[object_t::flags::not_null])
+			{
+				vsm_try_void(detail::submit_io(
+					m,
+					h,
+					c,
+					s.m_raw_state.template emplace<raw_close>(r.error()),
+					make_args<io_parameters_t<RawListenSocket, close_t>>(),
+					handler));
+			}
 		}
 
-		return vsm::unexpected(e);
+		return r;
 	}
 
 	friend base;
@@ -246,13 +249,16 @@ class async_operation<M, openssl_listen_socket_t<RawListenSocket>, accept_t>
 	static vsm::result<void> _accept_completed(H const& h, S& s, auto&& socket)
 	{
 		// The client TLS context is created after successful raw accept.
-		vsm_try_assign(s.m_socket_h.openssl, detail::new_openssl_socket(h.ssl_ctx));
 
-		vsm_try_void(s.m_socket_h.openssl->allocate_buffers());
+		vsm_try(tunnel, detail::make_unique<openssl_tunnel_state>());
+
+		vsm_try_void(tunnel->allocate_buffers(4096, 4096));
+		vsm_try_void(tunnel->initialize(tunnel_mode::server, h.ssl_ctx));
 
 		auto [socket_h, socket_c] = socket.release();
 		static_cast<native_handle<raw_socket_object_type>&>(s.m_socket_h) = vsm_move(socket_h);
 		static_cast<async_connector_t<M, raw_socket_object_type>&>(s.m_socket_c) = vsm_move(socket_c);
+		s.m_socket_h.openssl = tunnel.release();
 
 		return {};
 	}
@@ -338,46 +344,50 @@ class async_operation<M, openssl_listen_socket_t<RawListenSocket>, accept_t>
 
 		return base::_enter(m, h, c, s, handler, [&]() -> typename base::enter_result
 		{
-			return s.m_socket_h.openssl->accept();
+			if (s.m_socket_h.openssl->is_tunnel_connected())
+			{
+				return {};
+			}
+
+			return s.m_socket_h.openssl->connect(tunnel_mode::server);
 		});
 	}
 
-	static io_result<void> _on_error(
+	static io_result<R> _finalize(
 		M& m,
 		H&,
 		C&,
 		S& s,
 		A const&,
 		io_handler<M>& handler,
-		std::error_code const e)
+		io_result<void> const& r)
 	{
-		if (s.m_socket_h.openssl != nullptr)
+		if (!r)
 		{
-			detail::delete_openssl_socket(s.m_socket_h.openssl);
-			s.m_socket_h.openssl = nullptr;
+			if (s.m_socket_h.openssl != nullptr)
+			{
+				detail::delete_object(s.m_socket_h.openssl);
+				s.m_socket_h.openssl = nullptr;
+			}
+
+			if (s.m_socket_h.flags[object_t::flags::not_null])
+			{
+				vsm_try_void(detail::submit_io(
+					m,
+					s.m_socket_h,
+					s.m_socket_c,
+					s.m_raw_state.template emplace<raw_close>(r.error()),
+					make_args<io_parameters_t<raw_socket_object_type, close_t>>(),
+					handler));
+			}
 		}
 
-		if (s.m_socket_h.flags[object_t::flags::not_null])
-		{
-			vsm_try_void(detail::submit_io(
-				m,
-				s.m_socket_h,
-				s.m_socket_c,
-				s.m_raw_state.template emplace<raw_close>(e),
-				make_args<io_parameters_t<raw_socket_object_type, close_t>>(),
-				handler));
-		}
-
-		return vsm::unexpected(e);
-	}
-
-	static io_result<R> _get_result(M& m, S& s)
-	{
-		return vsm_lazy(R(
+		return io_result<R>(
+			vsm::result_value,
 			adopt_handle_t(),
 			m,
 			vsm_move(s.m_socket_h),
-			vsm_move(s.m_socket_c)));
+			vsm_move(s.m_socket_c));
 	}
 
 	friend base;

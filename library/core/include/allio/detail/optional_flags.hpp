@@ -85,7 +85,7 @@ public:
 	}
 
 	template<std::convertible_to<T> U = T>
-	[[nodiscard]] constexpr T value_or(U&& default_value)
+	[[nodiscard]] constexpr T value_or(U&& default_value) const
 		noexcept(std::is_nothrow_convertible_v<U, T>)
 	{
 		if (m_value & flag)

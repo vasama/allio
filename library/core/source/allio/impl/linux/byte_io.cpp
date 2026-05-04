@@ -1,6 +1,7 @@
 #include <allio/impl/linux/byte_io.hpp>
 
 #include <allio/impl/byte_io_buffers.hpp>
+#include <allio/detail/byte_io_state.hpp>
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/poll.hpp>
@@ -22,17 +23,17 @@ namespace {
 static constexpr fs_size max_file_extent = std::numeric_limits<off_t>::max();
 
 template<auto Syscall, short Event, bool HandleSignal, typename Arguments>
-static vsm::result<void> do_byte_io_2(
+static vsm::result<byte_io_status> do_byte_io_2(
 	native_handle<platform_object_t> const& h,
 	Arguments const& a,
-	size_t& transferred,
+	byte_io_state& io_state,
 	std::same_as<fs_size> auto const... offset)
 {
 	static constexpr bool is_random_access = sizeof...(offset) != 0;
 
 	if (io_buffers_is_empty(a.buffers))
 	{
-		return {};
+		return byte_io_status::success;
 	}
 
 	vsm_try_void(check_io_vectors_size(a.buffers));
@@ -91,7 +92,7 @@ static vsm::result<void> do_byte_io_2(
 			fd,
 			local_io_vectors.data(),
 			vsm::truncating(local_io_vectors.size()),
-			vsm::truncating(offset + transferred)...);
+			vsm::truncating(offset + io_state.transferred())...);
 
 		if (r == -1)
 		{
@@ -110,21 +111,21 @@ static vsm::result<void> do_byte_io_2(
 
 		if (r == 0)
 		{
-			return vsm::unexpected(allio_error(error::end_of_stream));
+			return byte_io_status::end_of_stream;
 		}
 
 		size_t local_transferred = static_cast<size_t>(r);
-		transferred += local_transferred;
+		io_state.transfer_completed(local_transferred);
 
 		if (vsm::no_flags(a.flags, io_flags::greedy_byte_io))
 		{
-			return {};
+			return byte_io_status::success;
 		}
 
 		if constexpr (is_random_access)
 		{
 			//TODO: Figure this one out...
-			if (a.offset >= max_file_extent - transferred)
+			if (a.offset >= max_file_extent - io_state.transferred())
 			{
 				return vsm::unexpected(allio_error(error::invariant_violation));
 			}
@@ -134,7 +135,7 @@ static vsm::result<void> do_byte_io_2(
 		{
 			if (io_vectors.empty())
 			{
-				return {};
+				return byte_io_status::success;
 			}
 
 			size_t io_vector_size = io_vectors.front().iov_len;
@@ -157,14 +158,14 @@ static vsm::result<void> do_byte_io_2(
 		}
 	}
 
-	return {};
+	return byte_io_status::success;
 }
 
 template<auto Syscall, short Event, bool HandleSignal, typename Arguments>
-static vsm::result<void> do_byte_io_1(
+static vsm::result<byte_io_status> do_byte_io_1(
 	native_handle<platform_object_t> const& h,
 	Arguments const& a,
-	size_t& transferred)
+	byte_io_state& io_state)
 {
 	if constexpr (requires { a.offset; })
 	{
@@ -173,29 +174,21 @@ static vsm::result<void> do_byte_io_1(
 			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
 
-		return do_byte_io_2<Syscall, Event, HandleSignal>(h, a, transferred, a.offset);
+		return do_byte_io_2<Syscall, Event, HandleSignal>(h, a, io_state, a.offset);
 	}
 	else
 	{
-		return do_byte_io_2<Syscall, Event, HandleSignal>(h, a, transferred);
+		return do_byte_io_2<Syscall, Event, HandleSignal>(h, a, io_state);
 	}
 }
 
-template<auto Syscall, short Event, bool HandleSignal = false, typename Arguments>
-static vsm::result<size_t> do_byte_io(native_handle<platform_object_t> const& h, Arguments const& a)
+template<typename Result, auto Syscall, short Event, bool HandleSignal = false, typename Arguments>
+static vsm::result<Result> do_byte_io(native_handle<platform_object_t> const& h, Arguments const& a)
 {
-	size_t transferred = 0;
-
-	if (auto const r = do_byte_io_1<Syscall, Event, HandleSignal>(h, a, transferred); !r)
-	{
-		// The error is ignored if some data was transferred and greedy I/O was not requested.
-		if (transferred == 0 || vsm::any_flags(a.flags, io_flags::greedy_byte_io))
-		{
-			return vsm::unexpected(r.error());
-		}
-	}
-
-	return transferred;
+	byte_io_state io_state = {};
+	return io_state.finalize<Result>(
+		a,
+		do_byte_io_1<Syscall, Event, HandleSignal>(h, a, io_state));
 }
 
 } // namespace
@@ -204,33 +197,33 @@ vsm::result<size_t> linux::random_read(
 	detail::native_handle<platform_object_t> const& h,
 	detail::byte_io::random_parameters_t<std::byte> const& a)
 {
-	return do_byte_io<preadv, POLLIN>(h, a);
+	return do_byte_io<size_t, preadv, POLLIN>(h, a);
 }
 
 vsm::result<size_t> linux::random_write(
 	detail::native_handle<platform_object_t> const& h,
 	detail::byte_io::random_parameters_t<std::byte const> const& a)
 {
-	return do_byte_io<pwritev, POLLOUT>(h, a);
+	return do_byte_io<size_t, pwritev, POLLOUT>(h, a);
 }
 
-vsm::result<size_t> linux::stream_read(
+vsm::result<read_result> linux::stream_read(
 	detail::native_handle<platform_object_t> const& h,
 	detail::byte_io::stream_parameters_t<std::byte> const& a)
 {
-	return do_byte_io<readv, POLLIN>(h, a);
+	return do_byte_io<read_result, readv, POLLIN>(h, a);
 }
 
 vsm::result<size_t> linux::stream_write(
 	detail::native_handle<platform_object_t> const& h,
 	detail::byte_io::stream_parameters_t<std::byte const> const& a)
 {
-	return do_byte_io<writev, POLLOUT>(h, a);
+	return do_byte_io<size_t, writev, POLLOUT>(h, a);
 }
 
 vsm::result<size_t> linux::stream_write_no_signal(
 	detail::native_handle<platform_object_t> const& h,
 	detail::byte_io::stream_parameters_t<std::byte const> const& a)
 {
-	return do_byte_io<writev, POLLOUT, /* HandleSignal: */ true>(h, a);
+	return do_byte_io<size_t, writev, POLLOUT, /* HandleSignal: */ true>(h, a);
 }

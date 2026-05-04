@@ -181,7 +181,7 @@ vsm::result<void> raw_socket_t::disconnect(
 	}
 }
 
-vsm::result<size_t> raw_socket_t::stream_read(
+vsm::result<read_result> raw_socket_t::stream_read(
 	native_handle<raw_socket_t> const& h,
 	io_parameters_t<raw_socket_t, stream_read_t> const& a)
 {
@@ -227,7 +227,7 @@ vsm::result<size_t> raw_socket_t::stream_read(
 
 	if (transferred == 0 && !io_buffers_is_empty(a.buffers))
 	{
-		return vsm::unexpected(allio_error(error::end_of_stream));
+		return end_of_stream;
 	}
 
 	return transferred;

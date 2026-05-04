@@ -9,9 +9,6 @@
 
 #include <variant>
 
-// TODO: Debugging
-inline bool enable_debug;
-
 namespace allio::detail {
 
 class a_s2n_socket_security_context : public a_s2n_security_context
@@ -240,17 +237,11 @@ protected:
 					rw_args,
 					handler);
 
-				if (enable_debug) {
-					fprintf(stderr, "%p submitted raw w ...", &s);
-					getchar();
-				}
 				if (detail::get_io_notify_status(r) == io_notify_status::submitted)
 				{
 					return vsm::unexpected(r.error());
 				}
 
-				if (enable_debug)
-					fprintf(stderr, "%p completed raw w (%zu) (synchronously)\n", &s, r.value());
 				rw_h.s2n->write_completed(r);
 			}
 
@@ -267,17 +258,11 @@ protected:
 					rw_args,
 					handler);
 
-				if (enable_debug) {
-					fprintf(stderr, "%p submitted raw r ...\n", &s);
-					getchar();
-				}
 				if (detail::get_io_notify_status(r) == io_notify_status::submitted)
 				{
 					return vsm::unexpected(r.error());
 				}
 
-				if (enable_debug)
-					fprintf(stderr, "%p completed raw r (%zu) (synchronously)\n", &s, r.value());
 				rw_h.s2n->read_completed(r);
 			}
 
@@ -339,13 +324,6 @@ protected:
 			return vsm::unexpected(r.error());
 		}
 
-		if (enable_debug) {
-			if (r) {
-				fprintf(stderr, "%p completed raw r (%zu)\n", &s, r.value());
-			} else {
-				fprintf(stderr, "%p completed raw r (%s)\n", &s, r.error().message().c_str());
-			}
-		}
 		rw_h.s2n->read_completed(r);
 
 		return {};
@@ -381,13 +359,6 @@ protected:
 			return vsm::unexpected(r.error());
 		}
 
-		if (enable_debug) {
-			if (r) {
-				fprintf(stderr, "%p completed raw w (%zu)\n", &s, r.value());
-			} else {
-				fprintf(stderr, "%p completed raw w (%s)\n", &s, r.error().message().c_str());
-			}
-		}
 		rw_h.s2n->write_completed(r);
 
 		return {};
@@ -591,8 +562,6 @@ class async_operation<M, a_s2n_socket_t<RawSocket>, disconnect_t>
 
 	static io_result<void> _submit(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler)
 	{
-		if (enable_debug)
-			fprintf(stderr, "%p submitted connection disconnect (%p)\n", &s, h.s2n);
 		vsm_assert(h.s2n != nullptr);
 
 		return {};
@@ -610,8 +579,6 @@ class async_operation<M, a_s2n_socket_t<RawSocket>, disconnect_t>
 			return h.s2n->disconnect();
 		}));
 
-		if (enable_debug)
-			fprintf(stderr, "%p submitted raw disconnect\n", &s);
 		return detail::submit_io(
 			m,
 			h,
@@ -642,15 +609,6 @@ class async_operation<M, a_s2n_socket_t<RawSocket>, disconnect_t>
 			handler,
 			vsm_move(status));
 
-		if (enable_debug) {
-			if (detail::get_io_notify_status(r) != io_notify_status::submitted) {
-				if (r) {
-					fprintf(stderr, "%p completed raw disconnect\n", &s);
-				} else {
-					fprintf(stderr, "%p completed raw disconnect (%s)\n", &s, r.error().message().c_str());
-				}
-			}
-		}
 		return r;
 	}
 
@@ -689,18 +647,6 @@ class async_operation<M, a_s2n_socket_t<RawSocket>, Operation>
 
 	static io_result<void> _submit(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler)
 	{
-		if (enable_debug)
-		{
-			if constexpr (std::is_same_v<Operation, byte_io::stream_read_t>)
-			{
-				fprintf(stderr, "%p submitted connection read       (%p)\n", &s, h.s2n);
-			}
-			else
-			{
-				fprintf(stderr, "%p submitted connection write      (%p)\n", &s, h.s2n);
-			}
-		}
-
 		s.buffer_index = 0;
 		s.buffer_offset = 0;
 		s.transferred = 0;

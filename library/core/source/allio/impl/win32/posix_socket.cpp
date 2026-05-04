@@ -234,7 +234,7 @@ vsm::result<void> posix::socket_set_non_blocking(
 	return {};
 }
 
-vsm::result<size_t> posix::socket_scatter_read(
+vsm::result<read_result> posix::socket_scatter_read(
 	socket_type const socket,
 	new_read_buffers const buffers)
 {
@@ -260,7 +260,7 @@ vsm::result<size_t> posix::socket_scatter_read(
 
 	if (transferred == 0 && !io_buffers_is_empty(buffers))
 	{
-		return vsm::unexpected(allio_error(error::end_of_stream));
+		return end_of_stream;
 	}
 
 	return transferred;

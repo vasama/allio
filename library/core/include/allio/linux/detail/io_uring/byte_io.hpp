@@ -21,9 +21,10 @@ struct io_uring_byte_io_state_2
 template<typename Operation>
 struct io_uring_byte_io_state_1 : io_uring_byte_io_state_2
 {
+	using R = typename Operation::result_type;
 	using A = typename Operation::params_type;
 
-	static io_result<size_t> submit(
+	static io_result<R> submit(
 		M& m,
 		H& h,
 		C& c,
@@ -31,7 +32,7 @@ struct io_uring_byte_io_state_1 : io_uring_byte_io_state_2
 		A const& a,
 		io_handler<M>& handler);
 
-	static io_result<size_t> notify(
+	static io_result<R> notify(
 		M& m,
 		H& h,
 		C& c,

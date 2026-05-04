@@ -145,7 +145,7 @@ vsm::result<void> file_t::set_maximum_extent(
 	return {};
 }
 
-vsm::result<size_t> file_t::stream_read(
+vsm::result<read_result> file_t::stream_read(
 	native_handle<file_t> const& h,
 	io_parameters_t<file_t, stream_read_t> const& a)
 {

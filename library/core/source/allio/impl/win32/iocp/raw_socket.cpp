@@ -217,26 +217,26 @@ static size_t get_transfer_result(H const& h, M::overlapped& overlapped)
 	return transferred;
 }
 
-using read_t = raw_socket_t::stream_read_t;
-using read_s = async_operation_t<M, raw_socket_t, read_t>;
-using read_a = io_parameters_t<raw_socket_t, read_t>;
+using recv_t = raw_socket_t::stream_read_t;
+using recv_s = async_operation_t<M, raw_socket_t, recv_t>;
+using recv_a = io_parameters_t<raw_socket_t, recv_t>;
 
-static vsm::result<size_t> get_read_transferred(read_a const& a, size_t const transferred)
+static vsm::result<read_result> get_read_transferred(recv_a const& a, size_t const transferred)
 {
 	if (transferred == 0 && !io_buffers_is_empty(a.buffers))
 	{
-		return vsm::unexpected(allio_error(error::end_of_stream));
+		return end_of_stream;
 	}
 
 	return transferred;
 }
 
-io_result<size_t> read_s::submit(
+io_result<read_result> recv_s::submit(
 	M& m,
 	H const& h,
 	C const&,
-	read_s& s,
-	read_a const& a,
+	recv_s& s,
+	recv_a const& a,
 	io_handler<M>& handler)
 {
 	vsm_try_void(check_wsa_buffers_size<DWORD>(a.buffers));
@@ -281,12 +281,12 @@ io_result<size_t> read_s::submit(
 	return vsm::unexpected(io_notify_status::submitted);
 }
 
-io_result<size_t> read_s::notify(
+io_result<read_result> recv_s::notify(
 	M&,
 	H const& h,
 	C const&,
-	read_s& s,
-	read_a const& a,
+	recv_s& s,
+	recv_a const& a,
 	io_handler<M>& handler,
 	M::io_status_type const status)
 {
@@ -302,22 +302,22 @@ io_result<size_t> read_s::notify(
 	return get_read_transferred(a, get_transfer_result(h, s.overlapped));
 }
 
-void read_s::cancel(M&, H const& h, C const&, read_s& s)
+void recv_s::cancel(M&, H const& h, C const&, recv_s& s)
 {
 	cancel_socket_io(posix::unwrap_socket(h.platform_handle), *s.overlapped);
 }
 
 
-using write_t = raw_socket_t::stream_write_t;
-using write_s = async_operation_t<M, raw_socket_t, write_t>;
-using write_a = io_parameters_t<raw_socket_t, write_t>;
+using send_t = raw_socket_t::stream_write_t;
+using send_s = async_operation_t<M, raw_socket_t, send_t>;
+using send_a = io_parameters_t<raw_socket_t, send_t>;
 
-io_result<size_t> write_s::submit(
+io_result<size_t> send_s::submit(
 	M& m,
 	H const& h,
 	C const&,
-	write_s& s,
-	write_a const& a,
+	send_s& s,
+	send_a const& a,
 	io_handler<M>& handler)
 {
 	vsm_try_void(check_wsa_buffers_size<DWORD>(a.buffers));
@@ -360,12 +360,12 @@ io_result<size_t> write_s::submit(
 	return vsm::unexpected(io_notify_status::submitted);
 }
 
-io_result<size_t> write_s::notify(
+io_result<size_t> send_s::notify(
 	M&,
 	H const& h,
 	C const&,
-	write_s& s,
-	write_a const&,
+	send_s& s,
+	send_a const&,
 	io_handler<M>& handler,
 	M::io_status_type const status)
 {
@@ -381,7 +381,7 @@ io_result<size_t> write_s::notify(
 	return get_transfer_result(h, s.overlapped);
 }
 
-void write_s::cancel(M&, H const& h, C const&, write_s& s)
+void send_s::cancel(M&, H const& h, C const&, send_s& s)
 {
 	cancel_socket_io(posix::unwrap_socket(h.platform_handle), *s.overlapped);
 }

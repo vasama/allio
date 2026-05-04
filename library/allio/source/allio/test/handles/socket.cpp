@@ -3,6 +3,7 @@
 #include <allio/senders/raw_listen_socket.hpp>
 #include <allio/senders/raw_socket.hpp>
 
+#include <allio/byte_io.hpp>
 #include <allio/handles/object.hpp>
 #include <allio/senders/sync_wait.hpp>
 #include <allio/senders/task.hpp>
@@ -77,10 +78,7 @@ TEST_CASE("Blocking stream sockets can exchange data", "[socket][blocking]")
 	// The server can no longer read after client disconnect:
 	{
 		signed char value = 0;
-		REQUIRE_THROWS_MATCHES(
-			server_socket.read_some(as_read_buffer(&value, 1), deadline::instant()),
-			std::system_error,
-			match_error(error::end_of_stream));
+		REQUIRE(server_socket.read_some(as_read_buffer(&value, 1)) == end_of_stream);
 	}
 }
 
@@ -124,7 +122,7 @@ TEST_CASE("Stream socket can be connected asynchronously", "[socket][senders]")
 		REQUIRE(ws == 1);
 
 		signed char reply_data;
-		size_t const rs = co_await socket.read_some(as_read_buffer(&reply_data, 1));
+		auto const rs = co_await socket.read_some(as_read_buffer(&reply_data, 1));
 		REQUIRE(rs == 1);
 
 		REQUIRE(reply_data == -request_data);
@@ -168,22 +166,16 @@ TEST_CASE("Stream socket can be accepted asynchronously", "[socket][senders]")
 		auto const socket = co_await listen_socket.accept();
 
 		signed char request_data = 0;
-		size_t const rs = co_await socket.read_some(as_read_buffer(&request_data, 1));
+		auto const rs = co_await socket.read_some(as_read_buffer(&request_data, 1));
 		REQUIRE(rs == 1);
 
 		signed char const reply_data = -request_data;
 		size_t const ws = co_await socket.write_some(as_write_buffer(&reply_data, 1));
 		REQUIRE(ws == 1);
 
-		allio_test_catch_exception(
-			exception,
-			co_await socket.read_some(as_read_buffer(&request_data, 1)));
-
 		// Any further read should result in an error:
-		REQUIRE_THROWS_MATCHES(
-			test::rethrow_exception(exception),
-			std::system_error,
-			match_error(error::end_of_stream));
+		auto const rs_eof = co_await socket.read_some(as_read_buffer(&request_data, 1));
+		REQUIRE(rs_eof == end_of_stream);
 	};
 
 	senders::sync_wait(multiplexer, server_task());
@@ -229,7 +221,7 @@ TEST_CASE("Asynchronous stream sockets can exchange data", "[socket][async]")
 
 			// Wait for a request from the client:
 			signed char request_data;
-			size_t const rs = co_await socket.read_some(as_read_buffer(&request_data, 1));
+			auto const rs = co_await socket.read_some(as_read_buffer(&request_data, 1));
 			REQUIRE(rs == 1);
 
 			// Send a reply to the client:
@@ -238,23 +230,8 @@ TEST_CASE("Asynchronous stream sockets can exchange data", "[socket][async]")
 			REQUIRE(ws == 1);
 
 			// Any further read should result in an error:
-			{
-				#if 0 // TODO: Why was this song and dance required?
-				allio_test_catch_exception(
-					exception,
-					co_await socket.read_some(as_read_buffer(&request_data, 1)));
-
-				REQUIRE_THROWS_MATCHES(
-					test::rethrow_exception(exception),
-					std::system_error,
-					match_error(error::end_of_stream));
-				#endif
-			}
-
-			REQUIRE_THROWS_MATCHES(
-				co_await socket.read_some(as_read_buffer(&request_data, 1)),
-				std::system_error,
-				match_error(error::end_of_stream));
+			auto const rs_eof = co_await socket.read_some(as_read_buffer(&request_data, 1));
+			REQUIRE(rs_eof == end_of_stream);
 
 			co_await socket.disconnect();
 		};
@@ -287,7 +264,7 @@ TEST_CASE("Asynchronous stream sockets can exchange data", "[socket][async]")
 
 			// Wait for a reply from the server:
 			signed char reply_data;
-			size_t const rs = co_await socket.read_some(as_read_buffer(&reply_data, 1));
+			auto const rs = co_await socket.read_some(as_read_buffer(&reply_data, 1));
 			REQUIRE(rs == 1);
 
 			REQUIRE(reply_data == -42);

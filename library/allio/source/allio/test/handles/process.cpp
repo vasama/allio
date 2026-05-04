@@ -204,10 +204,11 @@ TEST_CASE("Child stdout can be redirected", "[process][pipe][multi_process]")
 
 	char output_data[input_data.size() + 1];
 
-	size_t const output_size = pipe.read_pipe.read_some(
+	auto const output_size = pipe.read_pipe.read_some(
 		as_read_buffer(output_data, std::size(output_data)));
 
-	REQUIRE(std::string_view(output_data, output_size) == "input data\n");
+	REQUIRE(output_size);
+	REQUIRE(std::string_view(output_data, output_size.size()) == "input data\n");
 }
 
 TEST_CASE("Child stderr can be redirected", "[process][pipe][multi_process]")
@@ -229,10 +230,11 @@ TEST_CASE("Child stderr can be redirected", "[process][pipe][multi_process]")
 
 	char output_data[input_data.size() + 1];
 
-	size_t const output_size = pipe.read_pipe.read_some(
+	auto const output_size = pipe.read_pipe.read_some(
 		as_read_buffer(output_data, std::size(output_data)));
 
-	REQUIRE(std::string_view(output_data, output_size) == "input data\n");
+	REQUIRE(output_size);
+	REQUIRE(std::string_view(output_data, output_size.size()) == "input data\n");
 }
 
 TEST_CASE("Child process can be terminated", "[process][multi_process]")

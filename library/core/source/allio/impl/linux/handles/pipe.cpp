@@ -69,7 +69,7 @@ vsm::result<void> pipe_pair_t::create_pair(
 	return {};
 }
 
-vsm::result<size_t> pipe_t::stream_read(
+vsm::result<read_result> pipe_t::stream_read(
 	native_handle<pipe_t> const& h,
 	io_parameters_t<pipe_t, stream_read_t> const& a)
 {

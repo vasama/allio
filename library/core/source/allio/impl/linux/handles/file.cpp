@@ -73,7 +73,7 @@ vsm::result<fs_size> file_t::get_maximum_extent(
 	return static_cast<fs_size>(data.st_size);
 }
 
-vsm::result<size_t> file_t::stream_read(
+vsm::result<read_result> file_t::stream_read(
 	native_handle<file_t> const& h,
 	io_parameters_t<file_t, stream_read_t> const& a)
 {

@@ -36,7 +36,7 @@ static native_handle<platform_object_t> make_std_platform_handle(
 	};
 }
 
-vsm::result<size_t> standard_stream_t::stream_read(
+vsm::result<read_result> standard_stream_t::stream_read(
 	native_handle<standard_stream_t> const& h,
 	io_parameters_t<standard_stream_t, stream_read_t> const& args)
 {

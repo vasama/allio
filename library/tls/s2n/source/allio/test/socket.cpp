@@ -67,10 +67,8 @@ TEST_CASE("Blocking s2n stream sockets can exchange data", "[s2n][socket][blocki
 
 	client_socket.disconnect();
 
-	REQUIRE_THROWS_MATCHES(
-		server_socket.read_some(as_read_buffer(read_buffer)),
-		std::system_error,
-		match_error(error::end_of_stream));
+	// The server can no longer read after client disconnect:
+	REQUIRE(server_socket.read_some(as_read_buffer(read_buffer)) == end_of_stream);
 }
 
 TEST_CASE("Asynchronous s2n stream sockets can exchange data", "[s2n][socket][senders]")
@@ -79,7 +77,6 @@ TEST_CASE("Asynchronous s2n stream sockets can exchange data", "[s2n][socket][se
 
 	auto multiplexer = default_multiplexer::create().value();
 
-	//enable_debug = true;
 	auto const combined_task = []() -> task<void>
 	{
 		auto const endpoint = test::generate_endpoint();
@@ -95,7 +92,7 @@ TEST_CASE("Asynchronous s2n stream sockets can exchange data", "[s2n][socket][se
 
 			// Wait for a request from the client:
 			signed char request_data;
-			size_t const rs = co_await socket.read_some(as_read_buffer(&request_data, 1));
+			auto const rs = co_await socket.read_some(as_read_buffer(&request_data, 1));
 			REQUIRE(rs == 1);
 
 			// Send a reply to the client:
@@ -103,10 +100,8 @@ TEST_CASE("Asynchronous s2n stream sockets can exchange data", "[s2n][socket][se
 			size_t const ws = co_await socket.write_some(as_write_buffer(&reply_data, 1));
 			REQUIRE(ws == 1);
 
-			REQUIRE_THROWS_MATCHES(
-				co_await socket.read_some(as_read_buffer(&request_data, 1)),
-				std::system_error,
-				match_error(error::end_of_stream));
+			auto const rs_eof = co_await socket.read_some(as_read_buffer(&request_data, 1));
+			REQUIRE(rs_eof == end_of_stream);
 
 			co_await socket.disconnect();
 		};
