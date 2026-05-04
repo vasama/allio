@@ -91,7 +91,8 @@ TEST_CASE("WSA asynchronous connect and accept", "[windows][wsa][socket][async]"
 		completion_port.get(),
 		/* key_context: */ nullptr).value();
 
-	posix::socket_listen(listen_socket.get(), addr, 0).value();
+	posix::socket_bind(listen_socket.get(), addr).value();
+	posix::socket_listen(listen_socket.get(), /* backlog: */ 0).value();
 
 	auto const server_socket = create_socket();
 	wsa_accept_address_storage accept_addr;
@@ -176,7 +177,9 @@ TEST_CASE("WSA asynchronous unix connect and accept", "[windows][wsa][socket][as
 	// Accept
 
 	auto const listen_socket = create_socket();
-	posix::socket_listen(listen_socket.get(), addr, 1).value();
+
+	posix::socket_bind(listen_socket.get(), addr).value();
+	posix::socket_listen(listen_socket.get(), /* backlog: */ 1).value();
 
 	auto const server_socket = create_socket();
 	wsa_accept_address_storage accept_addr;
@@ -500,7 +503,8 @@ TEST_CASE("WSA RIO", "[windows][wsa][rio]")
 			completion_port.get(),
 			/* key_context: */ nullptr).value();
 
-		posix::socket_listen(listen_socket.get(), addr, 0).value();
+		posix::socket_bind(listen_socket.get(), addr).value();
+		posix::socket_listen(listen_socket.get(), /* backlog: */ 0).value();
 
 		server_socket = create_socket();
 		wsa_accept_address_storage accept_addr;

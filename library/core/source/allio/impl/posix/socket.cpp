@@ -325,17 +325,11 @@ vsm::result<socket_address> socket_address::get(socket_type const socket)
 }
 
 
-vsm::result<void> posix::socket_listen(
-	socket_type const socket,
-	socket_address_view const addr,
-	uint32_t const _backlog)
+vsm::result<void> posix::socket_listen(socket_type const socket, uint32_t const _backlog)
 {
 	int const backlog = _backlog == 0
 		? SOMAXCONN
 		: vsm::saturate<int>(_backlog);
-
-	//TODO: Separate bind.
-	vsm_try_void(socket_bind(socket, addr));
 
 	if (::listen(socket, backlog) == socket_error_value)
 	{

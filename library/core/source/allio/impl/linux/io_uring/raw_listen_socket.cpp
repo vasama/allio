@@ -41,10 +41,8 @@ io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s&, listen_a const& a,
 	// The POSIX implementation doesn't have any socket flags.
 	vsm_assert(flags == handle_flags::none);
 
-	vsm_try_void(posix::socket_listen(
-		socket.get(),
-		addr,
-		a.backlog));
+	vsm_try_void(posix::socket_bind(socket.get(), addr));
+	vsm_try_void(posix::socket_listen(socket.get(), a.backlog));
 
 	vsm_try_void(m.attach_fd(socket.get(), c));
 

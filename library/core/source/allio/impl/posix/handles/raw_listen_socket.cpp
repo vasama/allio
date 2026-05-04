@@ -26,10 +26,8 @@ vsm::result<void> raw_listen_socket_t::listen(
 		protocol,
 		a.flags));
 
-	vsm_try_void(socket_listen(
-		socket.get(),
-		addr,
-		a.backlog));
+	vsm_try_void(socket_bind(socket.get(), addr));
+	vsm_try_void(socket_listen(socket.get(), a.backlog));
 
 	h.flags = flags::not_null | set_address_family(addr.addr->sa_family) | flags;
 	h.platform_handle = wrap_socket(socket.release());

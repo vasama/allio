@@ -224,10 +224,7 @@ struct socket_with_flags
 	return socket_bind(socket, addr.addr, addr.size);
 }
 
-[[nodiscard]] vsm::result<void> socket_listen(
-	socket_type socket,
-	socket_address_view addr,
-	uint32_t backlog);
+[[nodiscard]] vsm::result<void> socket_listen(socket_type socket, uint32_t backlog);
 
 [[nodiscard]] vsm::result<socket_with_flags> socket_accept(
 	socket_type listen_socket,

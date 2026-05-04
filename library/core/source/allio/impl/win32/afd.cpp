@@ -47,10 +47,8 @@ static test::future<posix::unique_socket> spawn_accept(posix::socket_address con
 		IPPROTO_TCP,
 		io_flags::none).value().socket;
 
-	posix::socket_listen(
-		socket.get(),
-		addr,
-		/* backlog: */ 0).value();
+	posix::socket_bind(socket.get(), addr).value();
+	posix::socket_listen(socket.get(), /* backlog: */ 0).value();
 
 	return test::spawn([socket = vsm_move(socket)]()
 	{
