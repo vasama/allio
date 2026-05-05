@@ -42,7 +42,11 @@ io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s& s, listen_a const& 
 		protocol,
 		a.flags));
 
-	vsm_try_void(posix::socket_bind(socket.get(), addr));
+	if (posix::requires_explicit_bind(*addr.addr, addr.size))
+	{
+		vsm_try_void(posix::socket_bind(socket.get(), addr));
+	}
+
 	vsm_try_void(posix::socket_listen(socket.get(), a.backlog));
 
 	vsm_try_void(m.attach_platform_handle(posix::wrap_socket(socket.get()), c));
@@ -106,7 +110,7 @@ static io_result<socket_handle_type> handle_accept_completion(
 	socket_handle_type::connector_type c;
 	vsm_try_void(m.attach_platform_handle(s.socket.get(), c));
 
-	int const address_family = posix::get_address_family(h.flags);
+	sa_family_t const address_family = posix::get_address_family(h.flags);
 	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
 
 	if (a.endpoint && a.endpoint.is_platform_endpoint() && extension.has_object())
@@ -147,7 +151,7 @@ io_result<socket_handle_type> accept_s::submit(
 
 	SOCKET const listen_socket = posix::unwrap_socket(h.platform_handle);
 
-	int const address_family = posix::get_address_family(h.flags);
+	sa_family_t const address_family = posix::get_address_family(h.flags);
 	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
 	size_t const min_address_storage_size = max_address_size + 16;
 	vsm_assert(min_address_storage_size <= sizeof(wsa_accept_address_storage));

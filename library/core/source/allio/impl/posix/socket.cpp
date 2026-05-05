@@ -30,6 +30,14 @@ static To ipv6_network_byte_order(From const& addr)
 }
 
 static vsm::result<socket_address_size_type> set_socket_address(
+	socket_address_abstract& addr,
+	sa_family_t const family)
+{
+	addr.family = family;
+	return sizeof(addr);
+}
+
+static vsm::result<socket_address_size_type> set_socket_address(
 	sockaddr_un& addr,
 	path_view const path)
 {
@@ -139,6 +147,9 @@ static vsm::result<socket_address_view> get_socket_address_2(
 	auto const& endpoint,
 	storage_provider_ref const storage_provider)
 {
+	// TODO: Why is the address size stored in the allocation? Is this a relic that is no longer
+	//       needed now that socket_address_view stores the size separately?
+
 	using socket_address_type = basic_socket_address<SocketAddress>;
 
 	vsm_try(storage, storage_provider.get_storage(
@@ -198,7 +209,8 @@ static vsm::result<socket_address_view> get_socket_address_1(
 	automatic_endpoint const endpoint,
 	storage_provider_ref const storage_provider)
 {
-	return vsm::unexpected(allio_error(error::invalid_argument));
+	vsm_try(family, get_address_family(endpoint.kind()));
+	return get_socket_address_2<socket_address_abstract>(family, storage_provider);
 }
 
 static vsm::result<socket_address_view> get_socket_address_1(

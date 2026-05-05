@@ -17,7 +17,7 @@ namespace allio::posix {
 }
 #endif
 
-[[nodiscard]] inline detail::handle_flags set_address_family(int const address_family)
+[[nodiscard]] inline detail::handle_flags set_address_family(sa_family_t const address_family)
 {
 	detail::handle_flags flags = detail::handle_flags::none;
 
@@ -44,7 +44,7 @@ namespace allio::posix {
 	return flags;
 }
 
-[[nodiscard]] inline int get_address_family(detail::handle_flags const flags)
+[[nodiscard]] inline sa_family_t get_address_family(detail::handle_flags const flags)
 {
 	if (flags[detail::raw_common_socket_base_t::flags::address_family_1])
 	{

@@ -145,6 +145,47 @@ vsm::result<void> file_t::set_maximum_extent(
 	return {};
 }
 
+vsm::result<void> file_t::barrier(
+	native_handle<file_t> const& h,
+	io_parameters_t<file_t, barrier_t> const& a)
+{
+	ULONG flags = 0;
+
+	switch (a.kind)
+	{
+	case barrier_kind::none:
+	case barrier_kind::full:
+		break;
+
+	case barrier_kind::data:
+		flags = FLUSH_FLAGS_FILE_DATA_SYNC_ONLY;
+		break;
+	}
+
+	IO_STATUS_BLOCK io_status_block;
+	NTSTATUS status = NtFlushBuffersFileEx(
+		unwrap_handle(h.platform_handle),
+		flags,
+		/* Parameters: */ nullptr,
+		/* ParametersSize: */ 0,
+		&io_status_block);
+
+	if (status == STATUS_PENDING)
+	{
+		status = event.wait_for_io(
+			handle,
+			io_status_block,
+			relative_deadline);
+	}
+
+	if (!NT_SUCCESS(status))
+	{
+		return vsm::unexpected(static_cast<kernel_error>(status));
+	}
+
+	return {};
+}
+
 vsm::result<read_result> file_t::stream_read(
 	native_handle<file_t> const& h,
 	io_parameters_t<file_t, stream_read_t> const& a)

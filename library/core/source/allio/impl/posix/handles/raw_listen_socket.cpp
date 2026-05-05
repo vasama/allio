@@ -26,7 +26,11 @@ vsm::result<void> raw_listen_socket_t::listen(
 		protocol,
 		a.flags));
 
-	vsm_try_void(socket_bind(socket.get(), addr));
+	if (requires_explicit_bind(*addr.addr, addr.size))
+	{
+		vsm_try_void(socket_bind(socket.get(), addr));
+	}
+
 	vsm_try_void(socket_listen(socket.get(), a.backlog));
 
 	h.flags = flags::not_null | set_address_family(addr.addr->sa_family) | flags;
@@ -39,7 +43,7 @@ vsm::result<socket_handle_type> raw_listen_socket_t::accept(
 	native_handle<raw_listen_socket_t> const& h,
 	io_parameters_t<raw_listen_socket_t, accept_t> const& a)
 {
-	int const address_family = posix::get_address_family(h.flags);
+	sa_family_t const address_family = posix::get_address_family(h.flags);
 	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
 
 	void* user_address_storage = nullptr;

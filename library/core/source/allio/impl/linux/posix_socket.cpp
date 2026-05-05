@@ -16,7 +16,7 @@ using namespace allio::posix;
 using namespace allio::linux;
 
 vsm::result<socket_with_flags> posix::create_socket(
-	int const address_family,
+	sa_family_t const address_family,
 	int type,
 	int const protocol,
 	io_flags const flags)
@@ -40,6 +40,19 @@ vsm::result<socket_with_flags> posix::create_socket(
 	{
 		.socket = unique_socket(socket),
 	});
+}
+
+[[nodiscard]] vsm::result<void> posix::socket_bind(
+	socket_type const socket,
+	sockaddr const* const addr,
+	socket_address_size_type const size)
+{
+	if (::bind(socket, addr, size) == -1)
+	{
+		return vsm::unexpected(allio_error(get_last_socket_error()));
+	}
+
+	return {};
 }
 
 vsm::result<socket_with_flags> posix::socket_accept(

@@ -41,7 +41,11 @@ io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s&, listen_a const& a,
 	// The POSIX implementation doesn't have any socket flags.
 	vsm_assert(flags == handle_flags::none);
 
-	vsm_try_void(posix::socket_bind(socket.get(), addr));
+	if (posix::requires_explicit_bind(*addr.addr, addr.size))
+	{
+		vsm_try_void(posix::socket_bind(socket.get(), addr));
+	}
+
 	vsm_try_void(posix::socket_listen(socket.get(), a.backlog));
 
 	vsm_try_void(m.attach_fd(socket.get(), c));
@@ -88,7 +92,7 @@ io_result<socket_handle_type> accept_s::submit(
 		decltype(accept_s::address_size),
 		posix::socket_address_size_type>);
 
-	int const address_family = posix::get_address_family(h.flags);
+	sa_family_t const address_family = posix::get_address_family(h.flags);
 	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
 
 	io_extension_allocator extension = initialize_extension(s);

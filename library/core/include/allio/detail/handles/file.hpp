@@ -5,6 +5,13 @@
 
 namespace allio::detail {
 
+enum class barrier_kind : uint8_t
+{
+	none,
+	data,
+	full,
+};
+
 namespace file_io {
 
 struct tell_t
@@ -77,6 +84,29 @@ struct set_maximum_extent_t
 	}
 };
 
+struct barrier_t
+{
+	using operation_concept = void;
+
+	struct params_type : deadline_t
+	{
+		fs_size offset;
+		fs_size size;
+		barrier_kind kind;
+	};
+
+	using result_type = void;
+
+	template<object Object>
+	static vsm::result<void> blocking_io(
+		native_handle<Object> const& h,
+		io_parameters_t<Object, barrier_t> const& a)
+		requires requires { Object::barrier(h, a); }
+	{
+		return Object::barrier(h, a);
+	}
+};
+
 } // namespace file_io
 
 struct file_t : fs_object_t
@@ -87,6 +117,7 @@ struct file_t : fs_object_t
 	using seek_t = file_io::seek_t;
 	using get_maximum_extent_t = file_io::get_maximum_extent_t;
 	using set_maximum_extent_t = file_io::set_maximum_extent_t;
+	using barrier_t = file_io::barrier_t;
 	using stream_read_t = byte_io::stream_read_t;
 	using stream_write_t = byte_io::stream_write_t;
 	using random_read_t = byte_io::random_read_t;
@@ -99,6 +130,7 @@ struct file_t : fs_object_t
 		, seek_t
 		, get_maximum_extent_t
 		, set_maximum_extent_t
+		, barrier_t
 		, stream_read_t
 		, stream_write_t
 		, random_read_t
@@ -126,6 +158,10 @@ struct file_t : fs_object_t
 	static vsm::result<void> set_maximum_extent(
 		native_handle<file_t> const& h,
 		io_parameters_t<file_t, set_maximum_extent_t> const& args);
+
+	static vsm::result<void> barrier(
+		native_handle<file_t> const& h,
+		io_parameters_t<file_t, barrier_t> const& args);
 
 	static vsm::result<read_result> stream_read(
 		native_handle<file_t> const& h,
@@ -169,6 +205,13 @@ struct file_t : fs_object_t
 			return Traits::template observe<set_maximum_extent_t>(
 				static_cast<Handle const&>(*this),
 				a);
+		}
+
+		[[nodiscard]] auto barrier(auto&&... args) const
+		{
+			auto a = io_parameters_t<typename Handle::object_type, barrier_t>{};
+			(set_argument(a, vsm_forward(args)), ...);
+			return Traits::template observe<barrier_t>(static_cast<Handle const&>(*this), a);
 		}
 
 		[[nodiscard]] auto read_some(

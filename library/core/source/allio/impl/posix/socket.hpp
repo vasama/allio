@@ -25,6 +25,11 @@
 
 namespace allio::posix {
 
+struct socket_address_abstract
+{
+	sa_family_t family;
+};
+
 struct socket_address_view
 {
 	sockaddr const* addr;
@@ -83,7 +88,7 @@ using socket_address_storage = inplace_storage_provider<basic_socket_address<soc
 	storage_provider_ref storage_provider);
 
 
-[[nodiscard]] inline size_t get_max_socket_address_size(int const address_family)
+[[nodiscard]] inline size_t get_max_socket_address_size(sa_family_t const address_family)
 {
 	switch (address_family)
 	{
@@ -129,7 +134,8 @@ using socket_address_storage = inplace_storage_provider<basic_socket_address<soc
 	return 0;
 }
 
-[[nodiscard]] inline vsm::result<int> get_address_family(network_address_kind const address_kind)
+[[nodiscard]] inline vsm::result<sa_family_t> get_address_family(
+	network_address_kind const address_kind)
 {
 	switch (address_kind)
 	{
@@ -147,7 +153,7 @@ using socket_address_storage = inplace_storage_provider<basic_socket_address<soc
 	}
 }
 
-[[nodiscard]] inline network_address_kind get_address_kind(int const address_family)
+[[nodiscard]] inline network_address_kind get_address_kind(sa_family_t const address_family)
 {
 	switch (address_family)
 	{
@@ -167,6 +173,16 @@ using socket_address_storage = inplace_storage_provider<basic_socket_address<soc
 	return network_address_kind::null;
 }
 
+[[nodiscard]] inline bool is_autobind_address(sockaddr const& addr, size_t const size)
+{
+	return size == sizeof(sa_family_t);
+}
+
+[[nodiscard]] inline bool requires_explicit_bind(sockaddr const& addr, size_t const size)
+{
+	return !is_autobind_address(addr, size) || addr.sa_family == AF_UNIX;
+}
+
 
 struct socket_with_flags
 {
@@ -174,7 +190,9 @@ struct socket_with_flags
 	detail::handle_flags flags;
 };
 
-[[nodiscard]] inline vsm::result<int> choose_protocol(int const address_family, int const type)
+[[nodiscard]] inline vsm::result<int> choose_protocol(
+	sa_family_t const address_family,
+	int const type)
 {
 	switch (address_family)
 	{
@@ -200,22 +218,15 @@ struct socket_with_flags
 
 
 [[nodiscard]] vsm::result<socket_with_flags> create_socket(
-	int address_family,
+	sa_family_t address_family,
 	int type,
 	int protocol,
 	detail::io_flags flags);
 
-[[nodiscard]] inline vsm::result<void> socket_bind(
-	socket_type const socket,
-	sockaddr const* const addr,
-	socket_address_size_type const size)
-{
-	if (::bind(socket, addr, size) == socket_error_value)
-	{
-		return vsm::unexpected(allio_error(get_last_socket_error()));
-	}
-	return {};
-}
+[[nodiscard]] vsm::result<void> socket_bind(
+	socket_type socket,
+	sockaddr const* addr,
+	socket_address_size_type size);
 
 [[nodiscard]] inline vsm::result<void> socket_bind(
 	socket_type const socket,

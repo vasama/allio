@@ -73,6 +73,36 @@ vsm::result<fs_size> file_t::get_maximum_extent(
 	return static_cast<fs_size>(data.st_size);
 }
 
+// TODO: file_t::set_maximum_extent
+
+static int sync_file(int const fd, barrier_kind const kind)
+{
+	switch (kind)
+	{
+	case barrier_kind::none:
+	case barrier_kind::full:
+		return ::fsync(fd);
+
+	case barrier_kind::data:
+		return ::fdatasync(fd);
+	}
+
+	// TODO: Is this reasonable? Should an error be returned instead?
+	vsm_unreachable();
+}
+
+vsm::result<void> file_t::barrier(
+	native_handle<file_t> const& h,
+	io_parameters_t<file_t, barrier_t> const& a)
+{
+	if (sync_file(unwrap_handle(h.platform_handle), a.kind) == -1)
+	{
+		return vsm::unexpected(allio_error(get_last_error()));
+	}
+
+	return {};
+}
+
 vsm::result<read_result> file_t::stream_read(
 	native_handle<file_t> const& h,
 	io_parameters_t<file_t, stream_read_t> const& a)
