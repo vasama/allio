@@ -55,7 +55,7 @@ static io_result<Result> _submit(
 		.off = static_cast<uint64_t>(file_offset),
 		.addr = reinterpret_cast<uintptr_t>(io_vectors.data()),
 		.len = vsm::truncating(io_vectors.size()),
-		.user_data = ctx.get_user_data(s),
+		.user_data = ctx.encode_user_data(s),
 	};
 
 	if (a.deadline != deadline::never())
@@ -81,9 +81,6 @@ static io_result<Result> _notify(
 	M::io_status_type const status)
 {
 	io_extension_allocator const extension = acquire_extension(s);
-
-	// This operation uses no io_slots.
-	vsm_assert(status.slot == nullptr);
 
 	if (status.result < 0)
 	{

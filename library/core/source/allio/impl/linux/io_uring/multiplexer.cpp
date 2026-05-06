@@ -828,52 +828,23 @@ void _io_uring_multiplexer_impl::reap_cqe(io_uring_cqe const& cqe)
 	auto const user_data = user_data_ptr::from_tagged(reinterpret_cast<void*>(cqe.user_data));
 	vsm_assert(user_data.pointer() != nullptr);
 
-	auto const tag = user_data.tag();
-
-	// Emulate IOSQE_CQE_SKIP_SUCCESS for CQEs canceled via links, if requested. This avoids needing
-	// to delay completion of the operation until all linked CQEs still referencing their associated
-	// io_slot have been reaped.
-	if (cqe.res == -ECANCELED && vsm::any_flags(tag, user_data_tag::cqe_skip_cancel))
-	{
-		return;
-	}
-
 	io_status_type status =
 	{
-		.slot = nullptr,
 		.result = cqe.res,
 		.flags = cqe.flags,
+		.user_tag = user_data.tag(),
 	};
 
-	operation_type* operation;
+	operation_type& operation = *static_cast<operation_type*>(user_data.pointer());
 
-	if (vsm::any_flags(tag, user_data_tag::io_slot))
-	{
-		io_slot* const slot = static_cast<io_slot*>(user_data.pointer());
-
-		// Emulate IOSQE_CQE_SKIP_SUCCESS for successful operations.
-		if (status.result >= 0 && vsm::any_flags(slot->m_flags, io_slot_flags::cqe_skip_success))
-		{
-			return;
-		}
-
-		status.slot = slot;
-
-		operation = slot->get_operation();
-	}
-	else
-	{
-		operation = static_cast<operation_type*>(user_data.pointer());
-	}
-
-	io_handler_ptr handler = operation->m_handler.load(std::memory_order_acquire);
+	io_handler_ptr handler = operation.m_handler.load(std::memory_order_acquire);
 	if (handler.tag() != io_handler_tag::cancel_pending)
 	{
 		while (true)
 		{
 			(void)flush_cancel_queue();
 
-			handler = operation->m_handler.load(std::memory_order_acquire);
+			handler = operation.m_handler.load(std::memory_order_acquire);
 			if (handler.tag() != io_handler_tag::cancel_pending)
 			{
 				break;

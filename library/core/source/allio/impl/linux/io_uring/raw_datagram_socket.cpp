@@ -110,7 +110,7 @@ io_result<void> send_s::submit(
 		.flags = fd_flags,
 		.fd = fd,
 		.addr = reinterpret_cast<uintptr_t>(&header),
-		.user_data = ctx.get_user_data(s),
+		.user_data = ctx.encode_user_data(s),
 	};
 
 	s.set_handler(handler);
@@ -130,9 +130,6 @@ io_result<void> send_s::notify(
 	M::io_status_type const status)
 {
 	io_extension_allocator const extension = acquire_extension(s);
-
-	// This operation uses no io_slots.
-	vsm_assert(status.slot == nullptr);
 
 	if (status.result < 0)
 	{
@@ -213,7 +210,7 @@ io_result<size_t> recv_s::submit(
 		.flags = fd_flags,
 		.fd = fd,
 		.addr = reinterpret_cast<uintptr_t>(&header),
-		.user_data = ctx.get_user_data(s),
+		.user_data = ctx.encode_user_data(s),
 	};
 
 	s.set_handler(handler);
@@ -233,9 +230,6 @@ io_result<size_t> recv_s::notify(
 	M::io_status_type const status)
 {
 	io_extension_allocator const extension = acquire_extension(s);
-
-	// This operation uses no io_slots.
-	vsm_assert(status.slot == nullptr);
 
 	if (status.result < 0)
 	{

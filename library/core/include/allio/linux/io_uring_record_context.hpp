@@ -74,16 +74,17 @@ public:
 	}
 
 
-	[[nodiscard]] uintptr_t get_user_data(operation_type& operation) const
+	[[nodiscard]] uintptr_t encode_user_data(operation_type& operation) const
 	{
-		return reinterpret_cast<uintptr_t>(
-			basic_user_data_ptr<operation_type>(&operation, {}).tagged_pointer());
+		return reinterpret_cast<uintptr_t>(&operation);
 	}
 
-	[[nodiscard]] uintptr_t get_user_data(io_slot& slot) const
+	[[nodiscard]] uintptr_t encode_user_data(
+		operation_type& operation,
+		uintptr_t const user_tag) const
 	{
-		return reinterpret_cast<uintptr_t>(
-			basic_user_data_ptr<io_slot>(&slot, user_data_tag::io_slot).tagged_pointer());
+		vsm_assert(user_tag <= _io_uring_multiplexer::max_user_data_tag);
+		return reinterpret_cast<uintptr_t>(&operation) | user_tag;
 	}
 
 
@@ -104,21 +105,6 @@ public:
 		m_last_sqe->flags |= flags;
 	}
 
-
-#if 0
-	[[nodiscard]] vsm::result<io_uring_sqe*> push_timeout(timeout::reference const timeout)
-	{
-		vsm_try(p_sqe, push());
-		*p_sqe = io_uring_sqe
-		{
-			.opcode = IORING_OP_TIMEOUT,
-			.addr = reinterpret_cast<uintptr_t>(&timeout.m_timespec),
-			.len = 1,
-			.timeout_flags = timeout.m_absolute ? IORING_TIMEOUT_ABS : 0,
-		};
-		return p_sqe;
-	}
-#endif
 
 	[[nodiscard]] vsm::result<void> link_timeout(timeout::reference const timeout)
 	{
@@ -142,30 +128,15 @@ public:
 		return {};
 	}
 
+	[[nodiscard]] bool has_skip_cqe_on_success() const
+	{
+		return m_multiplexer.m_cqe_skip_success_flag != 0;
+	}
 
 	/// @brief Set IOSQE_CQE_SKIP_SUCCESS on @param sqe if it is available.
-	void set_cqe_skip_success(io_uring_sqe& sqe)
+	void may_skip_cqe_on_success(io_uring_sqe& sqe)
 	{
 		sqe.flags |= m_multiplexer.m_cqe_skip_success_flag;
-	}
-
-	/// @brief Emulate skipping of CQEs of operations on success. Any CQEs associated with this slot
-	///        are skipped if successful.
-	void set_cqe_skip_success_emulation(io_slot& slot)
-	{
-		slot.m_flags |= io_slot_flags::cqe_skip_success;
-	}
-
-	/// @brief Emulate skipping of CQEs of linked operations on failure. The CQE associated with
-	///        this SQE is skipped if the result is ECANCELED. The primary purpose of skipping the
-	///        CQE is to avoid extending the lifetime of the associated io_slot until all linked
-	///        operations are canceled.
-	/// @pre @param sqe has associated user data. CQEs without user data are always skipped.
-	/// @note This prevents the direct manual cancellation of the affected operation.
-	void set_cqe_skip_success_linked_emulation(io_uring_sqe& sqe)
-	{
-		vsm_assert(sqe.user_data != 0); //PRECONDITION
-		sqe.user_data |= static_cast<uintptr_t>(user_data_tag::cqe_skip_cancel);
 	}
 
 

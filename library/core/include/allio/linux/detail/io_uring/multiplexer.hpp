@@ -60,17 +60,10 @@ class _io_uring_multiplexer
 	vsm_partial(_io_uring_multiplexer);
 	vsm_partial_delete(_io_uring_multiplexer);
 
+	static constexpr uintptr_t max_user_data_tag = alignof(operation_type);
+
 public:
 	using poll_parameters = deadline_t;
-
-	enum class user_data_tag : uintptr_t
-	{
-		io_slot                         = 1 << 0,
-		cqe_skip_cancel                 = 1 << 1,
-
-		all = io_slot | cqe_skip_cancel
-	};
-	vsm_flag_enum_friend(user_data_tag);
 
 	enum class io_handler_tag : uintptr_t
 	{
@@ -81,18 +74,17 @@ public:
 	};
 	vsm_flag_enum_friend(io_handler_tag);
 
-	enum class io_slot_flags : uint16_t
-	{
-		cqe_skip_success                = 1 << 0,
-	};
-	vsm_flag_enum_friend(io_slot_flags);
-
 	template<typename T>
-	using basic_user_data_ptr = vsm::pointer_tag_pair_with_max<T, user_data_tag, user_data_tag::all>;
+	using basic_user_data_ptr = vsm::pointer_tag_pair_with_max<T, uintptr_t, max_user_data_tag>;
 
-	using user_data_ptr = vsm::pointer_tag_pair_with_max<void, user_data_tag, user_data_tag::all>;
+	using user_data_ptr = vsm::pointer_tag_pair_with_max<void, uintptr_t, max_user_data_tag>;
 
-	struct io_status_type;
+	struct io_status_type
+	{
+		int32_t result;
+		uint32_t flags;
+		uint32_t user_tag;
+	};
 
 	using io_handler_type = basic_io_handler<io_status_type>;
 	using io_handler_ptr = vsm::pointer_tag_pair<io_handler_type, io_handler_tag>;
@@ -104,7 +96,7 @@ public:
 		friend _io_uring_multiplexer;
 	};
 
-	class operation_type : vsm::intrusive::mpsc_queue_link
+	class alignas(8) operation_type : vsm::intrusive::mpsc_queue_link
 	{
 		mutable vsm::atomic<io_handler_ptr> m_handler;
 
@@ -124,42 +116,6 @@ public:
 	private:
 		friend _io_uring_multiplexer;
 		friend vsm::intrusive::access;
-	};
-
-	class alignas(4) io_slot
-	{
-		uint16_t m_offset = 0;
-		io_slot_flags m_flags = {};
-
-	public:
-		void bind(operation_type& operation) &
-		{
-			uintptr_t const uint_main = reinterpret_cast<uintptr_t>(&operation);
-			uintptr_t const uint_this = reinterpret_cast<uintptr_t>(this);
-
-			vsm_assert(uint_this > uint_main);
-			vsm_assert(uint_this - uint_main <= static_cast<uint16_t>(-1));
-
-			m_offset = static_cast<uint16_t>(uint_this - uint_main);
-		}
-
-	private:
-		operation_type* get_operation() const
-		{
-			vsm_assert(m_offset != 0);
-			uintptr_t const uint_this = reinterpret_cast<uintptr_t>(this);
-			uintptr_t const uint_main = uint_this - m_offset;
-			return reinterpret_cast<operation_type*>(uint_main);
-		}
-
-		friend _io_uring_multiplexer;
-	};
-
-	struct io_status_type
-	{
-		io_slot const* slot;
-		int32_t result;
-		uint32_t flags;
 	};
 
 private:
@@ -245,6 +201,12 @@ private:
 	uint32_t m_sq_release;
 
 public:
+	[[nodiscard]] bool has_skip_cqe_on_success() const
+	{
+		return m_cqe_skip_success_flag != 0;
+	}
+
+
 	[[nodiscard]] vsm::result<void> attach_fd(int fd, connector_type& c);
 	[[nodiscard]] vsm::result<void> detach_fd(int fd, connector_type& c);
 
@@ -358,7 +320,6 @@ protected:
 
 vsm_gcc_diagnostic(pop)
 
-static_assert(std::is_default_constructible_v<_io_uring_multiplexer::io_slot>);
 static_assert(std::is_default_constructible_v<_io_uring_multiplexer::timeout>);
 
 
@@ -417,6 +378,12 @@ public:
 	}
 
 
+	[[nodiscard]] bool has_skip_cqe_on_success() const
+	{
+		return m_multiplexer->has_skip_cqe_on_success();
+	}
+
+
 	[[nodiscard]] vsm::result<void> attach_fd(int const fd, connector_type& c)
 	{
 		return m_multiplexer->attach_fd(fd, c);
@@ -444,20 +411,9 @@ public:
 	}
 
 
-	void cancel_io(operation_type& operation)
+	void cancel_io(user_data_ptr const user_data)
 	{
-		m_multiplexer->cancel_io(
-			operation,
-			_io_uring_multiplexer::user_data_ptr(&operation, {}));
-	}
-
-	void cancel_io(operation_type& operation, _io_uring_multiplexer::io_slot& slot)
-	{
-		m_multiplexer->cancel_io(
-			operation,
-			_io_uring_multiplexer::user_data_ptr(
-				&slot,
-				_io_uring_multiplexer::user_data_tag::io_slot));
+		m_multiplexer->cancel_io(operation, user_data);
 	}
 
 
@@ -484,7 +440,6 @@ public:
 	}
 
 
-	using io_slot = _io_uring_multiplexer::io_slot;
 	using timeout = _io_uring_multiplexer::timeout;
 
 private:

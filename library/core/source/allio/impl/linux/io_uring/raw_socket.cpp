@@ -58,7 +58,7 @@ io_result<void> connect_s::submit(
 		.fd = s.socket.get(),
 		.off = addr.size,
 		.addr = reinterpret_cast<uintptr_t>(addr.addr),
-		.user_data = ctx.get_user_data(s),
+		.user_data = ctx.encode_user_data(s),
 	};
 
 	if (a.deadline != deadline::never())
@@ -83,9 +83,6 @@ io_result<void> connect_s::notify(
 	M::io_status_type const status)
 {
 	io_extension_allocator const extension = acquire_extension(s);
-
-	// This operation uses no io_slots.
-	vsm_assert(status.slot == nullptr);
 
 	if (status.result < 0)
 	{
@@ -133,7 +130,7 @@ io_result<void> disconnect_s::submit(
 		.opcode = IORING_OP_SHUTDOWN,
 		.fd = unwrap_handle(h.platform_handle),
 		.len = SHUT_RDWR,
-		.user_data = ctx.get_user_data(s),
+		.user_data = ctx.encode_user_data(s),
 	};
 
 	if (a.deadline != deadline::never())
@@ -156,9 +153,6 @@ io_result<void> disconnect_s::notify(
 	io_handler<M>&,
 	M::io_status_type const status)
 {
-	// This operation uses no io_slots.
-	vsm_assert(status.slot == nullptr);
-
 	if (status.result < 0)
 	{
 		return vsm::unexpected(allio_error(static_cast<system_error>(-status.result)));
@@ -202,7 +196,7 @@ io_result<read_result> recv_s::submit(
 		.fd = fd,
 		.addr = reinterpret_cast<uintptr_t>(io_vectors.data()),
 		.len = vsm::truncating(io_vectors.size()),
-		.user_data = ctx.get_user_data(s),
+		.user_data = ctx.encode_user_data(s),
 	};
 
 	if (a.deadline != deadline::never())
@@ -227,9 +221,6 @@ io_result<read_result> recv_s::notify(
 	M::io_status_type const status)
 {
 	io_extension_allocator const extension = acquire_extension(s);
-
-	// This operation uses no io_slots.
-	vsm_assert(status.slot == nullptr);
 
 	if (status.result < 0)
 	{
@@ -279,7 +270,7 @@ io_result<size_t> send_s::submit(
 		.fd = fd,
 		.addr = reinterpret_cast<uintptr_t>(io_vectors.data()),
 		.len = vsm::truncating(io_vectors.size()),
-		.user_data = ctx.get_user_data(s),
+		.user_data = ctx.encode_user_data(s),
 	};
 
 	if (a.deadline != deadline::never())
@@ -304,9 +295,6 @@ io_result<size_t> send_s::notify(
 	M::io_status_type const status)
 {
 	io_extension_allocator const extension = acquire_extension(s);
-
-	// This operation uses no io_slots.
-	vsm_assert(status.slot == nullptr);
 
 	if (status.result < 0)
 	{

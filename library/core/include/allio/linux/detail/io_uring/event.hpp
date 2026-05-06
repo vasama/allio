@@ -25,11 +25,17 @@ struct async_operation<io_uring_multiplexer, event_t, event_t::wait_t>
 
 	step_deadline absolute_deadline;
 
-	/// @brief Timeout passed by reference in a linked timeout SQE.
-	M::timeout timeout;
+	union
+	{
+		/// @brief Timeout passed by reference in a linked timeout SQE.
+		M::timeout timeout;
 
-	/// @brief Context for the poll operation.
-	M::io_slot poll_slot;
+		/// @brief Result of the poll operation in the case that
+		///        1. the event is in auto reset mode (needs read),
+		///        2. cqe skipping on success is not available, and
+		///        3. the poll failed, but the read is still pending.
+		int previous_error;
+	};
 
 	static io_result<void> submit(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler);
 	static io_result<void> notify(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler, M::io_status_type status);
