@@ -23,8 +23,8 @@ using wait_t = event_t::wait_t;
 using wait_s = async_operation_t<M, event_t, wait_t>;
 using wait_a = io_parameters_t<event_t, wait_t>;
 
-static constexpr uintptr_t wait_for_next_cqe                = 1;
-static constexpr uintptr_t use_previous_error               = 2;
+static constexpr uint32_t wait_for_next_cqe                 = 1;
+static constexpr uint32_t use_previous_error                = 2;
 
 static io_result<void> _submit(
 	M& m,
@@ -111,7 +111,6 @@ io_result<void> wait_s::submit(
 
 	s.set_handler(handler);
 	s.absolute_deadline = a.deadline;
-	s.poll_slot.bind(s);
 
 	return _submit(m, h, c, s, a, handler);
 }
@@ -174,7 +173,8 @@ io_result<void> wait_s::notify(
 	return {};
 }
 
-void wait_s::cancel(M& m, H const&, C const&, S& s)
+void wait_s::cancel(M& m, H const& h, C const&, S& s)
 {
-	(void)m.cancel_io(s, s.poll_slot);
+	bool const double_cqe = is_auto_reset(h) && !m.has_skip_cqe_on_success();
+	(void)m.cancel_io(s, double_cqe ? wait_for_next_cqe : 0);
 }

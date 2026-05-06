@@ -60,11 +60,17 @@ class _io_uring_multiplexer
 	vsm_partial(_io_uring_multiplexer);
 	vsm_partial_delete(_io_uring_multiplexer);
 
-	static constexpr uintptr_t max_user_data_tag = alignof(operation_type);
-
 public:
-	using poll_parameters = deadline_t;
+	struct io_status_type
+	{
+		int32_t result;
+		uint32_t flags;
+		uint32_t user_tag;
+	};
 
+	using io_handler_type = basic_io_handler<io_status_type>;
+
+private:
 	enum class io_handler_tag : uintptr_t
 	{
 		not_cancelled                   = 0,
@@ -74,21 +80,9 @@ public:
 	};
 	vsm_flag_enum_friend(io_handler_tag);
 
-	template<typename T>
-	using basic_user_data_ptr = vsm::pointer_tag_pair_with_max<T, uintptr_t, max_user_data_tag>;
-
-	using user_data_ptr = vsm::pointer_tag_pair_with_max<void, uintptr_t, max_user_data_tag>;
-
-	struct io_status_type
-	{
-		int32_t result;
-		uint32_t flags;
-		uint32_t user_tag;
-	};
-
-	using io_handler_type = basic_io_handler<io_status_type>;
 	using io_handler_ptr = vsm::pointer_tag_pair<io_handler_type, io_handler_tag>;
 
+public:
 	class connector_type
 	{
 		int32_t file_index = -1;
@@ -117,6 +111,15 @@ public:
 		friend _io_uring_multiplexer;
 		friend vsm::intrusive::access;
 	};
+
+private:
+	static constexpr uintptr_t max_user_data_tag = alignof(operation_type) - 1;
+
+public:
+	using user_data_type = vsm::pointer_tag_pair_with_max<
+		operation_type,
+		uint32_t,
+		max_user_data_tag>;
 
 private:
 	/// @brief Unique owner of the mmapped region containing the submission queue indices.
@@ -201,16 +204,18 @@ private:
 	uint32_t m_sq_release;
 
 public:
+	using poll_parameters = deadline_t;
+
+
 	[[nodiscard]] bool has_skip_cqe_on_success() const
 	{
 		return m_cqe_skip_success_flag != 0;
 	}
 
-
 	[[nodiscard]] vsm::result<void> attach_fd(int fd, connector_type& c);
 	[[nodiscard]] vsm::result<void> detach_fd(int fd, connector_type& c);
 
-	void cancel_io(operation_type& operation, user_data_ptr user_data);
+	void cancel_io(user_data_type user_data);
 
 	[[nodiscard]] vsm::result<bool> poll(poll_parameters const& args);
 
@@ -383,7 +388,6 @@ public:
 		return m_multiplexer->has_skip_cqe_on_success();
 	}
 
-
 	[[nodiscard]] vsm::result<void> attach_fd(int const fd, connector_type& c)
 	{
 		return m_multiplexer->attach_fd(fd, c);
@@ -411,9 +415,14 @@ public:
 	}
 
 
-	void cancel_io(user_data_ptr const user_data)
+	void cancel_io(operation_type& operation)
 	{
-		m_multiplexer->cancel_io(operation, user_data);
+		m_multiplexer->cancel_io(_io_uring_multiplexer::user_data_type(&operation, 0));
+	}
+
+	void cancel_io(operation_type& operation, uint32_t const user_tag)
+	{
+		m_multiplexer->cancel_io(_io_uring_multiplexer::user_data_type(&operation, user_tag));
 	}
 
 

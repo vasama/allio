@@ -207,10 +207,8 @@ public:
 
 	vsm_gcc_diagnostic(push)
 
-	// TODO: Move _io_uring_multiplexer into multiplexer.cpp.
 	// GCC warns about the use of hardware_destructive_interference_size due to its ABI-breaking
-	// potential. Despite being located in a header, the members of this structure are not accessed
-	// by library user code.
+	// potential.
 	vsm_gcc_diagnostic(ignored "-Winterference-size")
 
 	struct alignas(std::hardware_destructive_interference_size)
@@ -340,8 +338,8 @@ public:
 	void wake_poll_thread();
 	void wake_poll_thread_reset();
 
-	void submit_async_cancel(user_data_ptr user_data);
-	void cancel_io_externally_synchronized(operation_type& operation, user_data_ptr user_data);
+	void submit_async_cancel(user_data_type user_data);
+	void cancel_io_externally_synchronized(user_data_type user_data);
 	void cancel_io_internally_synchronized(operation_type& operation);
 	[[nodiscard]] bool flush_cancel_queue();
 
@@ -673,7 +671,7 @@ void _io_uring_multiplexer_impl::wake_poll_thread_reset()
 	}
 }
 
-void _io_uring_multiplexer_impl::submit_async_cancel(user_data_ptr const user_data)
+void _io_uring_multiplexer_impl::submit_async_cancel(user_data_type const user_data)
 {
 	io_uring_record_context ctx(*this);
 
@@ -693,10 +691,10 @@ void _io_uring_multiplexer_impl::submit_async_cancel(user_data_ptr const user_da
 	}
 }
 
-void _io_uring_multiplexer_impl::cancel_io_externally_synchronized(
-	operation_type& operation,
-	user_data_ptr const user_data)
+void _io_uring_multiplexer_impl::cancel_io_externally_synchronized(user_data_type const user_data)
 {
+	operation_type& operation = *user_data.pointer();
+
 	io_handler_ptr handler = operation.m_handler.load(std::memory_order_acquire);
 
 	/**/ if (handler.tag() == io_handler_tag::not_cancelled)
@@ -825,7 +823,7 @@ void _io_uring_multiplexer_impl::reap_cqe(io_uring_cqe const& cqe)
 		return;
 	}
 
-	auto const user_data = user_data_ptr::from_tagged(reinterpret_cast<void*>(cqe.user_data));
+	auto const user_data = user_data_type::from_tagged(reinterpret_cast<void*>(cqe.user_data));
 	vsm_assert(user_data.pointer() != nullptr);
 
 	io_status_type status =
@@ -1020,17 +1018,17 @@ vsm::result<void> _io_uring_multiplexer::detach_fd(int const fd, connector_type&
 	return {};
 }
 
-void _io_uring_multiplexer::cancel_io(operation_type& operation, user_data_ptr const user_data)
+void _io_uring_multiplexer::cancel_io(user_data_type const user_data)
 {
 	vsm_self(_io_uring_multiplexer_impl);
 
 	if (is_externally_synchronized())
 	{
-		self->cancel_io_externally_synchronized(operation, user_data);
+		self->cancel_io_externally_synchronized(user_data);
 	}
 	else
 	{
-		self->cancel_io_internally_synchronized(operation);
+		self->cancel_io_internally_synchronized(*user_data.pointer());
 	}
 }
 
