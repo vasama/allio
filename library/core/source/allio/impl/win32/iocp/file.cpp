@@ -21,7 +21,7 @@ io_result<size_t> read_s::submit(
 	read_a const& a,
 	io_handler<M>& handler)
 {
-	return s.byte_io.submit(h, a, handler);
+	return s.byte_io.submit<read_t>(h, a, handler);
 }
 
 io_result<size_t> read_s::notify(
@@ -33,7 +33,7 @@ io_result<size_t> read_s::notify(
 	io_handler<M>&,
 	M::io_status_type const status)
 {
-	return s.byte_io.notify(h, a, status);
+	return s.byte_io.notify<read_t>(h, a, status);
 }
 
 void read_s::cancel(M& m, H const& h, C const&, read_s& s)
@@ -53,7 +53,7 @@ io_result<size_t> write_s::submit(
 	write_a const& a,
 	io_handler<M>& handler)
 {
-	return s.byte_io.submit(h, a, handler);
+	return s.byte_io.submit<write_t>(h, a, handler);
 }
 
 io_result<size_t> write_s::notify(
@@ -65,7 +65,7 @@ io_result<size_t> write_s::notify(
 	io_handler<M>&,
 	M::io_status_type const status)
 {
-	return s.byte_io.notify(h, a, status);
+	return s.byte_io.notify<write_t>(h, a, status);
 }
 
 void write_s::cancel(M& m, H const& h, C const&, write_s& s)

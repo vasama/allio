@@ -3,6 +3,7 @@
 #include <allio/impl/byte_io_buffers.hpp>
 #include <allio/impl/error_encoding_impl.hpp>
 #include <allio/impl/hexadecimal.hpp>
+#include <allio/impl/random.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
 #include <allio/impl/win32/wsa.hpp>
@@ -62,7 +63,7 @@ template class ec::encoded_error_category<allio_error_encoding, posix::socket_er
 
 
 static vsm::result<posix::unique_socket> wsa_socket(
-	sa_family_t const address_family,
+	ADDRESS_FAMILY const address_family,
 	int const type,
 	int const protocol,
 	DWORD const flags)
@@ -84,7 +85,7 @@ static vsm::result<posix::unique_socket> wsa_socket(
 }
 
 vsm::result<posix::socket_with_flags> posix::create_socket(
-	sa_family_t const address_family,
+	socket_address_family_type const address_family,
 	int const type,
 	int const protocol,
 	io_flags const flags)
@@ -190,7 +191,7 @@ vsm::result<posix::socket_with_flags> posix::socket_accept(
 }
 #endif
 
-static vsm::result<void> autobind_unix_socket(socket_type const socket)
+static vsm::result<void> autobind_unix_socket(SOCKET const socket)
 {
 	sockaddr_un addr;
 
@@ -210,7 +211,7 @@ static vsm::result<void> autobind_unix_socket(socket_type const socket)
 
 		if (int const e = WSAGetLastError(); e != WSAEADDRINUSE)
 		{
-			return vsm::unexpected(static_cast<socket_error>(error));
+			return vsm::unexpected(allio_error(static_cast<posix::socket_error>(e)));
 		}
 	}
 }
@@ -220,7 +221,7 @@ static vsm::result<void> autobind_unix_socket(socket_type const socket)
 	sockaddr const* const addr,
 	socket_address_size_type const size)
 {
-	if (addr->sa_family == AF_UNIX && size == sizeof(sa_family_t))
+	if (addr->sa_family == AF_UNIX && size == sizeof(socket_address_family_type))
 	{
 		return autobind_unix_socket(socket);
 	}

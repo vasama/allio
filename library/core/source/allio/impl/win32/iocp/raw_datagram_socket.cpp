@@ -201,7 +201,7 @@ io_result<size_t> recv_s::submit(
 
 	vsm_try(wsa_buffers, get_wsa_buffers(a.buffers, extension));
 
-	sa_family_t const address_family = posix::get_address_family(h.flags);
+	posix::socket_address_family_type const address_family = posix::get_address_family(h.flags);
 	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
 
 	void* address_storage = nullptr;

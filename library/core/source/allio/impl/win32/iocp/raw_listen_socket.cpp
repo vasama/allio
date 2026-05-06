@@ -110,7 +110,7 @@ static io_result<socket_handle_type> handle_accept_completion(
 	socket_handle_type::connector_type c;
 	vsm_try_void(m.attach_platform_handle(s.socket.get(), c));
 
-	sa_family_t const address_family = posix::get_address_family(h.flags);
+	posix::socket_address_family_type const address_family = posix::get_address_family(h.flags);
 	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
 
 	if (a.endpoint && a.endpoint.is_platform_endpoint() && extension.has_object())
@@ -151,7 +151,7 @@ io_result<socket_handle_type> accept_s::submit(
 
 	SOCKET const listen_socket = posix::unwrap_socket(h.platform_handle);
 
-	sa_family_t const address_family = posix::get_address_family(h.flags);
+	posix::socket_address_family_type const address_family = posix::get_address_family(h.flags);
 	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
 	size_t const min_address_storage_size = max_address_size + 16;
 	vsm_assert(min_address_storage_size <= sizeof(wsa_accept_address_storage));

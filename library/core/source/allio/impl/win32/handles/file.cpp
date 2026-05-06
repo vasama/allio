@@ -170,13 +170,10 @@ vsm::result<void> file_t::barrier(
 		/* ParametersSize: */ 0,
 		&io_status_block);
 
-	if (status == STATUS_PENDING)
-	{
-		status = event.wait_for_io(
-			handle,
-			io_status_block,
-			relative_deadline);
-	}
+	// TODO: Handle STATUS_PENDING if it may be returned from NtFlushBuffersFileEx. KernelBase.dll,
+	//       when calling NtFlushBuffersFile, (which presumably defers to NtFlushBuffersFileEx),
+	//       does not handle STATUS_PENDING.
+	vsm_assert(status != STATUS_PENDING);
 
 	if (!NT_SUCCESS(status))
 	{

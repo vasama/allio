@@ -18,7 +18,7 @@ static constexpr fs_size max_file_extent =
 template<vsm::any_cv_of<std::byte> T>
 static auto is_read_buffer(io_buffers<T> const&) -> std::bool_constant<vsm::non_cv<T>>;
 
-template<auto const& Syscall>
+template<typename Result, auto const& Syscall>
 class iocp_byte_io
 {
 	iocp_byte_io_state& m_state;
@@ -33,7 +33,7 @@ public:
 	}
 
 	template<typename Arguments>
-	io_result<size_t> submit(
+	io_result<Result> submit(
 		native_handle<platform_object_t> const& h,
 		Arguments const& a,
 		io_handler<iocp_multiplexer>& handler)
@@ -52,46 +52,40 @@ public:
 			return 0;
 		}
 
-		return transform_result(a, [&]() -> io_result<void>
+		m_state.absolute_deadline = a.deadline;
+
+		m_state.io_state = byte_io_state();
+		m_state.buffer_index = 0;
+		m_state.buffer_visit = 0;
+
+		m_state.io_status_block.bind(handler);
+
+		auto const r = submit_loop(h, a);
+
+		if (detail::get_io_notify_status(r) == io_notify_status::submitted)
 		{
-			m_state.absolute_deadline = a.deadline;
+			return vsm::unexpected(r.error());
+		}
 
-			m_state.transferred = 0;
-			m_state.buffer_index = 0;
-			m_state.buffer_visit = 0;
-
-			m_state.io_status_block.bind(handler);
-
-			return submit_loop(h, a);
-		}());
+		return m_state.io_state.finalize<Result>(a, r);
 	}
 
 	template<typename Arguments>
-	io_result<size_t> notify(
+	io_result<Result> notify(
 		native_handle<platform_object_t> const& h,
 		Arguments const& a,
 		iocp_multiplexer::io_status_type const status)
 	{
 		vsm_assert(&status.slot == &m_state.io_status_block);
 
-		return transform_result(a, [&]() -> io_result<void>
+		auto const r = handle_completion(h, a, *m_state.io_status_block);
+
+		if (detail::get_io_notify_status(r) == io_notify_status::submitted)
 		{
-			size_t const transfer_size = m_state.io_status_block->Information;
+			return vsm::unexpected(r.error());
+		}
 
-			if (transfer_size == 0)
-			{
-				return {};
-			}
-
-			m_buffers_layout = a.buffers.get_layout();
-			m_buffers = read_io_buffers(a.buffers.get_buffers());
-
-			std::span<std::byte const> const buffer = get_current_buffer();
-			size_t const max_transfer_size = get_max_transfer_size(buffer.size());
-			vsm_try_void(handle_completion(a, transfer_size, max_transfer_size));
-
-			return submit_loop(h, a);
-		}());
+		return m_state.io_state.finalize<Result>(a, r);
 	}
 
 private:
@@ -109,7 +103,23 @@ private:
 	}
 
 	template<typename Arguments>
-	io_result<void> handle_completion(
+	io_result<byte_io_status> handle_error(NTSTATUS const status)
+	{
+		if constexpr (decltype(is_read_buffer(Arguments::buffers))::value)
+		{
+			if (status == STATUS_PIPE_BROKEN)
+			{
+				// For uniformity between Windows and POSIX, broken pipe on read is transformed into
+				// end_of_stream.
+				return byte_io_status::end_of_stream;
+			}
+		}
+
+		return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
+	}
+
+	template<typename Arguments>
+	io_result<void> handle_success(
 		Arguments const& a,
 		size_t const transfer_size,
 		size_t const max_transfer_size)
@@ -120,9 +130,9 @@ private:
 		vsm_assert(transfer_size <= max_transfer_size);
 
 		// The addition of the transferred size to the total cannot wrap around.
-		vsm_assert(m_state.transferred <= static_cast<size_t>(-1) - transfer_size);
+		vsm_assert(m_state.io_state.transferred() <= static_cast<size_t>(-1) - transfer_size);
 
-		m_state.transferred += transfer_size;
+		m_state.io_state.transfer_completed(transfer_size);
 		++m_state.buffer_visit;
 
 		if (transfer_size != max_transfer_size)
@@ -138,6 +148,7 @@ private:
 			}
 		}
 
+#if 0
 		if (m_state.transferred == static_cast<size_t>(-1))
 		{
 			return vsm::unexpected(allio_error(error::io_size_out_of_range));
@@ -147,12 +158,13 @@ private:
 		{
 			return vsm::unexpected(allio_error(error::file_offset_out_of_range));
 		}
+#endif
 
 		// All of these conditions are non-erroneous cases where some number of suboperations have
 		// succeeded but no further suboperations may be submitted.
 		if (transfer_size != max_transfer_size ||
-			m_state.transferred == static_cast<size_t>(-1) ||
-			get_file_offset(a) >= max_file_extent - m_state.transferred)
+			m_state.io_state.transferred() == static_cast<size_t>(-1) ||
+			get_file_offset(a) >= max_file_extent - m_state.io_state.transferred())
 		{
 			// This error is handled locally and should never propagate to the user.
 			return vsm::unexpected(allio_error(error::invariant_violation));
@@ -162,7 +174,39 @@ private:
 	}
 
 	template<typename Arguments>
-	io_result<void> submit_loop(native_handle<platform_object_t> const& h, Arguments const& a)
+	io_result<byte_io_status> handle_completion(
+		native_handle<platform_object_t> const& h,
+		Arguments const& a,
+		IO_STATUS_BLOCK const& io_status_block)
+	{
+		NTSTATUS const status = io_status_block.Status;
+
+		if (!NT_SUCCESS(status))
+		{
+			return handle_error<Arguments>(status);
+		}
+
+		size_t const transfer_size = io_status_block.Information;
+
+		if (transfer_size == 0)
+		{
+			return byte_io_status::end_of_stream;
+		}
+
+		m_buffers_layout = a.buffers.get_layout();
+		m_buffers = read_io_buffers(a.buffers.get_buffers());
+
+		std::span<std::byte const> const buffer = get_current_buffer();
+		size_t const max_transfer_size = get_max_transfer_size(buffer.size());
+		vsm_try_void(handle_success(a, transfer_size, max_transfer_size));
+
+		return submit_loop(h, a);
+	}
+
+	template<typename Arguments>
+	io_result<byte_io_status> submit_loop(
+		native_handle<platform_object_t> const& h,
+		Arguments const& a)
 	{
 		vsm_assert(m_state.buffer_index < m_buffers.size());
 
@@ -188,8 +232,9 @@ private:
 				{
 					// The validity of this conversion is ensured by
 					// 1. the initial offset check in submit, and
-					// 2. the addition check in handle_completion.
-					offset_integer.QuadPart = vsm::truncating(a.offset + m_state.transferred);
+					// 2. the addition check in handle_success.
+					offset_integer.QuadPart =
+						vsm::truncating(a.offset + m_state.io_state.transferred());
 
 					p_offset_integer = &offset_integer;
 				}
@@ -217,27 +262,17 @@ private:
 
 				if (!NT_SUCCESS(status))
 				{
-					if constexpr (decltype(is_read_buffer(a.buffers))::value)
-					{
-						if (status == STATUS_PIPE_BROKEN)
-						{
-							// For uniformity between Windows and POSIX, broken pipe on read is
-							// transformed into end_of_stream.
-							return end_of_stream;
-						}
-					}
-
-					return vsm::unexpected(allio_error(static_cast<kernel_error>(status)));
+					return handle_error<Arguments>(status);
 				}
 
 				size_t const transfer_size = m_state.io_status_block->Information;
 
 				if (transfer_size == 0)
 				{
-					return {};
+					return byte_io_status::end_of_stream;
 				}
 
-				vsm_try_void(handle_completion(a, transfer_size, max_transfer_size));
+				vsm_try_void(handle_success(a, transfer_size, max_transfer_size));
 
 				buffer = buffer.subspan(transfer_size);
 
@@ -252,7 +287,7 @@ private:
 		}
 		while (++m_state.buffer_index < m_buffers.size());
 
-		return {};
+		return byte_io_status::success;
 	}
 
 	std::span<std::byte const> get_current_buffer() const
@@ -275,7 +310,7 @@ private:
 		// The maximum transfer size is limited by the range of size_t transferred.
 		size_t const limit_1 = std::min(
 			buffer_size,
-			std::numeric_limits<size_t>::max() - m_state.transferred);
+			std::numeric_limits<size_t>::max() - m_state.io_state.transferred());
 
 		// The maximum transfer size is limited by the range of the ULONG Length parameter.
 		ULONG const limit_2 = static_cast<ULONG>(std::min(
@@ -284,56 +319,57 @@ private:
 
 		return limit_2;
 	}
-
-	template<typename Arguments>
-	io_result<size_t> transform_result(Arguments const& a, io_result<void> const& result)
-	{
-		if (!result)
-		{
-			if (result.error().get_io_notify_status() == io_notify_status::submitted ||
-				m_state.transferred == 0 || vsm::any_flags(a.flags, io_flags::greedy_byte_io))
-			{
-				return vsm::unexpected(result.error());
-			}
-		}
-
-		if (m_state.transferred == 0)
-		{
-			// TODO: Is m_state.transferred == 0 possible due to empty request buffer?
-			return end_of_stream;
-		}
-
-		return m_state.transferred;
-	}
 };
 
-template<template<typename> typename Template>
-iocp_byte_io<win32::NtReadFile> _detect_byte_io(Template<std::byte> const&);
 
-template<template<typename> typename Template>
-iocp_byte_io<win32::NtWriteFile> _detect_byte_io(Template<std::byte const> const&);
+template<typename Operation>
+struct select_byte_io_1;
 
-template<typename T>
-using detect_byte_io = decltype(_detect_byte_io(std::declval<T const&>()));
+template<>
+struct select_byte_io_1<byte_io::stream_read_t>
+{
+	using type = iocp_byte_io<read_result, win32::NtReadFile>;
+};
+
+template<>
+struct select_byte_io_1<byte_io::stream_write_t>
+{
+	using type = iocp_byte_io<size_t, win32::NtWriteFile>;
+};
+
+template<>
+struct select_byte_io_1<byte_io::random_read_t>
+{
+	using type = iocp_byte_io<size_t, win32::NtReadFile>;
+};
+
+template<>
+struct select_byte_io_1<byte_io::random_write_t>
+{
+	using type = iocp_byte_io<size_t, win32::NtWriteFile>;
+};
+
+template<typename Operation>
+using select_byte_io = typename select_byte_io_1<Operation>::type;
 
 } // namespace
 
-template<typename Arguments>
-io_result<size_t> iocp_byte_io_state::submit(
+template<typename Operation>
+io_result<typename Operation::result_type> iocp_byte_io_state::submit(
 	H const& h,
-	Arguments const& a,
+	typename Operation::params_type const& a,
 	io_handler<M>& handler)
 {
-	return detect_byte_io<Arguments>(*this).submit(h, a, handler);
+	return select_byte_io<Operation>(*this).submit(h, a, handler);
 }
 
-template<typename Arguments>
-io_result<size_t> iocp_byte_io_state::notify(
+template<typename Operation>
+io_result<typename Operation::result_type> iocp_byte_io_state::notify(
 	H const& h,
-	Arguments const& a,
+	typename Operation::params_type const& a,
 	M::io_status_type status)
 {
-	return detect_byte_io<Arguments>(*this).notify(h, a, status);
+	return select_byte_io<Operation>(*this).notify(h, a, status);
 }
 
 void iocp_byte_io_state::cancel(M& m, H const& h)
@@ -343,17 +379,17 @@ void iocp_byte_io_state::cancel(M& m, H const& h)
 }
 
 
-#define allio_byte_io_instance(arguments_type) \
-	template io_result<size_t> iocp_byte_io_state::submit<arguments_type>( \
+#define allio_byte_io_instance(Operation) \
+	template io_result<typename Operation::result_type> iocp_byte_io_state::submit<Operation>( \
 		H const& h, \
-		arguments_type const& a, \
+		typename Operation::params_type const& a, \
 		io_handler<M>& handler); \
-	template io_result<size_t> iocp_byte_io_state::notify<arguments_type>( \
+	template io_result<typename Operation::result_type> iocp_byte_io_state::notify<Operation>( \
 		H const& h, \
-		arguments_type const& a, \
+		typename Operation::params_type const& a, \
 		M::io_status_type status) \
 
-allio_byte_io_instance(byte_io::random_parameters_t<std::byte>);
-allio_byte_io_instance(byte_io::random_parameters_t<std::byte const>);
-allio_byte_io_instance(byte_io::stream_parameters_t<std::byte>);
-allio_byte_io_instance(byte_io::stream_parameters_t<std::byte const>);
+allio_byte_io_instance(byte_io::stream_read_t);
+allio_byte_io_instance(byte_io::stream_write_t);
+allio_byte_io_instance(byte_io::random_read_t);
+allio_byte_io_instance(byte_io::random_write_t);

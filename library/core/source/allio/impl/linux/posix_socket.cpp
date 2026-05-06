@@ -16,7 +16,7 @@ using namespace allio::posix;
 using namespace allio::linux;
 
 vsm::result<socket_with_flags> posix::create_socket(
-	sa_family_t const address_family,
+	socket_address_family_type const address_family,
 	int type,
 	int const protocol,
 	io_flags const flags)

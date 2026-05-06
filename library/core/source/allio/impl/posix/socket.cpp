@@ -31,10 +31,11 @@ static To ipv6_network_byte_order(From const& addr)
 
 static vsm::result<socket_address_size_type> set_socket_address(
 	socket_address_abstract& addr,
-	sa_family_t const family)
+	socket_address_family_type const family)
 {
 	addr.family = family;
-	return sizeof(addr);
+
+	return static_cast<socket_address_size_type>(sizeof(addr));
 }
 
 static vsm::result<socket_address_size_type> set_socket_address(

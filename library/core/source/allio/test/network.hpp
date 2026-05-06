@@ -11,6 +11,7 @@
 
 #include <filesystem>
 #include <format>
+#include <random>
 
 namespace allio::test {
 

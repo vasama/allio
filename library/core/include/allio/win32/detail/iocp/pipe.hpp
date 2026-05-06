@@ -25,8 +25,8 @@ struct async_operation<iocp_multiplexer, pipe_t, byte_io::stream_read_t>
 
 	iocp_byte_io_state byte_io;
 
-	static io_result<size_t> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
-	static io_result<size_t> notify(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);
+	static io_result<read_result> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
+	static io_result<read_result> notify(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);
 	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 

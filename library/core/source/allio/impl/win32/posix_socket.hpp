@@ -25,6 +25,7 @@ namespace allio::posix {
 
 using socket_type = SOCKET;
 using socket_address_size_type = int;
+using socket_address_family_type = ADDRESS_FAMILY;
 
 inline constexpr auto socket_error_value = SOCKET_ERROR;
 inline constexpr socket_type invalid_socket = INVALID_SOCKET;

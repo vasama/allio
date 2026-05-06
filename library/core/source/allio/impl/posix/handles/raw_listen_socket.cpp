@@ -43,7 +43,7 @@ vsm::result<socket_handle_type> raw_listen_socket_t::accept(
 	native_handle<raw_listen_socket_t> const& h,
 	io_parameters_t<raw_listen_socket_t, accept_t> const& a)
 {
-	sa_family_t const address_family = posix::get_address_family(h.flags);
+	posix::socket_address_family_type const address_family = posix::get_address_family(h.flags);
 	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
 
 	void* user_address_storage = nullptr;

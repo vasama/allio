@@ -60,7 +60,7 @@ vsm::result<size_t> raw_datagram_socket_t::receive_from(
 
 	posix::socket_type const socket = posix::unwrap_socket(h.platform_handle);
 
-	sa_family_t const address_family = posix::get_address_family(h.flags);
+	posix::socket_address_family_type const address_family = posix::get_address_family(h.flags);
 	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
 
 	posix::socket_address_union local_address_storage;

@@ -24,6 +24,7 @@ namespace allio::posix {
 
 using socket_type = int;
 using socket_address_size_type = unsigned int;
+using socket_address_family_type = sa_family_t;
 
 inline constexpr auto socket_error_value = -1;
 inline constexpr socket_type invalid_socket = static_cast<socket_type>(-1);

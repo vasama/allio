@@ -555,6 +555,13 @@ extern NTSTATUS(NTAPI* NtWriteFile)(
 	_In_opt_ PLARGE_INTEGER ByteOffset,
 	_In_opt_ PULONG Key);
 
+extern NTSTATUS(NTAPI* NtFlushBuffersFileEx)(
+	_In_ HANDLE FileHandle,
+	_In_ ULONG Flags,
+	_In_ PVOID Parameters,
+	_In_ ULONG ParametersSize,
+	_Out_ PIO_STATUS_BLOCK IoStatusBlock);
+
 
 /* Directory management */
 

@@ -711,6 +711,9 @@ class async_operation<M, openssl_socket_t<RawSocket>, Operation>
 		return byte_io_status::success;
 	}
 
+	vsm_gcc_diagnostic(push)
+	vsm_gcc_diagnostic(ignored "-Wunused-label")
+
 	static io_result<byte_io_status> _continue(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler)
 	{
 		using byte_type = vsm::select_t<
@@ -794,7 +797,13 @@ class async_operation<M, openssl_socket_t<RawSocket>, Operation>
 			}
 		}
 
-	[[maybe_unused]] outer_break:
+		vsm_msvc_warning(push)
+		vsm_msvc_warning(disable: 4102) // unreferenced label
+
+	outer_break:
+
+		vsm_msvc_warning(pop)
+
 		vsm_try_void(base::_submit_rw(m, h, c, s, handler));
 
 		vsm_assert(!h.openssl->read_needed());
@@ -802,6 +811,8 @@ class async_operation<M, openssl_socket_t<RawSocket>, Operation>
 
 		return status;
 	}
+
+	vsm_gcc_diagnostic(pop)
 
 	static io_result<typename Operation::result_type> _finalize(
 		M&,

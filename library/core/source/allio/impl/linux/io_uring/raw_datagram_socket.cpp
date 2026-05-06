@@ -165,7 +165,7 @@ io_result<size_t> recv_s::submit(
 {
 	vsm_try_void(check_io_vectors_size(a.buffers));
 
-	sa_family_t const address_family = posix::get_address_family(h.flags);
+	posix::socket_address_family_type const address_family = posix::get_address_family(h.flags);
 	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
 
 	io_extension_allocator extension = initialize_extension(s);

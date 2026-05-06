@@ -134,5 +134,5 @@ TEST_CASE(
 		co_await ex::when_all(server_task(), client_task());
 	};
 
-	senders::sync_wait(multiplexer, combined_task()).value();
+	(void)senders::sync_wait(multiplexer, combined_task()).value();
 }

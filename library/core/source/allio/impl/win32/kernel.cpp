@@ -27,6 +27,7 @@ using namespace allio::win32;
 	X(ntdll,        NtDeviceIoControlFile,                  STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtDuplicateObject,                      STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtFreeVirtualMemory,                    STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtFlushBuffersFileEx,                   STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtMapViewOfSection,                     STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtProtectVirtualMemory,                 STATUS_NOT_SUPPORTED) \
 	X(ntdll,        NtQueryDirectoryFileEx,                 STATUS_NOT_SUPPORTED) \
