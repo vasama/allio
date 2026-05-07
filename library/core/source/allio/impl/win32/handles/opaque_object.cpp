@@ -1,6 +1,7 @@
 #include <allio/detail/handles/opaque_object.hpp>
 
 #include <allio/impl/error_encoding.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/win32/kernel_error.hpp>
 
@@ -12,7 +13,7 @@ vsm::result<void> opaque_object_t::poll(
 	native_handle<opaque_object_t> const& h,
 	io_parameters_t<opaque_object_t, poll_t> const& a)
 {
-	NTSTATUS const status = win32::NtWaitForSingleObject(
+	NTSTATUS const status = allio_syscall(win32::NtWaitForSingleObject)(
 		reinterpret_cast<HANDLE>(h.object->handle_value),
 		/* Alertable: */ false,
 		kernel_timeout(a.deadline));

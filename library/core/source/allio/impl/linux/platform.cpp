@@ -3,6 +3,7 @@
 #include <allio/error.hpp>
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
+#include <allio/impl/syscall.hpp>
 
 #include <unistd.h>
 
@@ -16,7 +17,7 @@ void detail::close_platform_handle(int const fd) noexcept
 {
 	static_assert(vsm_os_linux, "Check close behaviour on EINTR");
 
-	if (::close(fd) == -1)
+	if (allio_syscall(::close)(fd) == -1)
 	{
 		unrecoverable_error(allio_error(get_last_error()));
 	}

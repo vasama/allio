@@ -3,6 +3,7 @@
 #include <allio/impl/byte_io_buffers.hpp>
 #include <allio/impl/posix/handles/raw_common_socket.hpp>
 #include <allio/impl/posix/socket.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/wsa_thread_event.hpp>
 #include <allio/impl/win32/wsa.hpp>
 
@@ -109,7 +110,7 @@ vsm::result<void> raw_socket_t::connect(
 	}
 	else
 	{
-		if (::connect(socket.get(), addr.addr, addr.size) == SOCKET_ERROR)
+		if (allio_syscall(::connect)(socket.get(), addr.addr, addr.size) == SOCKET_ERROR)
 		{
 			return vsm::unexpected(allio_error(posix::get_last_socket_error()));
 		}
@@ -203,7 +204,7 @@ vsm::result<read_result> raw_socket_t::stream_read(
 	DWORD transferred;
 	DWORD flags = 0;
 
-	if (win32::WSARecv(
+	if (allio_syscall(win32::WSARecv)(
 		socket,
 		// This function is not const correct, so a const_cast is required.
 		const_cast<WSABUF*>(wsa_buffers.data()),
@@ -255,7 +256,7 @@ vsm::result<size_t> raw_socket_t::stream_write(
 	DWORD transferred;
 	DWORD flags = 0;
 
-	if (win32::WSASend(
+	if (allio_syscall(win32::WSASend)(
 		socket,
 		// This function is not const correct, so a const_cast is required.
 		const_cast<WSABUF*>(wsa_buffers.data()),

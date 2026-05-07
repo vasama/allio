@@ -4,6 +4,7 @@
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/timeout.hpp>
+#include <allio/impl/syscall.hpp>
 
 #include <vsm/assert.h>
 #include <vsm/result.hpp>
@@ -14,6 +15,7 @@
 
 namespace allio::linux {
 
+// TODO: move out of header
 [[nodiscard]] inline vsm::result<short> poll(
 	int const fd,
 	short const events,
@@ -27,7 +29,7 @@ namespace allio::linux {
 		.events = events,
 	};
 
-	int const r = ppoll(
+	int const r = allio_syscall(ppoll)(
 		&poll_fd,
 		/* count: */ 1,
 		kernel_timeout<timespec>(deadline),

@@ -2,6 +2,7 @@
 
 #include <allio/impl/new.hpp>
 #include <allio/impl/error_encoding.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
 #include <allio/impl/win32/memory.hpp>
 #include <allio/impl/win32/kernel.hpp>
@@ -83,7 +84,7 @@ static vsm::result<unique_anonymous_mmap> allocate_virtual_memory(
 	ULONG const allocation_type,
 	ULONG const page_protection)
 {
-	NTSTATUS const status = NtAllocateVirtualMemory(
+	NTSTATUS const status = allio_syscall(NtAllocateVirtualMemory)(
 		process,
 		&base,
 		/* ZeroBits: */ 0,
@@ -112,7 +113,7 @@ static vsm::result<ULONG> protect_virtual_memory(
 	ULONG const new_page_protection)
 {
 	ULONG old_page_protection;
-	NTSTATUS const status = NtProtectVirtualMemory(
+	NTSTATUS const status = allio_syscall(NtProtectVirtualMemory)(
 		process,
 		&base,
 		&size,
@@ -134,7 +135,7 @@ static vsm::result<void> free_virtual_memory(
 	size_t size,
 	ULONG const free_type)
 {
-	NTSTATUS const status = NtFreeVirtualMemory(
+	NTSTATUS const status = allio_syscall(NtFreeVirtualMemory)(
 		process,
 		&base,
 		&size,
@@ -162,7 +163,7 @@ static vsm::result<unique_section_mmap> map_view_of_section(
 		offset,
 		error::file_offset_out_of_range));
 
-	NTSTATUS const status = NtMapViewOfSection(
+	NTSTATUS const status = allio_syscall(NtMapViewOfSection)(
 		section,
 		process,
 		&base,
@@ -186,7 +187,7 @@ static vsm::result<void> unmap_view_of_section(
 	HANDLE const process,
 	void* const base)
 {
-	NTSTATUS const status = NtUnmapViewOfSection(
+	NTSTATUS const status = allio_syscall(NtUnmapViewOfSection)(
 		process,
 		base);
 

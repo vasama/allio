@@ -1,6 +1,7 @@
 #include <allio/impl/win32/object.hpp>
 
 #include <allio/impl/error_encoding.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/error.hpp>
 
 #include <vsm/out_resource.hpp>
@@ -14,7 +15,7 @@ vsm::result<ACCESS_MASK> win32::get_handle_access(HANDLE const handle)
 	OBJECT_BASIC_INFORMATION information;
 
 	ULONG returned_size;
-	NTSTATUS const status = win32::NtQueryObject(
+	NTSTATUS const status = allio_syscall(win32::NtQueryObject)(
 		handle,
 		ObjectBasicInformation,
 		&information,

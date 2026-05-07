@@ -1,5 +1,6 @@
-#include <allio/handles/thread.hpp>
 #include <allio/impl/win32/handles/thread.hpp>
+
+#include <allio/impl/syscall.hpp>
 
 using namespace allio;
 using namespace allio::detail;
@@ -37,7 +38,7 @@ vsm::result<void> thread_t::terminate(
 	native_type const& h,
 	io_parameters_t<thread_t, terminate_t> const& a)
 {
-	NSTATATUS const status = NtTerminateThread(
+	NSTATATUS const status = allio_syscall(NtTerminateThread)(
 		unwrap_handle(h.platform_handle),
 		//TODO: Does this require some kind of transformation?
 		static_cast<NTSTATUS>(a.exit_code));
@@ -56,7 +57,7 @@ vsm::result<process_exit_code> thread_t::wait(
 {
 	HANDLE const handle = unwrap_handle(h.platform_handle);
 
-	NTSTATUS const status = win32::NtWaitForSingleObject(
+	NTSTATUS const status = allio_syscall(win32::NtWaitForSingleObject)(
 		handle,
 		/* Alertable: */ false,
 		kernel_timeout(a.deadline));

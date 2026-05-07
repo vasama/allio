@@ -4,6 +4,7 @@
 #include <allio/detail/config.hpp>
 #include <allio/detail/platform.hpp>
 #include <allio/detail/unique_handle.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/transcode.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel_path.hpp>
@@ -74,7 +75,7 @@ vsm::result<unique_handle> win32::create_file(
 	IO_STATUS_BLOCK io_status_block;
 
 	unique_handle handle;
-	NTSTATUS const status = win32::NtCreateFile(
+	NTSTATUS const status = allio_syscall(win32::NtCreateFile)(
 		vsm::out_resource(handle),
 		options.desired_access,
 		&object_attributes,
@@ -210,7 +211,7 @@ vsm::result<void> win32::link_file_at(
 	std::memcpy(information->FileName, path.data(), path.size() * sizeof(wchar_t));
 
 	IO_STATUS_BLOCK io_status_block;
-	NTSTATUS const status = NtSetInformationFile(
+	NTSTATUS const status = allio_syscall(NtSetInformationFile)(
 		handle,
 		&io_status_block,
 		information,
@@ -270,7 +271,7 @@ static vsm::result<std::wstring_view> query_object_path(
 		auto const information = reinterpret_cast<OBJECT_NAME_INFORMATION*>(storage.data());
 
 		ULONG information_size;
-		NTSTATUS const status = win32::NtQueryObject(
+		NTSTATUS const status = allio_syscall(win32::NtQueryObject)(
 			handle,
 			ObjectNameInformation,
 			storage.data(),
@@ -317,7 +318,7 @@ static vsm::result<std::wstring_view> query_normalized_file_path(
 		auto const information = reinterpret_cast<FILE_NAME_INFORMATION*>(storage.data());
 
 		IO_STATUS_BLOCK io_status_block;
-		NTSTATUS const status = NtQueryInformationFile(
+		NTSTATUS const status = allio_syscall(NtQueryInformationFile)(
 			handle,
 			&io_status_block,
 			information,
@@ -358,7 +359,7 @@ static vsm::result<HANDLE> open_mount_manager()
 		};
 
 		IO_STATUS_BLOCK io_status_block;
-		NTSTATUS const status = win32::NtCreateFile(
+		NTSTATUS const status = allio_syscall(win32::NtCreateFile)(
 			&handle,
 			SYNCHRONIZE | FILE_READ_ATTRIBUTES,
 			&object_attributes,
@@ -396,7 +397,7 @@ static vsm::result<std::wstring_view> query_dos_volume_name(
 		auto const paths = reinterpret_cast<MOUNTMGR_VOLUME_PATHS*>(storage.data());
 
 		IO_STATUS_BLOCK io_status_block;
-		NTSTATUS const status = win32::NtDeviceIoControlFile(
+		NTSTATUS const status = allio_syscall(win32::NtDeviceIoControlFile)(
 			mount_manager,
 			/* Event: */ NULL,
 			/* ApcRoutine: */ nullptr,
@@ -599,7 +600,7 @@ static vsm::result<mount_points_view> query_mount_points(
 		auto const mount_points = reinterpret_cast<MOUNTMGR_MOUNT_POINTS*>(storage.data());
 
 		IO_STATUS_BLOCK io_status_block;
-		NTSTATUS const status = win32::NtDeviceIoControlFile(
+		NTSTATUS const status = allio_syscall(win32::NtDeviceIoControlFile)(
 			mount_manager,
 			/* Event: */ NULL,
 			/* ApcRoutine: */ nullptr,
@@ -825,7 +826,7 @@ static vsm::result<std::wstring_view> query_file_name_win32(
 			wchar_t* const buffer = reinterpret_cast<wchar_t*>(storage.data());
 			size_t const buffer_writable_size = storage.size() - root.size();
 
-			DWORD const name_size = GetFinalPathNameByHandleW(
+			DWORD const name_size = allio_syscall(GetFinalPathNameByHandleW)(
 				handle,
 				buffer + root.size(),
 				vsm::truncating(buffer_writable_size),

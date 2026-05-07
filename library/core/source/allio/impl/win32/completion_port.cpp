@@ -1,6 +1,7 @@
 #include <allio/impl/win32/completion_port.hpp>
 
 #include <allio/impl/error_encoding.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/win32/kernel_error.hpp>
 
@@ -14,7 +15,7 @@ using namespace allio::win32;
 vsm::result<unique_handle> win32::create_completion_port(size_t const max_concurrent_threads)
 {
 	HANDLE handle;
-	NTSTATUS const status = NtCreateIoCompletion(
+	NTSTATUS const status = allio_syscall(NtCreateIoCompletion)(
 		&handle,
 		IO_COMPLETION_ALL_ACCESS,
 		/* ObjectAttributes: */ nullptr,
@@ -41,7 +42,7 @@ vsm::result<void> win32::set_completion_information(
 		.Key = key_context,
 	};
 
-	NTSTATUS const status = NtSetInformationFile(
+	NTSTATUS const status = allio_syscall(NtSetInformationFile)(
 		handle,
 		&io_status_block,
 		&file_completion_information,
@@ -65,7 +66,7 @@ vsm::result<void> win32::set_io_completion(
 	NTSTATUS const completion_status,
 	ULONG const completion_information)
 {
-	NTSTATUS const status = NtSetIoCompletion(
+	NTSTATUS const status = allio_syscall(NtSetIoCompletion)(
 		completion_port,
 		key_context,
 		apc_context,
@@ -92,7 +93,7 @@ vsm::result<size_t> win32::remove_io_completions(
 	{
 		FILE_IO_COMPLETION_INFORMATION& entry = buffer.front();
 
-		status = NtRemoveIoCompletion(
+		status = allio_syscall(NtRemoveIoCompletion)(
 			completion_port,
 			&entry.KeyContext,
 			&entry.ApcContext,
@@ -103,7 +104,7 @@ vsm::result<size_t> win32::remove_io_completions(
 	}
 	else
 	{
-		status = NtRemoveIoCompletionEx(
+		status = allio_syscall(NtRemoveIoCompletionEx)(
 			completion_port,
 			buffer.data(),
 			vsm::saturating(buffer.size()),

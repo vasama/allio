@@ -3,6 +3,7 @@
 #include <allio/detail/config.hpp>
 #include <allio/impl/new.hpp>
 #include <allio/impl/storage_provider.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/transcode.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/filesystem.hpp>
@@ -166,7 +167,7 @@ vsm::result<handle_with_flags> win32::old_create_file(
 	IO_STATUS_BLOCK io_status_block;
 
 	unique_handle handle;
-	NTSTATUS const status = win32::NtCreateFile(
+	NTSTATUS const status = allio_syscall(win32::NtCreateFile)(
 		vsm::out_resource(handle),
 		options.desired_access,
 		&object_attributes,
@@ -252,7 +253,7 @@ vsm::result<void> win32::_link_file_at(
 		};
 
 		IO_STATUS_BLOCK io_status_block2;
-		[[maybe_unused]] NTSTATUS const status2 = NtSetInformationFile(
+		[[maybe_unused]] NTSTATUS const status2 = allio_syscall(NtSetInformationFile)(
 			delete_handle,
 			&io_status_block2,
 			&information2,
@@ -273,7 +274,7 @@ vsm::result<void> win32::_link_file_at(
 		};
 
 		IO_STATUS_BLOCK io_status_block2;
-		[[maybe_unused]] NTSTATUS const status2 = NtSetInformationFile(
+		[[maybe_unused]] NTSTATUS const status2 = allio_syscall(NtSetInformationFile)(
 			delete_handle,
 			&io_status_block2,
 			&information2,
@@ -301,7 +302,7 @@ vsm::result<void> win32::_link_file_at(
 	std::memcpy(information->FileName, path.data(), path.size() * sizeof(wchar_t));
 
 	IO_STATUS_BLOCK io_status_block;
-	NTSTATUS const status = NtSetInformationFile(
+	NTSTATUS const status = allio_syscall(NtSetInformationFile)(
 		handle,
 		&io_status_block,
 		information,
@@ -349,7 +350,7 @@ static vsm::result<void> delete_file(HANDLE const handle, bool try_posix_semanti
 		}
 
 		IO_STATUS_BLOCK io_status_block;
-		NTSTATUS const status = NtSetInformationFile(
+		NTSTATUS const status = allio_syscall(NtSetInformationFile)(
 			handle,
 			&io_status_block,
 			&information,
@@ -438,7 +439,7 @@ static vsm::result<FILE_ID_INFO> get_file_id_info(HANDLE const handle)
 
 	IO_STATUS_BLOCK io_status_block;
 
-	NTSTATUS const status = NtQueryInformationFile(
+	NTSTATUS const status = allio_syscall(NtQueryInformationFile)(
 		handle,
 		&io_status_block,
 		&information,

@@ -1,6 +1,7 @@
 #include <allio/impl/posix/socket.hpp>
 
 #include <allio/impl/error_encoding.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/step_deadline.hpp>
 
 #include <vsm/lazy.hpp>
@@ -344,7 +345,7 @@ vsm::result<void> posix::socket_listen(socket_type const socket, uint32_t const 
 		? SOMAXCONN
 		: vsm::saturate<int>(_backlog);
 
-	if (::listen(socket, backlog) == socket_error_value)
+	if (allio_syscall(::listen)(socket, backlog) == socket_error_value)
 	{
 		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}
@@ -359,7 +360,7 @@ static vsm::result<void> socket_connect_with_timeout(
 {
 	vsm_try_void(socket_set_non_blocking(socket, true));
 
-	if (::connect(socket, addr.addr, addr.size) == socket_error_value)
+	if (allio_syscall(::connect)(socket, addr.addr, addr.size) == socket_error_value)
 	{
 		switch (socket_error const error = get_last_socket_error())
 		{

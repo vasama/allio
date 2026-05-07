@@ -2,6 +2,7 @@
 
 #include <allio/error.hpp>
 #include <allio/impl/error_encoding.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/win32/error.hpp>
 #include <allio/win32/kernel_error.hpp>
@@ -12,7 +13,7 @@ using namespace allio::win32;
 
 void detail::close_platform_handle(HANDLE const handle) noexcept
 {
-	NTSTATUS const status = win32::NtClose(handle);
+	NTSTATUS const status = allio_syscall(win32::NtClose)(handle);
 
 	if (!NT_SUCCESS(status))
 	{

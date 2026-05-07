@@ -2,6 +2,7 @@
 
 #include <allio/detail/serialization.hpp>
 #include <allio/impl/error_encoding.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>
 
@@ -30,7 +31,7 @@ bool win32::verify_object_type(HANDLE const handle, std::wstring_view const type
 	auto& storage = storage_with_padding.storage;
 
 	ULONG returned_size;
-	NTSTATUS const status = win32::NtQueryObject(
+	NTSTATUS const status = allio_syscall(win32::NtQueryObject)(
 		handle,
 		ObjectTypeInformation,
 		&storage,

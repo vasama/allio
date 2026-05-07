@@ -2,6 +2,7 @@
 
 #include <allio/detail/unique_handle.hpp>
 #include <allio/impl/error_encoding.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
 #include <allio/impl/win32/kernel.hpp>
@@ -41,7 +42,7 @@ vsm::result<void> event_t::create(
 	}
 
 	unique_handle handle;
-	NTSTATUS const status = NtCreateEvent(
+	NTSTATUS const status = allio_syscall(NtCreateEvent)(
 		vsm::out_resource(handle),
 		EVENT_ALL_ACCESS,
 		p_object_attributes,
@@ -72,7 +73,7 @@ vsm::result<void> event_t::signal(
 	native_handle<event_t> const& h,
 	io_parameters_t<event_t, signal_t> const&)
 {
-	NTSTATUS const status = NtSetEvent(
+	NTSTATUS const status = allio_syscall(NtSetEvent)(
 		unwrap_handle(h.platform_handle),
 		/* PreviousState: */ nullptr);
 
@@ -88,7 +89,7 @@ vsm::result<void> event_t::reset(
 	native_handle<event_t> const& h,
 	io_parameters_t<event_t, reset_t> const&)
 {
-	NTSTATUS const status = NtResetEvent(
+	NTSTATUS const status = allio_syscall(NtResetEvent)(
 		unwrap_handle(h.platform_handle),
 		/* PreviousState: */ nullptr);
 
@@ -104,7 +105,7 @@ vsm::result<void> event_t::wait(
 	native_handle<event_t> const& h,
 	io_parameters_t<event_t, wait_t> const& a)
 {
-	NTSTATUS const status = win32::NtWaitForSingleObject(
+	NTSTATUS const status = allio_syscall(win32::NtWaitForSingleObject)(
 		unwrap_handle(h.platform_handle),
 		/* Alertable: */ false,
 		kernel_timeout(a.deadline));

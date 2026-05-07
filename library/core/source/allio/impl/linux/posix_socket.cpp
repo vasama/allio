@@ -2,6 +2,7 @@
 
 #include <allio/impl/linux/timeout.hpp>
 #include <allio/impl/linux/byte_io.hpp>
+#include <allio/impl/syscall.hpp>
 
 #include <vsm/lazy.hpp>
 #include <vsm/numeric.hpp>
@@ -47,7 +48,7 @@ vsm::result<socket_with_flags> posix::create_socket(
 	sockaddr const* const addr,
 	socket_address_size_type const size)
 {
-	if (::bind(socket, addr, size) == -1)
+	if (allio_syscall(::bind)(socket, addr, size) == -1)
 	{
 		return vsm::unexpected(allio_error(get_last_socket_error()));
 	}

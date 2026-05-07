@@ -1,6 +1,7 @@
 #include <allio/impl/linux/process.hpp>
 
 #include <allio/impl/linux/poll.hpp>
+#include <allio/impl/syscall.hpp>
 
 #include <sys/ioctl.h>
 #include <sys/wait.h>
@@ -52,7 +53,7 @@ static vsm::result<void> get_pidfd_info(
 	pidfd_info& out_info)
 {
 	out_info.mask = mask;
-	int const r = ::ioctl(fd, PIDFD_GET_INFO, &out_info);
+	int const r = allio_syscall(::ioctl)(fd, PIDFD_GET_INFO, &out_info);
 
 	if (r < 0)
 	{

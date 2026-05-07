@@ -3,6 +3,7 @@
 #include <allio/detail/handles/platform_object.hpp>
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/posix/socket.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/thread_event.hpp>
 

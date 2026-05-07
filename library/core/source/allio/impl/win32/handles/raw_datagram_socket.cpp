@@ -3,6 +3,7 @@
 #include <allio/impl/byte_io_buffers.hpp>
 #include <allio/impl/posix/handles/raw_common_socket.hpp>
 #include <allio/impl/posix/socket.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/wsa_thread_event.hpp>
 #include <allio/impl/win32/wsa.hpp>
 
@@ -97,7 +98,7 @@ vsm::result<size_t> raw_datagram_socket_t::receive_from(
 	DWORD transferred;
 	DWORD flags = 0;
 
-	if (win32::WSARecvFrom(
+	if (allio_syscall(win32::WSARecvFrom)(
 		socket,
 		const_cast<WSABUF*>(wsa_buffers.data()),
 		vsm::truncating(wsa_buffers.size()),
@@ -147,7 +148,7 @@ vsm::result<void> raw_datagram_socket_t::send_to(
 
 	DWORD transferred;
 
-	if (win32::WSASendTo(
+	if (allio_syscall(win32::WSASendTo)(
 		socket,
 		const_cast<WSABUF*>(wsa_buffers.data()),
 		vsm::truncating(wsa_buffers.size()),

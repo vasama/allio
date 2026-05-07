@@ -1,6 +1,7 @@
 #include <allio/impl/win32/event.hpp>
 
 #include <allio/impl/error_encoding.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/kernel.hpp>
 
 #include <vsm/out_resource.hpp>
@@ -16,7 +17,7 @@ vsm::result<detail::unique_handle> win32::create_event(
 	vsm::result<unique_handle> r(vsm::result_value);
 
 	//TODO: Make inheritable if requested.
-	NTSTATUS const status = NtCreateEvent(
+	NTSTATUS const status = allio_syscall(NtCreateEvent)(
 		vsm::out_resource(*r),
 		EVENT_ALL_ACCESS,
 		/* ObjectAttributes: */ nullptr,
@@ -35,7 +36,7 @@ vsm::result<detail::unique_handle> win32::create_event(
 
 vsm::result<void> win32::signal_event(HANDLE const event)
 {
-	NTSTATUS const status = NtSetEvent(
+	NTSTATUS const status = allio_syscall(NtSetEvent)(
 		event,
 		/* PreviousState: */ nullptr);
 

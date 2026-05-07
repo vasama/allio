@@ -1,5 +1,6 @@
 #include <allio/impl/win32/thread_event.hpp>
 
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/event.hpp>
 
 #include <vsm/atomic.hpp>
@@ -21,7 +22,7 @@ static void cancel_io_and_wait(
 	NTSTATUS const status_on_cancellation)
 {
 	IO_STATUS_BLOCK io_status_block_cancel;
-	NTSTATUS const status = NtCancelIoFileEx(
+	NTSTATUS const status = allio_syscall(NtCancelIoFileEx)(
 		handle,
 		&io_status_block,
 		&io_status_block_cancel);
@@ -56,7 +57,7 @@ vsm::result<thread_event> thread_event::get()
 {
 	vsm_assert(m_event != NULL); //PRECONDITION
 
-	NTSTATUS const status = win32::NtWaitForSingleObject(
+	NTSTATUS const status = allio_syscall(win32::NtWaitForSingleObject)(
 		m_event,
 		/* Alertable: */ false,
 		kernel_timeout(deadline));
@@ -114,7 +115,7 @@ void thread_event::reset_event()
 {
 	if (m_event != NULL && m_reset)
 	{
-		NTSTATUS const status = NtResetEvent(
+		NTSTATUS const status = allio_syscall(NtResetEvent)(
 			m_event,
 			/* PreviousState: */ nullptr);
 

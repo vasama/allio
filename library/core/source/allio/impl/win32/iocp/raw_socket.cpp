@@ -4,6 +4,7 @@
 #include <allio/impl/io_extension.hpp>
 #include <allio/impl/posix/handles/raw_common_socket.hpp>
 #include <allio/impl/posix/socket.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/iocp/raw_socket.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/wsa.hpp>
@@ -256,7 +257,7 @@ io_result<read_result> recv_s::submit(
 	// complete this operation.
 	vsm_try(already_completed, submit_socket_io(m, h, [&]() -> DWORD
 	{
-		if (win32::WSARecv(
+		if (allio_syscall(win32::WSARecv)(
 			posix::unwrap_socket(h.platform_handle),
 			const_cast<WSABUF*>(wsa_buffers.data()),
 			vsm::truncating(wsa_buffers.size()),
@@ -334,7 +335,7 @@ io_result<size_t> send_s::submit(
 	// complete this operation.
 	vsm_try(already_completed, submit_socket_io(m, h, [&]() -> DWORD
 	{
-		if (win32::WSASend(
+		if (allio_syscall(win32::WSASend)(
 			posix::unwrap_socket(h.platform_handle),
 			const_cast<WSABUF*>(wsa_buffers.data()),
 			vsm::truncating(wsa_buffers.size()),

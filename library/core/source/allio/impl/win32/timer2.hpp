@@ -1,5 +1,6 @@
 #pragma once
 
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/kernel.hpp>
 
 #include <vsm/lazy.hpp>
@@ -14,7 +15,7 @@ static constexpr ULONG timer2_manual_reset                  = 1 << 31;
 inline vsm::result<unique_timer> create_timer()
 {
 	HANDLE handle;
-	NTSTATUS const status = NtCreateTimer2(
+	NTSTATUS const status = allio_syscall(NtCreateTimer2)(
 		&handle,
 		/* Reserved: */ nullptr,
 		/* ObjectAttributes: */ nullptr,
@@ -37,7 +38,7 @@ inline vsm::result<void> set_timer(timer const timer, deadline const deadline)
 		.NoWakeTolerance = 0, //TODO: Set NoWakeTolerance
 	};
 
-	NTSTATUS const status = NtSetTimer2(
+	NTSTATUS const status = allio_syscall(NtSetTimer2)(
 		unwrap_timer(timer),
 		kernel_timeout(deadline),
 		/* Period: */ nullptr,

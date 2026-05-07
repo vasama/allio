@@ -1,6 +1,7 @@
 #include <allio/impl/win32/wait_packet.hpp>
 
 #include <allio/impl/error_encoding.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/win32/kernel_error.hpp>
 
 #include <vsm/out_resource.hpp>
@@ -14,7 +15,7 @@ static constexpr ACCESS_MASK wait_packet_all_access = 1;
 vsm::result<unique_handle> win32::create_wait_packet()
 {
 	unique_handle handle;
-	NTSTATUS const status = NtCreateWaitCompletionPacket(
+	NTSTATUS const status = allio_syscall(NtCreateWaitCompletionPacket)(
 		vsm::out_resource(handle),
 		wait_packet_all_access,
 		/* ObjectAttributes: */ nullptr);
@@ -37,7 +38,7 @@ vsm::result<bool> win32::associate_wait_packet(
 	ULONG_PTR const completion_information)
 {
 	BOOLEAN already_signaled = false;
-	NTSTATUS const status = NtAssociateWaitCompletionPacket(
+	NTSTATUS const status = allio_syscall(NtAssociateWaitCompletionPacket)(
 		wait_packet,
 		completion_port,
 		target_handle,
@@ -59,7 +60,7 @@ vsm::result<bool> win32::cancel_wait_packet(
 	HANDLE const wait_packet,
 	bool const remove_queued_completion)
 {
-	NTSTATUS const status = NtCancelWaitCompletionPacket(
+	NTSTATUS const status = allio_syscall(NtCancelWaitCompletionPacket)(
 		wait_packet,
 		remove_queued_completion);
 

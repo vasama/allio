@@ -4,6 +4,7 @@
 #include <allio/impl/error_encoding_impl.hpp>
 #include <allio/impl/hexadecimal.hpp>
 #include <allio/impl/random.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
 #include <allio/impl/win32/wsa.hpp>
@@ -68,7 +69,7 @@ static vsm::result<posix::unique_socket> wsa_socket(
 	int const protocol,
 	DWORD const flags)
 {
-	SOCKET const socket = win32::WSASocketW(
+	SOCKET const socket = allio_syscall(win32::WSASocketW)(
 		address_family,
 		type,
 		protocol,
@@ -134,7 +135,7 @@ static vsm::result<posix::unique_socket> wsa_accept(
 {
 	addr.size = sizeof(posix::socket_address_union);
 
-	SOCKET const socket = win32::WSAAccept(
+	SOCKET const socket = allio_syscall(win32::WSAAccept)(
 		listen_socket,
 		&addr.addr,
 		&addr.size,
@@ -204,7 +205,12 @@ static vsm::result<void> autobind_unix_socket(SOCKET const socket)
 	{
 		vsm_try_void(secure_random_fill(data));
 
-		if (::bind(socket, reinterpret_cast<sockaddr const*>(&addr), sizeof(addr)) != SOCKET_ERROR)
+		int const r = allio_syscall(::bind)(
+			socket,
+			reinterpret_cast<sockaddr const*>(&addr),
+			sizeof(addr));
+
+		if (r != SOCKET_ERROR)
 		{
 			return {};
 		}
@@ -227,7 +233,7 @@ static vsm::result<void> autobind_unix_socket(SOCKET const socket)
 	}
 	else
 	{
-		if (::bind(socket, addr, size) == SOCKET_ERROR)
+		if (allio_syscall(::bind)(socket, addr, size) == SOCKET_ERROR)
 		{
 			return vsm::unexpected(allio_error(get_last_socket_error()));
 		}
@@ -247,7 +253,7 @@ vsm::result<posix::socket_poll_mask> posix::socket_poll(
 		.events = mask,
 	};
 
-	int const r = win32::WSAPoll(
+	int const r = allio_syscall(win32::WSAPoll)(
 		&poll_fd,
 		/* fds: */ 1,
 		//TODO: WSAPoll timeout
@@ -291,7 +297,7 @@ vsm::result<read_result> posix::socket_scatter_read(
 	DWORD flags = 0;
 
 	DWORD transferred;
-	int const r = win32::WSARecv(
+	int const r = allio_syscall(win32::WSARecv)(
 		socket,
 		const_cast<WSABUF*>(wsa_buffers.data()),
 		vsm::saturating(wsa_buffers.size()),
@@ -321,7 +327,7 @@ vsm::result<size_t> posix::socket_gather_write(
 	vsm_try(wsa_buffers, get_wsa_buffers(buffers, buffer_storage));
 
 	DWORD transferred;
-	int const r = win32::WSASend(
+	int const r = allio_syscall(win32::WSASend)(
 		socket,
 		const_cast<WSABUF*>(wsa_buffers.data()),
 		vsm::saturating(wsa_buffers.size()),
@@ -352,7 +358,7 @@ vsm::result<size_t> posix::socket_receive_from(
 	DWORD transferred;
 	DWORD flags = 0;
 
-	if (win32::WSARecvFrom(
+	if (allio_syscall(win32::WSARecvFrom)(
 		socket,
 		const_cast<WSABUF*>(wsa_buffers.data()),
 		vsm::truncating(wsa_buffers.size()),
@@ -381,7 +387,7 @@ vsm::result<void> posix::socket_send_to(
 	vsm_try(wsa_buffers, get_wsa_buffers(buffers, buffer_storage));
 
 	DWORD transferred;
-	if (win32::WSASendTo(
+	if (allio_syscall(win32::WSASendTo)(
 		socket,
 		const_cast<WSABUF*>(wsa_buffers.data()),
 		vsm::truncating(wsa_buffers.size()),

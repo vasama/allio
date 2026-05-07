@@ -2,6 +2,7 @@
 
 #include <allio/detail/unique_handle.hpp>
 #include <allio/impl/error_encoding.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/byte_io.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
@@ -28,7 +29,7 @@ static vsm::result<HANDLE> get_named_pipe_directory()
 		IO_STATUS_BLOCK io_status_block;
 
 		unique_handle handle;
-		NTSTATUS const status = win32::NtCreateFile(
+		NTSTATUS const status = allio_syscall(win32::NtCreateFile)(
 			vsm::out_resource(handle),
 			GENERIC_READ | SYNCHRONIZE,
 			&object_attributes,
@@ -87,7 +88,7 @@ static vsm::result<handle_with_flags> create_named_pipe_file(io_flags const flag
 	IO_STATUS_BLOCK io_status_block;
 
 	unique_handle handle;
-	NTSTATUS const status = NtCreateNamedPipeFile(
+	NTSTATUS const status = allio_syscall(NtCreateNamedPipeFile)(
 		vsm::out_resource(handle),
 		GENERIC_READ | SYNCHRONIZE | FILE_WRITE_ATTRIBUTES,
 		&object_attributes,
@@ -149,7 +150,7 @@ static vsm::result<handle_with_flags> create_pipe(
 	IO_STATUS_BLOCK io_status_block;
 
 	unique_handle handle;
-	NTSTATUS const status = win32::NtCreateFile(
+	NTSTATUS const status = allio_syscall(win32::NtCreateFile)(
 		vsm::out_resource(handle),
 		GENERIC_WRITE | SYNCHRONIZE | FILE_READ_ATTRIBUTES,
 		&object_attributes,

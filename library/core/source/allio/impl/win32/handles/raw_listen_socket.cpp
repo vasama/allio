@@ -2,6 +2,7 @@
 
 #include <allio/impl/posix/handles/raw_common_socket.hpp>
 #include <allio/impl/posix/socket.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/wsa_thread_event.hpp>
 #include <allio/impl/win32/wsa.hpp>
 
@@ -149,7 +150,7 @@ vsm::result<socket_handle_type> raw_listen_socket_t::accept(
 	{
 		int addr_size = vsm::truncating(max_address_size);
 
-		SOCKET const new_socket = win32::WSAAccept(
+		SOCKET const new_socket = allio_syscall(win32::WSAAccept)(
 			listen_socket,
 			static_cast<sockaddr*>(address_storage),
 			&addr_size,

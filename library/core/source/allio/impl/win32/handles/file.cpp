@@ -1,6 +1,7 @@
 #include <allio/detail/handles/file.hpp>
 
 #include <allio/impl/error_encoding.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/byte_io.hpp>
 #include <allio/impl/win32/handles/fs_object.hpp>
 #include <allio/impl/win32/kernel.hpp>
@@ -33,7 +34,7 @@ vsm::result<fs_size> file_t::tell(
 	FILE_POSITION_INFORMATION information;
 
 	IO_STATUS_BLOCK io_status_block;
-	NTSTATUS const status = NtQueryInformationFile(
+	NTSTATUS const status = allio_syscall(NtQueryInformationFile)(
 		unwrap_handle(h.platform_handle),
 		&io_status_block,
 		&information,
@@ -59,7 +60,7 @@ vsm::result<void> file_t::seek(
 		error::file_offset_out_of_range));
 
 	IO_STATUS_BLOCK io_status_block;
-	NTSTATUS const status = NtSetInformationFile(
+	NTSTATUS const status = allio_syscall(NtSetInformationFile)(
 		unwrap_handle(h.platform_handle),
 		&io_status_block,
 		&information,
@@ -81,7 +82,7 @@ vsm::result<fs_size> file_t::get_maximum_extent(
 	FILE_STANDARD_INFORMATION information;
 
 	IO_STATUS_BLOCK io_status_block;
-	NTSTATUS const status = NtQueryInformationFile(
+	NTSTATUS const status = allio_syscall(NtQueryInformationFile)(
 		unwrap_handle(h.platform_handle),
 		&io_status_block,
 		&information,
@@ -110,7 +111,7 @@ vsm::result<void> file_t::set_maximum_extent(
 		information.EndOfFile.QuadPart = size;
 
 		IO_STATUS_BLOCK io_status_block;
-		NTSTATUS const status = NtSetInformationFile(
+		NTSTATUS const status = allio_syscall(NtSetInformationFile)(
 			unwrap_handle(h.platform_handle),
 			&io_status_block,
 			&information,
@@ -129,7 +130,7 @@ vsm::result<void> file_t::set_maximum_extent(
 		information.AllocationSize.QuadPart = size;
 
 		IO_STATUS_BLOCK io_status_block;
-		NTSTATUS const status = NtSetInformationFile(
+		NTSTATUS const status = allio_syscall(NtSetInformationFile)(
 			unwrap_handle(h.platform_handle),
 			&io_status_block,
 			&information,
@@ -163,7 +164,7 @@ vsm::result<void> file_t::barrier(
 	}
 
 	IO_STATUS_BLOCK io_status_block;
-	NTSTATUS status = NtFlushBuffersFileEx(
+	NTSTATUS status = allio_syscall(NtFlushBuffersFileEx)(
 		unwrap_handle(h.platform_handle),
 		flags,
 		/* Parameters: */ nullptr,

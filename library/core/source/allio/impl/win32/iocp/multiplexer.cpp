@@ -1,6 +1,7 @@
 #include <allio/win32/detail/iocp/multiplexer.hpp>
 
 #include <allio/impl/error_encoding.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/completion_port.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>
@@ -92,7 +93,7 @@ bool iocp_multiplexer::_cancel_io(
 	if (target_status_ref.load(std::memory_order_acquire) == STATUS_PENDING)
 	{
 		IO_STATUS_BLOCK cancel_io_status_block;
-		NTSTATUS const cancel_status = NtCancelIoFileEx(
+		NTSTATUS const cancel_status = allio_syscall(NtCancelIoFileEx)(
 			unwrap_handle(handle),
 			target_io_status_block,
 			&cancel_io_status_block);

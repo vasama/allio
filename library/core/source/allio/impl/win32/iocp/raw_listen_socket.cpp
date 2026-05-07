@@ -3,6 +3,7 @@
 #include <allio/impl/io_extension.hpp>
 #include <allio/impl/posix/handles/raw_common_socket.hpp>
 #include <allio/impl/posix/socket.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/iocp/raw_socket.hpp>
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/wsa.hpp>

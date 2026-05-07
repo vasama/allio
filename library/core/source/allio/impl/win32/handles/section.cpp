@@ -2,6 +2,7 @@
 
 #include <allio/detail/unique_handle.hpp>
 #include <allio/impl/error_encoding.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/win32/handles/platform_object.hpp>
 #include <allio/impl/win32/memory.hpp>
 #include <allio/impl/win32/kernel.hpp>
@@ -140,7 +141,7 @@ vsm::result<void> section_t::create(
 		error::invalid_argument));
 
 	unique_handle handle;
-	NTSTATUS const status = NtCreateSection(
+	NTSTATUS const status = allio_syscall(NtCreateSection)(
 		vsm::out_resource(handle),
 		//TODO: Set section access flags
 		section_access,

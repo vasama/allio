@@ -2,6 +2,7 @@
 
 #include <allio/impl/linux/api_string.hpp>
 #include <allio/impl/linux/error.hpp>
+#include <allio/impl/syscall.hpp>
 
 #include <allio/linux/detail/undef.i>
 
@@ -20,7 +21,7 @@ vsm::result<unique_handle> linux::create_file(
 		dir_fd = AT_FDCWD;
 	}
 
-	int const fd = openat(
+	int const fd = allio_syscall(openat)(
 		dir_fd,
 		path,
 		flags,
@@ -59,7 +60,7 @@ vsm::result<unique_handle> linux::reopen_file(
 	char link_path[32];
 	vsm_verify(snprintf(link_path, sizeof(link_path), "/proc/self/fd/%d", fd) > 0);
 
-	int const new_fd = open(
+	int const new_fd = allio_syscall(open)(
 		link_path,
 		flags,
 		mode);

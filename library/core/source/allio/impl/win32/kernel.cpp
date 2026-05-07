@@ -1,6 +1,7 @@
 #include <allio/impl/win32/kernel.hpp>
 
 #include <allio/error.hpp>
+#include <allio/impl/syscall.hpp>
 
 #include <vsm/preprocessor.h>
 
@@ -150,7 +151,12 @@ bool win32::io_cancel(HANDLE const handle, IO_STATUS_BLOCK& io_status_block)
 {
 	if (io_status_block.Status == STATUS_PENDING)
 	{
-		if (NT_SUCCESS(NtCancelIoFileEx(handle, &io_status_block, &io_status_block)))
+		NTSTATUS const cancel_status = allio_syscall(NtCancelIoFileEx)(
+			handle,
+			&io_status_block,
+			&io_status_block);
+	
+		if (NT_SUCCESS(cancel_status))
 		{
 			return true;
 		}

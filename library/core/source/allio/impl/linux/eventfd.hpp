@@ -19,7 +19,7 @@ namespace allio::linux {
 inline vsm::result<eventfd_t> eventfd_read(int const fd)
 {
 	eventfd_t value;
-	if (::eventfd_read(fd, &value) == -1)
+	if (allio_syscall(::eventfd_read)(fd, &value) == -1)
 	{
 		return vsm::unexpected(allio_error(get_last_error()));
 	}
@@ -28,7 +28,7 @@ inline vsm::result<eventfd_t> eventfd_read(int const fd)
 
 inline vsm::result<void> eventfd_write(int const fd, eventfd_t const value)
 {
-	if (::eventfd_write(fd, value) == -1)
+	if (allio_syscall(::eventfd_write)(fd, value) == -1)
 	{
 		return vsm::unexpected(allio_error(get_last_error()));
 	}
@@ -37,7 +37,7 @@ inline vsm::result<void> eventfd_write(int const fd, eventfd_t const value)
 
 inline vsm::result<void> eventfd_signal(int const fd)
 {
-	int const r = ::eventfd_write(
+	int const r = allio_syscall(::eventfd_write)(
 		fd,
 		/* value: */ 1);
 
@@ -59,7 +59,7 @@ inline vsm::result<bool> eventfd_reset(int const fd)
 {
 	eventfd_t value;
 
-	int const r = ::eventfd_read(
+	int const r = allio_syscall(::eventfd_read)(
 		fd,
 		&value);
 
@@ -85,7 +85,7 @@ inline vsm::result<detail::unique_handle> eventfd(
 {
 	vsm_assert((flags & ~(EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE)) == 0); //PRECONDITION
 
-	int const fd = ::eventfd(initial_value, flags);
+	int const fd = allio_syscall(::eventfd)(initial_value, flags);
 
 	if (fd == -1)
 	{

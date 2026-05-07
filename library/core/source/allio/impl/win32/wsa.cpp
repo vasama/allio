@@ -1,5 +1,7 @@
 #include <allio/impl/win32/wsa.hpp>
 
+#include <allio/impl/syscall.hpp>
+
 #include <vsm/atomic.hpp>
 #include <vsm/defer.hpp>
 #include <vsm/numeric.hpp>
@@ -325,7 +327,7 @@ static DWORD wsa_send_msg(
 	LPDWORD const transferred,
 	LPOVERLAPPED const overlapped)
 {
-	if (win32::WSASendMsg(
+	if (allio_syscall(win32::WSASendMsg)(
 		socket,
 		message,
 		/* dwFlags: */ 0,
@@ -344,7 +346,7 @@ static DWORD wsa_recv_msg(
 	LPDWORD const transferred,
 	LPOVERLAPPED const overlapped)
 {
-	if (win32::WSARecvMsg(
+	if (allio_syscall(win32::WSARecvMsg)(
 		socket,
 		message,
 		transferred,

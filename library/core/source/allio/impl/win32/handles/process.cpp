@@ -3,6 +3,7 @@
 
 #include <allio/detail/dynamic_buffer.hpp>
 #include <allio/impl/error_encoding.hpp>
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/transcode.hpp>
 #include <allio/impl/win32/command_line.hpp>
 #include <allio/impl/win32/environment_block.hpp>
@@ -482,7 +483,7 @@ vsm::result<void> process_t::terminate(
 		? a.exit_code
 		: EXIT_FAILURE;
 
-	NTSTATUS status = NtTerminateProcess(
+	NTSTATUS status = allio_syscall(NtTerminateProcess)(
 		handle,
 		//TODO: Does this require some kind of transformation?
 		static_cast<NTSTATUS>(exit_code));
@@ -527,7 +528,7 @@ vsm::result<process_wait_result> process_t::wait(
 
 	HANDLE const handle = unwrap_handle(h.platform_handle);
 
-	NTSTATUS const status = win32::NtWaitForSingleObject(
+	NTSTATUS const status = allio_syscall(win32::NtWaitForSingleObject)(
 		handle,
 		/* Alertable: */ false,
 		kernel_timeout(a.deadline));
@@ -561,7 +562,7 @@ vsm::result<native_platform_handle> process_t::duplicate_handle(
 	}
 
 	HANDLE new_handle;
-	NTSTATUS const status = win32::NtDuplicateObject(
+	NTSTATUS const status = allio_syscall(win32::NtDuplicateObject)(
 		/* SourceProcessHandle: */ unwrap_handle(h.platform_handle),
 		/* SourceHandle: */ unwrap_handle(a.platform_handle),
 		/* TargetProcessHandle: */ GetCurrentProcess(),
@@ -591,7 +592,7 @@ vsm::result<void> process_t::close(
 			return vsm::unexpected(allio_error(error::process_is_current_process));
 		}
 
-		NTSTATUS const status = win32::NtWaitForSingleObject(
+		NTSTATUS const status = allio_syscall(win32::NtWaitForSingleObject)(
 			unwrap_handle(h.platform_handle),
 			/* Alertable: */ false,
 			/* Timeout: */ nullptr);

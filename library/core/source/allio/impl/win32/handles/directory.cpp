@@ -1,6 +1,7 @@
 #include <allio/detail/handles/directory.hpp>
 #include <allio/impl/win32/handles/directory.hpp>
 
+#include <allio/impl/syscall.hpp>
 #include <allio/impl/transcode.hpp>
 #include <allio/impl/win32/error.hpp>
 #include <allio/impl/win32/kernel.hpp>
@@ -148,7 +149,7 @@ NTSTATUS win32::query_directory_file_start(
 	}
 
 	//TODO: Align args.buffer first.
-	return NtQueryDirectoryFileEx(
+	return allio_syscall(NtQueryDirectoryFileEx)(
 		handle,
 		event,
 		apc_routine,
