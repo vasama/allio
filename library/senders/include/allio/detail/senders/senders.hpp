@@ -115,12 +115,20 @@ class io_sender
 
 		void on_cancel_requested()
 		{
-			cancel_io(m_handle, m_operation);
+			cancel_io(
+				m_handle,
+				m_operation,
+				vsm_as_const(m_args),
+				static_cast<io_handler_type const&>(*this));
 		}
 
 		void on_stop_requested()
 		{
-			cancel_io(m_handle, m_operation);
+			cancel_io(
+				m_handle,
+				m_operation,
+				vsm_as_const(m_args),
+				static_cast<io_handler_type const&>(*this));
 		}
 
 		template<typename R>
@@ -263,12 +271,20 @@ class io_handle_sender
 
 		void on_cancel_requested() noexcept
 		{
-			cancel_io(m_handle, m_operation);
+			cancel_io(
+				m_handle,
+				m_operation,
+				vsm_as_const(m_args),
+				static_cast<io_handler_type const&>(*this));
 		}
 
 		void on_stop_requested() noexcept
 		{
-			cancel_io(m_handle, m_operation);
+			cancel_io(
+				m_handle,
+				m_operation,
+				vsm_as_const(m_args),
+				static_cast<io_handler_type const&>(*this));
 		}
 
 		void handle_result(io_result<void> const& r)

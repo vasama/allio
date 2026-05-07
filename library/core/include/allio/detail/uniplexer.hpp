@@ -17,6 +17,8 @@ public:
 	struct connector_type {};
 	struct operation_type {};
 	struct io_status_type {};
+
+	using io_handler_type = basic_io_handler<io_status_type>;
 };
 
 class uniplexer_handle
@@ -69,7 +71,7 @@ public:
 	}
 
 private:
-	struct io_handler_type : io_handler_base<uniplexer, io_handler_type>
+	struct handler_type : io_handler_base<uniplexer, handler_type>
 	{
 		static void on_io_notification(uniplexer::io_status_type&&) noexcept
 		{
@@ -83,10 +85,10 @@ private:
 	};
 
 	static uniplexer multiplexer;
-	static io_handler_type handler;
+	static handler_type handler;
 };
 inline constinit uniplexer uniplexer_handle::multiplexer;
-inline constinit uniplexer_handle::io_handler_type uniplexer_handle::handler;
+inline constinit uniplexer_handle::handler_type uniplexer_handle::handler;
 
 template<std::same_as<uniplexer> Multiplexer, object Object>
 struct async_connector<Multiplexer, Object> : uniplexer::connector_type
@@ -136,8 +138,9 @@ struct async_operation<Multiplexer, Object, Operation> : uniplexer::operation_ty
 		vsm_unreachable();
 	}
 
-	static void cancel(M&, H const&, C const&, S&)
+	static void cancel(M&, H const&, C const&, S&, A const&, io_handler<M> const&)
 	{
+		vsm_unreachable();
 	}
 };
 

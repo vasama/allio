@@ -112,34 +112,35 @@ TEST_CASE("Asynchronous pipe pair can send and receive data", "[pipe][senders][a
 
 	auto multiplexer = default_multiplexer::create().value();
 
-	sync_wait(multiplexer, []() -> task<void>
+	auto const combined_task = []() -> task<void>
 	{
 		auto const [r, w] = co_await create_pipe();
 
-		co_await ex::when_all
-		(
-			[&]() -> task<void>
-			{
-				unsigned char r_buffer = 0;
+		auto const reader_task = [&]() -> task<void>
+		{
+			unsigned char r_buffer = 0;
 
-				auto const rs_1 = co_await r.read_some(as_read_buffer(&r_buffer, 1));
-				REQUIRE(rs_1 == 1);
-				REQUIRE(r_buffer == 1);
+			auto const rs_1 = co_await r.read_some(as_read_buffer(&r_buffer, 1));
+			REQUIRE(rs_1 == 1);
+			REQUIRE(r_buffer == 1);
 
-				auto const rs_2 = co_await r.read_some(as_read_buffer(&r_buffer, 1));
-				REQUIRE(rs_2 == 1);
-				REQUIRE(r_buffer == 2);
-			}(),
+			auto const rs_2 = co_await r.read_some(as_read_buffer(&r_buffer, 1));
+			REQUIRE(rs_2 == 1);
+			REQUIRE(r_buffer == 2);
+		};
 
-			[&]() -> task<void>
-			{
-				unsigned char w_buffer[2] = { 1, 2 };
+		auto const writer_task = [&]() -> task<void>
+		{
+			unsigned char w_buffer[2] = { 1, 2 };
 
-				size_t const ws = co_await w.write_some(as_write_buffer(w_buffer, 2));
-				REQUIRE(ws == 2);
-			}()
-		);
-	}());
+			size_t const ws = co_await w.write_some(as_write_buffer(w_buffer, 2));
+			REQUIRE(ws == 2);
+		};
+
+		co_await ex::when_all(reader_task(), writer_task());
+	};
+
+	(void)senders::sync_wait(multiplexer, combined_task());
 }
 
 //TODO: Add async greedy I/O tests.

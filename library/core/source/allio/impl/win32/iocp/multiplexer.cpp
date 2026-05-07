@@ -15,16 +15,6 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-namespace {
-
-enum class key_context : uintptr_t
-{
-	generic,
-	wait_packet,
-};
-
-} // namespace
-
 
 vsm::result<iocp_multiplexer> iocp_multiplexer::_create(create_parameters const& args)
 {
@@ -60,12 +50,13 @@ iocp_multiplexer::iocp_multiplexer(vsm::intrusive_ptr<shared_state_t> shared_sta
 
 vsm::result<void> iocp_multiplexer::attach_platform_handle(
 	native_platform_handle const handle,
-	connector_type&)
+	connector_type&,
+	attachment_flags const flags)
 {
 	return set_completion_information(
 		unwrap_handle(handle),
 		m_completion_port.value,
-		std::bit_cast<void*>(key_context::generic));
+		std::bit_cast<void*>(flags));
 }
 
 vsm::result<void> iocp_multiplexer::detach_platform_handle(
@@ -80,52 +71,41 @@ vsm::result<void> iocp_multiplexer::detach_platform_handle(
 
 vsm::result<void> iocp_multiplexer::_attach_handle(
 	native_handle<platform_object_t> const& h,
-	connector_type& c)
+	connector_type& c,
+	attachment_flags const flags)
 {
 	if (!h.flags[platform_object_t::impl_type::flags::overlapped])
 	{
 		return vsm::unexpected(allio_error(error::handle_is_not_multiplexable));
 	}
 
-	return attach_platform_handle(h.platform_handle, c);
+	return attach_platform_handle(h.platform_handle, c, flags);
 }
 
 
-bool iocp_multiplexer::cancel_io(io_slot& slot, native_platform_handle const handle)
+bool iocp_multiplexer::_cancel_io(
+	native_platform_handle const handle,
+	IO_STATUS_BLOCK* const target_io_status_block)
 {
-	size_t const io_status_block_offset = io_status_block::get_storage_offset();
-	static_assert(io_status_block_offset == overlapped::get_storage_offset());
+	auto const target_status_ref = std::atomic_ref(target_io_status_block->Status);
 
-	void* const isb = reinterpret_cast<void*>(
-		reinterpret_cast<uintptr_t>(&slot) + io_status_block_offset);
-
-#if 0
-	// This copy may cause a data race if the kernel writes the ISB.
-	//TODO: Figure out if this is worthwhile, and if so, do it atomically.
-	IO_STATUS_BLOCK isb_copy;
-	memcpy(&isb_copy, isb, sizeof(IO_STATUS_BLOCK));
-
-	if (isb_copy.Status != STATUS_PENDING)
+	if (target_status_ref.load(std::memory_order_acquire) == STATUS_PENDING)
 	{
-		return {};
-	}
-#endif
+		IO_STATUS_BLOCK cancel_io_status_block;
+		NTSTATUS const cancel_status = NtCancelIoFileEx(
+			unwrap_handle(handle),
+			target_io_status_block,
+			&cancel_io_status_block);
 
-	IO_STATUS_BLOCK io_status_block_cancel;
+		if (NT_SUCCESS(cancel_status))
+		{
+			return true;
+		}
 
-	NTSTATUS const status = NtCancelIoFileEx(
-		unwrap_handle(handle),
-		reinterpret_cast<IO_STATUS_BLOCK*>(isb),
-		&io_status_block_cancel);
-
-	if (NT_SUCCESS(status))
-	{
-		return true;
-	}
-
-	if (status != STATUS_NOT_FOUND)
-	{
-		unrecoverable_error(allio_error(static_cast<kernel_error>(status)));
+		if (cancel_status != STATUS_NOT_FOUND)
+		{
+			unrecoverable_error(allio_error(static_cast<kernel_error>(cancel_status)));
+		}
 	}
 
 	return false;
@@ -147,18 +127,17 @@ void iocp_multiplexer::release_wait_packet(unique_wait_packet&& packet)
 
 vsm::result<bool> iocp_multiplexer::submit_wait(
 	wait_packet const packet,
-	wait_slot& slot,
-	native_platform_handle const handle)
+	native_platform_handle const handle,
+	io_handler_type& handler,
+	uint32_t const user_tag)
 {
-	vsm_assert(slot.m_handler != nullptr);
-
 	vsm_try(already_signaled, associate_wait_packet(
 		unwrap_wait_packet(packet),
 		m_completion_port.value,
 		unwrap_handle(handle),
-		std::bit_cast<void*>(key_context::wait_packet),
-		/* apc_context: */ &slot,
-		STATUS_SUCCESS,
+		/* key_context: */ std::bit_cast<void*>(attachment_flags::use_apc_context),
+		/* apc_context: */ io_handler_ptr(&handler, user_tag).tagged_pointer(),
+		/* completion_status: */ STATUS_SUCCESS,
 		/* completion_information: */ 0));
 
 	if (already_signaled)
@@ -172,7 +151,10 @@ vsm::result<bool> iocp_multiplexer::submit_wait(
 	return already_signaled;
 }
 
-bool iocp_multiplexer::cancel_wait(wait_packet const packet, wait_slot& slot)
+bool iocp_multiplexer::cancel_wait(
+	wait_packet const packet,
+	io_handler_type const& const_handler,
+	uint32_t const user_tag)
 {
 	auto const r = cancel_wait_packet(
 		unwrap_wait_packet(packet),
@@ -186,14 +168,17 @@ bool iocp_multiplexer::cancel_wait(wait_packet const packet, wait_slot& slot)
 
 	if (*r)
 	{
+		auto& handler = const_cast<io_handler_type&>(const_handler);
+
+		// TODO: Instead of going through the OS, it might be better to queue this in user space.
+
 		// If the wait was canceled before its completion, a completion event must be queued
 		// manually.
-		//TODO: Instead of going through the OS, it might be better to queue this in user space.
 		vsm_verify(set_io_completion(
 			m_completion_port.value,
-			std::bit_cast<void*>(key_context::wait_packet),
-			/* apc_context: */ &slot,
-			STATUS_CANCELLED,
+			/* key_context: */ std::bit_cast<void*>(attachment_flags::use_apc_context),
+			/* apc_context: */ io_handler_ptr(&handler, user_tag).tagged_pointer(),
+			/* completion_status: */ STATUS_CANCELLED,
 			/* completion_information: */ 0));
 	}
 
@@ -215,43 +200,32 @@ vsm::result<bool> iocp_multiplexer::_poll(poll_parameters const& args)
 		return false;
 	}
 
+	auto const get_handler_ptr = [](void* const apc_context, attachment_flags const flags)
+	{
+		if (vsm::any_flags(flags, attachment_flags::use_apc_context))
+		{
+			return io_handler_ptr::from_tagged(apc_context);
+		}
+		else
+		{
+			// The ApcContext contains the pointer to the original IO_STATUS_BLOCK or OVERLAPPED
+			// passed to the I/O API when this operation was started. When use_apc_context is not
+			// specified, the pointer to the I/O handler is stored before the io status block.
+			return static_cast<io_handler_ptr const*>(apc_context)[-1];
+		}
+	};
+
 	for (auto const& entry : std::span(entries, entry_count))
 	{
-		switch (std::bit_cast<key_context>(entry.KeyContext))
+		auto const flags = std::bit_cast<attachment_flags>(entry.KeyContext);
+		auto const [handler, user_tag] = get_handler_ptr(entry.ApcContext, flags);
+
+		handler->notify(io_status_type
 		{
-		case key_context::generic:
-			{
-				size_t const io_status_block_offset = io_status_block::get_storage_offset();
-				static_assert(io_status_block_offset == overlapped::get_storage_offset());
-
-				// The ApcContext contains the pointer to the original IO_STATUS_BLOCK or OVERLAPPED
-				// passed to the I/O API when this operation was started.
-				io_slot& slot = *std::launder(reinterpret_cast<io_slot*>(
-					reinterpret_cast<uintptr_t>(entry.ApcContext) - io_status_block_offset));
-
-				vsm_assert(slot.m_handler != nullptr);
-				slot.m_handler->notify(io_status_type
-				{
-					.slot = slot,
-					.status = entry.IoStatusBlock.Status,
-				});
-			}
-			break;
-
-		case key_context::wait_packet:
-			{
-				wait_slot& slot = *static_cast<wait_slot*>(entry.ApcContext);
-
-				vsm_assert(slot.m_handler != nullptr);
-				slot.m_handler->notify(io_status_type
-				{
-					.slot = slot,
-					.status = entry.IoStatusBlock.Status,
-				});
-			}
-			break;
-		}
-
+			.status = entry.IoStatusBlock.Status,
+			.user_tag = user_tag,
+			.information = entry.IoStatusBlock.Information,
+		});
 	}
 
 	return true;

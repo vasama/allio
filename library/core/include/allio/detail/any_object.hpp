@@ -291,9 +291,11 @@ struct any_object_attached_functions_1
 		multiplexer_handle_for<AnyObject> auto&& m,
 		native_handle<AnyObject> const& h,
 		async_connector_t<Multiplexer, AnyObject> const& c,
-		async_operation_t<Multiplexer, AnyObject, Operation>& s) const
+		async_operation_t<Multiplexer, AnyObject, Operation>& s,
+		io_parameters_t<AnyObject, Operation> const& a,
+		io_handler<Multiplexer> const& handler) const
 	{
-		p_cancel(m, h, c, s);
+		p_cancel(m, h, c, s, a, handler);
 	}
 };
 
@@ -436,13 +438,15 @@ struct async_operation<Multiplexer, any_object_t<BaseObject, Multiplexers...>, O
 			vsm_move(status));
 	}
 
-	static void cancel(M& m, H& h, C& c, S& s)
+	static void cancel(M& m, H& h, C& c, S& s, A const& args, io_handler<M> const& handler)
 	{
 		c.functions->template cancel<Operation>(
 			m,
 			h,
 			c,
-			s);
+			s,
+			args,
+			handler);
 	}
 };
 
@@ -593,7 +597,9 @@ void any_cancel(
 	Multiplexer& m,
 	native_handle<AnyObject> const& any_h,
 	async_connector<Multiplexer, AnyObject> const& any_c,
-	async_operation<Multiplexer, AnyObject, Operation>& any_s)
+	async_operation<Multiplexer, AnyObject, Operation>& any_s,
+	io_parameters_t<AnyObject, Operation> const& a,
+	io_handler<Multiplexer> const& handler)
 {
 	using h_type = native_handle<Object>;
 	using c_type = async_connector<Multiplexer, Object>;
@@ -603,7 +609,7 @@ void any_cancel(
 	auto const c = any_c.storage.template get<c_type>();
 	auto const s = any_s.storage.template get<s_type>();
 
-	detail::cancel_io(m, *h, *c, *s);
+	detail::cancel_io(m, *h, *c, *s, a, handler);
 }
 
 // TODO: Intellisense was having issues here. Figure out if there's a workaround.

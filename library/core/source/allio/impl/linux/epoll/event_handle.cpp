@@ -66,7 +66,7 @@ io_result operation<M, H, wait_t>::notify(M& m, H const& h, C const& c, wait_s& 
 	});
 }
 
-void operation<M, H, wait_t>::cancel(M& m, H const& h, C const& c, wait_s& s)
+void operation<M, H, wait_t>::cancel(M& m, H const& h, C const& c, wait_s& s, wait_a const& a, io_handler<M> const& handler)
 {
 	m.unsubscribe(c, s.subscription);
 }

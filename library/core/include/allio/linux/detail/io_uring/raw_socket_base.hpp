@@ -19,7 +19,7 @@ struct io_uring_raw_socket_get_address_1
 
 	static io_result<void> submit(M& m, H const& h, C const& c, S& s, A const& a, io_handler<M>& handler);
 	static io_result<void> notify(M& m, H const& h, C const& c, S& s, A const& a, io_handler<M>& handler, M::io_status_type status);
-	static void cancel(M& m, H const& h, C const& c, S& s);
+	static void cancel(M& m, H const& h, C const& c, S& s, A const& a, io_handler<M> const& handler);
 };
 
 template<typename RawSocket>
@@ -42,9 +42,9 @@ struct io_uring_raw_socket_get_address
 		return io_uring_raw_socket_get_address::notify(m, h, c, s, a, handler, vsm_move(status));
 	}
 
-	static vsm_always_inline void cancel(M& m, H const& h, C const& c, S& s)
+	static vsm_always_inline void cancel(M& m, H const& h, C const& c, S& s, A const& a, io_handler<M> const& handler)
 	{
-		return io_uring_raw_socket_get_address::cancel(m, h, c, s);
+		return io_uring_raw_socket_get_address::cancel(m, h, c, s, a, handler);
 	}
 };
 

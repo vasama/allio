@@ -41,7 +41,10 @@ io_result<void> bind_s::submit(M& m, H& h, C& c, bind_s&, bind_a const& a, io_ha
 		a.flags));
 
 	vsm_try_void(socket_bind(socket.get(), addr));
-	vsm_try_void(m.attach_platform_handle(posix::wrap_socket(socket.get()), c));
+	vsm_try_void(m.attach_platform_handle(
+		posix::wrap_socket(socket.get()),
+		c,
+		iocp_multiplexer::attachment_flags::none));
 
 	h = H
 	{
@@ -71,19 +74,19 @@ io_result<void> bind_s::notify(
 	vsm_unreachable();
 }
 
-void bind_s::cancel(M&, H const&, C const&, bind_s&)
+void bind_s::cancel(M&, H const&, C const&, bind_s&, A const&, io_handler<M> const&)
 {
 }
 
 
-static size_t get_transfer_result(H const& h, M::overlapped& overlapped)
+static size_t get_transfer_result(H const& h, OVERLAPPED& overlapped)
 {
 	DWORD transferred;
 	DWORD flags;
 
 	vsm_verify(WSAGetOverlappedResult(
 		posix::unwrap_socket(h.platform_handle),
-		overlapped.get(),
+		&overlapped,
 		&transferred,
 		/* fWait: */ false,
 		&flags));
@@ -114,11 +117,11 @@ io_result<void> send_s::submit(
 
 	DWORD transferred;
 
-	OVERLAPPED& overlapped = *s.overlapped;
+	OVERLAPPED& overlapped = s.overlapped.initialize();
 	overlapped.Pointer = nullptr;
 	overlapped.hEvent = NULL;
 
-	s.overlapped.bind(handler);
+	s.overlapped.set_context(handler);
 
 	vsm_try(already_completed, submit_socket_io(m, h, [&]() -> DWORD
 	{
@@ -160,22 +163,20 @@ io_result<void> send_s::notify(
 {
 	io_extension_allocator const extension = acquire_extension(s);
 
-	vsm_assert(&status.slot == &s.overlapped);
-
 	if (!NT_SUCCESS(status.status))
 	{
 		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
 	}
 
-	size_t const transferred = get_transfer_result(h, s.overlapped);
+	size_t const transferred = get_transfer_result(h, s.overlapped.get_existing());
 	vsm_assert(transferred == get_io_buffers_size(a.buffers));
 
 	return {};
 }
 
-void send_s::cancel(M&, H const& h, C const&, send_s& s)
+void send_s::cancel(M&, H const& h, C const&, send_s& s, A const&, io_handler<M> const&)
 {
-	cancel_socket_io(posix::unwrap_socket(h.platform_handle), *s.overlapped);
+	cancel_socket_io(posix::unwrap_socket(h.platform_handle), s.overlapped.get_existing());
 }
 
 
@@ -230,11 +231,11 @@ io_result<size_t> recv_s::submit(
 		}
 	}
 
-	OVERLAPPED& overlapped = *s.overlapped;
+	OVERLAPPED& overlapped = s.overlapped.initialize();
 	overlapped.Pointer = nullptr;
 	overlapped.hEvent = NULL;
 
-	s.overlapped.bind(handler);
+	s.overlapped.set_context(handler);
 
 	DWORD transferred;
 	DWORD flags = 0;
@@ -277,20 +278,18 @@ io_result<size_t> recv_s::notify(
 {
 	io_extension_allocator const extension = acquire_extension(s);
 
-	vsm_assert(&status.slot == &s.overlapped);
-
 	if (!NT_SUCCESS(status.status))
 	{
 		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
 	}
 
-	size_t const transferred = get_transfer_result(h, s.overlapped);
+	size_t const transferred = get_transfer_result(h, s.overlapped.get_existing());
 	vsm_assert(transferred != 0);
 
 	return transferred;
 }
 
-void recv_s::cancel(M&, H const& h, C const&, recv_s& s)
+void recv_s::cancel(M&, H const& h, C const&, recv_s& s, A const&, io_handler<M> const&)
 {
-	cancel_socket_io(posix::unwrap_socket(h.platform_handle), *s.overlapped);
+	cancel_socket_io(posix::unwrap_socket(h.platform_handle), s.overlapped.get_existing());
 }

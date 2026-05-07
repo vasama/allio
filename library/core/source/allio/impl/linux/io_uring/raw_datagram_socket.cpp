@@ -67,7 +67,7 @@ io_result<void> bind_s::notify(M&, H&, C&, bind_s&, bind_a const&, io_handler<M>
 	vsm_unreachable();
 }
 
-void bind_s::cancel(M&, H const&, C const&, bind_s&)
+void bind_s::cancel(M&, H const&, C const&, bind_s&, bind_a const&, io_handler<M> const&)
 {
 }
 
@@ -142,7 +142,7 @@ io_result<void> send_s::notify(
 	return {};
 }
 
-void send_s::cancel(M& m, H const&, C const&, send_s& s)
+void send_s::cancel(M& m, H const&, C const&, send_s& s, send_a const&, io_handler<M> const&)
 {
 	(void)m.cancel_io(s);
 }
@@ -239,7 +239,7 @@ io_result<size_t> recv_s::notify(
 	return static_cast<size_t>(status.result);
 }
 
-void recv_s::cancel(M&, H const& h, C const&, recv_s& s)
+void recv_s::cancel(M&, H const& h, C const&, recv_s& s, recv_a const&, io_handler<M> const&)
 {
 	//TODO: Cancel
 }

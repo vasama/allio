@@ -74,7 +74,9 @@ struct async_operation<io_uring_multiplexer, my_object_t, my_operation_t>
         M& m,
         H const& h,
         C const& c,
-        S& s);
+        S& s,
+        A const& a,
+        io_handler<M> const& handler);
 };
 ```
 

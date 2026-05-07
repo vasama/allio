@@ -42,8 +42,9 @@ io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s&, listen_a const& a,
 	vsm_try_void(posix::socket_listen(socket.get(), a.backlog));
 
 	vsm_try_void(m.attach_platform_handle(
-		posix::wrap_socket(socket.get()),
-		c));
+		socket.get(),
+		c,
+		iocp_multiplexer::attachment_flags::use_apc_context));
 
 	h.flags = object_t::flags::not_null | flags;
 	h.platform_handle = posix::wrap_socket(socket.release());
@@ -56,7 +57,7 @@ io_result<void> listen_s::notify(M&, H&, C&, listen_s&, listen_a const&, io_hand
 	vsm_unreachable();
 }
 
-void listen_s::cancel(M&, H const&, C const&, listen_s&)
+void listen_s::cancel(M&, H const&, C const&, listen_s&, A const&, io_handler<M> const&)
 {
 }
 
@@ -78,7 +79,10 @@ static io_result<accept_result_type> make_accept_result(
 	posix::socket_address_union const& addr)
 {
 	socket_handle_type::connector_type c;
-	vsm_try_void(m.attach_platform_handle(socket.get(), c));
+	vsm_try_void(m.attach_platform_handle(
+		socket.get(),
+		c,
+		iocp_multiplexer::attachment_flags::none));
 
 	auto const make_socket_handle = [&]()
 	{
@@ -101,7 +105,10 @@ static io_result<accept_result_type> continue_accept_2(M& m, H const& h, accept_
 
 	unique_handle& handle = s.handle;
 	socket_handle_type::connector_type new_c;
-	vsm_try_void(m.attach_platform_handle(handle.get(), new_c));
+	vsm_try_void(m.attach_platform_handle(
+		handle.get(),
+		new_c,
+		iocp_multiplexer::attachment_flags::use_apc_context));
 
 	auto const make_socket_handle = [&]()
 	{
@@ -172,8 +179,6 @@ io_result<accept_result_type> accept_s::submit(M& m, H const& h, C const&, accep
 {
 	auto& data = new_object<accept_data>(s.storage);
 
-	s.io_status_block.bind(handler);
-
 	bool const may_complete_synchronously = m.supports_synchronous_completion(h);
 
 	// If using a multithreaded completion port, after this call
@@ -182,7 +187,7 @@ io_result<accept_result_type> accept_s::submit(M& m, H const& h, C const&, accep
 		unwrap_handle(h.platform_handle),
 		/* Event: */ NULL,
 		/* ApcRoutine: */ nullptr,
-		/* ApcContext: */ nullptr,
+		iocp_multiplexer::make_apc_context(handler),
 		s.io_status_block.get(),
 		&data.data,
 		sizeof(data));
@@ -220,7 +225,7 @@ io_result<accept_result_type> accept_s::notify(M& m, H const&, C const&, accept_
 	}
 }
 
-void accept_s::cancel(M&, H const& h, C const&, S& s)
+void accept_s::cancel(M&, H const& h, C const&, S& s, A const&, io_handler<M> const&)
 {
-	cancel_io(unwrap_handler(h.platform_handle), *s.io_status_block);
+	cancel_io(unwrap_handler(h.platform_handle), s.io_status_block);
 }

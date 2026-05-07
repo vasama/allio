@@ -13,15 +13,15 @@ using wait_a = io_parameters_t<event_t, wait_t>;
 
 io_result<void> wait_s::submit(M& m, H const& h, C const&, wait_s& s, wait_a const&, io_handler<M>& handler)
 {
-	return s.wait_state.submit(m, h, s, handler);
+	return s.wait_state.submit(m, h, handler);
 }
 
 io_result<void> wait_s::notify(M& m, H const& h, C const&, wait_s& s, wait_a const&, io_handler<M>& handler, M::io_status_type const status)
 {
-	return s.wait_state.notify(m, h, s, handler, status);
+	return s.wait_state.notify(m, h, handler, status);
 }
 
-void wait_s::cancel(M& m, H const& h, C const&, S& s)
+void wait_s::cancel(M& m, H const& h, C const&, S& s, A const&, io_handler<M> const& handler)
 {
-	s.wait_state.cancel(m, h, s);
+	s.wait_state.cancel(m, h, handler);
 }

@@ -72,7 +72,7 @@ io_result<void> listen_s::notify(M&, H&, C&, listen_s&, listen_a const&, io_hand
 	vsm_unreachable();
 }
 
-void listen_s::cancel(M&, H const&, C const&, listen_s&)
+void listen_s::cancel(M&, H const&, C const&, listen_s&, listen_a const&, io_handler<M> const&)
 {
 }
 
@@ -196,7 +196,7 @@ io_result<socket_handle_type> accept_s::notify(
 	));
 }
 
-void accept_s::cancel(M& m, H const& h, C const&, S& s)
+void accept_s::cancel(M& m, H const& h, C const&, S& s, A const&, io_handler<M> const&)
 {
 	(void)m.cancel_io(s);
 }

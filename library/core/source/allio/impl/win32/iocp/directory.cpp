@@ -9,6 +9,16 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
+using M = iocp_multiplexer;
+using H = native_handle<directory_t>;
+using C = async_connector_t<M, directory_t>;
+
+vsm::result<void> C::attach(M& m, H const& h, C& c)
+{
+	return m.attach_handle(h, c, iocp_multiplexer::attachment_flags::use_apc_context);
+}
+
+
 using open_t = directory_t::open_t;
 using open_s = async_operation<iocp_multiplexer, directory_t, open_t>;
 using open_a = io_parameters_t<directory_t, open_t>;
@@ -17,7 +27,12 @@ io_result<void> open_s::submit(M& m, H& h, C& c, open_s&, open_a const& a, io_ha
 {
 	basic_detached_handle<directory_t> handle;
 	vsm_try_void(blocking_io<directory_t::open_t>(handle, a));
-	vsm_try_void(m.attach_platform_handle(handle.native().platform_handle, c));
+
+	vsm_try_void(m.attach_platform_handle(
+		handle.native().platform_handle,
+		c,
+		iocp_multiplexer::attachment_flags::use_apc_context));
+
 	h = handle.release();
 
 	return {};
@@ -28,7 +43,7 @@ io_result<void> open_s::notify(M&, H&, C&, open_s&, open_a const&, io_handler<M>
 	vsm_unreachable();
 }
 
-void open_s::cancel(M&, H const&, C const&, S&)
+void open_s::cancel(M&, H const&, C const&, S&, A const&, io_handler<M> const&)
 {
 	vsm_unreachable();
 }
@@ -65,7 +80,7 @@ io_result<basic_directory_stream_view<void>> read_s::submit(
 	read_a const& a,
 	io_handler<M>& handler)
 {
-	s.io_status_block.bind(handler);
+	IO_STATUS_BLOCK& io_status_block = s.io_status_block.initialize();
 
 	NTSTATUS const status = query_directory_file_start(
 		unwrap_handle(h.platform_handle),
@@ -73,13 +88,13 @@ io_result<basic_directory_stream_view<void>> read_s::submit(
 		a.buffer,
 		/* restart: */ false,
 		/* apc_routine: */ nullptr,
-		/* apc_context: */ nullptr,
-		*s.io_status_block);
+		iocp_multiplexer::make_apc_context(handler),
+		io_status_block);
 
 	if (status != STATUS_PENDING && m.supports_synchronous_completion(h))
 	{
-		vsm_assert(s.io_status_block->Status == status);
-		return read_completed(a.buffer, *s.io_status_block);
+		vsm_assert(io_status_block.Status == status);
+		return read_completed(a.buffer, io_status_block);
 	}
 
 	return vsm::unexpected(io_notify_status::submitted);
@@ -94,12 +109,12 @@ io_result<basic_directory_stream_view<void>> read_s::notify(
 	io_handler<M>& handler,
 	M::io_status_type const status)
 {
-	vsm_assert(&status.slot == &s.io_status_block);
-	vsm_assert(status.status == s.io_status_block->Status);
-	return read_completed(a.buffer, *s.io_status_block);
+	auto& io_status_block = s.io_status_block.get_existing();
+	vsm_assert(status.status == io_status_block.Status);
+	return read_completed(a.buffer, io_status_block);
 }
 
-void read_s::cancel(M&, H const& h, C const&, S& s)
+void read_s::cancel(M& m, H const& h, C const&, S& s, A const&, io_handler<M> const&)
 {
-	io_cancel(unwrap_handle(h.platform_handle), *s.io_status_block);
+	(void)m.cancel_io(h.platform_handle, s.io_status_block);
 }

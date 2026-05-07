@@ -35,7 +35,7 @@ io_result<size_t> read_s::notify(
 	return s.byte_io.notify(m, h, a, handler, status);
 }
 
-void read_s::cancel(M& m, H const& h, C const&, read_s& s)
+void read_s::cancel(M& m, H const& h, C const&, read_s& s, A const&, io_handler<M> const&)
 {
 	s.byte_io.cancel(m, h, c, s);
 }

@@ -445,13 +445,17 @@ struct handle_traits<basic_attached_handle<Object, MultiplexerHandle>>
 	template<operation_c Operation>
 	static void cancel_io(
 		_handle_type const& h,
-		async_operation_t<_multiplexer_type, Object, Operation>& s)
+		async_operation_t<_multiplexer_type, Object, Operation>& s,
+		io_parameters_t<Object, Operation> const& a,
+		io_handler<_multiplexer_type> const& handler)
 	{
 		return detail::cancel_io(
 			h.m_multiplexer_handle,
 			h.m_native,
 			h.m_connector,
-			s);
+			s,
+			a,
+			handler);
 	}
 };
 

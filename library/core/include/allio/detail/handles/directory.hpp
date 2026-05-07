@@ -462,6 +462,7 @@ struct async_operation<Multiplexer, directory_iterator_t, directory_iterator_t::
 			*c.directory_connector,
 			s._directory_read,
 			_make_directory_read_args(h),
+			handler,
 			vsm_move(status));
 
 		vsm_try(done, _notify_directory_read(
@@ -485,13 +486,15 @@ struct async_operation<Multiplexer, directory_iterator_t, directory_iterator_t::
 		return h.stream_position != directory_stream_position::end_of_directory;
 	}
 
-	static void cancel(M& m, H const& h, C const& c, S& s)
+	static void cancel(M& m, H const& h, C const& c, S& s, A const& a, io_handler<M> const& handler)
 	{
 		decltype(_directory_read)::cancel(
 			m,
 			*h.directory_handle,
 			*c.directory_connector,
-			s._directory_read);
+			s._directory_read,
+			_make_directory_read_args(h),
+			handler);
 	}
 
 	static directory_io::read_t::params_type _make_directory_read_args(H& h)

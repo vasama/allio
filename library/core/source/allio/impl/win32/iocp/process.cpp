@@ -19,7 +19,7 @@ io_result<process_exit_code> wait_s::submit(
 	wait_a const&,
 	io_handler<M>& handler)
 {
-	vsm_try_void(s.wait_state.submit(m, h, s, handler));
+	vsm_try_void(s.wait_state.submit(m, h, handler));
 	return get_process_exit_code(unwrap_handle(h.platform_handle));
 }
 
@@ -32,11 +32,11 @@ io_result<process_exit_code> wait_s::notify(
 	io_handler<M>& handler,
 	M::io_status_type const status)
 {
-	vsm_try_void(s.wait_state.notify(m, h, s, handler, status));
+	vsm_try_void(s.wait_state.notify(m, h, handler, status));
 	return get_process_exit_code(unwrap_handle(h.platform_handle));
 }
 
-void wait_s::cancel(M& m, H const& h, C const&, S& s)
+void wait_s::cancel(M& m, H const& h, C const&, S& s, A const&, io_handler<M> const& handler)
 {
-	s.wait_state.cancel(m, h, s);
+	s.wait_state.cancel(m, h, handler);
 }

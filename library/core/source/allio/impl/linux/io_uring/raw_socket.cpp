@@ -104,7 +104,7 @@ io_result<void> connect_s::notify(
 	return {};
 }
 
-void connect_s::cancel(M& m, H const&, C const&, S& s)
+void connect_s::cancel(M& m, H const&, C const&, S& s, A const&, io_handler<M> const&)
 {
 	(void)m.cancel_io(s);
 }
@@ -161,7 +161,7 @@ io_result<void> disconnect_s::notify(
 	return {};
 }
 
-void disconnect_s::cancel(M& m, H const&, C const&, S& s)
+void disconnect_s::cancel(M& m, H const&, C const&, S& s, A const&, io_handler<M> const&)
 {
 	(void)m.cancel_io(s);
 }
@@ -235,7 +235,7 @@ io_result<read_result> recv_s::notify(
 	return static_cast<size_t>(status.result);
 }
 
-void recv_s::cancel(M& m, H const& h, C const&, recv_s& s)
+void recv_s::cancel(M& m, H const& h, C const&, recv_s& s, A const&, io_handler<M> const&)
 {
 	(void)m.cancel_io(s);
 }
@@ -304,7 +304,7 @@ io_result<size_t> send_s::notify(
 	return static_cast<size_t>(status.result);
 }
 
-void send_s::cancel(M& m, H const& h, C const&, send_s& s)
+void send_s::cancel(M& m, H const& h, C const&, send_s& s, send_a const&, io_handler<M> const&)
 {
 	(void)m.cancel_io(s);
 }

@@ -9,6 +9,7 @@
 #include <allio/win32/detail/win32_fwd.hpp>
 
 #include <vsm/intrusive_ptr.hpp>
+#include <vsm/pointer_tag_pair.hpp>
 #include <vsm/result.hpp>
 
 #include <bit>
@@ -31,96 +32,94 @@ public:
 	struct operation_type {};
 	struct io_status_type;
 
-	class io_slot
+public:
+	struct io_status_type
 	{
-		using io_handler_type = basic_io_handler<io_status_type>;
+		NTSTATUS status;
+		uint32_t user_tag;
+		uint64_t information;
+	};
 
-		io_handler_type* m_handler = nullptr;
-
-	public:
-		void bind(io_handler_type& handler) &
-		{
-			m_handler = &handler;
-		}
-
-	protected:
-		io_slot() = default;
-		io_slot(io_slot const&) = default;
-		io_slot& operator=(io_slot const&) = default;
-		~io_slot() = default;
-
-	private:
-		friend class iocp_multiplexer;
+	struct alignas(8) io_handler_type : basic_io_handler<io_status_type>
+	{
+		using basic_io_handler::basic_io_handler;
 	};
 
 private:
-	template<typename T>
-	class basic_io_slot_storage
+	static constexpr uintptr_t max_user_data_tag = alignof(io_handler_type) - 1;
+
+	using io_handler_ptr = vsm::pointer_tag_pair_with_max<
+		io_handler_type,
+		uint32_t,
+		max_user_data_tag>;
+
+	class basic_io_status_block_handler
 	{
-		static constexpr size_t buffer_size = win32_type_traits<T>::size;
-		static_assert(buffer_size >= win32_type_traits<IO_STATUS_BLOCK>::size);
-
-	protected:
-		alignas(uintptr_t) std::byte m_buffer[buffer_size];
-
 	public:
-		T* get()
-		{
-			return std::launder(reinterpret_cast<T*>(m_buffer));
-		}
-
-		T const* get() const
-		{
-			return std::launder(reinterpret_cast<T const*>(m_buffer));
-		}
-
-		T& operator*()
-		{
-			return *get();
-		}
-
-		T const& operator*() const
-		{
-			return *get();
-		}
-
-		T* operator->()
-		{
-			return get();
-		}
-
-		T const* operator->() const
-		{
-			return get();
-		}
+		io_handler_ptr m_handler;
 	};
 
-	template<typename T>
-	class basic_io_slot
-		: public io_slot
-		, public basic_io_slot_storage<T>
+	template<typename IoStatusBlock>
+	class basic_io_status_block
 	{
-		static consteval size_t get_storage_offset()
+		static constexpr size_t storage_size = win32_type_traits<IoStatusBlock>::size;
+		static_assert(storage_size >= win32_type_traits<IO_STATUS_BLOCK>::size);
+
+		alignas(void*) unsigned char m_storage[storage_size];
+
+	public:
+		[[nodiscard]] IoStatusBlock& initialize()
 		{
-			return offsetof(basic_io_slot, m_buffer);
+			static_assert(std::is_trivially_default_constructible_v<IoStatusBlock>);
+			return *::new (m_storage) IoStatusBlock;
 		}
 
-		friend class iocp_multiplexer;
+		[[nodiscard]] IoStatusBlock& get_existing()
+		{
+			return *std::launder(reinterpret_cast<IoStatusBlock*>(m_storage));
+		}
+
+		[[nodiscard]] IoStatusBlock const& get_existing() const
+		{
+			return *std::launder(reinterpret_cast<IoStatusBlock const*>(m_storage));
+		}
+
+	private:
+		friend iocp_multiplexer;
+	};
+
+	template<typename IoStatusBlock>
+	class basic_io_status_block_with_context
+		: basic_io_status_block_handler
+		, public basic_io_status_block<IoStatusBlock>
+	{
+	public:
+		void set_context(io_handler_type& handler) &
+		{
+			m_handler = io_handler_ptr(&handler, 0);
+		}
+
+		void set_context(io_handler_type& handler, uintptr_t const user_tag) &
+		{
+			m_handler = io_handler_ptr(&handler, user_tag);
+		}
+
+	private:
+		friend iocp_multiplexer;
 	};
 
 public:
-	using io_status_block = basic_io_slot<IO_STATUS_BLOCK>;
-	using overlapped = basic_io_slot<OVERLAPPED>;
+	using io_status_block = basic_io_status_block<IO_STATUS_BLOCK>;
+	using io_status_block_with_handler = basic_io_status_block_with_context<IO_STATUS_BLOCK>;
+	using overlapped_with_handler = basic_io_status_block_with_context<OVERLAPPED>;
 
-	struct wait_slot : io_slot
+	enum class attachment_flags : uintptr_t
 	{
-	};
+		none                            = 0,
 
-	struct io_status_type
-	{
-		io_slot& slot;
-		NTSTATUS status;
+		use_apc_context                 = 1 << 0,
 	};
+	vsm_flag_enum_friend(attachment_flags);
 
 private:
 	struct linear_handle
@@ -191,7 +190,8 @@ public:
 
 	[[nodiscard]] vsm::result<void> attach_platform_handle(
 		native_platform_handle handle,
-		connector_type& c);
+		connector_type& c,
+		attachment_flags flags = attachment_flags::none);
 
 	//TODO: Handles should gain a multiplexer coupling aware close to avoid detaching.
 	[[nodiscard]] vsm::result<void> detach_platform_handle(
@@ -201,9 +201,10 @@ public:
 	template<platform_object Object>
 	[[nodiscard]] vsm::result<void> attach_handle(
 		native_handle<Object> const& h,
-		async_connector<iocp_multiplexer, Object>& c)
+		async_connector<iocp_multiplexer, Object>& c,
+		attachment_flags const flags = attachment_flags::none)
 	{
-		return _attach_handle(h, c);
+		return _attach_handle(h, c, flags);
 	}
 
 	template<platform_object Object>
@@ -216,10 +217,27 @@ public:
 	}
 
 
-	/// @brief Attempt to cancel a pending I/O operation described by handle and slot.
+	[[nodiscard]] static void* make_apc_context(io_handler_type& handler)
+	{
+		return io_handler_ptr(&handler, 0).tagged_pointer();
+	}
+
+	[[nodiscard]] static void* make_apc_context(io_handler_type& handler, uint32_t const user_tag)
+	{
+		return io_handler_ptr(&handler, user_tag).tagged_pointer();
+	}
+
+
+	/// @brief Attempt to cancel a pending I/O operation described by handle and APC context.
 	/// @return True if the operation was canceled before its completion.
 	/// @note A completion event is queued regardless of whether the operation was canceled.
-	[[nodiscard]] bool cancel_io(io_slot& slot, native_platform_handle handle);
+	template<typename IoStatusBlock>
+	[[nodiscard]] bool cancel_io(
+		native_platform_handle const handle,
+		basic_io_status_block<IoStatusBlock>& io_status_block)
+	{
+		return _cancel_io(handle, reinterpret_cast<IO_STATUS_BLOCK*>(io_status_block.m_storage));
+	}
 
 
 	/// @brief Acquire a wait packet from the multiplexer's pool.
@@ -267,16 +285,21 @@ public:
 		return wait_packet_lease(*this, wait_packet);
 	}
 
-	/// @brief Submit a wait operation on the specified slot and handle, as if by WaitForSingleObject.
-	/// @pre The wait_slot shall be associated with an operation state.
+	/// @brief Submit a wait operation on the specified handle and with the specified APC context,
+	///        as if by WaitForSingleObject.
 	/// @return True if the object was already signaled.
 	/// @note A completion event is not queued if the object was already signaled.
-	[[nodiscard]] vsm::result<bool> submit_wait(wait_packet packet, wait_slot& slot, native_platform_handle handle);
+	[[nodiscard]] vsm::result<bool> submit_wait(
+		wait_packet packet,
+		native_platform_handle handle,
+		io_handler_type& handler,
+		uint32_t user_tag = 0);
 
-	/// @brief Attempt to cancel a wait operation started on the specified slot.
+	/// @brief Attempt to cancel a wait operation using the specified packet and with the specified
+	///        APC context.
 	/// @return True if the operation was canceled before its completion.
 	/// @note A completion event is queued regardless of whether the operation was canceled.
-	bool cancel_wait(wait_packet packet, wait_slot& slot);
+	bool cancel_wait(wait_packet packet, io_handler_type const& handler, uint32_t user_tag = 0);
 
 
 	[[nodiscard]] static bool supports_synchronous_completion(native_handle<platform_object_t> const& h)
@@ -302,7 +325,10 @@ private:
 
 	[[nodiscard]] vsm::result<void> _attach_handle(
 		native_handle<platform_object_t> const& h,
-		connector_type& c);
+		connector_type& c,
+		attachment_flags flags);
+
+	[[nodiscard]] bool _cancel_io(native_platform_handle handle, IO_STATUS_BLOCK* io_status_block);
 
 
 	[[nodiscard]] vsm::result<bool> _poll(poll_parameters const& args);

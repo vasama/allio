@@ -17,8 +17,8 @@ struct async_connector<iocp_multiplexer, _opaque_handle>
 
 	static vsm::result<void> attach(M&, H const&, C&)
 	{
-		// Opaque handles are not associated with an IOCP.
-		// Instead waits are performed using wait packet objects.
+		// Opaque objects cannot be associated with an IOCP. Instead waits are performed using wait
+		// packet objects.
 		return {};
 	}
 

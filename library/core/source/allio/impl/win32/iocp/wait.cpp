@@ -7,16 +7,14 @@ using namespace allio;
 using namespace allio::detail;
 using namespace allio::win32;
 
-io_result<void> iocp_wait_state::submit(M& m, H const& h, S&, io_handler<M>& handler)
+io_result<void> iocp_wait_state::submit(M& m, H const& h, io_handler<M>& handler)
 {
 	vsm_try(lease, m.lease_wait_packet(wait_packet));
 
-	wait_slot.bind(handler);
-
 	vsm_try(already_signaled, m.submit_wait(
 		wait_packet.get(),
-		wait_slot,
-		h.platform_handle));
+		h.platform_handle,
+		handler));
 
 	if (already_signaled)
 	{
@@ -30,10 +28,8 @@ io_result<void> iocp_wait_state::submit(M& m, H const& h, S&, io_handler<M>& han
 	return vsm::unexpected(io_notify_status::submitted);
 }
 
-io_result<void> iocp_wait_state::notify(M& m, H const&, S&, io_handler<M>& handler, M::io_status_type const status)
+io_result<void> iocp_wait_state::notify(M& m, H const&, io_handler<M>& handler, M::io_status_type const status)
 {
-	vsm_assert(&status.slot == &wait_slot);
-
 	m.release_wait_packet(vsm_move(wait_packet));
 
 	if (!NT_SUCCESS(status.status))
@@ -51,7 +47,7 @@ io_result<void> iocp_wait_state::notify(M& m, H const&, S&, io_handler<M>& handl
 	return {};
 }
 
-void iocp_wait_state::cancel(M& m, H const&, S&)
+void iocp_wait_state::cancel(M& m, H const&, io_handler<M> const& handler)
 {
-	m.cancel_wait(wait_packet.get(), wait_slot);
+	m.cancel_wait(wait_packet.get(), handler);
 }

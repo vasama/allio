@@ -11,6 +11,11 @@ template<>
 struct async_connector<iocp_multiplexer, file_t>
 	: iocp_multiplexer::connector_type
 {
+	using M = iocp_multiplexer;
+	using H = native_handle<file_t>;
+	using C = async_connector_t<M, file_t>;
+
+	static vsm::result<void> attach(M& m, H const& h, C& c);
 };
 
 template<>
@@ -27,7 +32,7 @@ struct async_operation<iocp_multiplexer, file_t, byte_io::random_read_t>
 
 	static io_result<size_t> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
 	static io_result<size_t> notify(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);
-	static void cancel(M& m, H const& h, C const& c, S& s);
+	static void cancel(M& m, H const& h, C const& c, S& s, A const& a, io_handler<M> const& handler);
 };
 
 template<>
@@ -44,7 +49,7 @@ struct async_operation<iocp_multiplexer, file_t, byte_io::random_write_t>
 
 	static io_result<size_t> submit(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler);
 	static io_result<size_t> notify(M& m, H const& h, C const& c, S& s, A const& args, io_handler<M>& handler, M::io_status_type status);
-	static void cancel(M& m, H const& h, C const& c, S& s);
+	static void cancel(M& m, H const& h, C const& c, S& s, A const& a, io_handler<M> const& handler);
 };
 
 } // namespace allio::detail

@@ -77,7 +77,7 @@ io_result<void> get_address_s::notify(
 	return {};
 }
 
-void get_address_s::cancel(M& m, H const&, C const&, S& s)
+void get_address_s::cancel(M& m, H const&, C const&, S& s, A const&, io_handler<M> const&)
 {
 	(void)m.cancel_io(s);
 }

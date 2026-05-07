@@ -62,8 +62,6 @@ io_result<void> connect_s::submit(M& m, H& h, C& c, connect_s& s, connect_a cons
 		}
 	}
 
-	s.io_status_block.bind(handler);
-
 	bool const may_complete_synchronously = m.supports_synchronous_completion(h);
 
 	// If using a multithreaded completion port, after this call
@@ -72,7 +70,7 @@ io_result<void> connect_s::submit(M& m, H& h, C& c, connect_s& s, connect_a cons
 		handle.get(),
 		/* Event: */ NULL,
 		/* ApcRoutine: */ nullptr,
-		/* ApcContext: */ nullptr,
+		iocp_multiplexer::make_apc_context(handler),
 		s.io_status_block.get(),
 		&addr.addr,
 		static_cast<ULONG>(addr.size));
@@ -108,9 +106,9 @@ io_result<void> connect_s::notify(M&, H& h, C&, connect_s& s, connect_a const&, 
 	return {};
 }
 
-void connect_s::cancel(M&, H const&, C const&, S& s)
+void connect_s::cancel(M&, H const&, C const&, S& s, A const&, io_handler<M> const&)
 {
-	cancel_io(s.handle.get(), *s.io_status_block);
+	cancel_io(s.handle.get(), s.io_status_block);
 }
 
 
@@ -121,8 +119,6 @@ using read_a = io_parameters_t<raw_socket_t, read_t>;
 io_result<size_t> read_s::submit(M& m, H const& h, C const&, read_s& s, read_a const& a, io_handler<M>& handler)
 {
 	vsm_try(wsa_buffers, make_wsa_buffers(s.buffers, a.buffers.buffers()));
-
-	s.io_status_block.bind(handler);
 
 	bool const may_complete_synchronously = m.supports_synchronous_completion(h);
 
@@ -138,7 +134,7 @@ io_result<size_t> read_s::submit(M& m, H const& h, C const&, read_s& s, read_a c
 		unwrap_handle(h.platform_handle),
 		/* Event: */ NULL,
 		/* ApcRoutine: */ nullptr,
-		/* ApcContext: */ nullptr,
+		iocp_multiplexer::make_apc_context(handler),
 		s.io_status_block.get(),
 		&info);
 
@@ -157,19 +153,17 @@ io_result<size_t> read_s::submit(M& m, H const& h, C const&, read_s& s, read_a c
 
 io_result<size_t> read_s::notify(M&, H const& h, C const&, read_s& s, read_a const&, M::io_status_type const status)
 {
-	vsm_assert(&status.slot == &s.io_status_block);
-
 	if (!NT_SUCCESS(status.status))
 	{
 		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
 	}
 
-	return s.io_status_block->Information;
+	return status.information;
 }
 
-void read_s::cancel(M&, H const& h, C const&, read_s& s)
+void read_s::cancel(M&, H const& h, C const&, read_s& s, A const&, io_handler<M> const&)
 {
-	cancel_io(s.handle.get(), *s.io_status_block);
+	cancel_io(s.handle.get(), s.io_status_block);
 }
 
 
@@ -180,8 +174,6 @@ using write_a = io_parameters_t<raw_socket_t, write_t>;
 io_result<size_t> write_s::submit(M& m, H const& h, C const&, write_s& s, write_a const& a, io_handler<M>& handler)
 {
 	vsm_try(wsa_buffers, make_wsa_buffers(s.buffers, a.buffers.buffers()));
-
-	s.io_status_block.bind(handler);
 
 	bool const may_complete_synchronously = m.supports_synchronous_completion(h);
 
@@ -197,7 +189,7 @@ io_result<size_t> write_s::submit(M& m, H const& h, C const&, write_s& s, write_
 		unwrap_handle(h.platform_handle),
 		/* Event: */ NULL,
 		/* ApcRoutine: */ nullptr,
-		/* ApcContext: */ nullptr,
+		iocp_multiplexer::make_apc_context(handler),
 		s.io_status_block.get(),
 		&info);
 
@@ -216,17 +208,15 @@ io_result<size_t> write_s::submit(M& m, H const& h, C const&, write_s& s, write_
 
 io_result<size_t> write_s::notify(M&, H const& h, C const&, write_s& s, write_a const&, M::io_status_type const status)
 {
-	vsm_assert(&status.slot == &s.overlapped);
-
 	if (!NT_SUCCESS(status.status))
 	{
 		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
 	}
 
-	return s.io_status_block->Information;
+	return status.information;
 }
 
-void write_s::cancel(M&, H const& h, C const&, write_s& s)
+void write_s::cancel(M&, H const& h, C const&, write_s& s, A const&, io_handler<M> const&)
 {
-	cancel_io(s.handle.get(), *s.io_status_block);
+	cancel_io(s.handle.get(), s.io_status_block);
 }

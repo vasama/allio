@@ -240,7 +240,9 @@ struct async_create_pipe_pair : Multiplexer::operation_type
 		M&,
 		H const&,
 		C const&,
-		S&)
+		S&,
+		A const&,
+		io_handler<M> const&)
 	{
 		vsm_unreachable();
 	}

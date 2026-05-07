@@ -178,7 +178,7 @@ public:
 		return S::_finalize(m, h, c, s, a, handler, vsm_move(r));
 	}
 
-	static void cancel(M& m, H const& h, C const& c, S& s)
+	static void cancel(M& m, H const& h, C const& c, S& s, A const&, io_handler<M> const&)
 	{
 		// TODO: Implement openssl cancellation support.
 	}

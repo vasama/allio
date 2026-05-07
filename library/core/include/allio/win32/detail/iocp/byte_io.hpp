@@ -32,6 +32,7 @@ struct iocp_byte_io_state
 	io_result<typename Operation::result_type> notify(
 		H const& h,
 		typename Operation::params_type const& a,
+		io_handler<M>& handler,
 		M::io_status_type status);
 
 	void cancel(M& m, H const& h);

@@ -39,7 +39,7 @@ struct async_operation<io_uring_multiplexer, event_t, event_t::wait_t>
 
 	static io_result<void> submit(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler);
 	static io_result<void> notify(M& m, H& h, C& c, S& s, A const& a, io_handler<M>& handler, M::io_status_type status);
-	static void cancel(M& m, H const& h, C const& c, S& s);
+	static void cancel(M& m, H const& h, C const& c, S& s, A const& a, io_handler<M> const& handler);
 };
 
 } // namespace allio::detail

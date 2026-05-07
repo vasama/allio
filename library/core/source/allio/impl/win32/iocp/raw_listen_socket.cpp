@@ -8,6 +8,7 @@
 #include <allio/impl/win32/wsa.hpp>
 #include <allio/win32/kernel_error.hpp>
 
+#include <vsm/lazy.hpp>
 #include <vsm/numeric.hpp>
 
 using namespace allio;
@@ -49,7 +50,10 @@ io_result<void> listen_s::submit(M& m, H& h, C& c, listen_s& s, listen_a const& 
 
 	vsm_try_void(posix::socket_listen(socket.get(), a.backlog));
 
-	vsm_try_void(m.attach_platform_handle(posix::wrap_socket(socket.get()), c));
+	vsm_try_void(m.attach_platform_handle(
+		posix::wrap_socket(socket.get()),
+		c,
+		iocp_multiplexer::attachment_flags::none));
 
 	h = H
 	{
@@ -80,7 +84,7 @@ io_result<void> listen_s::notify(
 	vsm_unreachable();
 }
 
-void listen_s::cancel(M&, H const&, C const&, listen_s&)
+void listen_s::cancel(M&, H const&, C const&, listen_s&, A const&, io_handler<M> const&)
 {
 }
 
@@ -108,7 +112,10 @@ static io_result<socket_handle_type> handle_accept_completion(
 	accept_extension const& extension)
 {
 	socket_handle_type::connector_type c;
-	vsm_try_void(m.attach_platform_handle(s.socket.get(), c));
+	vsm_try_void(m.attach_platform_handle(
+		s.socket.get(),
+		c,
+		iocp_multiplexer::attachment_flags::none));
 
 	posix::socket_address_family_type const address_family = posix::get_address_family(h.flags);
 	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
@@ -216,11 +223,11 @@ io_result<socket_handle_type> accept_s::submit(
 	s.socket = unique_wrapped_socket(posix::wrap_socket(socket.release()));
 	s.socket_flags = flags | posix::set_address_family(address_family);
 
-	OVERLAPPED& overlapped = *s.overlapped;
+	OVERLAPPED& overlapped = s.overlapped.initialize();
 	overlapped.Pointer = nullptr;
 	overlapped.hEvent = NULL;
 
-	s.overlapped.bind(handler);
+	s.overlapped.set_context(handler);
 
 	// If using a multithreaded completion port, after this call another thread will race to
 	// complete this operation.
@@ -275,8 +282,6 @@ io_result<socket_handle_type> accept_s::notify(
 {
 	accept_extension const extension = acquire_extension(s);
 
-	vsm_assert(&status.slot == &s.overlapped);
-
 	if (!NT_SUCCESS(status.status))
 	{
 		return vsm::unexpected(allio_error(static_cast<kernel_error>(status.status)));
@@ -285,7 +290,7 @@ io_result<socket_handle_type> accept_s::notify(
 	return handle_accept_completion(m, h, s, a, extension);
 }
 
-void accept_s::cancel(M&, H const& h, C const&, S& s)
+void accept_s::cancel(M&, H const& h, C const&, S& s, A const&, io_handler<M> const&)
 {
-	cancel_socket_io(posix::unwrap_socket(h.platform_handle), *s.overlapped);
+	cancel_socket_io(posix::unwrap_socket(h.platform_handle), s.overlapped.get_existing());
 }

@@ -361,6 +361,8 @@ class basic_io_handler
 	callback_type* m_callback;
 
 public:
+	using status_type = Status;
+
 	constexpr explicit basic_io_handler(callback_type& callback)
 		: m_callback(callback)
 	{
@@ -382,14 +384,15 @@ protected:
 	~basic_io_handler() = default;
 };
 
-template<typename Status, typename Handler>
-class basic_io_handler_base : public basic_io_handler<Status>
+template<typename BaseHandler, typename UserHandler>
+class basic_io_handler_base : public BaseHandler
 {
-	using io_handler_type = basic_io_handler<Status>;
+public:
+	using status_type = typename BaseHandler::status_type;
 
 protected:
 	constexpr basic_io_handler_base()
-		: io_handler_type(_callback)
+		: BaseHandler(_callback)
 	{
 	}
 
@@ -398,13 +401,13 @@ protected:
 	~basic_io_handler_base() = default;
 
 private:
-	static void _callback(io_handler_type& base, Status* const status) noexcept
+	static void _callback(basic_io_handler<status_type>& base, status_type* const status) noexcept
 	{
-		auto& self = static_cast<Handler&>(static_cast<basic_io_handler_base&>(base));
+		auto& self = static_cast<UserHandler&>(static_cast<basic_io_handler_base&>(base));
 
 		if (status != nullptr)
 		{
-			self.on_io_notification(vsm_move(*status));
+			self.on_io_notification(static_cast<status_type&&>(*status));
 		}
 		else
 		{
@@ -414,10 +417,10 @@ private:
 };
 
 template<multiplexer Multiplexer>
-using io_handler = basic_io_handler<typename Multiplexer::io_status_type>;
+using io_handler = typename Multiplexer::io_handler_type;
 
 template<multiplexer Multiplexer, typename Handler>
-using io_handler_base = basic_io_handler_base<typename Multiplexer::io_status_type, Handler>;
+using io_handler_base = basic_io_handler_base<io_handler<Multiplexer>, Handler>;
 
 
 struct submit_io_t
@@ -481,22 +484,26 @@ inline constexpr notify_io_t notify_io = {};
 
 struct cancel_io_t
 {
-	template<typename H, typename S>
+	template<typename H, typename S, typename A, typename Handler>
 	vsm_static_operator void operator()(
-		H& h,
-		S& s) vsm_static_operator_const
+		H const& h,
+		S& s,
+		A const& a,
+		Handler const& handler) vsm_static_operator_const
 	{
-		return handle_traits<std::remove_cv_t<H>>::cancel_io(h, s);
+		return handle_traits<std::remove_cv_t<H>>::cancel_io(h, s, a, handler);
 	}
 
-	template<typename M, typename H, typename C, typename S>
+	template<typename M, typename H, typename C, typename S, typename A, typename Handler>
 	vsm_static_operator void operator()(
 		M& m,
-		H& h,
-		C& c,
-		S& s) vsm_static_operator_const
+		H const& h,
+		C const& c,
+		S& s,
+		A const& a,
+		Handler const& handler) vsm_static_operator_const
 	{
-		return S::cancel(m, h, c, s);
+		return S::cancel(m, h, c, s, a, handler);
 	}
 };
 inline constexpr cancel_io_t cancel_io = {};
@@ -546,7 +553,7 @@ struct async_operation<Multiplexer, Object, Operation>
 		vsm_unreachable();
 	}
 
-	static void cancel(M&, H const&, C const&, S&)
+	static void cancel(M&, H const&, C const&, S&, A const&, io_handler<M> const&)
 	{
 	}
 };

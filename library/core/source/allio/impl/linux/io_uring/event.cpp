@@ -173,7 +173,7 @@ io_result<void> wait_s::notify(
 	return {};
 }
 
-void wait_s::cancel(M& m, H const& h, C const&, S& s)
+void wait_s::cancel(M& m, H const& h, C const&, S& s, A const&, io_handler<M> const&)
 {
 	bool const double_cqe = is_auto_reset(h) && !m.has_skip_cqe_on_success();
 	(void)m.cancel_io(s, double_cqe ? wait_for_next_cqe : 0);

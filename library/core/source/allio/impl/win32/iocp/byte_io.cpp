@@ -58,9 +58,7 @@ public:
 		m_state.buffer_index = 0;
 		m_state.buffer_visit = 0;
 
-		m_state.io_status_block.bind(handler);
-
-		auto const r = submit_loop(h, a);
+		auto const r = submit_loop(h, a, handler);
 
 		if (detail::get_io_notify_status(r) == io_notify_status::submitted)
 		{
@@ -74,11 +72,10 @@ public:
 	io_result<Result> notify(
 		native_handle<platform_object_t> const& h,
 		Arguments const& a,
-		iocp_multiplexer::io_status_type const status)
+		io_handler<iocp_multiplexer>& handler,
+		iocp_multiplexer::io_status_type const& status)
 	{
-		vsm_assert(&status.slot == &m_state.io_status_block);
-
-		auto const r = handle_completion(h, a, *m_state.io_status_block);
+		auto const r = handle_completion(h, a, handler, status);
 
 		if (detail::get_io_notify_status(r) == io_notify_status::submitted)
 		{
@@ -148,18 +145,6 @@ private:
 			}
 		}
 
-#if 0
-		if (m_state.transferred == static_cast<size_t>(-1))
-		{
-			return vsm::unexpected(allio_error(error::io_size_out_of_range));
-		}
-
-		if (get_file_offset(a) >= max_file_extent - m_state.transferred)
-		{
-			return vsm::unexpected(allio_error(error::file_offset_out_of_range));
-		}
-#endif
-
 		// All of these conditions are non-erroneous cases where some number of suboperations have
 		// succeeded but no further suboperations may be submitted.
 		if (transfer_size != max_transfer_size ||
@@ -177,16 +162,15 @@ private:
 	io_result<byte_io_status> handle_completion(
 		native_handle<platform_object_t> const& h,
 		Arguments const& a,
-		IO_STATUS_BLOCK const& io_status_block)
+		io_handler<iocp_multiplexer>& handler,
+		iocp_multiplexer::io_status_type const& status)
 	{
-		NTSTATUS const status = io_status_block.Status;
-
-		if (!NT_SUCCESS(status))
+		if (!NT_SUCCESS(status.status))
 		{
-			return handle_error<Arguments>(status);
+			return handle_error<Arguments>(status.status);
 		}
 
-		size_t const transfer_size = io_status_block.Information;
+		size_t const transfer_size = status.information;
 
 		if (transfer_size == 0)
 		{
@@ -200,13 +184,14 @@ private:
 		size_t const max_transfer_size = get_max_transfer_size(buffer.size());
 		vsm_try_void(handle_success(a, transfer_size, max_transfer_size));
 
-		return submit_loop(h, a);
+		return submit_loop(h, a, handler);
 	}
 
 	template<typename Arguments>
 	io_result<byte_io_status> submit_loop(
 		native_handle<platform_object_t> const& h,
-		Arguments const& a)
+		Arguments const& a,
+		io_handler<iocp_multiplexer>& handler)
 	{
 		vsm_assert(m_state.buffer_index < m_buffers.size());
 
@@ -239,14 +224,14 @@ private:
 					p_offset_integer = &offset_integer;
 				}
 
-				IO_STATUS_BLOCK& io_status_block = *m_state.io_status_block;
+				IO_STATUS_BLOCK& io_status_block = m_state.io_status_block.initialize();
 
 				//TODO: Should STATUS_END_OF_FILE ever be handled?
 				NTSTATUS const status = Syscall(
 					handle,
 					/* Event: */ NULL,
 					/* ApcRoutine: */ nullptr,
-					/* ApcContext: */ &io_status_block,
+					iocp_multiplexer::make_apc_context(handler),
 					&io_status_block,
 					// NtWriteFile takes void* which requires casting away the const.
 					const_cast<std::byte*>(buffer.data()),
@@ -265,7 +250,7 @@ private:
 					return handle_error<Arguments>(status);
 				}
 
-				size_t const transfer_size = m_state.io_status_block->Information;
+				size_t const transfer_size = io_status_block.Information;
 
 				if (transfer_size == 0)
 				{
@@ -367,15 +352,16 @@ template<typename Operation>
 io_result<typename Operation::result_type> iocp_byte_io_state::notify(
 	H const& h,
 	typename Operation::params_type const& a,
+	io_handler<M>& handler,
 	M::io_status_type status)
 {
-	return select_byte_io<Operation>(*this).notify(h, a, status);
+	return select_byte_io<Operation>(*this).notify(h, a, handler, status);
 }
 
 void iocp_byte_io_state::cancel(M& m, H const& h)
 {
 	//TODO: There is a race condition here when cancel is called between two NT I/Os.
-	(void)m.cancel_io(io_status_block, h.platform_handle);
+	(void)m.cancel_io(h.platform_handle, io_status_block);
 }
 
 
@@ -387,6 +373,7 @@ void iocp_byte_io_state::cancel(M& m, H const& h)
 	template io_result<typename Operation::result_type> iocp_byte_io_state::notify<Operation>( \
 		H const& h, \
 		typename Operation::params_type const& a, \
+		io_handler<M>& handler, \
 		M::io_status_type status) \
 
 allio_byte_io_instance(byte_io::stream_read_t);
