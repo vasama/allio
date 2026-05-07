@@ -259,6 +259,27 @@ static vsm::result<unique_ptr<shared_native_handle<Object>>> make_shared_handle(
 	}));
 }
 
+static vsm::result<protection> get_protection(
+	native_handle<section_t> const& section_h,
+	optional_flags<protection> const& desired_protection)
+{
+	auto const section_protection = get_section_protection(section_h);
+
+	if (!desired_protection)
+	{
+		// Pages are never mapped with executable permissions unless explicitly requested.
+		return section_protection & protection::read_write;
+	}
+
+	if (!vsm::all_flags(section_protection, *desired_protection))
+	{
+		// TODO: Would an "access denied" error be more appropriate here?
+		return vsm::unexpected(allio_error(error::invalid_argument));
+	}
+
+	return *desired_protection;
+}
+
 static vsm::result<void> _map_section(
 	native_handle<map_t>& h,
 	io_parameters_t<map_t, map_io::map_memory_t> const& a)
@@ -286,18 +307,7 @@ static vsm::result<void> _map_section(
 		? a.page_level
 		: get_default_page_level();
 
-	protection protection = get_section_protection(section_h) & protection::read_write;
-
-	if (a.protection != detail::protection(0))
-	{
-		if (!vsm::all_flags(get_section_protection(section_h), a.protection))
-		{
-			return vsm::unexpected(allio_error(error::invalid_argument));
-		}
-
-		protection = a.protection;
-	}
-
+	vsm_try(protection, get_protection(section_h, a.protection));
 	vsm_try(page_protection, get_page_protection(protection));
 	vsm_try(allocation_type, get_page_level_allocation_type(page_level));
 
@@ -351,11 +361,9 @@ static vsm::result<void> _map_anonymous(
 	{
 		allocation_type |= MEM_COMMIT;
 
-		auto const protection = a.protection != detail::protection(0)
-			? a.protection
-			: detail::protection::read_write;
-
-		vsm_try_assign(page_protection, get_page_protection(protection));
+		vsm_try_assign(
+			page_protection,
+			get_page_protection(a.protection.value_or(protection::read_write)));
 	}
 
 	vsm_try(map, allocate_virtual_memory(
@@ -410,10 +418,7 @@ vsm::result<void> map_t::commit(
 		return vsm::unexpected(allio_error(error::invalid_address));
 	}
 
-	auto const protection = a.protection != detail::protection(0)
-		? a.protection
-		: detail::protection::read_write;
-
+	vsm_try(protection, a.protection.value_or(protection::read_write));
 	vsm_try(page_protection, get_page_protection(protection));
 
 	vsm_try_discard(allocate_virtual_memory(

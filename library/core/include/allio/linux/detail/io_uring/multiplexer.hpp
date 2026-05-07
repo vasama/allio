@@ -338,6 +338,8 @@ public:
 	using operation_type = _io_uring_multiplexer::operation_type;
 	using io_status_type = _io_uring_multiplexer::io_status_type;
 
+	using io_handler_type = _io_uring_multiplexer::io_handler_type;
+
 private:
 	//TODO: Use allio_acquire_storage/allio_release_storage.
 	std::unique_ptr<_io_uring_multiplexer> m_multiplexer;

@@ -128,36 +128,38 @@ static protection get_section_protection(native_handle<section_t> const& h)
 };
 
 static vsm::result<protection> get_protection(
-	protection const section_protection,
-	protection const desired_protection)
+	native_handle<section_t> const& section_h,
+	optional_flags<protection> const desired_protection)
 {
-	if (desired_protection == detail::protection(0))
+	auto const section_protection = get_section_protection(section_h);
+
+	if (!desired_protection)
 	{
-		return section_protection != detail::protection(0)
-			? section_protection
-			: protection::read_write;
+		// Pages are never mapped with executable permissions unless explicitly requested.
+		return section_protection & protection::read_write;
 	}
 
-	if (section_protection != detail::protection(0))
+	if (!vsm::all_flags(section_protection, *desired_protection))
 	{
-		if (!vsm::all_flags(section_protection, desired_protection))
-		{
-			return vsm::unexpected(allio_error(error::invalid_argument));
-		}
+		// TODO: Would an "access denied" error be more appropriate here?
+		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
-	return desired_protection;
+	return *desired_protection;
 }
 
 static vsm::result<protection> get_protection(
 	native_handle<map_t> const& h,
-	protection const desired_protection)
+	optional_flags<protection> const desired_protection)
 {
-	return get_protection(
-		h.section == nullptr
-			? detail::protection(0)
-			: get_section_protection(h.section->h),
-		desired_protection);
+	if (auto const section = h.section)
+	{
+		return get_protection(section->h, desired_protection);
+	}
+	else
+	{
+		return desired_protection.value_or(protection::read_write);
+	}
 }
 
 
@@ -240,18 +242,7 @@ static vsm::result<void> _map_section(
 		return vsm::unexpected(allio_error(error::invalid_argument));
 	}
 
-	auto protection = get_section_protection(section_h);
-
-	if (a.protection != detail::protection(0))
-	{
-		if (!vsm::all_flags(protection, a.protection))
-		{
-			return vsm::unexpected(allio_error(error::invalid_argument));
-		}
-
-		protection = a.protection;
-	}
-
+	vsm_try(protection, get_protection(section_h, a.protection));
 	vsm_try(offset, vsm::try_truncate<off_t>(a.section_offset, error::invalid_argument));
 
 	vsm_try_bind((map, h_flags), _map_common(
@@ -299,9 +290,7 @@ static vsm::result<void> _map_anonymous(
 		? a.page_level
 		: get_default_page_level();
 
-	auto const protection = a.protection != detail::protection(0)
-		? a.protection
-		: detail::protection::read_write;
+	auto const protection = a.protection.value_or(protection::read_write);
 
 	vsm_try_bind((map, h_flags), _map_common(
 		a,

@@ -109,16 +109,16 @@ vsm::result<void> section_t::create(
 		}
 	}
 
-	protection protection = default_protection;
+	detail::protection protection = default_protection;
 
-	if (a.protection != detail::protection(0))
+	if (a.protection)
 	{
-		if (!vsm::all_flags(maximum_protection, a.protection))
+		protection = *a.protection;
+
+		if (!vsm::all_flags(maximum_protection, protection))
 		{
 			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
-
-		protection = a.protection;
 	}
 
 	ULONG const section_access = get_section_access(protection);

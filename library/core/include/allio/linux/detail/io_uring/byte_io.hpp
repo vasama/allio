@@ -14,8 +14,6 @@ struct io_uring_byte_io_state_2
 	using S = io_uring_byte_io_state_2;
 
 	M::timeout timeout;
-
-	static void cancel(M& m, H const& h, C const& c, S& s);
 };
 
 template<typename Operation>
@@ -40,6 +38,14 @@ struct io_uring_byte_io_state_1 : io_uring_byte_io_state_2
 		A const& a,
 		io_handler<M>& handler,
 		M::io_status_type status);
+
+	static void cancel(
+		M& m,
+		H const& h,
+		C const& c,
+		S& s,
+		A const& a,
+		io_handler<M> const& handler);
 };
 
 template<typename Object, typename Operation>

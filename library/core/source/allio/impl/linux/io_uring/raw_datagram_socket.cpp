@@ -239,7 +239,7 @@ io_result<size_t> recv_s::notify(
 	return static_cast<size_t>(status.result);
 }
 
-void recv_s::cancel(M&, H const& h, C const&, recv_s& s, recv_a const&, io_handler<M> const&)
+void recv_s::cancel(M& m, H const& h, C const&, recv_s& s, recv_a const&, io_handler<M> const&)
 {
-	//TODO: Cancel
+	(void)m.cancel_io(s);
 }

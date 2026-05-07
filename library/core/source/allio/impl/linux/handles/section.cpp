@@ -90,13 +90,16 @@ static vsm::result<void> _create_with_backing_file(
 		maximum_protection |= protection::execute;
 	}
 
-	auto const protection = a.protection != detail::protection(0)
-		? a.protection
-		: default_protection;
+	detail::protection protection = default_protection;
 
-	if (!vsm::all_flags(maximum_protection, protection))
+	if (a.protection)
 	{
-		return vsm::unexpected(allio_error(error::invalid_argument));
+		protection = *a.protection;
+
+		if (!vsm::all_flags(maximum_protection, protection))
+		{
+			return vsm::unexpected(allio_error(error::invalid_argument));
+		}
 	}
 
 	int open_flags = get_file_protection_flags(protection);
@@ -130,9 +133,7 @@ static vsm::result<void> _create_with_backing_directory(
 	io_parameters_t<section_t, section_io::create_t> const& a,
 	native_handle<fs_object_t> const& backing_h)
 {
-	auto const protection = a.protection != detail::protection(0)
-		? a.protection
-		: protection::read_write;
+	auto const protection = a.protection.value_or(protection::read_write);
 
 	if (!vsm::all_flags(protection, protection::write))
 	{

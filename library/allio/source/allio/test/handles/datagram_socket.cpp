@@ -13,17 +13,11 @@ namespace ex = stdexec;
 
 static bool is_supported_address_kind(network_address_kind const kind)
 {
-	//TODO: The async datagram server/client test fails using the local address family, because the
-	//      endpoint returned from receive_from is empty in that case. This should be fixed once the
-	//      networking operations are changed to take pre-transformed opaque platform addresses.
-
-#if vsm_os_win32
-	if (kind == network_address_kind::local)
+	if (vsm_os_win32 && kind == network_address_kind::local)
 	{
 		// Windows does not support unix datagram sockets.
 		return false;
 	}
-#endif
 
 	return true;
 }
@@ -82,7 +76,7 @@ TEST_CASE("Asynchronous datagram sockets can exchange data", "[datagram_socket][
 
 	auto multiplexer = default_multiplexer::create().value();
 
-	sync_wait(multiplexer, [&]() -> task<void>
+	auto const combined_task = [&]() -> task<void>
 	{
 		auto const server_endpoint = endpoint_factory->create_endpoint();
 		auto const server_socket = co_await raw_bind(server_endpoint);
@@ -90,42 +84,50 @@ TEST_CASE("Asynchronous datagram sockets can exchange data", "[datagram_socket][
 		auto const client_endpoint = endpoint_factory->create_endpoint();
 		auto const client_socket = co_await raw_bind(client_endpoint);
 
-		co_await ex::when_all
-		(
-			// Server
-			[&]() -> task<void>
-			{
-				auto& socket = server_socket;
-				platform_endpoint peer_endpoint;
+		auto const server_task = [&]() -> task<void>
+		{
+			auto& socket = server_socket;
+			platform_endpoint peer_endpoint;
 
-				// Wait for a request from the client
-				signed char request_data;
-				size_t const size = co_await socket.receive_from(
-					as_read_buffer(&request_data, 1),
-					peer_endpoint);
-				REQUIRE(size == 1);
+			// Wait for a request from the client
+			signed char request_data;
+			size_t const size = co_await socket.receive_from(
+				as_read_buffer(&request_data, 1),
+				peer_endpoint);
+			REQUIRE(size == 1);
 
-				// Send a reply to the client
-				signed char const reply_data = -request_data;
-				co_await socket.send_to(peer_endpoint, as_write_buffer(&reply_data, 1));
-			}(),
+			// The concept of the peer address does not make sense for unix sockets, so the client
+			// end point is used directly instead.
+			any_endpoint_view const reply_endpoint =
+				endpoint_factory->address_kind() == network_address_kind::local
+					? client_endpoint.get()
+					: any_endpoint_view(peer_endpoint);
 
-			// Client
-			[&]() -> task<void>
-			{
-				auto& socket = client_socket;
+			// Send a reply to the client
+			signed char const reply_data = -request_data;
+			co_await socket.send_to(reply_endpoint, as_write_buffer(&reply_data, 1));
+		};
 
-				// Send a request to the server
-				signed char const request_data = 42;
-				co_await socket.send_to(server_endpoint, as_write_buffer(&request_data, 1));
+		auto const client_task = [&]() -> task<void>
+		{
+			auto& socket = client_socket;
 
-				// Wait for a reply from the server
-				signed char reply_data;
-				size_t const size = co_await socket.receive_from(as_read_buffer(&reply_data, 1));
-				REQUIRE(size == 1);
+			// Send a request to the server
+			signed char const request_data = 42;
+			co_await socket.send_to(server_endpoint, as_write_buffer(&request_data, 1));
 
-				REQUIRE(reply_data == -42);
-			}()
-		);
-	}());
+			// Wait for a reply from the server
+			signed char reply_data;
+			size_t const size = co_await socket.receive_from(as_read_buffer(&reply_data, 1));
+			REQUIRE(size == 1);
+
+			REQUIRE(reply_data == -42);
+		};
+
+		// TODO: It was observed that the test would get stuck when the server reply resulted in an
+		//       error, causing the client receive to pend indefinitely. 
+		co_await ex::when_all(server_task(), client_task());
+	};
+
+	(void)senders::sync_wait(multiplexer, combined_task());
 }

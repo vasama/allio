@@ -143,7 +143,14 @@ io_result<typename Operation::result_type> io_uring_byte_io_state_1<Operation>::
 	return _notify<R>(m, h, c, s, a, handler, status);
 }
 
-void io_uring_byte_io_state_2::cancel(M& m, H const&, C const&, S& s, A const&, io_handler<M> const&)
+template<typename Operation>
+void io_uring_byte_io_state_1<Operation>::cancel(
+	M& m,
+	H const&,
+	C const&,
+	S& s,
+	A const&,
+	io_handler<M> const&)
 {
 	(void)m.cancel_io(s);
 }

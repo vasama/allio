@@ -28,7 +28,7 @@ struct create_t
 	struct params_type : io_flags_t
 	{
 		section_options options = {};
-		detail::protection protection = {};
+		optional_flags<detail::protection> protection;
 		native_handle<fs_object_t> const* backing_storage = nullptr;
 		fs_size max_size = 0;
 

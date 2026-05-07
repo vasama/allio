@@ -33,7 +33,7 @@ struct map_memory_t
 	struct params_type
 	{
 		map_options options = map_options::initial_commit;
-		detail::protection protection = {};
+		optional_flags<detail::protection> protection;
 		detail::page_level page_level = {};
 		native_handle<section_t> const* section = nullptr;
 		fs_size section_offset = 0;
@@ -106,7 +106,7 @@ struct map_file_t
 
 	struct params_type : io_flags_t
 	{
-		detail::protection protection = {};
+		optional_flags<detail::protection> protection;
 		native_handle<file_t> const* file = nullptr;
 
 		using io_flags_t::set_argument;
@@ -138,7 +138,7 @@ struct commit_t
 	{
 		void* base = nullptr;
 		size_t size = 0;
-		detail::protection protection = {};
+		optional_flags<detail::protection> protection;
 
 		void set_argument(detail::protection const value)
 		{

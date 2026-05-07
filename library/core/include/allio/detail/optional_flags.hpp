@@ -49,7 +49,7 @@ public:
 	}
 
 	constexpr optional_flags(T const value)
-		: m_value(static_cast<unsigned_type>(value))
+		: m_value(static_cast<unsigned_type>(value) | flag)
 	{
 		vsm_assert((static_cast<unsigned_type>(value) & flag) == 0);
 	}
