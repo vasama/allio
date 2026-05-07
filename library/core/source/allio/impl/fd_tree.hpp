@@ -17,6 +17,23 @@
 
 namespace allio {
 
+/// @brief Efficient data structure for allocating unique indices (file descriptors).
+///
+/// The tree consists of H layers of nodes above a single layer of leaves. Each leaf contains a
+/// bitmask of K bits indicating free (0) or allocated (1) indices. Each node (derived from leaf)
+/// contains a bitmask of K bits indicating completely or partially free (0) or completely full (1)
+/// children, as well as a pointer to an array K of child nodes or leaves (depending on the depth
+/// of the parent node within the tree).
+///
+/// The height of the tree (H) is non-constant, and grows as more indices are allocated. Initially
+/// the tree has a height of zero, and consists of a single leaf. At the root of the tree is a
+/// single leaf (when H = 0) or node (when H > 0). Thus, the tree is capable of allocating up to K
+/// indices to the user without any memory allocations of its own.
+///
+/// Growing the tree is achieved by allocating an array of K nodes or leaves, moving the root node
+/// or leaf to the first position in the newly allocated array, and replacing the root with a node
+/// pointing to that array. The new root node has a mask with a single bit set, indicating that its
+/// first child is entirely full.
 class fd_tree
 {
 	using mask_t = uintptr_t;
@@ -128,6 +145,11 @@ class fd_tree
 	std::unique_ptr<block_array_t, block_array_deleter> m_block_array;
 
 public:
+	fd_tree() = default;
+
+	fd_tree(fd_tree const&) = delete;
+	fd_tree& operator=(fd_tree const&) = delete;
+
 	[[nodiscard]] vsm::result<int> allocate()
 	{
 		if (m_count == max_index_count)
@@ -135,7 +157,7 @@ public:
 			return vsm::unexpected(allio_error(error::maximum_capacity_exceeded));
 		}
 
-		if (m_root.mask == static_cast<size_t>(-1))
+		if (m_root.mask == static_cast<mask_t>(-1))
 		{
 			vsm_try_void(allocate_root_node());
 		}
@@ -146,6 +168,9 @@ public:
 			size_t index;
 		};
 
+		// A stack is used to record the path taken through the tree when selecting the index. In
+		// the case that the leaf where the index is allocated becomes full, the data recorded in
+		// the stack helps in recursing back down the tree when the parent full bits are set.
 		node_stack_type stack_storage[max_tree_height];
 		std::span const stack(stack_storage, m_height);
 
@@ -161,7 +186,7 @@ public:
 			node = &static_cast<node_t*>(tree)[local_index];
 
 			local_index = node->find_free();
-			total_index = (total_index << log_k) + local_index;
+			total_index = total_index * k + local_index;
 			stack_index = local_index;
 
 			if (node->children == nullptr)
@@ -177,8 +202,10 @@ public:
 		leaf_t& leaf = tree[local_index];
 
 		local_index = leaf.find_free();
-		total_index = (total_index << log_k) + local_index;
+		total_index = total_index * k + local_index;
 
+		// Set the selected bit in the leaf mask. If the mask is all set afterwards, recurse back
+		// through the parent hierarchy and set the the full bits of each node mask.
 		if (!leaf.set(local_index))
 		{
 			for (auto const& [node, stack_index] : std::views::reverse(stack))

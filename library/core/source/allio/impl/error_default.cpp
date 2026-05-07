@@ -46,7 +46,7 @@ void allio::unrecoverable_error(
 		char const* const stack_trace_2)
 	{
 		static constexpr char threw_exception[] =
-			"?\n            message() threw an exception: ";
+			"?\n            std::error_code::message() threw an exception: ";
 
 		vsm_except_try
 		{

@@ -418,7 +418,7 @@ vsm::result<void> map_t::commit(
 		return vsm::unexpected(allio_error(error::invalid_address));
 	}
 
-	vsm_try(protection, a.protection.value_or(protection::read_write));
+	auto const protection = a.protection.value_or(protection::read_write);
 	vsm_try(page_protection, get_page_protection(protection));
 
 	vsm_try_discard(allocate_virtual_memory(
