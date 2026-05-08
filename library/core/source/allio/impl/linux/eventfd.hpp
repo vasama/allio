@@ -3,6 +3,7 @@
 #include <allio/detail/unique_handle.hpp>
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/linux/error.hpp>
+#include <allio/impl/syscall.hpp>
 
 #include <vsm/assert.h>
 #include <vsm/lazy.hpp>

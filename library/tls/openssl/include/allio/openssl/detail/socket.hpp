@@ -154,7 +154,8 @@ public:
 
 				if constexpr (vsm::is_instance_of_v<RawState, openssl_raw_close>)
 				{
-					return io_result<void>();
+					static_assert(std::is_void_v<typename S::internal_result_type>);
+					return {};
 				}
 				else
 				{
@@ -410,9 +411,10 @@ using openssl_socket_operation = openssl_rw_operation<
 	async_operation<M, RawSocket, RawOperations>...>;
 
 template<typename M, typename RawSocket>
-class async_operation<M, openssl_socket_t<RawSocket>, connect_t>
-	: public openssl_socket_operation<M, RawSocket, connect_t, connect_t, close_t>
+struct async_operation<M, openssl_socket_t<RawSocket>, connect_t>
+	: openssl_socket_operation<M, RawSocket, connect_t, connect_t, close_t>
 {
+private:
 	using base = openssl_socket_operation<M, RawSocket, connect_t, connect_t, close_t>;
 
 	using H = native_handle<openssl_socket_t<RawSocket>>;
@@ -569,9 +571,10 @@ class async_operation<M, openssl_socket_t<RawSocket>, connect_t>
 };
 
 template<typename M, typename RawSocket>
-class async_operation<M, openssl_socket_t<RawSocket>, disconnect_t>
-	: public openssl_socket_operation<M, RawSocket, disconnect_t, disconnect_t>
+struct async_operation<M, openssl_socket_t<RawSocket>, disconnect_t>
+	: openssl_socket_operation<M, RawSocket, disconnect_t, disconnect_t>
 {
+private:
 	using base = openssl_socket_operation<M, RawSocket, disconnect_t, disconnect_t>;
 
 	using H = native_handle<openssl_socket_t<RawSocket>> const;
@@ -686,9 +689,10 @@ template<
 	typename M,
 	typename RawSocket,
 	vsm::any_of<byte_io::stream_read_t, byte_io::stream_write_t> Operation>
-class async_operation<M, openssl_socket_t<RawSocket>, Operation>
-	: public openssl_socket_operation<M, RawSocket, Operation>
+struct async_operation<M, openssl_socket_t<RawSocket>, Operation>
+	: openssl_socket_operation<M, RawSocket, Operation>
 {
+private:
 	using base = openssl_socket_operation<M, RawSocket, Operation>;
 
 	using H = native_handle<openssl_socket_t<RawSocket>> const;

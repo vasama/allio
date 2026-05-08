@@ -50,15 +50,20 @@ inline constexpr explicit_parameter<completion_queue_size_t> completion_queue_si
 
 } // namespace io_uring
 
-vsm_gcc_diagnostic(push)
-vsm_gcc_diagnostic(ignored "-Wnon-virtual-dtor")
+vsm_gnu_diagnostic(push)
+vsm_gnu_diagnostic(ignored "-Wnon-virtual-dtor")
 
 class _io_uring_multiplexer
 	: public buffer_registrar
 	, public externally_synchronized
 {
+	vsm_clang_diagnostic(push)
+	vsm_clang_diagnostic(ignored "-Wdefaulted-function-deleted")
+
 	vsm_partial(_io_uring_multiplexer);
 	vsm_partial_delete(_io_uring_multiplexer);
+
+	vsm_clang_diagnostic(pop)
 
 public:
 	struct io_status_type
@@ -323,10 +328,9 @@ protected:
 		unique_io_uring_void_mmap&& sq_data) noexcept;
 };
 
-vsm_gcc_diagnostic(pop)
-
 static_assert(std::is_default_constructible_v<_io_uring_multiplexer::timeout>);
 
+vsm_gnu_diagnostic(pop)
 
 //TODO: The io_uring_multiplexer handle should point directly to the internal object.
 class io_uring_multiplexer final : public externally_synchronized
@@ -341,8 +345,27 @@ public:
 	using io_handler_type = _io_uring_multiplexer::io_handler_type;
 
 private:
+	struct _io_uring_multiplexer_deleter
+	{
+		void operator()(_io_uring_multiplexer* const multiplexer) const
+		{
+			vsm_gnu_diagnostic(push)
+
+			vsm_gcc_diagnostic(ignored "-Wdelete-non-virtual-dtor")
+			vsm_clang_diagnostic(ignored "-Wdelete-non-abstract-non-virtual-dtor")
+
+			delete multiplexer;
+
+			vsm_gnu_diagnostic(pop)
+		}
+	};
+
+	using _io_uring_multiplexer_ptr = std::unique_ptr<
+		_io_uring_multiplexer,
+		_io_uring_multiplexer_deleter>;
+
 	//TODO: Use allio_acquire_storage/allio_release_storage.
-	std::unique_ptr<_io_uring_multiplexer> m_multiplexer;
+	_io_uring_multiplexer_ptr m_multiplexer;
 
 
 	struct create_parameters
@@ -454,7 +477,7 @@ public:
 	using timeout = _io_uring_multiplexer::timeout;
 
 private:
-	explicit io_uring_multiplexer(std::unique_ptr<_io_uring_multiplexer> multiplexer) noexcept
+	explicit io_uring_multiplexer(_io_uring_multiplexer_ptr multiplexer) noexcept
 		: m_multiplexer(vsm_move(multiplexer))
 	{
 	}

@@ -102,6 +102,8 @@ consteval uint32_t encode_location(
 		uint32_t const line = location.line() < line_range ? location.line() : 0;
 		return (line << file_bits | file) << code_bits;
 	}
+
+	vsm_unreachable();
 }
 
 vsm_clang_diagnostic(pop)

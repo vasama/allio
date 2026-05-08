@@ -562,15 +562,17 @@ static vsm::result<int> get_tls_version(security_context_parameters const& args)
 	case tls_version::tls_1_3:
 		return TLS1_3_VERSION;
 
-	vsm_gcc_diagnostic(pop)
-	vsm_gcc_diagnostic(ignored "-Wswitch")
 	vsm_msvc_warning(push)
 	vsm_msvc_warning(disable: 4063)
+
+	vsm_gnu_diagnostic(push)
+	vsm_gnu_diagnostic(ignored "-Wswitch")
+
 	case static_cast<tls_version>(0):
 		vsm_unreachable();
 
-	vsm_gcc_diagnostic(pop)
 	vsm_msvc_warning(pop)
+	vsm_gnu_diagnostic(pop)
 	}
 	return vsm::unexpected(error::invalid_argument);
 }
@@ -604,7 +606,6 @@ static vsm::result<openssl_ssl_ctx_ptr> create_ssl_ctx(
 		{
 		default:
 			vsm_unreachable();
-			[[fallthrough]];
 
 		case tls_verification::none:
 			break;

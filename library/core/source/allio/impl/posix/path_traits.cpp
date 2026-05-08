@@ -1099,6 +1099,8 @@ void posix_path_iterator_base<Char>::decrement()
 	m_cur_end = new_end;
 }
 
+namespace allio::detail {
+
 template struct posix_path_iterator_base<char>;
 template struct posix_path_iterator_base<wchar_t>;
 template struct posix_path_iterator_base<char8_t>;
@@ -1110,3 +1112,5 @@ template struct posix_path_traits_base<wchar_t>;
 template struct posix_path_traits_base<char8_t>;
 template struct posix_path_traits_base<char16_t>;
 template struct posix_path_traits_base<char32_t>;
+
+} // namespace allio::detail

@@ -156,7 +156,11 @@ void io_uring_byte_io_state_1<Operation>::cancel(
 }
 
 
+namespace allio::detail {
+
 template struct io_uring_byte_io_state_1<byte_io::stream_read_t>;
 template struct io_uring_byte_io_state_1<byte_io::stream_write_t>;
 template struct io_uring_byte_io_state_1<byte_io::random_read_t>;
 template struct io_uring_byte_io_state_1<byte_io::random_write_t>;
+
+} // namespace allio::detail

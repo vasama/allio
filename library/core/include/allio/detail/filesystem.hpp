@@ -170,7 +170,7 @@ public:
 			return self;
 		}
 
-		return path_formats(self.m_bits | x << self.size() * 2);
+		return path_formats(static_cast<uint8_t>(self.m_bits | x << self.size() * 2));
 	}
 
 	[[nodiscard]] friend path_formats operator|(path_format const format, path_formats const self)
@@ -182,7 +182,7 @@ public:
 			return self;
 		}
 
-		return path_formats(x | self.m_bits << 2);
+		return path_formats(static_cast<uint8_t>(x | self.m_bits << 2));
 	}
 
 

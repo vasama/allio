@@ -38,7 +38,7 @@ vsm::result<size_t> _read_to_end_f(Handle const& h, any_byte_buffer const buffer
 	return detail::_block<byte_io::stream_read_t>(
 		storage,
 		a.deadline,
-		set_io_flags_t(io_flags::greedy_byte_io));
+		set_io_flags_t{ io_flags::greedy_byte_io });
 }
 
 template<typename Handle>

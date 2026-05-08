@@ -141,7 +141,7 @@ vsm_gcc_diagnostic(push)
 vsm_gcc_diagnostic(ignored "-Wnon-virtual-dtor")
 
 using _io_uring_multiplexer_impl = vsm::partial::private_class<_io_uring_multiplexer>;
-class _io_uring_multiplexer::private_class : public _io_uring_multiplexer
+class _io_uring_multiplexer::private_class final : public _io_uring_multiplexer
 {
 	/// Submission ring buffer.
 	///
@@ -571,13 +571,19 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 
 	int const kernel_version = get_kernel_version();
 
-	auto multiplexer = std::make_unique<_io_uring_multiplexer_impl>(
+	auto const multiplexer = new _io_uring_multiplexer_impl(
 		kernel_version,
 		setup,
 		vsm_move(io_uring),
 		vsm_move(rings.sq_ring),
 		vsm_move(rings.cq_ring),
 		vsm_move(sq_data));
+
+	using unique_multiplexer_ptr = std::unique_ptr<
+		_io_uring_multiplexer_impl,
+		_io_uring_multiplexer_deleter>;
+
+	unique_multiplexer_ptr unique_multiplexer(multiplexer);
 
 	if (kernel_version >= KERNEL_VERSION(5, 18, 0) &&
 		vsm::any_flags(args.options, io_uring_options::register_ring))
@@ -625,7 +631,7 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 
 	return vsm::result<io_uring_multiplexer>(
 		vsm::result_value,
-		vsm_lazy(io_uring_multiplexer(vsm_move(multiplexer))));
+		vsm_lazy(io_uring_multiplexer(vsm_move(unique_multiplexer))));
 }
 
 
@@ -977,7 +983,7 @@ vsm::result<int> _io_uring_multiplexer_impl::enter(
 
 vsm::result<void> _io_uring_multiplexer::attach_fd(int const fd, connector_type& c)
 {
-	vsm_self(_io_uring_multiplexer_impl);
+	// vsm_self(_io_uring_multiplexer_impl);
 
 	if (fd == -1)
 	{

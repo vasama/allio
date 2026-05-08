@@ -64,8 +64,8 @@ struct async_connector<M, openssl_listen_socket_t<RawListenSocket>>
 // TODO: Listen should probably not use openssl_operation.
 //       At least it does not require raw_read or raw_write.
 template<typename M, typename RawListenSocket>
-class async_operation<M, openssl_listen_socket_t<RawListenSocket>, listen_t>
-	: public openssl_operation<
+struct async_operation<M, openssl_listen_socket_t<RawListenSocket>, listen_t>
+	: openssl_operation<
 		M,
 		openssl_listen_socket_t<RawListenSocket>,
 		listen_t,
@@ -73,6 +73,7 @@ class async_operation<M, openssl_listen_socket_t<RawListenSocket>, listen_t>
 		async_operation<M, RawListenSocket, listen_t>,
 		async_operation<M, RawListenSocket, close_t>>
 {
+private:
 	using base = openssl_operation<
 		M,
 		openssl_listen_socket_t<RawListenSocket>,
@@ -214,8 +215,8 @@ class async_operation<M, openssl_listen_socket_t<RawListenSocket>, listen_t>
 };
 
 template<typename M, typename RawListenSocket>
-class async_operation<M, openssl_listen_socket_t<RawListenSocket>, accept_t>
-	: public openssl_rw_operation<
+struct async_operation<M, openssl_listen_socket_t<RawListenSocket>, accept_t>
+	: openssl_rw_operation<
 		M,
 		openssl_listen_socket_t<RawListenSocket>,
 		accept_t,
@@ -223,6 +224,7 @@ class async_operation<M, openssl_listen_socket_t<RawListenSocket>, accept_t>
 		async_operation<M, RawListenSocket, accept_t>,
 		async_operation<M, typename RawListenSocket::socket_object_type, close_t>>
 {
+private:
 	using base = openssl_rw_operation<
 		M,
 		openssl_listen_socket_t<RawListenSocket>,

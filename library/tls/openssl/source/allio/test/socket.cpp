@@ -83,52 +83,68 @@ TEST_CASE(
 
 	auto const combined_task = []() -> task<void>
 	{
+		fprintf(stderr, "LINE: %d\n", __LINE__);
 		auto const endpoint = test::generate_endpoint();
 
+		fprintf(stderr, "LINE: %d\n", __LINE__);
 		// Make sure the listening socket is bound before the client attempts to connect.
 		auto const listen_socket = co_await detail::listen<openssl::listen_socket_t, traits_type>(
 			endpoint,
 			make_server_security_context());
 
+		fprintf(stderr, "LINE: %d\n", __LINE__);
 		auto const server_task = [&]() -> task<void>
 		{
+			fprintf(stderr, "LINE: %d\n", __LINE__);
 			auto const socket = co_await listen_socket.accept();
 
+			fprintf(stderr, "LINE: %d\n", __LINE__);
 			// Wait for a request from the client:
 			signed char request_data;
 			auto const rs = co_await socket.read_some(as_read_buffer(&request_data, 1));
 			REQUIRE(rs == 1);
 
+			fprintf(stderr, "LINE: %d\n", __LINE__);
 			// Send a reply to the client:
 			signed char const reply_data = -request_data;
 			size_t const ws = co_await socket.write_some(as_write_buffer(&reply_data, 1));
 			REQUIRE(ws == 1);
 
-			REQUIRE(co_await socket.read_some(as_read_buffer(&request_data, 1)) == end_of_stream);
+			fprintf(stderr, "LINE: %d\n", __LINE__);
+			auto const rs_eof = co_await socket.read_some(as_read_buffer(&request_data, 1));
+			REQUIRE(rs_eof == end_of_stream);
 
+			fprintf(stderr, "LINE: %d\n", __LINE__);
 			co_await socket.disconnect();
+			fprintf(stderr, "LINE: %d\n", __LINE__);
 		};
 
 		auto const client_task = [&]() -> task<void>
 		{
+			fprintf(stderr, "LINE: %d\n", __LINE__);
 			// Connect to the server:
 			auto const socket = co_await detail::connect<openssl::socket_t, traits_type>(
 				endpoint,
 				make_client_security_context());
 
+			fprintf(stderr, "LINE: %d\n", __LINE__);
 			// Send a request to the server:
 			signed char const request_data = 42;
 			size_t const ws = co_await socket.write_some(as_write_buffer(&request_data, 1));
 			REQUIRE(ws == 1);
 
+			fprintf(stderr, "LINE: %d\n", __LINE__);
 			// Wait for a reply from the server:
 			signed char reply_data;
 			auto const rs = co_await socket.read_some(as_read_buffer(&reply_data, 1));
 			REQUIRE(rs == 1);
 
+			fprintf(stderr, "LINE: %d\n", __LINE__);
 			REQUIRE(reply_data == -42);
 
+			fprintf(stderr, "LINE: %d\n", __LINE__);
 			co_await socket.disconnect();
+			fprintf(stderr, "LINE: %d\n", __LINE__);
 		};
 
 		co_await ex::when_all(server_task(), client_task());
