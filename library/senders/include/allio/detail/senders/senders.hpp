@@ -8,6 +8,8 @@
 #include <vsm/standard.hpp>
 #include <vsm/type_traits.hpp>
 
+#include <exec/stoppable_base.hpp>
+
 #include <optional>
 
 namespace allio::detail {
@@ -38,9 +40,6 @@ using set_value_signature = typename _set_value_signature<std::is_void_v<R>>::te
 template<handle Handle, operation_c Operation>
 class io_sender
 {
-	//TODO: Temporary workaround for STDEXEC_MEMFN_DECL.
-	using connect_t = ex::connect_t;
-
 	using object_type = typename Handle::object_type;
 	using handle_type = handle_const_t<Operation, Handle>;
 
@@ -56,13 +55,13 @@ class io_sender
 	template<typename Receiver>
 	class operation
 		: io_handler_base<multiplexer_type, operation<Receiver>>
-		, ex::__stoppable_base_for_t<
+		, exec::stoppable_base_for_t<
 			ex::stop_token_of_t<ex::env_of_t<Receiver>>,
 			operation<Receiver>>
 	{
 		using io_handler_type = io_handler<multiplexer_type>;
 
-		using stoppable_base = ex::__stoppable_base_for_t<
+		using stoppable_base = exec::stoppable_base_for_t<
 			ex::stop_token_of_t<ex::env_of_t<Receiver>>,
 			operation<Receiver>>;
 
@@ -173,7 +172,7 @@ class io_sender
 	vsm_no_unique_address params_type m_args;
 
 public:
-	using is_sender = void;
+	using sender_concept = ex::sender_tag;
 
 	using completion_signatures = ex::completion_signatures<
 		set_value_signature<result_type>,
@@ -188,7 +187,7 @@ public:
 	}
 
 	template<vsm::any_cvref_of<io_sender> Sender, ex::receiver Receiver>
-	[[nodiscard]] STDEXEC_MEMFN_DECL(auto connect)(this Sender&& sender, Receiver&& receiver)
+	[[nodiscard]] auto connect(this Sender&& sender, Receiver&& receiver)
 		-> operation<std::decay_t<Receiver>>
 	{
 		return operation<std::decay_t<Receiver>>(vsm_forward(sender), vsm_forward(receiver));
@@ -198,10 +197,6 @@ public:
 template<object Object, producer Operation, template<typename> typename HandleTemplate>
 class io_handle_sender
 {
-	//TODO: Temporary workaround for STDEXEC_MEMFN_DECL.
-	using get_completion_signatures_t = ex::get_completion_signatures_t;
-	using connect_t = ex::connect_t;
-
 	using params_type = io_parameters_t<Object, Operation>;
 
 	template<multiplexer_handle_for<Object> MultiplexerHandle, ex::receiver Receiver>
@@ -209,11 +204,11 @@ class io_handle_sender
 		: io_handler_base<
 			typename MultiplexerHandle::multiplexer_type,
 			operation<MultiplexerHandle, Receiver>>
-		, ex::__stoppable_base_for_t<
+		, exec::stoppable_base_for_t<
 			ex::stop_token_of_t<ex::env_of_t<Receiver>>,
 			operation<MultiplexerHandle, Receiver>>
 	{
-		using stoppable_base = ex::__stoppable_base_for_t<
+		using stoppable_base = exec::stoppable_base_for_t<
 			ex::stop_token_of_t<ex::env_of_t<Receiver>>,
 			operation<MultiplexerHandle, Receiver>>;
 
@@ -312,7 +307,7 @@ class io_handle_sender
 	vsm_no_unique_address params_type m_args;
 
 public:
-	using is_sender = void;
+	using sender_concept = ex::sender_tag;
 
 	template<std::convertible_to<params_type> Args>
 	explicit io_handle_sender(Args&& args)
@@ -321,7 +316,7 @@ public:
 	}
 
 	template<vsm::any_cvref_of<io_handle_sender> Sender, typename Env>
-	STDEXEC_MEMFN_DECL(auto get_completion_signatures)(this Sender&& sender, Env&& env)
+	auto get_completion_signatures(this Sender&& sender, Env&& env)
 		-> ex::completion_signatures<
 			ex::set_value_t(HandleTemplate<env_multiplexer_handle_t<Env>>),
 			ex::set_error_t(std::error_code),
@@ -331,7 +326,7 @@ public:
 	}
 
 	template<vsm::any_cvref_of<io_handle_sender> Sender, ex::receiver Receiver>
-	[[nodiscard]] STDEXEC_MEMFN_DECL(auto connect)(this Sender&& sender, Receiver&& receiver)
+	[[nodiscard]] auto connect(this Sender&& sender, Receiver&& receiver)
 		-> operation<receiver_multiplexer_t<Receiver>, std::decay_t<Receiver>>
 	{
 		return operation<receiver_multiplexer_t<Receiver>, std::decay_t<Receiver>>(

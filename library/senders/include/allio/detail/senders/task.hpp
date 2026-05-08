@@ -4,43 +4,42 @@
 
 namespace allio::detail {
 
-template<typename MultiplexerHandle>
-class task_context : public exec::default_task_context<void>
+template<typename T, typename MultiplexerHandle>
+class task_context : public exec::default_task_context<T>
 {
-	using default_context = exec::default_task_context<void>;
+	using default_context = exec::default_task_context<T>;
 
 	vsm_no_unique_address MultiplexerHandle m_multiplexer_handle;
 
 public:
 	template<typename ParentPromise>
-	explicit task_context(exec::__task::__parent_promise_t tag, ParentPromise& parent)
-		: exec::default_task_context<void>(tag, parent)
+	explicit task_context(ParentPromise& parent)
+		: default_context(parent)
 		, m_multiplexer_handle(get_multiplexer(ex::get_env(parent)))
 	{
 	}
 
-	template<stdexec::scheduler Scheduler, std::convertible_to<MultiplexerHandle> Multiplexer>
+#if 0
+	template<ex::scheduler Scheduler, std::convertible_to<MultiplexerHandle> Multiplexer>
 	explicit task_context(Scheduler&& scheduler, Multiplexer&& multiplexer)
-		: exec::default_task_context<void>(vsm_forward(scheduler))
+		: default_context(vsm_forward(scheduler))
 		, m_multiplexer_handle(vsm_forward(multiplexer))
 	{
 	}
+#endif
 
 	using default_context::query;
 
-	[[nodiscard]] MultiplexerHandle const& query(get_multiplexer_t) const noexcept
+	[[nodiscard]] constexpr MultiplexerHandle const& query(get_multiplexer_t) const noexcept
 	{
 		return m_multiplexer_handle;
 	}
 
 	template<typename ThisPromise>
 	using promise_context_t = task_context;
-
-	//template<typename ThisPromise, typename ParentPromise>
-	//using awaiter_context_t = exec::__task::__default_awaiter_context<ParentPromise>;
 };
 
 template<typename T, typename MultiplexerHandle>
-using basic_task = exec::basic_task<T, detail::task_context<MultiplexerHandle>>;
+using basic_task = exec::basic_task<T, detail::task_context<T, MultiplexerHandle>>;
 
 } // namespace allio::detail

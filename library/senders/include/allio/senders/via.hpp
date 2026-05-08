@@ -12,9 +12,9 @@ namespace allio {
 template<typename Multiplexer>
 [[nodiscard]] auto via(Multiplexer&& multiplexer)
 {
-	return exec::write(exec::make_env(exec::with(
+	return ex::write_env(ex::prop(
 		detail::get_multiplexer,
-		detail::multiplexer_handle_t<std::remove_cvref_t<Multiplexer>>(vsm_forward(multiplexer)))));
+		detail::multiplexer_handle_t<std::remove_cvref_t<Multiplexer>>(vsm_forward(multiplexer))));
 }
 
 } // namespace allio

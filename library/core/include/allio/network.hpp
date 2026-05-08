@@ -223,6 +223,9 @@ public:
 	{
 		switch (m_kind)
 		{
+		case network_address_kind::local:
+			vsm_unreachable();
+
 		case network_address_kind::null:
 			return vsm_forward(visitor)(null_endpoint_t());
 

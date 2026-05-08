@@ -87,6 +87,9 @@ consteval uint32_t encode_file_name(std::string_view const root_path, std::strin
 	return 0;
 }
 
+vsm_clang_diagnostic(push)
+vsm_clang_diagnostic(ignored "-Wreturn-type")
+
 template<typename Encoding>
 consteval uint32_t encode_location(
 	std::string_view const root_path,
@@ -101,15 +104,22 @@ consteval uint32_t encode_location(
 	}
 }
 
+vsm_clang_diagnostic(pop)
+
 template<typename Encoding, uint32_t Location, typename ErrorCode>
 	requires std::is_error_code_enum_v<ErrorCode>
 [[nodiscard]] std::error_code encode(ErrorCode const error_code)
 {
 	if (uint32_t const code = encode_error_code(error_code))
 	{
+		vsm_clang_diagnostic(push)
+		vsm_clang_diagnostic(ignored "-Wundefined-var-template")
+
 		return std::error_code(
 			static_cast<int>(Location | code),
 			encoded_error_category<Encoding, ErrorCode>::instance);
+
+		vsm_clang_diagnostic(pop)
 	}
 
 	return error_code;
