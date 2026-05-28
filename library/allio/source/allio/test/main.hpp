@@ -110,13 +110,13 @@ concept child_entry_point = requires (EntryPoint&& entry_point)
 /// {
 ///   std::cout << arg_1 << " " << arg_2 << std::endl;
 /// };
-/// 
+///
 /// auto args = test::make_child_args(child_main, "hello", "world");
-/// create_process(test::get_child_executable_path(), process_arguments(args));
+/// create_process(test::get_test_suite_executable_path(), process_arguments(args));
 /// @endcode
 
 /// @return Executable path for creation of child processes.
-path_view get_child_executable_path();
+path_view get_test_suite_executable_path();
 
 /// @return Command-line option required for launching a child process running
 ///         the specified entry point function.

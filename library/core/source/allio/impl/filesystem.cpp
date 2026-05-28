@@ -61,3 +61,48 @@ vsm::result<unique_handle> detail::open_unique_file(
 		}
 	}
 }
+
+fs_standard_info::fs_standard_info(fs_info_view const view) noexcept
+{
+	m_mask = view.mask();
+
+	if (vsm::any_flags(view.mask(), fs_info_mask::type))
+	{
+		m_type = view.type();
+	}
+
+	if (vsm::any_flags(view.mask(), fs_info_mask::dev_id))
+	{
+		m_dev_id = view.dev_id();
+	}
+
+	if (vsm::any_flags(view.mask(), fs_info_mask::ino_id))
+	{
+		m_ino_id = view.ino_id();
+	}
+
+	if (vsm::any_flags(view.mask(), fs_info_mask::link_count))
+	{
+		m_link_count = view.link_count();
+	}
+
+	if (vsm::any_flags(view.mask(), fs_info_mask::max_extent))
+	{
+		m_max_extent = view.max_extent();
+	}
+
+	if (vsm::any_flags(view.mask(), fs_info_mask::data_access_time))
+	{
+		m_data_access_time = view.data_access_time();
+	}
+
+	if (vsm::any_flags(view.mask(), fs_info_mask::data_change_time))
+	{
+		m_data_change_time = view.data_change_time();
+	}
+
+	if (vsm::any_flags(view.mask(), fs_info_mask::attr_change_time))
+	{
+		m_attr_change_time = view.attr_change_time();
+	}
+}

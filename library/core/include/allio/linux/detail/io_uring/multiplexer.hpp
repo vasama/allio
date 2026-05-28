@@ -220,6 +220,9 @@ public:
 	[[nodiscard]] vsm::result<void> attach_fd(int fd, connector_type& c);
 	[[nodiscard]] vsm::result<void> detach_fd(int fd, connector_type& c);
 
+	void signaling_operation_submitted();
+	void signaling_operation_completed();
+
 	void cancel_io(user_data_type user_data);
 
 	[[nodiscard]] vsm::result<bool> poll(poll_parameters const& args);

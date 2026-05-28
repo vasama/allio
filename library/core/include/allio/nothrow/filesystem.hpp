@@ -1,6 +1,5 @@
 #pragma once
 
-#include <allio/detail/fs_operations.hpp>
 #include <allio/filesystem.hpp>
 #include <allio/path.hpp>
 

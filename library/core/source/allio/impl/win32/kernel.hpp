@@ -17,8 +17,25 @@ namespace allio::win32 {
 
 /* Status and error management */
 
-extern ULONG(NTAPI* RtlNtStatusToDosError)(
-	_In_ NTSTATUS Status);
+extern ULONG(NTAPI* RtlNtStatusToDosError)(_In_ NTSTATUS Status);
+
+
+/* Windows version information */
+
+extern NTSTATUS(NTAPI* RtlGetVersion)(_Out_ PRTL_OSVERSIONINFOW *lpVersionInformation);
+
+
+/* Time and date */
+
+inline constexpr ULONGLONG system_time_unix_epoch = 0x19DB1DED53E8000ULL;
+inline constexpr ULONGLONG system_time_nano_scale = 100;
+
+inline constexpr ULONGLONG system_time_to_unix_nano_time(ULONGLONG const system_time)
+{
+	return (system_time - system_time_unix_epoch) * system_time_nano_scale;
+}
+
+extern ULONGLONG(NTAPI* RtlGetSystemTimePrecise)();
 
 
 /* General I/O */
@@ -106,9 +123,292 @@ extern NTSTATUS(NTAPI* NtWaitForMultipleObjects)(
 	_In_opt_ PLARGE_INTEGER Timeout);
 
 
+/* NtQuerySystemInformation */
+
+enum _SYSTEM_INFORMATION_CLASS
+{
+	SystemBasicInformation,
+	SystemProcessorInformation,
+	SystemPerformanceInformation,
+	SystemTimeOfDayInformation,
+	SystemPathInformation,
+	SystemProcessInformation,
+	SystemCallCountInformation,
+	SystemDeviceInformation,
+	SystemProcessorPerformanceInformation,
+	SystemFlagsInformation,
+	SystemCallTimeInformation,
+	SystemModuleInformation,
+	SystemLocksInformation,
+	SystemStackTraceInformation,
+	SystemPagedPoolInformation,
+	SystemNonPagedPoolInformation,
+	SystemHandleInformation,
+	SystemObjectInformation,
+	SystemPageFileInformation,
+	SystemVdmInstemulInformation,
+	SystemVdmBopInformation,
+	SystemFileCacheInformation,
+	SystemPoolTagInformation,
+	SystemInterruptInformation,
+	SystemDpcBehaviorInformation,
+	SystemFullMemoryInformation,
+	SystemLoadGdiDriverInformation,
+	SystemUnloadGdiDriverInformation,
+	SystemTimeAdjustmentInformation,
+	SystemSummaryMemoryInformation,
+	SystemMirrorMemoryInformation,
+	SystemPerformanceTraceInformation,
+	SystemObsolete0,
+	SystemExceptionInformation,
+	SystemCrashDumpStateInformation,
+	SystemKernelDebuggerInformation,
+	SystemContextSwitchInformation,
+	SystemRegistryQuotaInformation,
+	SystemExtendServiceTableInformation,
+	SystemPrioritySeparation,
+	SystemVerifierAddDriverInformation,
+	SystemVerifierRemoveDriverInformation,
+	SystemProcessorIdleInformation,
+	SystemLegacyDriverInformation,
+	SystemCurrentTimeZoneInformation,
+	SystemLookasideInformation,
+	SystemTimeSlipNotification,
+	SystemSessionCreate,
+	SystemSessionDetach,
+	SystemSessionInformation,
+	SystemRangeStartInformation,
+	SystemVerifierInformation,
+	SystemVerifierThunkExtend,
+	SystemSessionProcessInformation,
+	SystemLoadGdiDriverInSystemSpace,
+	SystemNumaProcessorMap,
+	SystemPrefetcherInformation,
+	SystemExtendedProcessInformation,
+	SystemRecommendedSharedDataAlignment,
+	SystemComPlusPackage,
+	SystemNumaAvailableMemory,
+	SystemProcessorPowerInformation,
+	SystemEmulationBasicInformation,
+	SystemEmulationProcessorInformation,
+	SystemExtendedHandleInformation,
+	SystemLostDelayedWriteInformation,
+	SystemBigPoolInformation,
+	SystemSessionPoolTagInformation,
+	SystemSessionMappedViewInformation,
+	SystemHotpatchInformation,
+	SystemObjectSecurityMode,
+	SystemWatchdogTimerHandler,
+	SystemWatchdogTimerInformation,
+	SystemLogicalProcessorInformation,
+	SystemWow64SharedInformationObsolete,
+	SystemRegisterFirmwareTableInformationHandler,
+	SystemFirmwareTableInformation,
+	SystemModuleInformationEx,
+	SystemVerifierTriageInformation,
+	SystemSuperfetchInformation,
+	SystemMemoryListInformation,
+	SystemFileCacheInformationEx,
+	SystemThreadPriorityClientIdInformation,
+	SystemProcessorIdleCycleTimeInformation,
+	SystemVerifierCancellationInformation,
+	SystemProcessorPowerInformationEx,
+	SystemRefTraceInformation,
+	SystemSpecialPoolInformation,
+	SystemProcessIdInformation,
+	SystemErrorPortInformation,
+	SystemBootEnvironmentInformation,
+	SystemHypervisorInformation,
+	SystemVerifierInformationEx,
+	SystemTimeZoneInformation,
+	SystemImageFileExecutionOptionsInformation,
+	SystemCoverageInformation,
+	SystemPrefetchPatchInformation,
+	SystemVerifierFaultsInformation,
+	SystemSystemPartitionInformation,
+	SystemSystemDiskInformation,
+	SystemProcessorPerformanceDistribution,
+	SystemNumaProximityNodeInformation,
+	SystemDynamicTimeZoneInformation,
+	SystemCodeIntegrityInformation,
+	SystemProcessorMicrocodeUpdateInformation,
+	SystemProcessorBrandString,
+	SystemVirtualAddressInformation,
+	SystemLogicalProcessorAndGroupInformation,
+	SystemProcessorCycleTimeInformation,
+	SystemStoreInformation,
+	SystemRegistryAppendString,
+	SystemAitSamplingValue,
+	SystemVhdBootInformation,
+	SystemCpuQuotaInformation,
+	SystemNativeBasicInformation,
+	SystemErrorPortTimeouts,
+	SystemLowPriorityIoInformation,
+	SystemTpmBootEntropyInformation,
+	SystemVerifierCountersInformation,
+	SystemPagedPoolInformationEx,
+	SystemSystemPtesInformationEx,
+	SystemNodeDistanceInformation,
+	SystemAcpiAuditInformation,
+	SystemBasicPerformanceInformation,
+	SystemQueryPerformanceCounterInformation,
+	SystemSessionBigPoolInformation,
+	SystemBootGraphicsInformation,
+	SystemScrubPhysicalMemoryInformation,
+	SystemBadPageInformation,
+	SystemProcessorProfileControlArea,
+	SystemCombinePhysicalMemoryInformation,
+	SystemEntropyInterruptTimingInformation,
+	SystemConsoleInformation,
+	SystemPlatformBinaryInformation,
+	SystemPolicyInformation,
+	SystemHypervisorProcessorCountInformation,
+	SystemDeviceDataInformation,
+	SystemDeviceDataEnumerationInformation,
+	SystemMemoryTopologyInformation,
+	SystemMemoryChannelInformation,
+	SystemBootLogoInformation,
+	SystemProcessorPerformanceInformationEx,
+	SystemCriticalProcessErrorLogInformation,
+	SystemSecureBootPolicyInformation,
+	SystemPageFileInformationEx,
+	SystemSecureBootInformation,
+	SystemEntropyInterruptTimingRawInformation,
+	SystemPortableWorkspaceEfiLauncherInformation,
+	SystemFullProcessInformation,
+	SystemKernelDebuggerInformationEx,
+	SystemBootMetadataInformation,
+	SystemSoftRebootInformation,
+	SystemElamCertificateInformation,
+	SystemOfflineDumpConfigInformation,
+	SystemProcessorFeaturesInformation,
+	SystemRegistryReconciliationInformation,
+	SystemEdidInformation,
+	SystemManufacturingInformation,
+	SystemEnergyEstimationConfigInformation,
+	SystemHypervisorDetailInformation,
+	SystemProcessorCycleStatsInformation,
+	SystemVmGenerationCountInformation,
+	SystemTrustedPlatformModuleInformation,
+	SystemKernelDebuggerFlags,
+	SystemCodeIntegrityPolicyInformation,
+	SystemIsolatedUserModeInformation,
+	SystemHardwareSecurityTestInterfaceResultsInformation,
+	SystemSingleModuleInformation,
+	SystemAllowedCpuSetsInformation,
+	SystemVsmProtectionInformation,
+	SystemInterruptCpuSetsInformation,
+	SystemSecureBootPolicyFullInformation,
+	SystemCodeIntegrityPolicyFullInformation,
+	SystemAffinitizedInterruptProcessorInformation,
+	SystemRootSiloInformation,
+	SystemCpuSetInformation,
+	SystemCpuSetTagInformation,
+	SystemWin32WerStartCallout,
+	SystemSecureKernelProfileInformation,
+	SystemCodeIntegrityPlatformManifestInformation,
+	SystemInterruptSteeringInformation,
+	SystemSupportedProcessorArchitectures,
+	SystemMemoryUsageInformation,
+	SystemCodeIntegrityCertificateInformation,
+	SystemPhysicalMemoryInformation,
+	SystemControlFlowTransition,
+	SystemKernelDebuggingAllowed,
+	SystemActivityModerationExeState,
+	SystemActivityModerationUserSettings,
+	SystemCodeIntegrityPoliciesFullInformation,
+	SystemCodeIntegrityUnlockInformation,
+	SystemIntegrityQuotaInformation,
+	SystemFlushInformation,
+	SystemProcessorIdleMaskInformation,
+	SystemSecureDumpEncryptionInformation,
+	SystemWriteConstraintInformation,
+	SystemKernelVaShadowInformation,
+	SystemHypervisorSharedPageInformation,
+	SystemFirmwareBootPerformanceInformation,
+	SystemCodeIntegrityVerificationInformation,
+	SystemFirmwarePartitionInformation,
+	SystemSpeculationControlInformation,
+	SystemDmaGuardPolicyInformation,
+	SystemEnclaveLaunchControlInformation,
+	SystemWorkloadAllowedCpuSetsInformation,
+	SystemCodeIntegrityUnlockModeInformation,
+	SystemLeapSecondInformation,
+	SystemFlags2Information,
+	SystemSecurityModelInformation,
+	SystemCodeIntegritySyntheticCacheInformation,
+	SystemFeatureConfigurationInformation,
+	SystemFeatureConfigurationSectionInformation,
+	SystemFeatureUsageSubscriptionInformation,
+	SystemSecureSpeculationControlInformation,
+	SystemSpacesBootInformation,
+	SystemFwRamdiskInformation,
+	SystemWheaIpmiHardwareInformation,
+	SystemDifSetRuleClassInformation,
+	SystemDifClearRuleClassInformation,
+	SystemDifApplyPluginVerificationOnDriver,
+	SystemDifRemovePluginVerificationOnDriver,
+	SystemShadowStackInformation,
+	SystemBuildVersionInformation,
+	SystemPoolLimitInformation,
+	SystemCodeIntegrityAddDynamicStore,
+	SystemCodeIntegrityClearDynamicStores,
+	SystemDifPoolTrackingInformation,
+	SystemPoolZeroingInformation,
+	SystemDpcWatchdogInformation,
+	SystemDpcWatchdogInformation2,
+	SystemSupportedProcessorArchitectures2,
+	SystemSingleProcessorRelationshipInformation,
+	SystemXfgCheckFailureInformation,
+	SystemIommuStateInformation,
+	SystemHypervisorMinrootInformation,
+	SystemHypervisorBootPagesInformation,
+	SystemPointerAuthInformation,
+	SystemSecureKernelDebuggerInformation,
+	SystemOriginalImageFeatureInformation,
+	SystemMemoryNumaInformation,
+	SystemMemoryNumaPerformanceInformation,
+	SystemCodeIntegritySignedPoliciesFullInformation,
+	SystemSecureCoreInformation,
+	SystemTrustedAppsRuntimeInformation,
+	SystemBadPageInformationEx,
+	SystemResourceDeadlockTimeout,
+	SystemBreakOnContextUnwindFailureInformation,
+	SystemOslRamdiskInformation,
+	SystemCodeIntegrityPolicyManagementInformation,
+	SystemMemoryNumaCacheInformation,
+	SystemProcessorFeaturesBitMapInformation,
+	SystemRefTraceInformationEx,
+	SystemBasicProcessInformation,
+	SystemHandleCountInformation,
+	SystemRuntimeAttestationReport,
+	SystemPoolTagInformation2,
+	SystemCodeIntegrityEndpointSecurityInformation,
+}
+typedef SYSTEM_INFORMATION_CLASS, *PSYSTEM_INFORMATION_CLASS;
+
+extern NTSTATUS(NTAPI* NtQuerySystemInformation)(
+	_In_ SYSTEM_INFORMATION_CLASS SystemInformationClass,
+	_Inout_ PVOID SystemInformation,
+	_In_ ULONG SystemInformationLength,
+	_Out_opt_ PULONG ReturnLength);
+
+
 /* NtQueryObject */
 
-inline constexpr auto ObjectNameInformation = OBJECT_INFORMATION_CLASS(1);
+enum _OBJECT_INFORMATION_CLASS
+{
+	ObjectBasicInformation,
+	ObjectNameInformation,
+	ObjectTypeInformation,
+	ObjectTypesInformation,
+	ObjectHandleFlagInformation,
+	ObjectSessionInformation,
+	ObjectSessionObjectInformation,
+	ObjectSetRefTraceInformation,
+	MaxObjectInfoClass
+}
+typedef OBJECT_INFORMATION_CLASS, *POBJECT_INFORMATION_CLASS;
 
 struct _OBJECT_BASIC_INFORMATION
 {
@@ -174,7 +474,7 @@ extern NTSTATUS(NTAPI* NtQueryObject)(
 	_Out_opt_ PULONG ReturnLength);
 
 
-/* NtQueryInformationFile & NtSetInformationFile */
+/* NtQueryInformationByName, QueryInformationFile, NtSetInformationFile */
 
 enum _FILE_INFORMATION_CLASS
 {
@@ -257,6 +557,16 @@ enum _FILE_INFORMATION_CLASS
 }
 typedef FILE_INFORMATION_CLASS, *PFILE_INFORMATION_CLASS;
 
+struct _FILE_BASIC_INFORMATION
+{
+	LARGE_INTEGER CreationTime;
+	LARGE_INTEGER LastAccessTime;
+	LARGE_INTEGER LastWriteTime;
+	LARGE_INTEGER ChangeTime;
+	ULONG FileAttributes;
+}
+typedef FILE_BASIC_INFORMATION, *PFILE_BASIC_INFORMATION;
+
 struct _FILE_STANDARD_INFORMATION
 {
 	LARGE_INTEGER AllocationSize;
@@ -266,6 +576,12 @@ struct _FILE_STANDARD_INFORMATION
 	BOOLEAN Directory;
 }
 typedef FILE_STANDARD_INFORMATION, *PFILE_STANDARD_INFORMATION;
+
+struct _FILE_INTERNAL_INFORMATION
+{
+	LARGE_INTEGER IndexNumber;
+}
+typedef FILE_INTERNAL_INFORMATION, *PFILE_INTERNAL_INFORMATION;
 
 struct _FILE_NAME_INFORMATION
 {
@@ -322,6 +638,13 @@ struct _FILE_COMPLETION_INFORMATION
 }
 typedef FILE_COMPLETION_INFORMATION, *PFILE_COMPLETION_INFORMATION;
 
+struct _FILE_ATTRIBUTE_TAG_INFORMATION
+{
+	ULONG FileAttributes;
+	ULONG ReparseTag;
+}
+typedef FILE_ATTRIBUTE_TAG_INFORMATION, *PFILE_ATTRIBUTE_TAG_INFORMATION;
+
 struct _FILE_ID_FULL_DIR_INFORMATION
 {
 	ULONG NextEntryOffset;
@@ -346,6 +669,13 @@ struct _FILE_IO_COMPLETION_NOTIFICATION_INFORMATION
 	ULONG Flags;
 }
 typedef FILE_IO_COMPLETION_NOTIFICATION_INFORMATION, *PFILE_IO_COMPLETION_NOTIFICATION_INFORMATION;
+
+struct _FILE_ID_INFORMATION
+{
+	ULONGLONG VolumeSerialNumber;
+	FILE_ID_128 FileId;
+}
+typedef FILE_ID_INFORMATION, *PFILE_ID_INFORMATION;
 
 struct _FILE_ID_EXTD_DIR_INFORMATION
 {
@@ -377,6 +707,13 @@ struct _FILE_DISPOSITION_INFORMATION_EX
 }
 typedef FILE_DISPOSITION_INFORMATION_EX, *PFILE_DISPOSITION_INFORMATION_EX;
 
+extern NTSTATUS(NTAPI* NtQueryInformationByName)(
+	_In_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+	_Out_ PVOID FileInformation,
+	_In_ ULONG Length,
+	_In_ FILE_INFORMATION_CLASS FileInformationClass);
+
 extern NTSTATUS(NTAPI* NtQueryInformationFile)(
 	_In_ HANDLE FileHandle,
 	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
@@ -390,6 +727,49 @@ extern NTSTATUS(NTAPI* NtSetInformationFile)(
 	_In_ PVOID FileInformation,
 	_In_ ULONG Length,
 	_In_ FILE_INFORMATION_CLASS FileInformationClass);
+
+
+/* NtQueryVolumeInformationFile */
+
+typedef enum _FS_INFORMATION_CLASS
+{
+	FileFsVolumeInformation = 1,
+	FileFsLabelInformation,
+	FileFsSizeInformation,
+	FileFsDeviceInformation,
+	FileFsAttributeInformation,
+	FileFsControlInformation,
+	FileFsFullSizeInformation,
+	FileFsObjectIdInformation,
+	FileFsDriverPathInformation,
+	FileFsVolumeFlagsInformation,
+	FileFsSectorSizeInformation,
+	FileFsDataCopyInformation,
+	FileFsMetadataSizeInformation,
+	FileFsFullSizeInformationEx,
+	FileFsGuidInformation,
+	FileFsMaximumInformation
+}
+FS_INFORMATION_CLASS, *PFS_INFORMATION_CLASS;
+
+struct _FILE_FS_SECTOR_SIZE_INFORMATION
+{
+	ULONG LogicalBytesPerSector;
+	ULONG PhysicalBytesPerSectorForAtomicity;
+	ULONG PhysicalBytesPerSectorForPerformance;
+	ULONG FileSystemEffectivePhysicalBytesPerSectorForAtomicity;
+	ULONG Flags;
+	ULONG ByteOffsetForSectorAlignment;
+	ULONG ByteOffsetForPartitionAlignment;
+}
+typedef FILE_FS_SECTOR_SIZE_INFORMATION, *PFILE_FS_SECTOR_SIZE_INFORMATION;
+
+extern NTSTATUS (NTAPI* NtQueryVolumeInformationFile)(
+	_In_ HANDLE FileHandle,
+	_Out_ PIO_STATUS_BLOCK IoStatusBlock,
+	_Out_ PVOID FsInformation,
+	_In_ ULONG Length,
+	_In_ FS_INFORMATION_CLASS FsInformationClass);
 
 
 /* I/O Completion Port */

@@ -1,6 +1,8 @@
 #include <allio/blocking/directory.hpp>
+#include <allio/blocking/filesystem.hpp>
 #include <allio/senders/directory.hpp>
 
+#include <allio/filesystem.hpp>
 #include <allio/handles/fs_object.hpp>
 #include <allio/senders/sync_wait.hpp>
 #include <allio/senders/task.hpp>
@@ -167,44 +169,90 @@ TEST_CASE("Directory entries can be read asynchronously", "[directory][async]")
 }
 #endif
 
+TEST_CASE("Directory information can be queried", "[directory][blocking]")
+{
+	using namespace blocking;
 
-TEST_CASE("Current directory", "[directory][this_process][blocking]")
+	auto const path = test::get_temp_path();
+
+	fs_time_point const t0 = fs_clock::now();
+	std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	REQUIRE(std::filesystem::create_directory(path.string()));
+	std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	fs_time_point const t1 = fs_clock::now();
+
+	fs_info_mask const requested_mask = fs_info_mask::standard | fs_info_mask::create_time;
+
+	fs_info_buffer info_buffer;
+	auto const info = query_information(path, info_buffer, requested_mask);
+	REQUIRE(info.contains(fs_info_mask::standard));
+
+	REQUIRE(info.type() == fs_type::directory);
+
+	if (info.contains(fs_info_mask::create_time))
+	{
+		REQUIRE(t0 <= info.create_time());
+		REQUIRE(info.create_time() <= t1);
+	}
+
+	REQUIRE(t0 <= info.data_change_time());
+	REQUIRE(info.data_change_time() <= t1);
+
+	REQUIRE(t0 <= info.data_access_time());
+	REQUIRE(info.data_access_time() <= t1);
+
+	REQUIRE(t0 <= info.attr_change_time());
+	REQUIRE(info.attr_change_time() <= t1);
+}
+
+TEST_CASE("Current directory path can be read", "[directory][this_process][blocking]")
+{
+	using namespace blocking;
+
+	path current_path;
+
+	SECTION("Using an implicit buffer")
+	{
+		current_path = this_process::get_current_directory();
+	}
+
+	SECTION("Using an explicit buffer")
+	{
+		this_process::get_current_directory(current_path);
+	}
+
+	REQUIRE(current_path.string() == std::filesystem::current_path());
+}
+
+TEST_CASE("Current directory can be assigned", "[directory][this_process][blocking]")
 {
 	using namespace blocking;
 
 	auto const current_path = std::filesystem::current_path();
+
+	auto const temp_path = test::get_temp_path();
+	std::filesystem::create_directory(temp_path.string());
+
+	vsm_defer
 	{
-		SECTION("Current directory path can be read")
-		{
-			auto const path = this_process::get_current_directory();
-			[[maybe_unused]] auto const p = std::filesystem::current_path();
-			REQUIRE(path.string() == std::filesystem::current_path());
-		}
+		// If an exception is thrown and the defer is executed as part of exception unwinding, and
+		// the attempt to restore the previous path fails, the program terminates, but that's fine.
+		std::filesystem::current_path(current_path);
+	};
 
-		SECTION("Current directory can be assigned")
-		{
-			auto const temp_path = test::get_temp_path();
-			std::filesystem::create_directory(temp_path.string());
+	this_process::set_current_directory(temp_path);
+	REQUIRE(std::filesystem::equivalent(
+		temp_path.string(),
+		std::filesystem::current_path()));
+}
 
-			this_process::set_current_directory(temp_path);
+TEST_CASE("Current directory can be opened", "[directory][this_process][blocking]")
+{
+	using namespace blocking;
 
-			REQUIRE(std::filesystem::equivalent(
-				temp_path.string(),
-				std::filesystem::current_path()));
-		}
+	auto const directory = this_process::open_current_directory();
 
-		SECTION("Current directory can be opened")
-		{
-			auto const directory = this_process::open_current_directory();
-
-			REQUIRE(std::filesystem::equivalent(
-				current_path.string(),
-				directory.get_current_path().string()));
-		}
-	}
-
-	if (std::error_code e; std::filesystem::current_path(current_path, e), e)
-	{
-		std::abort();
-	}
+	REQUIRE(std::filesystem::equivalent(
+		directory.get_current_path().string(),
+		std::filesystem::current_path()));
 }

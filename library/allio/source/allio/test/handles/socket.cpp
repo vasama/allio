@@ -62,7 +62,7 @@ TEST_CASE("Blocking stream sockets can exchange data", "[socket][blocking]")
 		signed char value = 0;
 		REQUIRE(server_socket.read_some(as_read_buffer(&value, 1)) == 1);
 
-		value = -value;
+		value = static_cast<signed char>(-value);
 		REQUIRE(server_socket.write_some(as_write_buffer(&value, 1)) == 1);
 	}
 
@@ -95,7 +95,7 @@ TEST_CASE("Stream socket can be connected asynchronously", "[socket][senders]")
 		signed char request_data = 0;
 		socket.read(as_read_buffer(&request_data, 1));
 
-		signed char const reply_data = -request_data;
+		signed char const reply_data = static_cast<signed char>(-request_data);
 		socket.write(as_write_buffer(&reply_data, 1));
 
 		try
@@ -169,7 +169,7 @@ TEST_CASE("Stream socket can be accepted asynchronously", "[socket][senders]")
 		auto const rs = co_await socket.read_some(as_read_buffer(&request_data, 1));
 		REQUIRE(rs == 1);
 
-		signed char const reply_data = -request_data;
+		signed char const reply_data = static_cast<signed char>(-request_data);
 		size_t const ws = co_await socket.write_some(as_write_buffer(&reply_data, 1));
 		REQUIRE(ws == 1);
 
@@ -225,7 +225,7 @@ TEST_CASE("Asynchronous stream sockets can exchange data", "[socket][async]")
 			REQUIRE(rs == 1);
 
 			// Send a reply to the client:
-			signed char const reply_data = -request_data;
+			signed char const reply_data = static_cast<signed char>(-request_data);
 			size_t const ws = co_await socket.write_some(as_write_buffer(&reply_data, 1));
 			REQUIRE(ws == 1);
 

@@ -99,3 +99,31 @@ protection test::test_memory_protection(void* const base, size_t const size)
 
 	return protection | protection::none;
 }
+
+static bool write_executable_code(
+	void* const base,
+	size_t const size,
+	std::span<unsigned char> const code)
+{
+	if (size < code.size())
+	{
+		return false;
+	}
+
+	std::memcpy(code.data(), base, code.size());
+	return true;
+}
+
+bool test::write_noop_executable_code(void* const base, size_t const size)
+{
+#if vsm_arch_x86
+	unsigned char instructions[] =
+	{
+		0xC3 // RET
+	};
+
+	return write_executable_code(base, size, instructions);
+#else
+	return false;
+#endif
+}

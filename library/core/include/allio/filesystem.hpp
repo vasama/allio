@@ -15,13 +15,16 @@ struct directory_t;
 using detail::fs_size;
 using detail::fs_clock;
 using detail::fs_time_point;
-using detail::fs_device_id;
-using detail::fs_node_id;
-using detail::fs_permissions;
-using detail::fs_entry_type;
-using detail::fs_entry_info;
+using detail::fs_dev_id;
+using detail::fs_ino_id;
+using detail::fs_type;
+using detail::fs_io_limits;
+using detail::fs_info_mask;
+using detail::fs_info_view;
+using detail::fs_standard_info;
+using detail::fs_info_buffer_ref;
+using detail::fs_info_buffer;
 using detail::fs_path;
-using detail::get_fs_entry_info;
 using detail::is_null_device_path;
 
 template<detail::handle_for<detail::fs_object_t> Handle>

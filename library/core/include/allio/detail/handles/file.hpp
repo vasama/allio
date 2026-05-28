@@ -5,6 +5,15 @@
 
 namespace allio::detail {
 
+struct direct_io_limits
+{
+	uint32_t read_memory_alignment;
+	uint32_t read_offset_aligmment;
+
+	uint32_t write_memory_alignment;
+	uint32_t write_offset_alignment;
+};
+
 enum class barrier_kind : uint8_t
 {
 	none,
@@ -112,6 +121,8 @@ struct barrier_t
 struct file_t : fs_object_t
 {
 	using base_type = fs_object_t;
+
+	struct impl_type;
 
 	using tell_t = file_io::tell_t;
 	using seek_t = file_io::seek_t;

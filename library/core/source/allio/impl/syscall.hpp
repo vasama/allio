@@ -1,7 +1,7 @@
 #pragma once
 
 // TODO: Just for debugging
-#define allio_config_syscall_hook 1
+// #define allio_config_syscall_hook 1
 
 #if allio_config_syscall_hook
 #	include <allio/impl/syscall_hook.hpp>

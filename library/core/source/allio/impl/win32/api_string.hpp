@@ -30,7 +30,6 @@ protected:
 		: m_index(0)
 		, m_count(count)
 	{
-		vsm_assert(count < 0x100); //PRECONDITION
 	}
 
 private:

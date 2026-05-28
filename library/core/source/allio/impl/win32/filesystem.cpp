@@ -10,6 +10,7 @@
 #include <allio/impl/win32/kernel_path.hpp>
 #include <allio/win32/path_format.hpp>
 
+#include <vsm/atomic.hpp>
 #include <vsm/lift.hpp>
 #include <vsm/numeric.hpp>
 #include <vsm/out_resource.hpp>
@@ -53,6 +54,51 @@ static bool _is_null_device_path(string_length_out_of_range_t)
 bool detail::is_null_device_path(any_path_view const path)
 {
 	return path.string().visit(vsm_lift(_is_null_device_path));
+}
+
+
+static fs_time_point make_time_point(uint64_t const system_time)
+{
+	return fs_time_point(fs_time_point::duration(system_time_to_unix_nano_time(system_time)));
+}
+
+fs_time_point fs_clock::now() noexcept
+{
+	return make_time_point(RtlGetSystemTimePrecise());
+}
+
+
+fs_type win32::get_file_type(ULONG const file_attributes, ULONG const reparse_tag)
+{
+	if (file_attributes & FILE_ATTRIBUTE_REPARSE_POINT)
+	{
+		if (reparse_tag == IO_REPARSE_TAG_SYMLINK)
+		{
+			return fs_type::symbolic_link;
+		}
+
+		if (reparse_tag == IO_REPARSE_TAG_MOUNT_POINT)
+		{
+			return fs_type::ntfs_junction;
+		}
+
+		//TODO: Check if this is correct.
+		return fs_type::unknown;
+	}
+
+	if (file_attributes & FILE_ATTRIBUTE_DIRECTORY)
+	{
+		return fs_type::directory;
+	}
+	else
+	{
+		return fs_type::regular;
+	}
+}
+
+fs_time_point win32::get_file_time(LARGE_INTEGER const file_time)
+{
+	return make_time_point(file_time.QuadPart);
 }
 
 
@@ -118,12 +164,12 @@ vsm::result<unique_handle> win32::open_anchor_file(
 		.desired_access = SYNCHRONIZE,
 		.share_access = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
 		.create_disposition = FILE_OPEN,
-		.create_options = FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
+		.create_options = FILE_SYNCHRONOUS_IO_NONALERT,
 	};
 
-	if (may_open_leaf)
+	if (!may_open_leaf)
 	{
-		options.create_options |= FILE_NON_DIRECTORY_FILE;
+		options.create_options |= FILE_DIRECTORY_FILE;
 	}
 
 	return create_file(base_handle, path, options);
@@ -184,6 +230,797 @@ vsm::result<unique_handle> detail::open_anonymous_file(
 #endif
 
 	return file;
+}
+
+
+namespace {
+
+enum class nt_info_mode : uint8_t
+{
+	file,
+	volume,
+};
+
+static constexpr fs_info_mask stat_mask =
+	fs_info_mask::type |
+	fs_info_mask::ino_id |
+	fs_info_mask::link_count |
+	fs_info_mask::max_extent |
+	fs_info_mask::timestamps;
+
+static constexpr fs_info_mask standard_mask =
+	fs_info_mask::link_count |
+	fs_info_mask::max_extent;
+
+#define allio_detail_file_info_kind(X) \
+	X(Stat,             STAT,               nt_info_mode::file,     stat_mask) \
+	X(AttributeTag,     ATTRIBUTE_TAG,      nt_info_mode::file,     fs_info_mask::type) \
+	X(Basic,            BASIC,              nt_info_mode::file,     fs_info_mask::timestamps) \
+	X(Standard,         STANDARD,           nt_info_mode::file,     standard_mask) \
+	X(Internal,         INTERNAL,           nt_info_mode::file,     fs_info_mask::ino_id) \
+	X(Id,               ID,                 nt_info_mode::file,     fs_info_mask::dev_id) \
+	X(FsSectorSize,     FS_SECTOR_SIZE,     nt_info_mode::volume,   fs_info_mask::io_limits) \
+
+enum class nt_info_kind : uint8_t
+{
+#define allio_detail_x(name, type, mode, mask) \
+	name,
+
+	allio_detail_file_info_kind(allio_detail_x)
+#undef allio_detail_x
+
+	count
+};
+
+template<typename Information>
+struct nt_info_traits;
+
+#define allio_detail_x(name, type, mode, mask) \
+	template<> \
+	struct nt_info_traits<FILE_ ## type ## _INFORMATION> \
+	{ \
+		static constexpr nt_info_kind value = nt_info_kind::name; \
+	}; \
+
+allio_detail_file_info_kind(allio_detail_x)
+#undef allio_detail_x
+
+struct nt_info_type
+{
+	fs_info_mask mask;
+	nt_info_mode mode;
+	uint8_t size;
+	uint8_t type;
+};
+
+static constexpr nt_info_type nt_info_list[] =
+{
+#define allio_detail_x(_name, _type, _mode, _mask) \
+	{ \
+		.mask = _mask, \
+		.mode = _mode, \
+		.size = vsm::truncating(vsm::po2_ceil(sizeof(FILE_ ## _type ## _INFORMATION), alignof(uint64_t))), \
+		.type = File ## _name ## Information, \
+	}, \
+
+	allio_detail_file_info_kind(allio_detail_x)
+#undef allio_detail_x
+};
+
+using nt_info_mask = uint8_t;
+
+static_assert(std::to_underlying(nt_info_kind::count) <= sizeof(nt_info_mask) * CHAR_BIT);
+
+#undef allio_detail_file_info_kind
+
+
+static vsm::atomic<nt_info_mask> unsupported_info_mask = 0;
+
+static nt_info_mask get_supported_info_mask()
+{
+	return ~unsupported_info_mask.load(std::memory_order_relaxed);
+}
+
+static void record_query_status(nt_info_kind const kind, NTSTATUS const status)
+{
+	if (status == STATUS_INVALID_INFO_CLASS)
+	{
+		auto const mask = static_cast<nt_info_mask>(1 << std::to_underlying(kind));
+		(void)unsupported_info_mask.fetch_and(~mask, std::memory_order_relaxed);
+	}
+}
+
+
+static vsm::atomic<bool> query_by_name_unsupported = false;
+
+static bool is_query_by_name_supported()
+{
+	return !query_by_name_unsupported.load(std::memory_order_relaxed);
+}
+
+static void record_query_by_name_status(NTSTATUS const status)
+{
+	if (status == STATUS_NOT_IMPLEMENTED)
+	{
+		query_by_name_unsupported.store(true, std::memory_order_relaxed);
+	}
+}
+
+
+struct alignas(uint64_t) file_info_header
+{
+	nt_info_mask mask;
+};
+
+class file_info_query_plan
+{
+	nt_info_mask m_mask = 0;
+	bool m_query_by_name = true;
+	bool m_query_attributes = false;
+
+public:
+	explicit file_info_query_plan(fs_info_mask user_mask)
+	{
+		nt_info_mask const supported_info_mask = get_supported_info_mask();
+
+		for (auto const [index, info] : std::views::enumerate(nt_info_list))
+		{
+			if (supported_info_mask & 1 << index && vsm::any_flags(user_mask, info.mask))
+			{
+				user_mask &= ~info.mask;
+
+				m_mask |= static_cast<nt_info_mask>(1 << index);
+				m_query_by_name &= info.mode == nt_info_mode::file;
+				m_query_attributes |= info.mode == nt_info_mode::file;
+			}
+		}
+
+		// If the plan requires multiple queries, querying by name is not possible.
+		m_query_by_name = m_query_by_name && std::popcount(m_mask) <= 1;
+
+		// Finally, if querying by name is unsupported, there is no value in planning for it.
+		m_query_by_name = m_query_by_name && is_query_by_name_supported();
+	}
+
+	[[nodiscard]] bool empty() const
+	{
+		return m_mask == 0;
+	}
+
+	[[nodiscard]] bool requires_file_handle() const
+	{
+		return !m_query_by_name;
+	}
+
+	[[nodiscard]] bool requires_read_attributes() const
+	{
+		return m_query_attributes;
+	}
+
+	[[nodiscard]] bool contains(nt_info_kind const kind) const
+	{
+		return m_mask & static_cast<nt_info_mask>(1 << std::to_underlying(kind));
+	}
+
+private:
+	file_info_query_plan() = default;
+};
+
+class file_info_builder
+{
+	any_byte_buffer_ref m_buffer;
+
+	std::byte* m_buffer_beg = nullptr;
+	std::byte* m_header_end = nullptr;
+	std::byte* m_buffer_pos = nullptr;
+	std::byte* m_buffer_end = nullptr;
+
+	nt_info_mask m_nt_mask = 0;
+	fs_info_mask m_fs_mask = fs_info_mask::none;
+
+public:
+	class info_storage
+	{
+		file_info_builder* m_builder;
+
+		std::byte* m_information_beg;
+		std::byte* m_information_end;
+
+		nt_info_mask m_nt_mask;
+		fs_info_mask m_fs_mask;
+
+	public:
+		explicit info_storage(
+			file_info_builder& builder,
+			size_t const size,
+			nt_info_mask const nt_mask,
+			fs_info_mask const fs_mask)
+			: m_builder(&builder)
+			, m_information_beg(builder.m_buffer_pos)
+			, m_information_end(builder.m_buffer_pos + size)
+			, m_nt_mask(nt_mask)
+			, m_fs_mask(fs_mask)
+		{
+		}
+
+		void commit()
+		{
+			vsm_assert(m_builder != nullptr);
+			m_builder->m_buffer_pos = m_information_end;
+			m_builder->m_nt_mask |= m_nt_mask;
+			m_builder->m_fs_mask |= m_fs_mask;
+			m_builder = nullptr;
+		}
+
+		[[nodiscard]] operator void*() const
+		{
+			vsm_assert(m_builder != nullptr);
+			return m_information_beg;
+		}
+	};
+
+	explicit file_info_builder(any_byte_buffer_ref const buffer)
+		: m_buffer(buffer)
+	{
+	}
+
+	void reset()
+	{
+		m_buffer_pos = m_header_end;
+		m_nt_mask = 0;
+	}
+
+	[[nodiscard]] vsm::result<info_storage> reserve(nt_info_kind const kind)
+	{
+		auto const& info = nt_info_list[std::to_underlying(kind)];
+
+		if (info.size > static_cast<size_t>(m_buffer_end - m_buffer_pos))
+		{
+			size_t const cur_size = static_cast<size_t>(m_buffer_end - m_header_end);
+
+			size_t const min_size = sizeof(file_info_header) + cur_size + info.size;
+			size_t const max_size = std::max(min_size, fs_info_storage_size);
+
+			vsm_try(buffer, m_buffer.resize(min_size, max_size));
+
+			m_buffer_beg = buffer.data();
+			m_header_end = m_buffer_beg + sizeof(file_info_header);
+			m_buffer_pos = m_header_end + cur_size;
+			m_buffer_end = m_buffer_beg + buffer.size();
+		}
+
+		nt_info_mask const nt_mask = static_cast<nt_info_mask>(1 << std::to_underlying(kind));
+		return vsm::result<info_storage>(vsm::result_value, *this, info.size, nt_mask, info.mask);
+	}
+
+	[[nodiscard]] vsm::result<fs_info_view> finalize(vsm::result<void> const r)
+	{
+		if (m_nt_mask != 0)
+		{
+			auto const header = ::new (m_buffer_beg) file_info_header
+			{
+				.mask = m_nt_mask,
+			};
+
+			return fs_info_view(header, m_fs_mask);
+		}
+
+		if (r)
+		{
+			return vsm::unexpected(allio_error(error::unsupported_operation));
+		}
+		else
+		{
+			return vsm::unexpected(r.error());
+		}
+	}
+};
+
+class file_info_backend
+{
+	bool m_has_file_handle;
+	bool m_read_attributes;
+
+	HANDLE m_handle;
+	std::wstring_view m_path;
+
+	unique_handle m_local_handle;
+
+public:
+	explicit file_info_backend(HANDLE const handle)
+		: m_has_file_handle(true)
+		, m_handle(handle)
+	{
+	}
+
+	explicit file_info_backend(HANDLE const base_handle, std::wstring_view const path)
+		: m_has_file_handle(false)
+		, m_handle(base_handle)
+		, m_path(path)
+	{
+	}
+
+	[[nodiscard]] vsm::result<bool> prepare_for_query_plan(file_info_query_plan const& query_plan)
+	{
+		if (!m_has_file_handle && query_plan.requires_file_handle() ||
+			!m_read_attributes && query_plan.requires_read_attributes())
+		{
+			vsm_try_void(open_handle(query_plan));
+			return true;
+		}
+
+		return false;
+	}
+
+	[[nodiscard]] vsm::result<bool> query(
+		nt_info_kind const kind,
+		file_info_builder& builder)
+	{
+		vsm_try(storage, builder.reserve(kind));
+
+		IO_STATUS_BLOCK io_status_block;
+		NTSTATUS const status = query(kind, storage, io_status_block);
+
+		vsm_assert(status != STATUS_PENDING);
+		record_query_status(kind, status);
+
+		if (NT_SUCCESS(status))
+		{
+			storage.commit();
+		}
+
+		return NT_SUCCESS(status);
+	}
+
+private:
+	[[nodiscard]] vsm::result<void> open_handle(file_info_query_plan const& query_plan)
+	{
+		platform_open_options options =
+		{
+			.desired_access = SYNCHRONIZE,
+			.share_access = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+			.create_disposition = FILE_OPEN,
+			.create_options = FILE_SYNCHRONOUS_IO_NONALERT,
+		};
+
+		if (query_plan.requires_read_attributes())
+		{
+			options.desired_access |= FILE_READ_ATTRIBUTES;
+		}
+
+		vsm_try_assign(m_local_handle, create_file(m_handle, m_path, options));
+
+		m_has_file_handle = true;
+		m_read_attributes = query_plan.requires_read_attributes();
+
+		m_handle = m_local_handle.get();
+		m_path = std::wstring_view();
+
+		return {};
+	}
+
+	[[nodiscard]] NTSTATUS query(
+		nt_info_kind const kind,
+		void* const storage,
+		IO_STATUS_BLOCK& io_status_block)
+	{
+		nt_info_type const& info = nt_info_list[std::to_underlying(kind)];
+
+		if (info.mode == nt_info_mode::volume)
+		{
+			return query_volume(
+				io_status_block,
+				storage,
+				info.size,
+				static_cast<win32::FS_INFORMATION_CLASS>(info.type));
+		}
+
+		if (!m_has_file_handle)
+		{
+			return query_file_by_name(
+				io_status_block,
+				storage,
+				info.size,
+				static_cast<win32::FILE_INFORMATION_CLASS>(info.type));
+		}
+
+		return query_file_by_handle(
+			io_status_block,
+			storage,
+			info.size,
+			static_cast<win32::FILE_INFORMATION_CLASS>(info.type));
+	}
+
+	[[nodiscard]] NTSTATUS query_file_by_name(
+		IO_STATUS_BLOCK& io_status_block,
+		PVOID const information,
+		ULONG const information_size,
+		win32::FILE_INFORMATION_CLASS const information_class)
+	{
+		auto path = make_unicode_string(m_path);
+
+		OBJECT_ATTRIBUTES object_attributes =
+		{
+			.Length = sizeof(object_attributes),
+			.RootDirectory = m_handle,
+			.ObjectName = &path,
+			.Attributes = OBJ_CASE_INSENSITIVE,
+		};
+
+		NTSTATUS const status = win32::NtQueryInformationByName(
+			&object_attributes,
+			&io_status_block,
+			information,
+			information_size,
+			information_class);
+
+		record_query_by_name_status(status);
+
+		return status;
+	}
+
+	[[nodiscard]] NTSTATUS query_file_by_handle(
+		IO_STATUS_BLOCK& io_status_block,
+		PVOID const information,
+		ULONG const information_size,
+		win32::FILE_INFORMATION_CLASS const information_class)
+	{
+		NTSTATUS const status = win32::NtQueryInformationFile(
+			m_handle,
+			&io_status_block,
+			information,
+			information_size,
+			information_class);
+
+		return status;
+	}
+
+	[[nodiscard]] NTSTATUS query_volume(
+		IO_STATUS_BLOCK& io_status_block,
+		PVOID const information,
+		ULONG const information_size,
+		win32::FS_INFORMATION_CLASS const information_class)
+	{
+		NTSTATUS const status = win32::NtQueryVolumeInformationFile(
+			m_handle,
+			&io_status_block,
+			information,
+			information_size,
+			information_class);
+
+		return status;
+	}
+};
+
+static vsm::result<void> _query_file_info_1(
+	file_info_backend& backend,
+	file_info_builder& builder,
+	fs_info_mask const desired_mask)
+{
+	std::underlying_type_t<nt_info_kind> i = 0;
+
+	while (true)
+	{
+		file_info_query_plan const query_plan(desired_mask);
+
+		vsm_try(should_reset, backend.prepare_for_query_plan(query_plan));
+
+		if (should_reset)
+		{
+			i = 0;
+			builder.reset();
+		}
+
+		while (true)
+		{
+			if (i == std::to_underlying(nt_info_kind::count))
+			{
+				return {};
+			}
+
+			auto const kind = static_cast<nt_info_kind>(i++);
+
+			if (query_plan.contains(kind))
+			{
+				vsm_try(success, backend.query(kind, builder));
+
+				if (!success)
+				{
+					break;
+				}
+			}
+		}
+	}
+}
+
+static vsm::result<fs_info_view> _query_file_info(
+	file_info_backend& backend,
+	any_byte_buffer const buffer,
+	fs_info_mask const desired_mask)
+{
+	file_info_builder builder(buffer);
+	return builder.finalize(_query_file_info_1(backend, builder, desired_mask));
+}
+
+
+class file_info_accessor
+{
+	std::byte const* m_info;
+	nt_info_mask m_nt_mask;
+	uint8_t m_nt_kind_index;
+
+public:
+	explicit file_info_accessor(void const* const info)
+	{
+		auto const header = static_cast<file_info_header const*>(info);
+
+		m_nt_mask = header->mask;
+		m_nt_kind_index = 0;
+
+		m_info = reinterpret_cast<std::byte const*>(header + 1);
+	}
+
+	template<typename Information>
+	[[nodiscard]] Information const* get()
+	{
+		static constexpr auto kind = nt_info_traits<Information>::value;
+		static constexpr auto kind_index = std::to_underlying(kind);
+		vsm_assert(m_nt_kind_index <= kind_index);
+
+		for (; m_nt_kind_index < kind_index; ++m_nt_kind_index)
+		{
+			if (vsm::any_flags(m_nt_mask, static_cast<uint8_t>(1 << m_nt_kind_index)))
+			{
+				m_info += nt_info_list[m_nt_kind_index].size;
+			}
+		}
+
+		if (vsm::any_flags(m_nt_mask, static_cast<uint8_t>(1 << kind_index)))
+		{
+			return reinterpret_cast<Information const*>(m_info);
+		}
+
+		return nullptr;
+	}
+};
+
+} // namespace
+
+
+fs_type detail::_fs_info_type(void const* const header)
+{
+	file_info_accessor accessor(header);
+
+	if (auto const info = accessor.get<FILE_STAT_INFORMATION>())
+	{
+		return get_file_type(info->FileAttributes, info->ReparseTag);
+	}
+
+	if (auto const info = accessor.get<FILE_ATTRIBUTE_TAG_INFORMATION>())
+	{
+		return get_file_type(info->FileAttributes, info->ReparseTag);
+	}
+
+	vsm_unreachable();
+}
+
+fs_dev_id detail::_fs_info_dev_id(void const* const header)
+{
+	file_info_accessor accessor(header);
+
+	if (auto const info = accessor.get<FILE_ID_INFORMATION>())
+	{
+		return vsm::to_enum<fs_dev_id>(info->VolumeSerialNumber);
+	}
+
+	vsm_unreachable();
+}
+
+fs_ino_id detail::_fs_info_ino_id(void const* const header)
+{
+	file_info_accessor accessor(header);
+
+	if (auto const info = accessor.get<FILE_STAT_INFORMATION>())
+	{
+		return vsm::to_enum<fs_ino_id>(info->FileId.QuadPart);
+	}
+
+	if (auto const info = accessor.get<_FILE_INTERNAL_INFORMATION>())
+	{
+		return vsm::to_enum<fs_ino_id>(info->IndexNumber.QuadPart);
+	}
+
+	vsm_unreachable();
+}
+
+fs_size detail::_fs_info_link_count(void const* const header)
+{
+	file_info_accessor accessor(header);
+
+	if (auto const info = accessor.get<FILE_STAT_INFORMATION>())
+	{
+		return info->NumberOfLinks;
+	}
+
+	if (auto const info = accessor.get<FILE_STANDARD_INFORMATION>())
+	{
+		return info->NumberOfLinks;
+	}
+
+	vsm_unreachable();
+}
+
+fs_size detail::_fs_info_max_extent(void const* const header)
+{
+	file_info_accessor accessor(header);
+
+	if (auto const info = accessor.get<FILE_STAT_INFORMATION>())
+	{
+		return info->EndOfFile.QuadPart;
+	}
+
+	if (auto const info = accessor.get<FILE_STANDARD_INFORMATION>())
+	{
+		return info->EndOfFile.QuadPart;
+	}
+
+	vsm_unreachable();
+}
+
+fs_time_point detail::_fs_info_create_time(void const* const header)
+{
+	file_info_accessor accessor(header);
+
+	if (auto const info = accessor.get<FILE_STAT_INFORMATION>())
+	{
+		return get_file_time(info->CreationTime);
+	}
+
+	if (auto const info = accessor.get<FILE_BASIC_INFORMATION>())
+	{
+		return get_file_time(info->CreationTime);
+	}
+
+	vsm_unreachable();
+}
+
+fs_time_point detail::_fs_info_data_access_time(void const* const header)
+{
+	file_info_accessor accessor(header);
+
+	if (auto const info = accessor.get<FILE_STAT_INFORMATION>())
+	{
+		return get_file_time(info->LastAccessTime);
+	}
+
+	if (auto const info = accessor.get<FILE_BASIC_INFORMATION>())
+	{
+		return get_file_time(info->LastAccessTime);
+	}
+
+	vsm_unreachable();
+}
+
+fs_time_point detail::_fs_info_data_change_time(void const* const header)
+{
+	file_info_accessor accessor(header);
+
+	if (auto const info = accessor.get<FILE_STAT_INFORMATION>())
+	{
+		return get_file_time(info->LastWriteTime);
+	}
+
+	if (auto const info = accessor.get<FILE_BASIC_INFORMATION>())
+	{
+		return get_file_time(info->LastWriteTime);
+	}
+
+	vsm_unreachable();
+}
+
+fs_time_point detail::_fs_info_attr_change_time(void const* const header)
+{
+	file_info_accessor accessor(header);
+
+	if (auto const info = accessor.get<FILE_STAT_INFORMATION>())
+	{
+		return get_file_time(info->ChangeTime);
+	}
+
+	if (auto const info = accessor.get<FILE_BASIC_INFORMATION>())
+	{
+		return get_file_time(info->ChangeTime);
+	}
+
+	vsm_unreachable();
+}
+
+fs_io_limits detail::_fs_info_io_limits(void const* const header)
+{
+	file_info_accessor accessor(header);
+
+	if (auto const info = accessor.get<FILE_FS_SECTOR_SIZE_INFORMATION>())
+	{
+		// https://learn.microsoft.com/en-us/windows/win32/fileio/file-buffering
+		// https://learn.microsoft.com/en-us/windows/win32/w8cookbook/advanced-format--4k--disk-compatibility-update
+		// https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/ns-ntddk-_file_fs_sector_size_information
+
+		auto const physical_min = std::min(
+			info->PhysicalBytesPerSectorForAtomicity,
+			info->PhysicalBytesPerSectorForPerformance);
+
+		auto const physical_max = std::max(
+			info->PhysicalBytesPerSectorForAtomicity,
+			info->PhysicalBytesPerSectorForPerformance);
+
+		auto const logical_min = std::min(physical_min, info->LogicalBytesPerSector);
+
+		return
+		{
+			.minimum_buffer_alignment = physical_min,
+
+			.minimum_reading_alignment = logical_min,
+			.optimal_reading_alignment = info->PhysicalBytesPerSectorForPerformance,
+			.maximum_reading_alignment = physical_max,
+
+			.minimum_writing_alignment = logical_min,
+			.optimal_writing_alignment = info->PhysicalBytesPerSectorForPerformance,
+			.maximum_writing_alignment = physical_max,
+
+			.minimum_atomic_write_size = info->PhysicalBytesPerSectorForAtomicity,
+			.optimal_atomic_write_size = info->PhysicalBytesPerSectorForAtomicity,
+			.maximum_atomic_write_size = info->PhysicalBytesPerSectorForAtomicity,
+		};
+	}
+
+	vsm_unreachable();
+}
+
+
+vsm::result<fs_info_view> win32::query_path_info(
+	HANDLE const base_handle,
+	std::wstring_view const path,
+	fs_info_mask const mask,
+	any_byte_buffer const buffer)
+{
+	file_info_backend backend(base_handle, path);
+	return _query_file_info(backend, buffer, mask);
+}
+
+vsm::result<fs_info_view> detail::query_file_info(
+	HANDLE const handle,
+	fs_info_mask const mask,
+	any_byte_buffer const buffer)
+{
+	file_info_backend backend(handle);
+	return _query_file_info(backend, buffer, mask);
+}
+
+vsm::result<fs_info_view> detail::query_path_info(
+	HANDLE const base_handle,
+	any_path_view const path,
+	fs_info_mask const mask,
+	any_byte_buffer_ref const buffer)
+{
+	kernel_path_storage path_storage;
+	kernel_path_handle path_handle;
+
+	vsm_try(kernel_path, make_kernel_path(
+		path_storage,
+		base_handle,
+		path,
+		&path_handle));
+
+	HANDLE kernel_path_base = base_handle;
+	unique_handle local_kernel_path_base;
+
+	if (path_handle.get() != NULL)
+	{
+		vsm_try_assign(local_kernel_path_base, path_handle.duplicate_and_close());
+		kernel_path_base = local_kernel_path_base.get();
+	}
+
+	return win32::query_path_info(kernel_path_base, kernel_path, mask, buffer);
 }
 
 
@@ -1046,7 +1883,9 @@ vsm::result<size_t> detail::canonical_path(fs_path const& path, any_path_buffer 
 	return copy_or_transcode_string(full_path, buffer.string());
 }
 
-vsm::result<size_t> _weakly_canonical_path(fs_path const& path, any_string_buffer const buffer)
+static vsm::result<size_t> _weakly_canonical_path(
+	fs_path const& path,
+	any_string_buffer const buffer)
 {
 	basic_storage<wchar_t, MAX_PATH + 4> path_storage_1;
 	unique_handle path_handle;

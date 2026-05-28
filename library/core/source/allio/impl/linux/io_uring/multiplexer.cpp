@@ -201,7 +201,10 @@ public:
 	/// @ref m_k_cq_consume == m_cq_consume <= @ref m_k_cq_produce
 	uint32_t m_cq_consume;
 
+	/// @brief Number of active operations which require signal handling.
+	size_t m_signaling_operation_count = 0;
 
+	/// @brief Data structure for allocating unique file indices.
 	fd_tree m_file_index_tree;
 
 
@@ -1024,6 +1027,18 @@ vsm::result<void> _io_uring_multiplexer::detach_fd(int const fd, connector_type&
 	return {};
 }
 
+void _io_uring_multiplexer::signaling_operation_submitted()
+{
+	vsm_self(_io_uring_multiplexer_impl);
+	++self->m_signaling_operation_count;
+}
+
+void _io_uring_multiplexer::signaling_operation_completed()
+{
+	vsm_self(_io_uring_multiplexer_impl);
+	vsm_verify(self->m_signaling_operation_count-- != 0);
+}
+
 void _io_uring_multiplexer::cancel_io(user_data_type const user_data)
 {
 	vsm_self(_io_uring_multiplexer_impl);
@@ -1132,9 +1147,16 @@ vsm::result<bool> _io_uring_multiplexer::poll(poll_parameters const& args)
 
 	if (enter_reason != reason::none)
 	{
-		vsm_try_void(signal_handler.activate());
+		// If there are any pending operations which may cause SIGPIPE to be raised, that signal
+		// will be raised by the call to io_uring_enter. In that case the signal must be masked and
+		// subsequently handled after io_uring_enter returns.
+		if (self->m_signaling_operation_count != 0)
+		{
+			vsm_try_void(signal_handler.activate());
 
-		signal_handler.expect_signal();
+			// TODO: We could avoid checking for a signal if none of the reaped CQEs had -EPIPE.
+			signal_handler.expect_signal();
+		}
 
 		vsm_try(error, self->enter(
 			enter_to_submit,
@@ -1160,8 +1182,6 @@ vsm::result<bool> _io_uring_multiplexer::poll(poll_parameters const& args)
 		// Check for new CQEs produced by the kernel.
 		made_progress |= self->acquire_cqes();
 	}
-
-	// TODO: We could avoid checking for a signal if none of the reaped CQEs had -EPIPE.
 
 	// Finally, reap the pending CQEs, invoking their notify callbacks if necessary.
 	return made_progress | self->reap_all_cqes();

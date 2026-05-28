@@ -108,6 +108,19 @@ vsm::result<platform_open_options> detail::make_platform_open_options(
 		return vsm::unexpected(allio_error(error::unsupported_operation));
 	}
 
+	switch (options.caching)
+	{
+	case file_caching::none:
+		r.flags |= O_DIRECT;
+		break;
+
+	case file_caching::normal:
+	case file_caching::sequential:
+	case file_caching::random:
+		// TODO: Use posix_fadvise to specify caching hints.
+		break;
+	}
+
 	if (r.flags & O_CREAT)
 	{
 		// Apply read/write permissions for owner, group and other by default.

@@ -175,12 +175,16 @@ using socket_address_storage = inplace_storage_provider<basic_socket_address<soc
 	return network_address_kind::null;
 }
 
-[[nodiscard]] inline bool is_autobind_address(sockaddr const& addr, size_t const size)
+[[nodiscard]] inline bool is_autobind_address(
+	sockaddr const& addr,
+	socket_address_size_type const size)
 {
 	return size == sizeof(socket_address_family_type);
 }
 
-[[nodiscard]] inline bool requires_explicit_bind(sockaddr const& addr, size_t const size)
+[[nodiscard]] inline bool requires_explicit_bind(
+	sockaddr const& addr,
+	socket_address_size_type const size)
 {
 	return !is_autobind_address(addr, size) || addr.sa_family == AF_UNIX;
 }

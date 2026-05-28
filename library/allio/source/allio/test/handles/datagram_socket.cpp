@@ -104,7 +104,7 @@ TEST_CASE("Asynchronous datagram sockets can exchange data", "[datagram_socket][
 					: any_endpoint_view(peer_endpoint);
 
 			// Send a reply to the client
-			signed char const reply_data = -request_data;
+			signed char const reply_data = static_cast<signed char>(-request_data);
 			co_await socket.send_to(reply_endpoint, as_write_buffer(&reply_data, 1));
 		};
 

@@ -142,6 +142,7 @@ private:
 			HANDLE local = other.value;
 			other.value = NULL;
 			std::swap(value, local);
+			return *this;
 		}
 	};
 

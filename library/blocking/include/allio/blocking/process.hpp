@@ -25,7 +25,7 @@ namespace this_process {
 
 using namespace detail::_this_process;
 
-[[nodiscard]] inline size_t get_executable_path(any_path_buffer const buffer)
+inline size_t get_executable_path(any_path_buffer const buffer)
 {
 	return detail::_get_current_executable_path<traits_type>(buffer);
 }

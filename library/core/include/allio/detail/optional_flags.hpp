@@ -1,11 +1,7 @@
 #pragma once
 
 #include <vsm/concepts.hpp>
-#include <vsm/exceptions.hpp>
-#include <vsm/standard/stdexcept.hpp>
 #include <vsm/utility.hpp>
-
-#include <optional>
 
 namespace allio::detail {
 
@@ -30,6 +26,7 @@ template<typename T>
 class optional_flags
 {
 	using unsigned_type = typename optional_flags_type<std::is_enum_v<T>>::template type<T>;
+
 	static_assert(std::is_unsigned_v<unsigned_type>);
 
 	static constexpr unsigned_type flag = 1;
@@ -39,11 +36,6 @@ class optional_flags
 
 public:
 	constexpr optional_flags()
-		: m_value(0)
-	{
-	}
-
-	constexpr optional_flags(std::nullopt_t)
 		: m_value(0)
 	{
 	}
@@ -70,18 +62,6 @@ public:
 	[[nodiscard]] constexpr bool has_value() const noexcept
 	{
 		return m_value & flag;
-	}
-
-	[[nodiscard]] constexpr T value() const
-	{
-		if (m_value & flag)
-		{
-			return static_cast<T>(m_value & mask);
-		}
-		else
-		{
-			vsm_except_throw(std::bad_optional_access());
-		}
 	}
 
 	template<std::convertible_to<T> U = T>

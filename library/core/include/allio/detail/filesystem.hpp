@@ -1,11 +1,14 @@
 #pragma once
 
+#include <allio/any_byte_buffer.hpp>
 #include <allio/any_path.hpp>
 #include <allio/any_path_buffer.hpp>
+#include <allio/detail/basic_storage.hpp>
 #include <allio/detail/object_concepts.hpp>
 
 #include <vsm/flags.hpp>
 #include <vsm/result.hpp>
+#include <vsm/standard.hpp>
 
 #include <chrono>
 #include <compare>
@@ -21,30 +24,9 @@ struct fs_object_t;
 
 using fs_size = uint64_t;
 
-using fs_clock = std::chrono::file_clock;
-using fs_time_point = fs_clock::time_point;
 
 
-class fs_device_id
-{
-	uint64_t m_id;
-
-	friend auto operator<=>(fs_device_id const&, fs_device_id const&) = default;
-};
-
-class fs_node_id
-{
-	uint64_t m_id;
-
-	friend auto operator<=>(fs_node_id const&, fs_node_id const&) = default;
-};
-
-class fs_permissions
-{
-};
-
-
-enum class fs_entry_type : unsigned char
+enum class fs_type : uint_least8_t
 {
 	unknown,
 
@@ -58,25 +40,384 @@ enum class fs_entry_type : unsigned char
 	character_device,
 
 	symbolic_link,
-
 	ntfs_junction,
 };
 
-struct fs_entry_info
+enum class fs_dev_id : uint64_t {};
+enum class fs_ino_id : uint64_t {};
+
+
+/// @brief Portable filesystem clock. Represented as nanoseconds since Jan 1 1970 UTC.
+/// @note The clock is not steady and as such is not suitable for interval measurements.
+struct fs_clock
 {
-	fs_entry_type type;
-	fs_permissions permissions;
+	using rep = int64_t;
+	using period = std::nano;
+	using duration = std::chrono::duration<rep, period>;
+	using time_point = std::chrono::time_point<fs_clock>;
 
-	fs_device_id device_id;
-	fs_node_id node_id;
+	static constexpr bool is_steady = false;
 
-	fs_size file_end_offset;
-	fs_size hard_link_count;
-
-	fs_time_point last_data_access_time;
-	fs_time_point last_data_modify_time;
-	fs_time_point last_node_modify_time;
+	[[nodiscard]] static time_point now() noexcept;
 };
+
+using fs_time_point = fs_clock::time_point;
+
+
+struct fs_io_limits
+{
+	uint32_t minimum_buffer_alignment;
+
+	uint32_t minimum_reading_alignment;
+	uint32_t optimal_reading_alignment;
+	uint32_t maximum_reading_alignment;
+
+	uint32_t minimum_writing_alignment;
+	uint32_t optimal_writing_alignment;
+	uint32_t maximum_writing_alignment;
+
+	uint32_t minimum_atomic_write_size;
+	uint32_t optimal_atomic_write_size;
+	uint32_t maximum_atomic_write_size;
+};
+
+
+enum class fs_info_mask : uint_least16_t
+{
+	none                        = 0,
+
+	type                        = 1 << 1,
+
+	dev_id                      = 1 << 2,
+	ino_id                      = 1 << 3,
+
+	link_count                  = 1 << 4,
+	max_extent                  = 1 << 5,
+
+	create_time                 = 1 << 6,
+	data_access_time            = 1 << 7,
+	data_change_time            = 1 << 8,
+	attr_change_time            = 1 << 9,
+
+	io_limits                   = 1 << 10,
+
+	/// @brief The set of widely supported filesystem timestamps.
+	standard_timestamps = data_access_time | data_change_time | attr_change_time,
+
+	/// @brief The full set of filesystem timestamps supported by the library.
+	timestamps = create_time | standard_timestamps,
+
+	/// @brief The standard file information set (POSIX stat).
+	standard = type | link_count | max_extent | standard_timestamps,
+};
+vsm_flag_enum(fs_info_mask);
+
+
+[[nodiscard]] fs_type _fs_info_type(void const* info);
+
+[[nodiscard]] fs_dev_id _fs_info_dev_id(void const* info);
+[[nodiscard]] fs_ino_id _fs_info_ino_id(void const* info);
+
+[[nodiscard]] fs_size _fs_info_link_count(void const* info);
+[[nodiscard]] fs_size _fs_info_max_extent(void const* info);
+
+[[nodiscard]] fs_time_point _fs_info_create_time(void const* info);
+[[nodiscard]] fs_time_point _fs_info_data_access_time(void const* info);
+[[nodiscard]] fs_time_point _fs_info_data_change_time(void const* info);
+[[nodiscard]] fs_time_point _fs_info_attr_change_time(void const* info);
+
+[[nodiscard]] fs_io_limits _fs_info_io_limits(void const* info);
+
+
+class fs_info_view
+{
+	fs_info_mask m_mask = fs_info_mask::none;
+	void const* m_info;
+
+public:
+	fs_info_view() = default;
+
+	explicit fs_info_view(void const* const info, fs_info_mask const mask) noexcept
+		: m_mask(mask)
+		, m_info(info)
+	{
+	}
+
+	[[nodiscard]] fs_info_mask mask() const noexcept
+	{
+		return m_mask;
+	}
+
+	[[nodiscard]] bool contains(fs_info_mask const mask) const noexcept
+	{
+		return vsm::all_flags(m_mask, mask);
+	}
+
+	[[nodiscard]] fs_type type() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::type)); //PRECONDITION
+		return detail::_fs_info_type(m_info);
+	}
+
+	[[nodiscard]] fs_dev_id dev_id() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::dev_id)); //PRECONDITION
+		return detail::_fs_info_dev_id(m_info);
+	}
+
+	[[nodiscard]] fs_ino_id ino_id() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::ino_id)); //PRECONDITION
+		return detail::_fs_info_ino_id(m_info);
+	}
+
+	[[nodiscard]] fs_size link_count() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::link_count)); //PRECONDITION
+		return detail::_fs_info_link_count(m_info);
+	}
+
+	[[nodiscard]] fs_size max_extent() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::max_extent)); //PRECONDITION
+		return detail::_fs_info_max_extent(m_info);
+	}
+
+	[[nodiscard]] fs_time_point create_time() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::create_time)); //PRECONDITION
+		return detail::_fs_info_create_time(m_info);
+	}
+
+	[[nodiscard]] fs_time_point data_access_time() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::data_access_time)); //PRECONDITION
+		return detail::_fs_info_data_access_time(m_info);
+	}
+
+	[[nodiscard]] fs_time_point data_change_time() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::data_change_time)); //PRECONDITION
+		return detail::_fs_info_data_change_time(m_info);
+	}
+
+	[[nodiscard]] fs_time_point attr_change_time() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::attr_change_time)); //PRECONDITION
+		return detail::_fs_info_attr_change_time(m_info);
+	}
+
+	[[nodiscard]] fs_io_limits io_limits() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::io_limits)); //PRECONDITION
+		return detail::_fs_info_io_limits(m_info);
+	}
+};
+
+class fs_standard_info
+{
+	fs_info_mask m_mask = fs_info_mask::none;
+
+	fs_type m_type;
+
+	fs_dev_id m_dev_id;
+	fs_ino_id m_ino_id;
+
+	fs_size m_link_count;
+	fs_size m_max_extent;
+
+	fs_time_point m_data_access_time;
+	fs_time_point m_data_change_time;
+	fs_time_point m_attr_change_time;
+
+public:
+	fs_standard_info() = default;
+
+	fs_standard_info(fs_info_view const view) noexcept;
+
+	[[nodiscard]] fs_info_mask mask() const
+	{
+		return m_mask;
+	}
+
+	[[nodiscard]] bool contains(fs_info_mask const mask) const noexcept
+	{
+		return vsm::all_flags(m_mask, mask);
+	}
+
+	[[nodiscard]] fs_type type() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::type)); //PRECONDITION
+		return m_type;
+	}
+
+	[[nodiscard]] fs_dev_id dev_id() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::dev_id)); //PRECONDITION
+		return m_dev_id;
+	}
+
+	[[nodiscard]] fs_ino_id ino_id() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::ino_id)); //PRECONDITION
+		return m_ino_id;
+	}
+
+	[[nodiscard]] fs_size link_count() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::link_count)); //PRECONDITION
+		return m_link_count;
+	}
+
+	[[nodiscard]] fs_size max_extent() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::max_extent)); //PRECONDITION
+		return m_max_extent;
+	}
+
+	[[nodiscard]] fs_time_point const& data_access_time() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::data_access_time)); //PRECONDITION
+		return m_data_access_time;
+	}
+
+	[[nodiscard]] fs_time_point const& data_change_time() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::data_change_time)); //PRECONDITION
+		return m_data_change_time;
+	}
+
+	[[nodiscard]] fs_time_point const& attr_change_time() const
+	{
+		vsm_assert(vsm::any_flags(m_mask, fs_info_mask::attr_change_time)); //PRECONDITION
+		return m_attr_change_time;
+	}
+};
+
+
+template<typename Information>
+struct fs_info_traits
+{
+};
+
+template<>
+struct fs_info_traits<fs_io_limits>
+{
+	static constexpr fs_info_mask info_mask = fs_info_mask::io_limits;
+
+	static fs_io_limits from_info(fs_info_view const info) noexcept
+	{
+		return info.io_limits();
+	}
+};
+
+template<>
+struct fs_info_traits<fs_standard_info>
+{
+	static constexpr fs_info_mask info_mask = fs_info_mask::standard;
+
+	static fs_standard_info from_info(fs_info_view const info) noexcept
+	{
+		return fs_standard_info(info);
+	}
+};
+
+
+template<std::same_as<fs_info_mask> auto>
+inline constexpr bool match_fs_info_mask = true;
+
+template<typename Information>
+concept fs_info_like = requires (fs_info_view const& info)
+{
+	requires match_fs_info_mask<fs_info_traits<Information>::info_mask>;
+
+	{
+		fs_info_traits<Information>::from_info(info)
+	} noexcept -> vsm::nothrow_assignable_to_lvalue<Information>;
+};
+
+
+class fs_info_ref
+{
+	using assign_fs_info_t = void(void* object, fs_info_view info);
+
+	assign_fs_info_t* m_assign;
+	void* m_object;
+
+public:
+	template<fs_info_like Information>
+	fs_info_ref(Information& information)
+		: m_assign(_assign_fs_info<Information>)
+		, m_object(std::addressof(information))
+	{
+	}
+
+	void assign(fs_info_view const view) const noexcept
+	{
+		m_assign(m_object, view);
+	}
+
+private:
+	explicit fs_info_ref(void* const object, assign_fs_info_t* const assign) noexcept
+		: m_assign(assign)
+		, m_object(object)
+	{
+	}
+
+	template<typename Information>
+	static void _assign_fs_info(void* const object, fs_info_view const view)
+	{
+		*static_cast<Information*>(object) = fs_info_traits<Information>::from_info(view);
+	}
+
+	friend class fs_info_buffer_ref;
+};
+
+class fs_info_buffer_ref : any_byte_buffer_ref_base
+{
+public:
+	using any_byte_buffer_ref_base::any_byte_buffer_ref_base;
+
+	fs_info_buffer_ref(fs_info_ref const ref) noexcept
+		: any_byte_buffer_ref_base(ref.m_object, ref.m_assign)
+	{
+	}
+
+	template<fs_info_like Information>
+	fs_info_buffer_ref(Information& information)
+		: fs_info_buffer_ref(fs_info_ref(information))
+	{
+	}
+
+	[[nodiscard]] bool is_byte_buffer() const noexcept
+	{
+		return !is_user_defined();
+	}
+
+	using any_byte_buffer_ref_base::as_byte_buffer;
+
+	[[nodiscard]] bool is_fs_info_ref() const noexcept
+	{
+		return is_user_defined();
+	}
+
+	[[nodiscard]] fs_info_ref as_fs_info_ref() const
+	{
+		return fs_info_ref(
+			object_pointer(),
+			static_cast<fs_info_ref::assign_fs_info_t*>(function_pointer()));
+	}
+};
+
+
+// Enough to store the currently available information in any supported platform.
+inline constexpr size_t fs_info_storage_size = 192;
+inline constexpr size_t fs_info_alignment = alignof(uint64_t);
+
+using fs_info_buffer = basic_storage<
+	std::byte,
+	fs_info_storage_size,
+	fs_info_alignment>;
 
 
 enum class path_format : uint8_t {};
@@ -235,11 +576,6 @@ struct fs_path_t
 {
 	fs_path path;
 };
-
-
-[[nodiscard]] vsm::result<fs_entry_info> get_fs_entry_info(fs_path path);
-
-[[nodiscard]] vsm::result<size_t> get_absolute_path(fs_path const& path);
 
 
 [[nodiscard]] bool is_null_device_path(any_path_view path);

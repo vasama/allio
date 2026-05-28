@@ -1,8 +1,10 @@
 #pragma once
 
+#include <allio/any_byte_buffer.hpp>
 #include <allio/any_path.hpp>
 #include <allio/any_path_buffer.hpp>
 #include <allio/detail/filesystem.hpp>
+#include <allio/detail/optional_enum.hpp>
 #include <allio/detail/optional_flags.hpp>
 #include <allio/detail/handles/platform_object.hpp>
 #include <allio/path.hpp>
@@ -51,7 +53,7 @@ enum class file_opening2 : uint8_t
 	create_only                 = create,
 	open_or_create              = open | create,
 	truncate_existing           = open | truncate,
-	create_or_truncate          = open | create | truncate,
+	create_or_truncate          = open | truncate | create,
 };
 
 /// @brief Controls sharing of the file by other handles.
@@ -61,10 +63,19 @@ enum class file_sharing : uint8_t
 {
 	// Bit 0 is used by optional_flags.
 
+	/// @brief Handles opened using this option prevent the file from being unlinked or opened
+	///        again.
 	none                                = 0,
 
+	/// @brief Handles opened using this option do not prevent the file from being unlinked.
 	unlink                              = 1 << 1,
+
+	/// @brief Handles opened using this option do not prevent the file from being opened again for
+	///        reading.
 	read                                = 1 << 2,
+
+	/// @brief Handles opened using this option do not prevent the file from being opened again for
+	///        writing.
 	write                               = 1 << 3,
 
 	all = unlink | read | write,
@@ -73,61 +84,26 @@ vsm_flag_enum(file_sharing);
 
 enum class file_caching : uint8_t
 {
-	none = 1,
-	only_metadata,
-	reads,
-	reads_and_metadata,
-	all,
-	safety_barriers,
-	temporary,
+	/// @brief The OS may perform no file caching (direct I/O).
+	/// @note In most scenarios this option reduces I/O performance.
+	/// @note Memory and file offset alignment restrictions may apply.
+	none,
+
+	/// @brief The OS may perform general purpose caching (default).
+	normal,
+
+	/// @brief The OS may optimize for fully sequential access.
+	sequential,
+
+	/// @brief The OS may optimize for random access patterns.
+	random,
 };
 
-// TODO: None of these flags are currently used...
 enum class file_options : uint16_t
 {
 	// Bit 0 is used by optional_flags.
-
-	none                                        = 0,
-	unlink_on_first_close                       = 1 << 1,
-	disable_safety_barriers                     = 1 << 2,
-	disable_safety_unlinks                      = 1 << 3,
-	disable_prefetching                         = 1 << 4,
-	maximum_prefetching                         = 1 << 5,
-
-#if vsm_os_win32
-#	define allio_detail_windows_flag(x) 1 << x
-#else
-#	define allio_detail_windows_flag(x) 0
-#endif
-
-	windows_disable_unlink_emulation            = allio_detail_windows_flag(6),
-	windows_disable_sparse_file_creation        = allio_detail_windows_flag(7),
-
-#undef allio_detail_windows_flag
 };
 vsm_flag_enum(file_options);
-
-#if 0
-//TODO: Implement ordered path_kind to allow user to specify preference?
-
-enum class path_kind : uint8_t
-{
-#if vsm_os_win32
-#	define allio_detail_windows_flag(x) 1 << x
-#else
-#	define allio_detail_windows_flag(x) 0
-#endif
-
-	windows_dos                         = allio_detail_windows_flag(0),
-	windows_guid                        = allio_detail_windows_flag(1),
-	windows_nt                          = allio_detail_windows_flag(2),
-
-#undef allio_detail_windows_flag
-
-	any = windows_dos | windows_guid | windows_nt,
-};
-vsm_flag_enum(path_kind);
-#endif
 
 enum class open_options : uint8_t
 {
@@ -137,18 +113,6 @@ enum class open_options : uint8_t
 };
 vsm_flag_enum(open_options);
 
-
-#if 0
-struct path_kind_t
-{
-	path_kind kind = path_kind::any;
-
-	void set_argument(path_kind const value)
-	{
-		kind = value;
-	}
-};
-#endif
 
 struct replace_existing_file_t : explicit_argument<replace_existing_file_t, bool> {};
 inline constexpr explicit_parameter<replace_existing_file_t> replace_existing_file{};
@@ -163,9 +127,9 @@ struct open_t
 	{
 		optional_flags<file_mode> mode;
 		optional_flags<file_options> options;
-		file_opening opening = {};
+		optional_enum<file_opening> opening;
 		optional_flags<file_sharing> sharing;
-		file_caching caching = {};
+		optional_enum<file_caching> caching;
 		open_options special = {};
 		fs_path path;
 
@@ -216,6 +180,33 @@ struct open_t
 		requires requires { Object::open(h, a); }
 	{
 		return Object::open(h, a);
+	}
+};
+
+struct query_file_info_t
+{
+	using operation_concept = void;
+
+	struct params_type
+	{
+		optional_flags<fs_info_mask> mask;
+		fs_info_buffer_ref buffer;
+
+
+	};
+
+	using result_type = fs_info_view;
+
+	template<object Object>
+	static constexpr auto& blocking_io_2 = Object::query_file_info;
+
+	template<object Object>
+	static vsm::result<fs_info_view> blocking_io(
+		native_handle<Object> const& h,
+		io_parameters_t<Object, query_file_info_t> const& a)
+		requires requires { Object::query_file_info(h, a); }
+	{
+		return Object::query_file_info(h, a);
 	}
 };
 
@@ -296,6 +287,7 @@ struct fs_object_t : platform_object_t
 	);
 
 	using open_t = fs_io::open_t;
+	using query_file_info_t = fs_io::query_file_info_t;
 	using get_current_path_t = fs_io::get_current_path_t;
 	using link_at_t = fs_io::link_at_t;
 
@@ -303,9 +295,14 @@ struct fs_object_t : platform_object_t
 	<
 		base_type::operations
 		, open_t
+		, query_file_info_t
 		, get_current_path_t
 		, link_at_t
 	>;
+
+	static vsm::result<fs_info_view> query_file_info(
+		native_handle<fs_object_t> const& h,
+		io_parameters_t<fs_object_t, query_file_info_t> const& a);
 
 	static vsm::result<size_t> get_current_path(
 		native_handle<fs_object_t> const& h,
@@ -328,6 +325,19 @@ struct fs_object_t : platform_object_t
 			path.base = &native;
 			path.path = relative_path;
 			return path;
+		}
+
+		[[nodiscard]] auto query_info(any_byte_buffer_ref const buffer, auto&&... args) const
+		{
+			return _query_info(buffer, vsm_forward(args)...);
+		}
+
+		template<fs_info_like Information>
+		[[nodiscard]] auto query_info(Information& information, auto&&... args) const
+		{
+			return Traits::transform(
+				_query_info(fs_info_buffer_ref(information), vsm_forward(args)...),
+				[](fs_info_view const info) -> void {});
 		}
 
 		[[nodiscard]] auto read_current_path(any_path_buffer const buffer, auto&&... args) const
@@ -360,6 +370,14 @@ struct fs_object_t : platform_object_t
 		}
 
 	private:
+		vsm::result<fs_info_view> _query_info(fs_info_buffer_ref const buffer, auto&&... args) const
+		{
+			auto a = io_parameters_t<typename Handle::object_type, query_file_info_t>{};
+			a.buffer = buffer;
+			(set_argument(a, vsm_forward(args)), ...);
+			return Traits::template observe<query_file_info_t>(static_cast<Handle const&>(*this), a);
+		}
+
 		vsm::result<size_t> _read_current_path(any_path_buffer const buffer, auto&&... args) const
 		{
 			auto a = io_parameters_t<typename Handle::object_type, get_current_path_t>{};

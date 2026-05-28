@@ -84,6 +84,10 @@ TEST_CASE("The protection of anonymous mappings can be changed", "[map][hardware
 	REQUIRE(test::test_memory_protection(base, size) == protection::read_write);
 }
 
+TEST_CASE("Executable anonymous mappings can be created", "[map]")
+{
+}
+
 TEST_CASE("Sections using backing files can be created and mapped", "[section_handle][map]")
 {
 	path const file_path = test::get_temp_path();

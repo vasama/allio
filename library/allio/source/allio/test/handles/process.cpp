@@ -24,6 +24,27 @@ using namespace allio;
 
 namespace {
 
+TEST_CASE("Current process executable path can be queried", "[process][this_process]")
+{
+	using namespace blocking;
+
+	path executable_path;
+
+	SECTION("Using an implicit buffer")
+	{
+		executable_path = this_process::get_executable_path();
+	}
+
+	SECTION("Using an explicit buffer")
+	{
+		this_process::get_executable_path(executable_path);
+	}
+
+	REQUIRE(std::filesystem::equivalent(
+		executable_path.string(),
+		test::get_test_suite_executable_path().string()));
+}
+
 TEST_CASE("Waiting on the current process returns an error", "[process][this_process]")
 {
 	auto const process = blocking::this_process::open();
@@ -314,7 +335,7 @@ TEST_CASE("Standard streams are implicitly inherited", "[process][multi_process]
 				std::back_inserter(pseudo_container));
 		};
 
-		auto const child_path = test::get_child_executable_path();
+		auto const child_path = test::get_test_suite_executable_path();
 		auto const child_args = test::make_child_args(child_main);
 
 		detail::io_parameters_t<process_t, process_t::create_t> args = {};
@@ -381,7 +402,7 @@ TEST_CASE("Standard streams are implicitly inherited", "[process][multi_process]
 
 	auto const child_args = test::make_child_args(child_main, control_argument);
 	auto const child_process = create_process(
-		test::get_child_executable_path(),
+		test::get_test_suite_executable_path(),
 		process_arguments(child_args),
 		redirect_stdin(i_pipe.read_pipe),
 		redirect_stdout(o_pipe.write_pipe),
@@ -410,7 +431,7 @@ TEST_CASE("Handles can be inherited by a child process", "[process][serializatio
 		blocking::encode_handle<std::string>(event));
 
 	auto const process = blocking::create_process(
-		test::get_child_executable_path(),
+		test::get_test_suite_executable_path(),
 		inherit_handles,
 		process_arguments(child_args));
 
@@ -439,7 +460,7 @@ TEST_CASE("Handles can be duplicated from a child process", "[process][serializa
 		blocking::encode_handle<std::string>(pipe_pair.write_pipe));
 
 	auto const process = blocking::create_process(
-		test::get_child_executable_path(),
+		test::get_test_suite_executable_path(),
 		inherit_handles,
 		process_arguments(child_args));
 
@@ -472,7 +493,7 @@ TEST_CASE("Child process can be waited for upon handle destruction", "[process][
 		blocking::encode_handle<std::string>(child_event));
 
 	auto process_1 = blocking::create_process(
-		test::get_child_executable_path(),
+		test::get_test_suite_executable_path(),
 		wait_on_close,
 		inherit_handles,
 		process_arguments(child_args));

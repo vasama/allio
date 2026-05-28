@@ -13,11 +13,23 @@ using namespace allio::win32;
 
 static std::wstring get_temp_nt_path()
 {
-	auto path = test::get_temp_stdfs_path().native();
+	auto path = test::get_temp_stdfs_path().lexically_normal().native();
+
 	std::filesystem::create_directory(path);
 
-	REQUIRE(path.starts_with(L"\\\\?\\"));
-	path[1] = L'?';
+	if (path.starts_with(L"\\\\.\\"))
+	{
+		path[2] = L'?';
+	}
+
+	if (path.starts_with(L"\\\\?\\"))
+	{
+		path[1] = L'?';
+	}
+	else
+	{
+		path.insert_range(path.begin(), std::wstring_view(L"\\??\\"));
+	}
 
 	return path;
 }

@@ -8,7 +8,6 @@
 namespace allio::detail {
 
 using fs_open_params_type = fs_io::open_t::params_type;
-//using open_parameters [[deprecated]] = fs_open_params_type;
 
 enum class open_kind : uint8_t
 {

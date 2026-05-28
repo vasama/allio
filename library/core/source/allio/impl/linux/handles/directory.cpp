@@ -54,33 +54,33 @@ static ssize_t getdents64(int const fd, linux_dirent64* const dirent, size_t cou
 
 using directory_stream_entry = linux_dirent64;
 
-static fs_entry_type get_entry_type(directory_stream_entry const& entry)
+static fs_type get_entry_type(directory_stream_entry const& entry)
 {
 	switch (entry.d_type)
 	{
 	case DT_BLK:
-		return fs_entry_type::block_device;
+		return fs_type::block_device;
 
 	case DT_CHR:
-		return fs_entry_type::character_device;
+		return fs_type::character_device;
 
 	case DT_DIR:
-		return fs_entry_type::directory;
+		return fs_type::directory;
 
 	case DT_FIFO:
-		return fs_entry_type::pipe;
+		return fs_type::pipe;
 
 	case DT_LNK:
-		return fs_entry_type::symbolic_link;
+		return fs_type::symbolic_link;
 
 	case DT_REG:
-		return fs_entry_type::regular;
+		return fs_type::regular;
 
 	case DT_SOCK:
-		return fs_entry_type::socket;
+		return fs_type::socket;
 	}
 
-	return fs_entry_type::unknown;
+	return fs_type::unknown;
 }
 
 static std::string_view get_entry_name(directory_stream_entry const& entry)
@@ -127,7 +127,7 @@ directory_stream_pointer detail::next_directory_entry(directory_stream_pointer c
 	return wrap_stream(next_entry(unwrap_stream(pointer)));
 }
 
-fs_entry_type detail::get_directory_entry_type(directory_stream_pointer const pointer)
+fs_type detail::get_directory_entry_type(directory_stream_pointer const pointer)
 {
 	vsm_assert(pointer != directory_stream_pointer::end_of_stream);
 	return get_entry_type(*unwrap_stream(pointer));

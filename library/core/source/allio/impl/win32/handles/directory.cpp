@@ -21,34 +21,6 @@ using namespace allio::win32;
 using directory_stream_entry = FILE_ID_FULL_DIR_INFORMATION;
 static constexpr auto directory_stream_information = FileIdFullDirectoryInformation;
 
-static fs_entry_type get_entry_type(directory_stream_entry const& entry)
-{
-	if (entry.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
-	{
-		if (entry.ReparsePointTag == IO_REPARSE_TAG_SYMLINK)
-		{
-			return fs_entry_type::symbolic_link;
-		}
-
-		if (entry.ReparsePointTag == IO_REPARSE_TAG_MOUNT_POINT)
-		{
-			return fs_entry_type::ntfs_junction;
-		}
-
-		//TODO: Check if this is correct.
-		return fs_entry_type::unknown;
-	}
-
-	if (entry.FileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-	{
-		return fs_entry_type::directory;
-	}
-	else
-	{
-		return fs_entry_type::regular;
-	}
-}
-
 static std::wstring_view get_entry_name(directory_stream_entry const& entry)
 {
 	return std::wstring_view(entry.FileName, entry.FileNameLength / sizeof(wchar_t));
@@ -89,10 +61,11 @@ directory_stream_pointer detail::next_directory_entry(directory_stream_pointer c
 	return wrap_stream(next_entry(unwrap_stream(pointer)));
 }
 
-fs_entry_type detail::get_directory_entry_type(directory_stream_pointer const pointer)
+fs_type detail::get_directory_entry_type(directory_stream_pointer const pointer)
 {
 	vsm_assert(pointer != directory_stream_pointer::end_of_stream);
-	return get_entry_type(*unwrap_stream(pointer));
+	directory_stream_entry const* const entry = unwrap_stream(pointer);
+	return get_file_type(entry->FileAttributes, entry->ReparsePointTag);
 }
 
 std::wstring_view detail::get_directory_entry_name(directory_stream_pointer const pointer)

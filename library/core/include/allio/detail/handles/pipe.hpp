@@ -20,6 +20,8 @@ struct pipe_t : platform_object_t
 {
 	using base_type = platform_object_t;
 
+	struct impl_type;
+
 	using stream_read_t = byte_io::stream_read_t;
 	using stream_write_t = byte_io::stream_write_t;
 

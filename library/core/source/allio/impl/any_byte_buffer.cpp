@@ -5,11 +5,11 @@
 using namespace allio;
 using namespace allio::detail;
 
-vsm::result<read_buffer> any_byte_buffer::_resize_borrowed(
+vsm::result<std::span<std::byte>> any_byte_buffer_ref_base::_resize_byte_buffer(
 	size_t const min_size,
 	size_t const max_size) const
 {
-	size_t const size = m_bits >> 1;
+	size_t const size = m_bits >> min_object_alignment;
 
 	if (min_size > static_cast<uintptr_t>(-1) << 1)
 	{
@@ -21,5 +21,5 @@ vsm::result<read_buffer> any_byte_buffer::_resize_borrowed(
 		return vsm::unexpected(allio_error(error::no_buffer_space));
 	}
 
-	return read_buffer(m_data, std::min(size, max_size));
+	return std::span<std::byte>(m_data, std::min(size, max_size));
 }

@@ -38,6 +38,7 @@ extern LPFN_DISCONNECTEX DisconnectEx;
 extern LPFN_WSASENDMSG WSASendMsg;
 extern LPFN_WSARECVMSG WSARecvMsg;
 
+#if 0
 extern LPFN_RIORECEIVE RIOReceive;
 extern LPFN_RIORECEIVEEX RIOReceiveEx;
 extern LPFN_RIOSEND RIOSend;
@@ -51,6 +52,7 @@ extern LPFN_RIONOTIFY RIONotify;
 extern LPFN_RIOREGISTERBUFFER RIORegisterBuffer;
 extern LPFN_RIORESIZECOMPLETIONQUEUE RIOResizeCompletionQueue;
 extern LPFN_RIORESIZEREQUESTQUEUE RIOResizeRequestQueue;
+#endif
 
 
 #if 0
@@ -218,6 +220,7 @@ DWORD wsa_recv_msg(
 	LPOVERLAPPED overlapped);
 
 
+#if 0
 void rio_close_completion_queue(RIO_CQ rq);
 void rio_deregister_buffer(RIO_BUFFERID buffer_id);
 
@@ -273,17 +276,18 @@ size_t rio_dequeue_completion(
 	std::span<RIORESULT> buffer);
 
 
-struct rio_buffer_registrar : detail::buffer_registrar
+struct rio_buffer_registrar final : detail::buffer_registrar
 {
 	[[nodiscard]] vsm::result<void*> register_buffers(
 		std::byte* storage,
 		size_t buffer_size,
 		size_t buffer_count) override;
 
-	[[nodiscard]] void deregister_buffers(void* opaque_pointer) override;
+	void deregister_buffers(void* opaque_pointer) override;
 
 
 	static rio_buffer_registrar instance;
 };
+#endif
 
 } // namespace allio::win32

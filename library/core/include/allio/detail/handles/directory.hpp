@@ -46,7 +46,7 @@ enum class directory_stream_pointer : uintptr_t
 
 [[nodiscard]] directory_stream_pointer next_directory_entry(directory_stream_pointer pointer);
 
-[[nodiscard]] fs_entry_type get_directory_entry_type(directory_stream_pointer pointer);
+[[nodiscard]] fs_type get_directory_entry_type(directory_stream_pointer pointer);
 
 [[nodiscard]] std::basic_string_view<native_path_char_t> get_directory_entry_name(
 	directory_stream_pointer pointer);
@@ -80,7 +80,7 @@ public:
 	{
 	}
 
-	[[nodiscard]] fs_entry_type type() const
+	[[nodiscard]] fs_type type() const
 	{
 		return get_directory_entry_type(m_pointer);
 	}

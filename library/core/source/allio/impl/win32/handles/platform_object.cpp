@@ -48,18 +48,31 @@ bool win32::verify_object_type(HANDLE const handle, std::wstring_view const type
 
 handle_flags win32::set_file_completion_notification_modes(HANDLE const handle)
 {
-	handle_flags flags_value = handle_flags::none;
-
-	if (SetFileCompletionNotificationModes(
-		handle,
-		FILE_SKIP_COMPLETION_PORT_ON_SUCCESS | FILE_SKIP_SET_EVENT_ON_HANDLE))
+	FILE_IO_COMPLETION_NOTIFICATION_INFORMATION information =
 	{
-		using flags = platform_object_t::impl_type::flags;
-		flags_value |= flags::skip_completion_port_on_success;
-		flags_value |= flags::skip_handle_event_on_completion;
+		.Flags = FILE_SKIP_COMPLETION_PORT_ON_SUCCESS | FILE_SKIP_SET_EVENT_ON_HANDLE
+	};
+
+	IO_STATUS_BLOCK io_status_block;
+	NTSTATUS const status = win32::NtSetInformationFile(
+		handle,
+		&io_status_block,
+		&information,
+		sizeof(information),
+		FileIoCompletionNotificationInformation);
+
+	vsm_assert(status != STATUS_PENDING);
+
+	handle_flags flags = handle_flags::none;
+
+	if (NT_SUCCESS(status))
+	{
+		using flags_type = platform_object_t::impl_type::flags;
+		flags |= flags_type::skip_completion_port_on_success;
+		flags |= flags_type::skip_handle_event_on_completion;
 	}
 
-	return flags_value;
+	return flags;
 }
 
 

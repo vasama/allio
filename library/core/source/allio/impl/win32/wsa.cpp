@@ -19,6 +19,7 @@ using namespace allio::win32;
 	X(WSASendMsg,                       SOCKET_ERROR,       WSAID_WSASENDMSG) \
 	X(WSARecvMsg,                       SOCKET_ERROR,       WSAID_WSARECVMSG) \
 
+#if 0
 #define allio_rio_functions(X) \
 	X(RIOSend,                          FALSE) \
 	X(RIOSendEx,                        FALSE) \
@@ -33,6 +34,8 @@ using namespace allio::win32;
 	X(RIORegisterBuffer,                RIO_INVALID_BUFFERID) \
 	X(RIOResizeCompletionQueue,         FALSE) \
 	X(RIOResizeRequestQueue,            FALSE) \
+
+#endif
 
 namespace {
 
@@ -145,6 +148,7 @@ static void msw_init(SOCKET const socket)
 #undef allio_x_entry
 }
 
+#if 0
 static void rio_init(SOCKET const socket)
 {
 	RIO_EXTENSION_FUNCTION_TABLE table = {};
@@ -164,6 +168,7 @@ static void rio_init(SOCKET const socket)
 	allio_rio_functions(allio_x_entry)
 	#undef allio_x_entry
 }
+#endif
 
 
 struct wsa_deleter
@@ -236,7 +241,9 @@ using unique_wsa_startup = vsm::unique_resource<bool, wsa_deleter, false>;
 	}
 
 	msw_init(socket);
+#if 0
 	rio_init(socket);
+#endif
 
 	return startup;
 }
@@ -254,7 +261,9 @@ static void wsa_init_lazy()
 
 allio_wsa_functions(allio_x_entry)
 allio_msw_functions(allio_x_entry)
+#if 0
 allio_rio_functions(allio_x_entry)
+#endif
 #undef allio_x_entry
 
 
@@ -392,6 +401,7 @@ DWORD win32::wsa_recv_msg(
 }
 
 
+#if 0
 void win32::rio_close_completion_queue(RIO_CQ const cq)
 {
 	win32::RIOCloseCompletionQueue(cq);
@@ -516,3 +526,4 @@ void rio_buffer_registrar::deregister_buffers(void* const opaque_pointer)
 }
 
 rio_buffer_registrar rio_buffer_registrar::instance;
+#endif

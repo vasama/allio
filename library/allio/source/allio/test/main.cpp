@@ -31,7 +31,7 @@ static child_entry_point_t offset_to_entry_point(uintptr_t const offset)
 
 static path_view this_executable_path;
 
-path_view test::get_child_executable_path()
+path_view test::get_test_suite_executable_path()
 {
 	return this_executable_path;
 }

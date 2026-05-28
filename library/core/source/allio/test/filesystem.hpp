@@ -15,40 +15,12 @@
 
 namespace allio::test {
 
-inline std::filesystem::path get_temp_stdfs_path()
-{
-	static constexpr std::string_view name_prefix = "allio_test_";
-	static constexpr size_t name_suffix_size = 32;
+std::shared_ptr<void> lock_test_directory(std::filesystem::path const& path);
 
-	char buffer[name_prefix.size() + name_suffix_size];
-	memcpy(buffer, name_prefix.data(), name_prefix.size());
 
-	auto& rng = Catch::sharedRng();
-	std::uniform_int_distribution<int> distribution(0, 0x10 - 1);
+std::filesystem::path get_temp_stdfs_path();
 
-	for (char& x : std::span(buffer).subspan(name_prefix.size()))
-	{
-		int const y = distribution(rng);
-		x = static_cast<char>(y < 10 ? '0' + y : 'a' + (y - 10));
-	}
-
-	auto path =
-		std::filesystem::temp_directory_path() /
-		std::string_view(buffer, sizeof(buffer));
-
-#if vsm_os_win32
-	path = std::filesystem::path("\\\\?\\" + path.string());
-#endif
-
-	std::filesystem::remove_all(path);
-
-	return path;
-}
-
-inline path get_temp_path()
-{
-	return allio::path(get_temp_stdfs_path().string());
-}
+path get_temp_path();
 
 
 struct file_deleter
@@ -65,6 +37,11 @@ inline unique_file open_file(char const* const path, bool const write = false)
 	FILE* const file = fopen(path, write ? "wb" : "rb");
 	REQUIRE(file != nullptr);
 	return unique_file(file);
+}
+
+inline unique_file open_file(std::filesystem::path const& path, bool const write = false)
+{
+	return open_file(path.string().c_str(), write);
 }
 
 inline unique_file open_file(path const& path, bool const write = false)

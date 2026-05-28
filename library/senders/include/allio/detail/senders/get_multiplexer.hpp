@@ -14,7 +14,7 @@ struct get_multiplexer_t : ex::__query<get_multiplexer_t>
 	[[nodiscard]] constexpr auto operator()() const noexcept;
 
 	template<typename Env>
-	[[nodiscard]] static constexpr void __validate() noexcept
+	static constexpr void __validate() noexcept
 	{
 		static_assert(ex::__nothrow_callable<get_multiplexer_t, Env const&>);
 		using multiplexer_handle_type = ex::__call_result_t<get_multiplexer_t, Env const &>;

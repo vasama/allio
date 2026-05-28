@@ -1,7 +1,7 @@
 #pragma once
 
 #if !allio_config_syscall_hook
-#	error syscall_hook.hpp included with invalid configuration.
+#	error syscall_hook_base.hpp included with invalid configuration.
 #endif
 
 #include <vsm/platform.h>
@@ -11,7 +11,7 @@
 namespace allio::detail {
 
 template<typename R, typename... Ps>
-class syscall_hook;
+class syscall_hook_base;
 
 template<auto const& Syscall>
 struct default_syscall_t
@@ -69,27 +69,27 @@ public:
 	}
 
 private:
-	friend syscall_hook<R, Ps...>;
+	friend syscall_hook_base<R, Ps...>;
 };
 
 template<typename R, typename... Ps>
-class syscall_hook : protected syscall_interface<R, Ps...>
+class syscall_hook_base : protected syscall_interface<R, Ps...>
 {
 	syscall_wrapper<R, Ps...>& m_syscall;
 	syscall_interface<R, Ps...> const* m_next_interface;
 
 public:
-	syscall_hook(syscall_hook const&) = delete;
-	syscall_hook& operator=(syscall_hook const&) = delete;
+	syscall_hook_base(syscall_hook_base const&) = delete;
+	syscall_hook_base& operator=(syscall_hook_base const&) = delete;
 
 protected:
-	syscall_hook(syscall_wrapper<R, Ps...>& syscall)
+	syscall_hook_base(syscall_wrapper<R, Ps...>& syscall)
 		: m_syscall(syscall)
 		, m_next_interface(std::exchange(syscall.m_interface, this))
 	{
 	}
 
-	~syscall_hook()
+	~syscall_hook_base()
 	{
 		m_syscall.m_interface = m_next_interface;
 	}
@@ -128,6 +128,16 @@ using syscall_wrapper_for = syscall_wrapper<decltype(Syscall)>;
 
 template<auto const& Syscall>
 syscall_wrapper_for<Syscall> wrap_syscall = default_syscall_t<Syscall>();
+
+template<auto const& Syscall>
+class syscall_hook : public syscall_hook_base<void>
+{
+protected:
+	syscall_hook()
+		: syscall_hook_base<void>(wrap_syscall<Syscall>)
+	{
+	}
+};
 
 #ifndef vsm_compiler_preview
 #	define allio_syscall(_syscall) (::allio::detail::wrap_syscall<_syscall>)

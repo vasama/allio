@@ -39,7 +39,7 @@ TEST_CASE(
 	auto const child_args = test::make_child_args(child_process);
 
 	auto const process = create_process(
-		test::get_child_executable_path(),
+		test::get_test_suite_executable_path(),
 		process_arguments(child_args),
 		redirect_stdin(i_pipe.read_pipe),
 		redirect_stdout(o_pipe.write_pipe),

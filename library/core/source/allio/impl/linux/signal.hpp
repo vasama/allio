@@ -157,7 +157,7 @@ public:
 
 	[[nodiscard]] vsm::result<void> handle()
 	{
-		if (m_expects_signal)
+		if (m_has_old_sigset && m_expects_signal)
 		{
 			vsm_try_void(_handle());
 			m_expects_signal = false;

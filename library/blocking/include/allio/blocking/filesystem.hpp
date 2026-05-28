@@ -1,7 +1,7 @@
 #pragma once
 
 #include <allio/detail/exceptions.hpp>
-#include <allio/detail/fs_operations.hpp>
+#include <allio/detail/handles/filesystem.hpp>
 #include <allio/filesystem.hpp>
 #include <allio/path.hpp>
 
@@ -12,7 +12,7 @@ template<typename Char, typename Encoding>
 	basic_path_view<Char, Encoding> const path,
 	path_buffer<Char, Encoding> const buffer)
 {
-	return detail::throw_on_error(detail::canonical_path(path, buffer))
+	return detail::throw_on_error(detail::canonical_path(path, buffer));
 }
 
 template<typename Path = path, typename Char, typename Encoding>
@@ -83,6 +83,27 @@ template<typename Path = path, typename Char, typename Encoding>
 		detail::throw_error(r2.error());
 	}
 	return r;
+}
+
+
+[[nodiscard]] fs_info_view query_information(
+	fs_path const& path,
+	fs_info_buffer_ref const buffer,
+	auto&&... args)
+{
+	return detail::_query_path_info<traits_type>(path, buffer, vsm_forward(args)...);
+}
+
+template<detail::fs_info_like Information = detail::fs_standard_info>
+[[nodiscard]] Information query_information(fs_path const& path)
+{
+	Information information;
+	(void)detail::_query_path_info<traits_type>(
+		path,
+		fs_info_buffer_ref(information),
+		detail::fs_info_traits<Information>::info_mask);
+
+	return information;
 }
 
 } // namespace allio::blocking

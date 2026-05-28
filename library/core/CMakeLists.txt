@@ -85,6 +85,7 @@ vsm_add_library(
 		source/allio/impl/handles/directory.cpp
 		source/allio/impl/handles/event.cpp
 		source/allio/impl/handles/file.cpp
+		source/allio/impl/handles/filesystem.cpp
 		source/allio/impl/handles/fs_object.cpp
 		source/allio/impl/handles/fs_object.hpp
 		source/allio/impl/handles/map.cpp
@@ -120,7 +121,10 @@ vsm_add_library(
 		source/allio/test/any_object.cpp
 		source/allio/test/byte_io_buffers.cpp
 		source/allio/test/fd_tree.cpp
+		source/allio/test/filesystem.cpp
+		source/allio/test/filesystem.hpp
 		source/allio/test/network.cpp
+		source/allio/test/network.hpp
 		source/allio/test/path_view.cpp
 )
 
@@ -236,6 +240,8 @@ vsm_configure(
 		source/allio/test/win32/completion_port.cpp
 		source/allio/test/win32/completion_port.hpp
 		source/allio/test/win32/directory.cpp
+		source/allio/test/win32/filesystem.cpp
+		source/allio/test/win32/information.cpp
 		source/allio/test/win32/kernel_path.cpp
 		source/allio/test/win32/pipe.cpp
 		source/allio/test/win32/wait_packet.cpp
@@ -333,6 +339,7 @@ vsm_configure(
 		source/allio/impl/linux/io_uring/raw_socket.cpp
 
 	TEST_SOURCES
+		source/allio/test/linux/filesystem.cpp
 		source/allio/test/linux/io_uring.cpp
 )
 

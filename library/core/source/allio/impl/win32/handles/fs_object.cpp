@@ -43,11 +43,13 @@ vsm::result<platform_open_options> detail::make_platform_open_options(
 		.desired_access = SYNCHRONIZE,
 	};
 
+	// Overlapped
 	if (vsm::any_flags(options.flags, io_flags::create_synchronous))
 	{
 		r.create_options |= FILE_SYNCHRONOUS_IO_NONALERT;
 	}
 
+	// Kind
 	switch (options.kind)
 	{
 	case open_kind::path:
@@ -67,25 +69,40 @@ vsm::result<platform_open_options> detail::make_platform_open_options(
 		break;
 	}
 
+	// Mode
 	if (options.mode != file_mode::none)
 	{
 		r.desired_access |= READ_CONTROL;
 	}
 	if (vsm::any_flags(options.mode, file_mode::read_data))
 	{
-		r.desired_access |= FILE_GENERIC_READ;
+		r.desired_access |= FILE_READ_DATA;
+		r.desired_access |= FILE_READ_ATTRIBUTES;
+		r.desired_access |= FILE_READ_EA;
 	}
 	if (vsm::any_flags(options.mode, file_mode::write_data))
 	{
-		r.desired_access |= FILE_GENERIC_WRITE | DELETE;
+		r.desired_access |= FILE_WRITE_DATA;
+		r.desired_access |= FILE_WRITE_ATTRIBUTES;
+		r.desired_access |= FILE_WRITE_EA;
+
+		// TODO: Determine if this is really necessary.
+		r.desired_access |= DELETE;
+
+		if (options.caching != file_caching::none)
+		{
+			r.desired_access |= FILE_APPEND_DATA;
+		}
 	}
 	if (vsm::any_flags(options.mode, file_mode::read_attributes))
 	{
-		r.desired_access |= FILE_READ_ATTRIBUTES | FILE_READ_EA;
+		r.desired_access |= FILE_READ_ATTRIBUTES;
+		r.desired_access |= FILE_READ_EA;
 	}
 	if (vsm::any_flags(options.mode, file_mode::write_attributes))
 	{
-		r.desired_access |= FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA;
+		r.desired_access |= FILE_WRITE_ATTRIBUTES;
+		r.desired_access |= FILE_WRITE_EA;
 	}
 
 	// Disposition
@@ -124,6 +141,25 @@ vsm::result<platform_open_options> detail::make_platform_open_options(
 	if (vsm::any_flags(options.sharing, file_sharing::write))
 	{
 		r.share_access |= FILE_SHARE_WRITE;
+	}
+
+	// Caching
+	switch (options.caching)
+	{
+	case file_caching::none:
+		r.create_options |= FILE_NO_INTERMEDIATE_BUFFERING;
+		break;
+
+	case file_caching::normal:
+		break;
+
+	case file_caching::sequential:
+		r.create_options |= FILE_SEQUENTIAL_ONLY;
+		break;
+
+	case file_caching::random:
+		r.create_options |= FILE_RANDOM_ACCESS;
+		break;
 	}
 
 	return r;
@@ -418,6 +454,7 @@ vsm::result<handle_flags> detail::configure_file(
 
 	return h_flags;
 }
+
 
 vsm::result<size_t> fs_object_t::get_current_path(
 	native_handle<fs_object_t> const& h,

@@ -91,13 +91,15 @@ static generic_open_options make_open_options(open_kind const kind, fs_open_para
 		? *args.mode
 		: default_file_mode(kind);
 
-	file_opening const opening = args.opening != file_opening(0)
-		? args.opening
+	file_opening const opening = args.opening
+		? *args.opening
 		: default_file_opening(args.special, mode);
 
 	file_sharing const sharing = args.sharing
 		? *args.sharing
 		: default_file_sharing(args.special);
+
+	file_caching const caching = args.caching.value_or(file_caching::normal);
 
 	return
 	{
@@ -105,7 +107,7 @@ static generic_open_options make_open_options(open_kind const kind, fs_open_para
 		.mode = mode,
 		.opening = opening,
 		.sharing = sharing,
-		.caching = args.caching,
+		.caching = caching,
 		.special = args.special,
 		.flags = args.flags,
 	};
@@ -126,7 +128,7 @@ vsm::result<void> detail::open_fs_object(
 
 	if (vsm::any_flags(args.special, open_options::unique_name | open_options::anonymous))
 	{
-		if (args.opening != file_opening(0) && args.opening != file_opening::create_only)
+		if (args.opening && *args.opening != file_opening::create_only)
 		{
 			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
@@ -151,6 +153,28 @@ vsm::result<void> detail::open_fs_object(
 	h.platform_handle = wrap_handle(handle.release());
 
 	return {};
+}
+
+vsm::result<fs_info_view> fs_object_t::query_file_info(
+	native_handle<fs_object_t> const& h,
+	io_parameters_t<fs_object_t, query_file_info_t> const& a)
+{
+	alignas(fs_info_alignment) std::byte local_byte_buffer[fs_info_storage_size];
+
+	auto const mask = a.mask.value_or(fs_info_mask::standard);
+
+	auto const buffer = a.buffer.is_byte_buffer()
+		? a.buffer.as_byte_buffer()
+		: any_byte_buffer_ref(local_byte_buffer);
+
+	vsm_try(info, detail::query_file_info(unwrap_handle(h.platform_handle), mask, buffer));
+
+	if (a.buffer.is_fs_info_ref())
+	{
+		a.buffer.as_fs_info_ref().assign(std::exchange(info, fs_info_view()));
+	}
+
+	return info;
 }
 
 vsm::result<void> fs_object_t::link_at(

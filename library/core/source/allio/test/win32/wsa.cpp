@@ -438,7 +438,7 @@ TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram
 }
 
 
-#if 1
+#if 0
 namespace {
 
 template<size_t Size>

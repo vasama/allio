@@ -3,6 +3,7 @@
 #include <allio/error.hpp>
 #include <allio/impl/syscall.hpp>
 
+#include <vsm/atomic.hpp>
 #include <vsm/preprocessor.h>
 
 #include <atomic>
@@ -14,40 +15,45 @@ using namespace allio::win32;
 	X(ntdll) \
 
 #define allio_kernel_functions(X) \
-	X(ntdll,        NtAllocateVirtualMemory,                STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtAssociateWaitCompletionPacket,        STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtCancelIoFileEx,                       STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtCancelWaitCompletionPacket,           STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtClose,                                STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtCreateEvent,                          STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtCreateFile,                           STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtCreateIoCompletion,                   STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtCreateNamedPipeFile,                  STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtCreateSection,                        STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtCreateWaitCompletionPacket,           STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtDeviceIoControlFile,                  STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtDuplicateObject,                      STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtFreeVirtualMemory,                    STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtFlushBuffersFileEx,                   STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtMapViewOfSection,                     STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtProtectVirtualMemory,                 STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtQueryDirectoryFileEx,                 STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtQueryInformationFile,                 STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtQueryObject,                          STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtReadFile,                             STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtRemoveIoCompletion,                   STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtRemoveIoCompletionEx,                 STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtResetEvent,                           STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtSetEvent,                             STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtSetInformationFile,                   STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtSetIoCompletion,                      STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtTerminateProcess,                     STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtUnmapViewOfSection,                   STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtWaitForMultipleObjects,               STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtWaitForSingleObject,                  STATUS_NOT_SUPPORTED) \
-	X(ntdll,        NtWriteFile,                            STATUS_NOT_SUPPORTED) \
-	X(ntdll,        RtlNtStatusToDosError,                  ERROR_NOT_SUPPORTED) \
-	X(ntdll,        RtlSetCurrentDirectory_U,               STATUS_NOT_SUPPORTED) \
+	X(ntdll,        NtAllocateVirtualMemory,                STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtAssociateWaitCompletionPacket,        STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtCancelIoFileEx,                       STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtCancelWaitCompletionPacket,           STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtClose,                                STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtCreateEvent,                          STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtCreateFile,                           STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtCreateIoCompletion,                   STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtCreateNamedPipeFile,                  STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtCreateSection,                        STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtCreateWaitCompletionPacket,           STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtDeviceIoControlFile,                  STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtDuplicateObject,                      STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtFreeVirtualMemory,                    STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtFlushBuffersFileEx,                   STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtMapViewOfSection,                     STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtProtectVirtualMemory,                 STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtQueryDirectoryFileEx,                 STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtQueryInformationByName,               STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtQueryInformationFile,                 STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtQueryVolumeInformationFile,           STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtQueryObject,                          STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtQuerySystemInformation,               STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtReadFile,                             STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtRemoveIoCompletion,                   STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtRemoveIoCompletionEx,                 STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtResetEvent,                           STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtSetEvent,                             STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtSetInformationFile,                   STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtSetIoCompletion,                      STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtTerminateProcess,                     STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtUnmapViewOfSection,                   STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtWaitForMultipleObjects,               STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtWaitForSingleObject,                  STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        NtWriteFile,                            STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        RtlGetSystemTimePrecise,                system_time_unix_epoch) \
+	X(ntdll,        RtlGetVersion,                          STATUS_NOT_IMPLEMENTED) \
+	X(ntdll,        RtlNtStatusToDosError,                  ERROR_CALL_NOT_IMPLEMENTED) \
+	X(ntdll,        RtlSetCurrentDirectory_U,               STATUS_NOT_IMPLEMENTED) \
 
 namespace {
 

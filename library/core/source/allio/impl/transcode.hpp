@@ -132,7 +132,7 @@ template<vsm::utf_character TargetChar, vsm::utf_character SourceChar>
 
 	switch (transcode_size<TargetChar>(string).ec)
 	{
-	case transcode_error():
+	case transcode_error::success:
 		return {};
 
 	case transcode_error::unsupported_operation:

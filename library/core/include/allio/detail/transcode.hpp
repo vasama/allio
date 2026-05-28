@@ -11,7 +11,8 @@ namespace allio::detail {
 
 enum class transcode_error
 {
-	no_buffer_space = 1,
+	success,
+	no_buffer_space,
 	invalid_source_encoding,
 	unsupported_operation,
 };

@@ -173,8 +173,10 @@ static vsm::result<byte_io_status> do_byte_io_1(
 		{
 			return vsm::unexpected(allio_error(error::invalid_argument));
 		}
-
-		return do_byte_io_2<Syscall, Event, HandleSignal>(h, a, io_state, a.offset);
+		else
+		{
+			return do_byte_io_2<Syscall, Event, HandleSignal>(h, a, io_state, a.offset);
+		}
 	}
 	else
 	{
@@ -197,33 +199,33 @@ vsm::result<size_t> linux::random_read(
 	detail::native_handle<platform_object_t> const& h,
 	detail::byte_io::random_parameters_t<std::byte> const& a)
 {
-	return do_byte_io<size_t, preadv, POLLIN>(h, a);
+	return do_byte_io<size_t, preadv2, POLLIN>(h, a);
 }
 
 vsm::result<size_t> linux::random_write(
 	detail::native_handle<platform_object_t> const& h,
 	detail::byte_io::random_parameters_t<std::byte const> const& a)
 {
-	return do_byte_io<size_t, pwritev, POLLOUT>(h, a);
+	return do_byte_io<size_t, pwritev2, POLLOUT>(h, a);
 }
 
 vsm::result<read_result> linux::stream_read(
 	detail::native_handle<platform_object_t> const& h,
 	detail::byte_io::stream_parameters_t<std::byte> const& a)
 {
-	return do_byte_io<read_result, readv, POLLIN>(h, a);
+	return do_byte_io<read_result, preadv2, POLLIN>(h, a);
 }
 
 vsm::result<size_t> linux::stream_write(
 	detail::native_handle<platform_object_t> const& h,
 	detail::byte_io::stream_parameters_t<std::byte const> const& a)
 {
-	return do_byte_io<size_t, writev, POLLOUT>(h, a);
+	return do_byte_io<size_t, pwritev2, POLLOUT>(h, a);
 }
 
 vsm::result<size_t> linux::stream_write_no_signal(
 	detail::native_handle<platform_object_t> const& h,
 	detail::byte_io::stream_parameters_t<std::byte const> const& a)
 {
-	return do_byte_io<size_t, writev, POLLOUT, /* HandleSignal: */ true>(h, a);
+	return do_byte_io<size_t, pwritev2, POLLOUT, /* HandleSignal: */ true>(h, a);
 }

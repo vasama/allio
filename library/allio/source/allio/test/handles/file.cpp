@@ -1,20 +1,89 @@
 #include <allio/blocking/directory.hpp>
 #include <allio/blocking/file.hpp>
+#include <allio/blocking/filesystem.hpp>
 
+#include <allio/filesystem.hpp>
 #include <allio/test/filesystem.hpp>
 
+#include <vsm/defer.hpp>
 #include <vsm/numeric.hpp>
+#include <vsm/standard/memory.hpp>
 
 #include <catch2/catch_all.hpp>
+
+#include <thread>
 
 #include <cstring>
 
 using namespace allio;
 
+namespace {
+
 static size_t count_files(std::filesystem::path const& path)
 {
 	return vsm::truncating(std::ranges::distance(std::filesystem::directory_iterator(path)));
 }
+
+template<typename T>
+class aligned_allocator
+{
+	size_t m_min_alignment;
+
+public:
+	using value_type = T;
+
+	aligned_allocator()
+		: m_min_alignment(0)
+	{
+	}
+
+	explicit aligned_allocator(size_t const min_alignment)
+		: m_min_alignment(min_alignment)
+	{
+	}
+
+	template<vsm::not_same_as<T> U>
+	aligned_allocator(aligned_allocator<U> const& other)
+		: m_min_alignment(other.min_alignment())
+	{
+	}
+
+	[[nodiscard]] size_t min_alignment() const
+	{
+		return m_min_alignment;
+	}
+
+	[[nodiscard]] T* allocate(size_t const size) const
+	{
+		return static_cast<T*>(operator new(size * sizeof(T), get_alignment()));
+	}
+
+	void deallocate(T* const storage, size_t const size) const
+	{
+		operator delete(storage, size * sizeof(T), get_alignment());
+	}
+
+private:
+	[[nodiscard]] std::align_val_t get_alignment() const
+	{
+		return std::align_val_t(std::max(m_min_alignment, alignof(T)));
+	}
+};
+
+static void random_fill(std::span<char> const string)
+{
+	auto& engine = Catch::sharedRng();
+	std::uniform_int_distribution<unsigned> distribution(0, 15);
+
+	std::ranges::generate(
+		string,
+		[&]()
+		{
+			return "0123456789ABCDEF"[distribution(engine)];
+		});
+}
+
+} // namespace
 
 TEST_CASE("Files can be read", "[file][blocking]")
 {
@@ -110,6 +179,102 @@ TEST_CASE("Files can be created with unique names", "[file][blocking]")
 		REQUIRE(count_files(stdfs_path) == 2);
 	}
 	REQUIRE(count_files(stdfs_path) == 2);
+}
+
+TEST_CASE("File information can be queried", "[file][blocking]")
+{
+	using namespace blocking;
+	using namespace std::chrono_literals;
+
+	auto const path = test::get_temp_path();
+
+	fs_time_point const t0 = fs_clock::now();
+	std::this_thread::sleep_for(10ms);
+	{
+		test::write_file_content(path, "trash");
+	}
+	std::this_thread::sleep_for(10ms);
+
+	fs_time_point const t1 = fs_clock::now();
+	std::this_thread::sleep_for(10ms);
+	{
+		FILE* const file = fopen(path.string().c_str(), "w+");
+		REQUIRE(file != nullptr);
+		REQUIRE(fwrite("hello", 5, 1, file) == 1);
+		fclose(file);
+	}
+	std::this_thread::sleep_for(10ms);
+
+	fs_time_point const t2 = fs_clock::now();
+	std::this_thread::sleep_for(10ms);
+	{
+		test::check_file_content(path, "hello");
+	}
+	std::this_thread::sleep_for(10ms);
+
+	fs_time_point const t3 = fs_clock::now();
+	std::this_thread::sleep_for(10ms);
+	{
+		using enum std::filesystem::perms;
+		std::filesystem::permissions(
+			path.string(),
+			owner_write | group_write | others_write,
+			std::filesystem::perm_options::remove);
+	}
+	std::this_thread::sleep_for(10ms);
+
+	fs_time_point const t4 = fs_clock::now();
+
+	fs_info_mask const requested_mask = fs_info_mask::standard | fs_info_mask::create_time;
+
+	fs_info_buffer info_buffer;
+	auto const info = query_information(path, info_buffer, requested_mask);
+	REQUIRE(info.contains(fs_info_mask::standard));
+
+	REQUIRE(info.type() == fs_type::regular);
+
+	if (info.contains(fs_info_mask::create_time))
+	{
+		REQUIRE(t0 <= info.create_time());
+		REQUIRE(info.create_time() <= t1);
+	}
+
+	REQUIRE(t1 <= info.data_change_time());
+	REQUIRE(info.data_change_time() <= t2);
+
+	REQUIRE(t2 <= info.data_access_time());
+	REQUIRE(info.data_access_time() <= t3);
+
+	REQUIRE(t3 <= info.attr_change_time());
+	REQUIRE(info.attr_change_time() <= t4);
+}
+
+TEST_CASE("File can be written using direct I/O", "[file][blocking]")
+{
+	using namespace blocking;
+
+	auto const path = test::get_temp_path();
+
+	std::optional<std::basic_string<char, std::char_traits<char>, aligned_allocator<char>>> data;
+	{
+		auto const file = open_file(path, file_caching::none);
+		auto const limits = query_information<fs_io_limits>(path);
+
+		data.emplace(aligned_allocator<char>(limits.minimum_buffer_alignment));
+		data->resize(limits.maximum_writing_alignment * 3, ' ');
+		vsm_assert(vsm::memalignment(data->data()) >= limits.minimum_buffer_alignment);
+
+		auto const write_region = [&](size_t const offset, size_t const size)
+		{
+			random_fill(std::span(data->data() + offset, size));
+			file.write(offset, as_write_buffer(data->data() + offset, size));
+		};
+
+		write_region(0, data->size());
+		write_region(limits.minimum_writing_alignment, limits.minimum_writing_alignment);
+		write_region(limits.maximum_writing_alignment, limits.maximum_writing_alignment);
+	}
+	test::check_file_content(path, *data);
 }
 
 #if 0
