@@ -4,6 +4,7 @@
 
 #include <allio_error_encoding.hpp>
 
+#include <algorithm>
 #include <source_location>
 #include <system_error>
 

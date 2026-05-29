@@ -27,9 +27,9 @@ static vsm::result<byte_io_status> do_byte_io_2(
 	native_handle<platform_object_t> const& h,
 	Arguments const& a,
 	byte_io_state& io_state,
-	std::same_as<fs_size> auto const... offset)
+	fs_size const offset)
 {
-	static constexpr bool is_random_access = sizeof...(offset) != 0;
+	static constexpr bool is_random_access = requires { a.offset; };
 
 	if (io_buffers_is_empty(a.buffers))
 	{
@@ -82,6 +82,12 @@ static vsm::result<byte_io_status> do_byte_io_2(
 				local_deadline));
 		}
 
+		off_t syscall_offset = -1;
+		if constexpr (is_random_access)
+		{
+			syscall_offset = vsm::truncating(offset + io_state.transferred());
+		}
+
 		if constexpr (HandleSignal)
 		{
 			vsm_try_void(signal_handler.activate());
@@ -92,7 +98,8 @@ static vsm::result<byte_io_status> do_byte_io_2(
 			fd,
 			local_io_vectors.data(),
 			vsm::truncating(local_io_vectors.size()),
-			vsm::truncating(offset + io_state.transferred())...);
+			syscall_offset,
+			/* flags: */ 0);
 
 		if (r == -1)
 		{
@@ -180,7 +187,7 @@ static vsm::result<byte_io_status> do_byte_io_1(
 	}
 	else
 	{
-		return do_byte_io_2<Syscall, Event, HandleSignal>(h, a, io_state);
+		return do_byte_io_2<Syscall, Event, HandleSignal>(h, a, io_state, 0);
 	}
 }
 

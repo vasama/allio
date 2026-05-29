@@ -42,7 +42,7 @@ inline vsm::result<struct stat> lstat(char const* const path)
 inline vsm::result<struct stat> fstatat(int const dirfd, char const* const path, int const flags)
 {
 	struct stat result;
-	if (::fstatat(dirfd, path, &result, flags))
+	if (::fstatat(dirfd, path, &result, flags) == -1)
 	{
 		return vsm::unexpected(allio_error(get_last_error()));
 	}

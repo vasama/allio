@@ -61,6 +61,7 @@ struct fs_clock
 	[[nodiscard]] static time_point now() noexcept;
 };
 
+using fs_duration = fs_clock::duration;
 using fs_time_point = fs_clock::time_point;
 
 
@@ -70,11 +71,9 @@ struct fs_io_limits
 
 	uint32_t minimum_reading_alignment;
 	uint32_t optimal_reading_alignment;
-	uint32_t maximum_reading_alignment;
 
 	uint32_t minimum_writing_alignment;
 	uint32_t optimal_writing_alignment;
-	uint32_t maximum_writing_alignment;
 
 	uint32_t minimum_atomic_write_size;
 	uint32_t optimal_atomic_write_size;
@@ -108,7 +107,7 @@ enum class fs_info_mask : uint_least16_t
 	timestamps = create_time | standard_timestamps,
 
 	/// @brief The standard file information set (POSIX stat).
-	standard = type | link_count | max_extent | standard_timestamps,
+	standard = type | dev_id | ino_id | link_count | max_extent | standard_timestamps,
 };
 vsm_flag_enum(fs_info_mask);
 
@@ -152,6 +151,12 @@ public:
 	{
 		return vsm::all_flags(m_mask, mask);
 	}
+
+	[[nodiscard]] explicit operator bool() const noexcept
+	{
+		return m_mask != fs_info_mask::none;
+	}
+
 
 	[[nodiscard]] fs_type type() const
 	{
@@ -411,7 +416,7 @@ public:
 
 
 // Enough to store the currently available information in any supported platform.
-inline constexpr size_t fs_info_storage_size = 192;
+inline constexpr size_t fs_info_storage_size = 256;
 inline constexpr size_t fs_info_alignment = alignof(uint64_t);
 
 using fs_info_buffer = basic_storage<

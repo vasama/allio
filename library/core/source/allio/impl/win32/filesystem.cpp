@@ -59,7 +59,7 @@ bool detail::is_null_device_path(any_path_view const path)
 
 static fs_time_point make_time_point(uint64_t const system_time)
 {
-	return fs_time_point(fs_time_point::duration(system_time_to_unix_nano_time(system_time)));
+	return fs_time_point(fs_duration(system_time_to_unix_nano_time(system_time)));
 }
 
 fs_time_point fs_clock::now() noexcept
@@ -949,10 +949,6 @@ fs_io_limits detail::_fs_info_io_limits(void const* const header)
 			info->PhysicalBytesPerSectorForAtomicity,
 			info->PhysicalBytesPerSectorForPerformance);
 
-		auto const physical_max = std::max(
-			info->PhysicalBytesPerSectorForAtomicity,
-			info->PhysicalBytesPerSectorForPerformance);
-
 		auto const logical_min = std::min(physical_min, info->LogicalBytesPerSector);
 
 		return
@@ -961,11 +957,9 @@ fs_io_limits detail::_fs_info_io_limits(void const* const header)
 
 			.minimum_reading_alignment = logical_min,
 			.optimal_reading_alignment = info->PhysicalBytesPerSectorForPerformance,
-			.maximum_reading_alignment = physical_max,
 
 			.minimum_writing_alignment = logical_min,
 			.optimal_writing_alignment = info->PhysicalBytesPerSectorForPerformance,
-			.maximum_writing_alignment = physical_max,
 
 			.minimum_atomic_write_size = info->PhysicalBytesPerSectorForAtomicity,
 			.optimal_atomic_write_size = info->PhysicalBytesPerSectorForAtomicity,
@@ -981,7 +975,7 @@ vsm::result<fs_info_view> win32::query_path_info(
 	HANDLE const base_handle,
 	std::wstring_view const path,
 	fs_info_mask const mask,
-	any_byte_buffer const buffer)
+	any_byte_buffer_ref const buffer)
 {
 	file_info_backend backend(base_handle, path);
 	return _query_file_info(backend, buffer, mask);
@@ -990,7 +984,7 @@ vsm::result<fs_info_view> win32::query_path_info(
 vsm::result<fs_info_view> detail::query_file_info(
 	HANDLE const handle,
 	fs_info_mask const mask,
-	any_byte_buffer const buffer)
+	any_byte_buffer_ref const buffer)
 {
 	file_info_backend backend(handle);
 	return _query_file_info(backend, buffer, mask);

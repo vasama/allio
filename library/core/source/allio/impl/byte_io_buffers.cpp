@@ -6,6 +6,7 @@
 #include <allio/impl/new.hpp>
 
 #include <bit>
+#include <limits>
 
 using namespace allio;
 using namespace allio::detail;

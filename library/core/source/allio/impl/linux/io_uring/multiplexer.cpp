@@ -2,6 +2,7 @@
 
 #include <allio/impl/error_encoding.hpp>
 #include <allio/impl/fd_tree.hpp>
+#include <allio/impl/lazy_feature_flag.hpp>
 #include <allio/impl/linux/error.hpp>
 #include <allio/impl/linux/eventfd.hpp>
 #include <allio/impl/linux/io_uring.hpp>
@@ -38,22 +39,15 @@ bool io_uring::is_supported()
 		return false;
 	}
 
-	static constexpr uint8_t lazy_init_flag = 0x80;
-	static constexpr uint8_t supported_flag = 0x01;
-
-	static constinit uint8_t storage = 0;
-	auto const reference = vsm::atomic_ref(storage);
-
-	auto value = reference.load(std::memory_order::acquire);
-	if (value == 0)
+	static constexpr auto query_io_uring_support = []() -> bool
 	{
 		errno = 0;
 		syscall(SYS_io_uring_register, 0, IORING_UNREGISTER_BUFFERS, NULL, 0);
-		value = lazy_init_flag | (errno != ENOSYS ? supported_flag : 0);
+		return errno != ENOSYS;
+	};
 
-		reference.store(value, std::memory_order::release);
-	}
-	return (value & supported_flag) != 0;
+	static constinit lazy_feature_flag is_supported;
+	return is_supported.query(query_io_uring_support);
 }
 
 

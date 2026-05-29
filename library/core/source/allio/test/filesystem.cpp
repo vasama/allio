@@ -4,6 +4,7 @@
 
 #include <vsm/exceptions.hpp>
 
+#include <atomic>
 #include <format>
 #include <random>
 

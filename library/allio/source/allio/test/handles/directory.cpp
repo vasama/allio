@@ -172,21 +172,25 @@ TEST_CASE("Directory entries can be read asynchronously", "[directory][async]")
 TEST_CASE("Directory information can be queried", "[directory][blocking]")
 {
 	using namespace blocking;
+	using namespace std::chrono_literals;
 
 	auto const path = test::get_temp_path();
 
 	fs_time_point const t0 = fs_clock::now();
-	std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	std::this_thread::sleep_for(10ms);
+
 	REQUIRE(std::filesystem::create_directory(path.string()));
-	std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+	std::this_thread::sleep_for(10ms);
 	fs_time_point const t1 = fs_clock::now();
 
-	fs_info_mask const requested_mask = fs_info_mask::standard | fs_info_mask::create_time;
-
 	fs_info_buffer info_buffer;
-	auto const info = query_information(path, info_buffer, requested_mask);
-	REQUIRE(info.contains(fs_info_mask::standard));
+	auto const info = query_information(
+		path,
+		info_buffer,
+		fs_info_mask::standard | fs_info_mask::create_time);
 
+	REQUIRE(info.contains(fs_info_mask::standard));
 	REQUIRE(info.type() == fs_type::directory);
 
 	if (info.contains(fs_info_mask::create_time))

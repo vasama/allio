@@ -55,7 +55,7 @@ static vsm::result<std::pair<unique_handle, unique_handle>> create_pipe_pair()
 	return vsm_lazy(std::pair<unique_handle, unique_handle>(fds[0], fds[1]));
 }
 
-TEST_CASE("io_uring", "[io_uring]")
+TEST_CASE("io_uring", "[io_uring][linux]")
 {
 	io_uring_params setup = {};
 	auto const io_uring = io_uring_setup(32, setup).value();

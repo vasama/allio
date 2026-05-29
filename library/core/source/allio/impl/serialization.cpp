@@ -5,6 +5,7 @@
 #include <vsm/array.hpp>
 
 #include <charconv>
+#include <limits>
 
 using namespace allio;
 using namespace allio::detail;

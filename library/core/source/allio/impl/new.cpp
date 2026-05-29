@@ -3,6 +3,7 @@
 #include <allio/error.hpp>
 #include <allio/impl/error_encoding.hpp>
 
+#include <limits>
 #include <new>
 
 using namespace allio;

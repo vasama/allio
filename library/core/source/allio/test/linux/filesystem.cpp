@@ -5,6 +5,7 @@
 
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 using namespace allio;
@@ -32,7 +33,7 @@ static unique_fd open_directory(std::filesystem::path const& path)
 		return vsm::null_resource;
 	}
 
-	std::optional<unique_fd>(std::in_place, fd);
+	return unique_fd(fd);
 }
 
 static unique_fd create_file_at(int const dir_fd, std::filesystem::path const& path)
@@ -44,7 +45,7 @@ static unique_fd create_file_at(int const dir_fd, std::filesystem::path const& p
 		return vsm::null_resource;
 	}
 
-	std::optional<unique_fd>(std::in_place, fd);
+	return unique_fd(fd);
 }
 
 static void try_unlink_file_at(int const dir_fd, std::filesystem::path const& path)
@@ -54,13 +55,13 @@ static void try_unlink_file_at(int const dir_fd, std::filesystem::path const& pa
 
 static bool is_linked(int const fd)
 {
-	struct stat s;
-	return fstat(fs, &s) == 0 && s.st_nlink > 0;
+	struct stat st;
+	return fstat(fd, &st) == 0 && st.st_nlink > 0;
 }
 
 static bool lock_file(int const fd)
 {
-	return flock(lock_fd, LOCK_EX | LOCK_NB) == 0 && is_linked(fd);
+	return flock(fd, LOCK_EX | LOCK_NB) == 0 && is_linked(fd);
 }
 
 } // namespace
@@ -92,7 +93,7 @@ std::shared_ptr<void> test::lock_test_directory(std::filesystem::path const& pat
 		}
 	};
 
-	auto const root_path = path.parent();
+	auto const root_path = path.parent_path();
 	auto const lock_name = path.filename();
 
 	if (auto root_fd = open_directory(root_path))

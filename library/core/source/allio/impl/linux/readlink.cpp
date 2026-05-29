@@ -20,10 +20,12 @@ static vsm::result<size_t> _readlinkat(
 	std::span<char> const buffer)
 {
 	ssize_t const size = ::readlinkat(dirfd, path, buffer.data(), buffer.size());
+
 	if (size == -1)
 	{
 		return vsm::unexpected(allio_error(get_last_error()));
 	}
+
 	return static_cast<size_t>(size);
 }
 
@@ -34,32 +36,51 @@ static vsm::result<size_t> _read_link_path(
 {
 	vsm_try(string, buffer.resize(0, static_cast<size_t>(-1)));
 
-	if (!string.empty())
+	bool is_lstat_available = true;
+	auto const resize_buffer = [&]() -> vsm::result<void>
 	{
-		// If the buffer is non-empty, try readlink before calling lstat.
-		goto skip_lstat;
-	}
-
-	while (true)
-	{
-		// Query the path size using lstat and resize the buffer.
+		if (is_lstat_available)
 		{
 			// Use lstat to get the size of the symbolic link target path.
 			vsm_try(stat, linux::fstatat(dirfd, path, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW));
 
 			static_assert(sizeof(off_t) >= sizeof(size_t));
 
-			// This conditions should never happen, and could not really be handled anyway.
-			if (stat.st_size == 0)
+			if (stat.st_size != 0)
 			{
-				return vsm::unexpected(allio_error(error::unknown_failure));
+				// Reserve one extra character to correctly interpret the readlink result.
+				size_t const min_size = static_cast<size_t>(stat.st_size) + 1;
+
+				if (min_size > string.size())
+				{
+					return vsm::assign_value(string, buffer.resize(min_size));
+				}
 			}
 
-			// Reserve one extra character to correctly interpret the readlink result.
-			vsm_try_assign(string, buffer.resize(static_cast<size_t>(stat.st_size) + 1));
+			// If st_size is zero or indicates a size smaller than the existing size of the output
+			// buffer, something weird is going on and no further lstat calls should be made.
+			is_lstat_available = false;
 		}
 
-	skip_lstat:
+		size_t const min_size = std::max<size_t>(1, string.size() * 3 / 2);
+
+		if (min_size < string.size())
+		{
+			// Something really weird must be going on if the multiplication overflows.
+			return vsm::unexpected(allio_error(error::unknown_failure));
+		}
+
+		return vsm::assign_value(string, buffer.resize(min_size, static_cast<size_t>(-1)));
+	};
+
+	if (string.empty())
+	{
+		// If the buffer is empty, it must be grown before calling readlink.
+		vsm_try_void(resize_buffer());
+	}
+
+	while (true)
+	{
 		vsm_try(path_size, _readlinkat(dirfd, path, string));
 
 		if (path_size < string.size())
@@ -69,6 +90,8 @@ static vsm::result<size_t> _read_link_path(
 
 			return path_size;
 		}
+
+		vsm_try_void(resize_buffer());
 	}
 }
 

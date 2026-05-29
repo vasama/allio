@@ -258,10 +258,22 @@ TEST_CASE("File can be written using direct I/O", "[file][blocking]")
 	std::optional<std::basic_string<char, std::char_traits<char>, aligned_allocator<char>>> data;
 	{
 		auto const file = open_file(path, file_caching::none);
-		auto const limits = query_information<fs_io_limits>(path);
+
+		fs_info_buffer info_buffer;
+		auto const info_view = query_information(
+			path,
+			info_buffer,
+			fs_info_mask::standard | fs_info_mask::io_limits);
+
+		if (!info_view.contains(fs_info_mask::io_limits))
+		{
+			return;
+		}
+
+		auto const limits = info_view.io_limits();
 
 		data.emplace(aligned_allocator<char>(limits.minimum_buffer_alignment));
-		data->resize(limits.maximum_writing_alignment * 3, ' ');
+		data->resize(limits.optimal_writing_alignment * 3, ' ');
 		vsm_assert(vsm::memalignment(data->data()) >= limits.minimum_buffer_alignment);
 
 		auto const write_region = [&](size_t const offset, size_t const size)
@@ -272,7 +284,7 @@ TEST_CASE("File can be written using direct I/O", "[file][blocking]")
 
 		write_region(0, data->size());
 		write_region(limits.minimum_writing_alignment, limits.minimum_writing_alignment);
-		write_region(limits.maximum_writing_alignment, limits.maximum_writing_alignment);
+		write_region(limits.optimal_writing_alignment, limits.optimal_writing_alignment);
 	}
 	test::check_file_content(path, *data);
 }
