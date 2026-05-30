@@ -60,11 +60,11 @@ TEST_CASE("The protection of anonymous mappings can be changed", "[map][hardware
 	map.commit(base, size, protection::read);
 	REQUIRE(test::test_memory_protection(base, size) == protection::read);
 
-	auto const set_write_only = [&]() -> bool
+	auto const set_page_protection = [&](protection const protection) -> bool
 	{
 		try
 		{
-			map.commit(base, size, protection::write);
+			map.commit(base, size, protection);
 			return true;
 		}
 		catch (std::system_error const&)
@@ -73,7 +73,7 @@ TEST_CASE("The protection of anonymous mappings can be changed", "[map][hardware
 		}
 	};
 
-	if (set_write_only())
+	if (set_page_protection(protection::write))
 	{
 		// Write-only mappings are most likely not supported, but if it happens that they are, test
 		// that they work correctly.
@@ -84,9 +84,17 @@ TEST_CASE("The protection of anonymous mappings can be changed", "[map][hardware
 	REQUIRE(test::test_memory_protection(base, size) == protection::read_write);
 
 	test::setup_executable_memory_test(base, size);
-	map.commit(base, size, protection::execute);
+	protection execute_protection = protection::execute;
 
-	REQUIRE(test::test_executable_memory(base, size) == protection::execute);
+	// First try to set execute only, but in case that fails, try again with both read and execute
+	// protection. Linux in particular does not support execute only page protection.
+	if (!set_page_protection(execute_protection))
+	{
+		execute_protection |= protection::read;
+		map.commit(base, size, execute_protection);
+	}
+
+	REQUIRE(test::test_executable_memory(base, size) == execute_protection);
 }
 
 TEST_CASE("Sections using backing files can be created and mapped", "[section_handle][map]")

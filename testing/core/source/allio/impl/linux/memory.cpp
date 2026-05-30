@@ -1,11 +1,64 @@
 #include <allio/test/memory.hpp>
 
+#include <vsm/exceptions.hpp>
+#include <vsm/numeric.hpp>
+
+#include <atomic>
+
+#include <csetjmp>
 #include <cstring>
+
+#include <signal.h>
 
 using namespace allio;
 using namespace allio::test;
 
 namespace {
+
+static thread_local sigjmp_buf* tls_jmp_buf;
+
+static void handler(int, siginfo_t*, void*)
+{
+	std::atomic_signal_fence(std::memory_order_acquire);
+	sigjmp_buf* const buf = tls_jmp_buf;
+
+	tls_jmp_buf = nullptr;
+	std::atomic_signal_fence(std::memory_order_release);
+
+	siglongjmp(*buf, /* status: */ 1);
+}
+
+static bool catch_access_violation(void(* const function)(void*), void* const context)
+{
+	bool r = true;
+
+	struct sigaction new_action = {};
+	new_action.sa_sigaction = handler;
+	new_action.sa_flags = SA_SIGINFO;
+
+	struct sigaction old_action;
+	vsm_assert(sigaction(SIGSEGV, &new_action, &old_action) != -1);
+
+	if (sigjmp_buf buf; sigsetjmp(buf, /* savesigs: */ 1) == 0)
+	{
+		tls_jmp_buf = &buf;
+		std::atomic_signal_fence(std::memory_order_release);
+
+		function(context);
+
+		tls_jmp_buf = nullptr;
+		std::atomic_signal_fence(std::memory_order_release);
+	}
+	else
+	{
+		r = false;
+	}
+
+	vsm_assert(sigaction(SIGSEGV, &old_action, nullptr) != -1);
+
+	return r;
+}
+
 
 enum access_type : unsigned char
 {
@@ -67,17 +120,19 @@ static void attempt_execute(void* const function)
 
 } // namespace
 
-__attribute__((section("__allio_executable_memory_test")))
-extern "C" void allio_test_executable_memory()
-{
-}
-
-__attribute__((section("__allio_executable_memory_test")))
-extern "C" void allio_test_executable_memory_end()
-{
-}
-
+extern "C" void allio_test_executable_memory();
+extern "C" void allio_test_executable_memory_end();
 extern "C" void __stop___allio_executable_memory_test();
+
+__attribute__((section("__allio_executable_memory_test")))
+void allio_test_executable_memory()
+{
+}
+
+__attribute__((section("__allio_executable_memory_test")))
+void allio_test_executable_memory_end()
+{
+}
 
 void test::setup_executable_memory_test(void* const base, size_t const size)
 {
@@ -85,7 +140,7 @@ void test::setup_executable_memory_test(void* const base, size_t const size)
 	auto const end_1 = reinterpret_cast<std::byte const*>(allio_test_executable_memory_end);
 	auto const end_2 = reinterpret_cast<std::byte const*>(__stop___allio_executable_memory_test);
 
-	size_t const code_size = std::max(end_1, end_2) - begin;
+	size_t const code_size = vsm::truncating(std::max(end_1, end_2) - begin);
 
 	if (size < code_size)
 	{
