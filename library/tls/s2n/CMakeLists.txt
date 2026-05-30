@@ -19,18 +19,18 @@ vsm_add_library(
 		source/allio/impl/s2n/s2n.cpp
 		source/allio/impl/s2n/s2n.hpp
 
-	HEADER_DEPENDENCIES
+	HEADER_LINK_LIBRARIES
 		vsm::intrusive
 		allio::core
 
-	SOURCE_DEPENDENCIES
+	SOURCE_LINK_LIBRARIES
 		s2n::s2n
 
 	TEST_SOURCES
 		source/allio/test/s2n.cpp
 		source/allio/test/socket.cpp
 
-	TEST_DEPENDENCIES
+	TEST_LINK_LIBRARIES
 		allio::blocking
 		allio::senders
 )

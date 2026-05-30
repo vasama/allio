@@ -13,6 +13,6 @@ vsm_add_executable(
 	SOURCE_DEFINITIONS
 		"allio_detail_test_exe_output=\"$<TARGET_PROPERTY:test_exe,allio_output>\""
 
-	SOURCE_DEPENDENCIES
+	SOURCE_LINK_LIBRARIES
 		vsm::core
 )

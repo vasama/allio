@@ -7,16 +7,13 @@ vsm_define_package(allio)
 vsm_add_library(
 	allio::allio
 
-	HEADER_DEPENDENCIES
+	HEADER_LINK_LIBRARIES
 		allio::core
 		allio::blocking
 		allio::senders
 
 	TEST_SOURCES
 		source/allio/test/main.cpp
-
-		source/allio/test/memory.cpp
-		source/allio/test/memory.hpp
 
 		source/allio/test/handles/datagram_socket.cpp
 		source/allio/test/handles/directory.cpp
@@ -29,23 +26,10 @@ vsm_add_library(
 		source/allio/test/handles/socket.cpp
 		source/allio/test/handles/standard_stream.cpp
 
+	TEST_LINK_LIBRARIES
+		allio::testing::core
+
 	TEST_CUSTOM_MAIN
-)
-
-vsm_configure(
-	allio::allio
-	PLATFORM Windows
-
-	TEST_SOURCES
-		source/allio/test/win32/memory.cpp
-)
-
-vsm_configure(
-	allio::allio
-	PLATFORM Linux
-
-	TEST_SOURCES
-		source/allio/test/linux/memory.cpp
 )
 
 get_property(

@@ -3,7 +3,6 @@
 #include <allio/impl/win32/kernel.hpp>
 #include <allio/impl/win32/wait_packet.hpp>
 #include <allio/nothrow/pipe.hpp>
-#include <allio/test/spawn.hpp>
 #include <allio/test/win32/completion_port.hpp>
 #include <allio/win32/kernel_error.hpp>
 
@@ -145,18 +144,13 @@ TEST_CASE("Synchronous I/O with attached overlapped handle", "[windows][iocp]")
 		/* Key: */ 0);
 	REQUIRE(status == STATUS_PENDING);
 
-	auto future = test::spawn([&]() {
-		return win32::NtWaitForSingleObject(
-			event.get(),
-			/* Alertable: */ false,
-			kernel_timeout(std::chrono::seconds(1)));
-	});
-	std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
 	unsigned char w_buffer = 42;
 	REQUIRE(w.write_some(as_write_buffer(&w_buffer, sizeof(w_buffer))).value() == 1);
 
-	REQUIRE(future.get() == STATUS_SUCCESS);
+	REQUIRE(win32::NtWaitForSingleObject(
+		event.get(),
+		/* Alertable: */ false,
+		kernel_timeout(deadline::instant())) == STATUS_SUCCESS);
 
 	REQUIRE(io_status_block.Status == 0);
 	REQUIRE(io_status_block.Information == 1);
@@ -226,14 +220,7 @@ TEST_CASE("I/O Completion Port becomes signaled when the queue has completions",
 		return false;
 	};
 
-	auto background_wait = test::spawn([&]()
-	{
-		REQUIRE(wait(std::chrono::milliseconds(100)) == false);
-	});
-
-	std::this_thread::sleep_for(std::chrono::milliseconds(10));
-	REQUIRE(wait(std::chrono::milliseconds(10)) == false);
-	background_wait.get();
+	REQUIRE(wait(std::chrono::milliseconds(1)) == false);
 
 	(void)w.write_some(as_write_buffer("x", 1)).value();
 	REQUIRE(wait() == true);

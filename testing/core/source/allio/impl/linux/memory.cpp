@@ -3,12 +3,7 @@
 #include <cstring>
 
 using namespace allio;
-
-namespace allio::test {
-
-bool catch_access_violation(void(*function)(void*), void* context);
-
-} // namespace allio::test
+using namespace allio::test;
 
 namespace {
 
@@ -26,8 +21,6 @@ struct context_type
 	unsigned char requested_access;
 	unsigned char attempted_access;
 };
-
-} // namespace
 
 static void attempt_copy(unsigned char volatile* const src, unsigned char volatile* const dst)
 {
@@ -67,6 +60,53 @@ static void attempt_access(void* const p_context)
 	}
 }
 
+static void attempt_execute(void* const function)
+{
+	reinterpret_cast<void(*)()>(function)();
+}
+
+} // namespace
+
+__attribute__((section("__allio_executable_memory_test")))
+extern "C" void allio_test_executable_memory()
+{
+}
+
+__attribute__((section("__allio_executable_memory_test")))
+extern "C" void allio_test_executable_memory_end()
+{
+}
+
+extern "C" void __stop___allio_executable_memory_test();
+
+void test::setup_executable_memory_test(void* const base, size_t const size)
+{
+	auto const begin = reinterpret_cast<std::byte const*>(allio_test_executable_memory);
+	auto const end_1 = reinterpret_cast<std::byte const*>(allio_test_executable_memory_end);
+	auto const end_2 = reinterpret_cast<std::byte const*>(__stop___allio_executable_memory_test);
+
+	size_t const code_size = std::max(end_1, end_2) - begin;
+
+	if (size < code_size)
+	{
+		vsm_except_throw_or_terminate(std::runtime_error("Unable to set up executable region."));
+	}
+
+	std::memcpy(base, begin, code_size);
+}
+
+protection test::test_executable_memory(void* const base, size_t const size)
+{
+	if (catch_access_violation(attempt_execute, base))
+	{
+		return protection::execute | test_memory_protection(base, size);
+	}
+	else
+	{
+		return protection::none;
+	}
+}
+
 protection test::test_memory_protection(void* const base, size_t const size)
 {
 	protection protection = protection::read_write;
@@ -99,33 +139,5 @@ protection test::test_memory_protection(void* const base, size_t const size)
 		context.requested_access &= ~context.attempted_access;
 	}
 
-	return protection | protection::none;
-}
-
-static bool write_executable_code(
-	void* const base,
-	size_t const size,
-	std::span<unsigned char const> const code)
-{
-	if (size < code.size())
-	{
-		return false;
-	}
-
-	std::memcpy(base, code.data(), code.size());
-	return true;
-}
-
-bool test::write_noop_executable_code(void* const base, size_t const size)
-{
-#if vsm_arch_x86
-	static constexpr unsigned char instructions[] =
-	{
-		0xC3 // RET
-	};
-
-	return write_executable_code(base, size, instructions);
-#else
-	return false;
-#endif
+	return protection;
 }

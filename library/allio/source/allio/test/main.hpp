@@ -99,11 +99,11 @@ concept child_entry_point = requires (EntryPoint&& entry_point)
 } // namespace detail
 
 
-/// These functions enable test cases to easily create child processes from
-/// functions. The executable is the calling unit test executable. A special
-/// command-line argument (from @ref get_entry_point_option) containing an
-/// offset of a function in the test binary instructs the unit test program to
-/// execute the function at that offset instead of normal unit test execution.
+/// These functions enable test cases to easily create child processes from functions. The
+/// executable is the calling unit test executable itself. A special command-line argument
+/// (from @ref get_entry_point_option) containing an offset of a function in the test binary
+/// instructs the unit test program to execute the function at that offset in place of usual unit
+/// test execution.
 ///
 /// @code
 /// auto child_main = [](std::string_view arg_1, std::string_view arg_2)
@@ -118,12 +118,12 @@ concept child_entry_point = requires (EntryPoint&& entry_point)
 /// @return Executable path for creation of child processes.
 path_view get_test_suite_executable_path();
 
-/// @return Command-line option required for launching a child process running
-///         the specified entry point function.
+/// @return Command-line option required for launching a child process running the specified entry
+///         point function.
 std::string get_entry_point_option(child_entry_point_t entry_point);
 
-/// @return List of command-line arguments for launching a child process running
-//          @param entry_point with string arguments from @param args.
+/// @return List of command-line arguments for launching a child process starting at
+///         @param entry_point with string arguments from @param args.
 template<detail::child_entry_point EntryPoint, std::ranges::input_range Range>
 	requires std::convertible_to<std::ranges::range_reference_t<Range>, std::string_view>
 std::vector<std::string> make_child_args(EntryPoint&& entry_point, Range&& args)
@@ -141,8 +141,8 @@ std::vector<std::string> make_child_args(EntryPoint&& entry_point, Range&& args)
 	return args_vector;
 }
 
-/// @return List of command-line arguments for launching a child process running
-//          @param entry_point with string arguments from @param args.
+/// @return List of command-line arguments for launching a child process starting at
+///         @param entry_point with string arguments from @param args.
 template<detail::child_entry_point EntryPoint, std::convertible_to<std::string_view>... Args>
 std::vector<std::string> make_child_args(EntryPoint&& entry_point, Args&&... args)
 {

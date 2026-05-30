@@ -108,10 +108,10 @@ vsm_add_library(
 	SOURCE_DEFINITIONS
 		"allio_config_std_stacktrace=${has_std_stacktrace}"
 
-	HEADER_DEPENDENCIES
+	HEADER_LINK_LIBRARIES
 		vsm::core
+		vsm::pointer_tagging
 		vsm::result
-		vsm::tag_ptr
 		vsm::unique_resource
 		vsm::intrusive
 
@@ -121,10 +121,7 @@ vsm_add_library(
 		source/allio/test/any_object.cpp
 		source/allio/test/byte_io_buffers.cpp
 		source/allio/test/fd_tree.cpp
-		source/allio/test/filesystem.cpp
-		source/allio/test/filesystem.hpp
 		source/allio/test/network.cpp
-		source/allio/test/network.hpp
 		source/allio/test/path_view.cpp
 )
 
@@ -230,7 +227,7 @@ vsm_configure(
 		source/allio/impl/win32/iocp/raw_socket.hpp
 		source/allio/impl/win32/iocp/wait.cpp
 
-	HEADER_DEPENDENCIES
+	HEADER_LINK_LIBRARIES
 		vsm::intrusive_ptr
 
 	TEST_SOURCES
@@ -240,7 +237,6 @@ vsm_configure(
 		source/allio/test/win32/completion_port.cpp
 		source/allio/test/win32/completion_port.hpp
 		source/allio/test/win32/directory.cpp
-		source/allio/test/win32/filesystem.cpp
 		source/allio/test/win32/information.cpp
 		source/allio/test/win32/kernel_path.cpp
 		source/allio/test/win32/pipe.cpp
@@ -339,9 +335,8 @@ vsm_configure(
 		source/allio/impl/linux/io_uring/raw_socket.cpp
 
 	TEST_SOURCES
-		source/allio/test/linux/filesystem.cpp
 		source/allio/test/linux/io_uring.cpp
 )
 
 allio_add_error_encoding(core core_error_encoding allio::core)
-vsm_configure(allio::core INTERNAL_DEPENDENCIES core_error_encoding)
+vsm_configure(allio::core INTERNAL_LINK_LIBRARIES core_error_encoding)

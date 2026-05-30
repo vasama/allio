@@ -18,6 +18,11 @@
 		{
 			"package": "allio.senders",
 			"version": "0.1"
+		},
+		{
+			"package": "allio.testing.core",
+			"version": "0.1",
+			"configs": "test-library"
 		}
 	]
 }

@@ -82,10 +82,11 @@ TEST_CASE("The protection of anonymous mappings can be changed", "[map][hardware
 
 	map.commit(base, size, protection::read_write);
 	REQUIRE(test::test_memory_protection(base, size) == protection::read_write);
-}
 
-TEST_CASE("Executable anonymous mappings can be created", "[map]")
-{
+	test::setup_executable_memory_test(base, size);
+	map.commit(base, size, protection::execute);
+
+	REQUIRE(test::test_executable_memory(base, size) == protection::execute);
 }
 
 TEST_CASE("Sections using backing files can be created and mapped", "[section_handle][map]")

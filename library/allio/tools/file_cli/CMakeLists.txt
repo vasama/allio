@@ -7,6 +7,6 @@ vsm_add_executable(
 	SOURCES
 		file_cli.cpp
 
-	SOURCE_DEPENDENCIES
+	SOURCE_LINK_LIBRARIES
 		allio::blocking
 )

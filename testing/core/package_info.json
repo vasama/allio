@@ -1,0 +1,16 @@
+{
+	"package": "allio.testing.core",
+	"version": "0.1",
+	"package_type": "header-library",
+
+	"requirements": [
+		{
+			"package": "catch2",
+			"version": "[^3.4]"
+		},
+		{
+			"package": "allio.core",
+			"version": "0.1"
+		}
+	]
+}

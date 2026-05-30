@@ -30,7 +30,7 @@ vsm_add_library(
 		include/allio/senders/raw_listen_socket.hpp
 		include/allio/senders/raw_socket.hpp
 
-	HEADER_DEPENDENCIES
+	HEADER_LINK_LIBRARIES
 		allio::core
 		vsm::intrusive
 		stdexec::stdexec

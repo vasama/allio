@@ -19,18 +19,18 @@ vsm_add_library(
 		source/allio/impl/openssl/openssl.cpp
 		source/allio/impl/openssl/openssl.hpp
 
-	HEADER_DEPENDENCIES
+	HEADER_LINK_LIBRARIES
 		vsm::intrusive
 		allio::core
 
-	SOURCE_DEPENDENCIES
+	SOURCE_LINK_LIBRARIES
 		OpenSSL::SSL
 
 	TEST_SOURCES
 		source/allio/test/openssl.cpp
 		source/allio/test/socket.cpp
 
-	TEST_DEPENDENCIES
+	TEST_LINK_LIBRARIES
 		allio::blocking
 		allio::senders
 )
@@ -137,4 +137,4 @@ target_compile_definitions(
 	allio-test-secrets INTERFACE
 	"allio_test_secret_path=\"${test_secrets_dir}\"")
 
-vsm_configure(allio::openssl TEST_DEPENDENCIES allio-test-secrets)
+vsm_configure(allio::openssl TEST_LINK_LIBRARIES allio-test-secrets)

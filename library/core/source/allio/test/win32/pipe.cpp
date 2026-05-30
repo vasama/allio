@@ -1,6 +1,5 @@
 #include <allio/detail/unique_handle.hpp>
 #include <allio/impl/win32/completion_port.hpp>
-#include <allio/test/spawn.hpp>
 #include <allio/test/win32/completion_port.hpp>
 
 #include <catch2/catch_all.hpp>

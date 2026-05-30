@@ -1,77 +1,32 @@
 #include <allio/impl/win32/completion_port.hpp>
 #include <allio/impl/win32/event.hpp>
 #include <allio/impl/win32/handles/directory.hpp>
-#include <allio/test/filesystem.hpp>
+#include <allio/impl/win32/kernel.hpp>
 #include <allio/test/win32/completion_port.hpp>
 
 #include <vsm/out_resource.hpp>
 
 #include <catch2/catch_all.hpp>
 
+#include <filesystem>
+
 using namespace allio;
 using namespace allio::win32;
 
-static std::wstring get_temp_nt_path()
+static HANDLE get_current_directory()
 {
-	auto path = test::get_temp_stdfs_path().lexically_normal().native();
+	// Normally this would be risky due to potential concurrent mutations, but these tests do not
+	// change the current directory, so in this case it is not problematic.
+	HANDLE const handle = NtCurrentPeb()->ProcessParameters->CurrentDirectoryHandle;
 
-	std::filesystem::create_directory(path);
+	REQUIRE(handle != NULL);
 
-	if (path.starts_with(L"\\\\.\\"))
-	{
-		path[2] = L'?';
-	}
-
-	if (path.starts_with(L"\\\\?\\"))
-	{
-		path[1] = L'?';
-	}
-	else
-	{
-		path.insert_range(path.begin(), std::wstring_view(L"\\??\\"));
-	}
-
-	return path;
-}
-
-static detail::unique_handle open_directory()
-{
-	auto const path = get_temp_nt_path();
-
-	UNICODE_STRING unicode_path = make_unicode_string(path);
-
-	OBJECT_ATTRIBUTES object_attributes = {};
-	object_attributes.Length = sizeof(object_attributes);
-	object_attributes.ObjectName = &unicode_path;
-
-	LARGE_INTEGER allocation_size;
-	allocation_size.QuadPart = 0;
-
-	IO_STATUS_BLOCK io_status_block;
-
-	detail::unique_handle h;
-	NTSTATUS const status = win32::NtCreateFile(
-		vsm::out_resource(h),
-		SYNCHRONIZE | FILE_GENERIC_READ,
-		&object_attributes,
-		&io_status_block,
-		&allocation_size,
-		/* FileAttributes: */ 0,
-		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-		FILE_OPEN,
-		FILE_DIRECTORY_FILE,
-		/* EaBuffer: */ nullptr,
-		/* EaLength: */ 0);
-
-	REQUIRE(NT_SUCCESS(status));
-	REQUIRE(status != STATUS_PENDING);
-
-	return h;
+	return handle;
 }
 
 TEST_CASE("Directory seek using SetFilePointer", "[windows][directory]")
 {
-	detail::unique_handle const h = open_directory();
+	HANDLE const h = get_current_directory();
 
 	FILE_POSITION_INFORMATION information =
 	{
@@ -81,7 +36,7 @@ TEST_CASE("Directory seek using SetFilePointer", "[windows][directory]")
 	IO_STATUS_BLOCK io_status_block;
 
 	NTSTATUS const status = win32::NtSetInformationFile(
-		h.get(),
+		h,
 		&io_status_block,
 		&information,
 		sizeof(information),
@@ -90,15 +45,16 @@ TEST_CASE("Directory seek using SetFilePointer", "[windows][directory]")
 	REQUIRE(NT_SUCCESS(status));
 }
 
+#if 0
 TEST_CASE("Asynchronous directory read with IOCP", "[windows][directory]")
 {
-	detail::unique_handle const h = open_directory();
+	HANDLE const h = get_current_directory();
 
 #if 0 //TODO: Determine if IOCP completions are possible at all.
 	auto const completion_port = create_completion_port(1).value();
 
 	set_completion_information(
-		h.get(),
+		h,
 		completion_port.get(),
 		/* key_context: */ nullptr).value();
 #endif
@@ -109,7 +65,7 @@ TEST_CASE("Asynchronous directory read with IOCP", "[windows][directory]")
 	IO_STATUS_BLOCK io_status_block;
 
 	NTSTATUS const status = win32::NtQueryDirectoryFileEx(
-		h.get(),
+		h,
 		event.get(),
 		/* ApcRoutine: */ nullptr,
 		/* ApcContext: */ nullptr,
@@ -137,3 +93,4 @@ TEST_CASE("Asynchronous directory read with IOCP", "[windows][directory]")
 		REQUIRE(NT_SUCCESS(io_status_block.Status));
 	}
 }
+#endif

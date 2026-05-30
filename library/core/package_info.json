@@ -20,11 +20,11 @@
 			"version": "0.1"
 		},
 		{
-			"package": "vsm.result",
+			"package": "vsm.pointer_tagging",
 			"version": "0.1"
 		},
 		{
-			"package": "vsm.tag_ptr",
+			"package": "vsm.result",
 			"version": "0.1"
 		},
 		{

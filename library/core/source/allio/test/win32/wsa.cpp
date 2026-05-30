@@ -3,10 +3,13 @@
 #include <allio/impl/win32/event.hpp>
 #include <allio/impl/win32/wsa.hpp>
 #include <allio/nothrow/event.hpp>
-#include <allio/test/filesystem.hpp>
-#include <allio/test/spawn.hpp>
+
+#include <vsm/defer.hpp>
 
 #include <catch2/catch_all.hpp>
+
+#include <filesystem>
+#include <random>
 
 using namespace allio;
 using namespace allio::win32;
@@ -21,6 +24,7 @@ using detail::io_flags;
 
 namespace {
 
+// TODO: Can the one from test/win32/completion_port.hpp be used here instead?
 template<size_t Size>
 class completion_storage
 {
@@ -157,9 +161,27 @@ TEST_CASE("WSA asynchronous connect and accept", "[windows][wsa][socket][async]"
 
 TEST_CASE("WSA asynchronous unix connect and accept", "[windows][wsa][socket][async]")
 {
+	auto const path = std::filesystem::temp_directory_path() / "allio-test-wsa-unix-socket";
+
+	// The socket file may already exist as a left over from a previous test execution, in which
+	// case it needs to be deleted before it a new unix socket can be bound.
+	std::filesystem::remove(path);
+
+	vsm_defer
+	{
+		vsm_except_try
+		{
+			// Once the test is done, try to delete the socket file.
+			std::filesystem::remove(path);
+		}
+		vsm_except_catch(...)
+		{
+		}
+	};
+
+	auto const addr_path = path.string();
 	posix::socket_address_storage address_storage;
-	path const path = test::get_temp_path();
-	auto const addr = posix::get_socket_address(path_view(path), address_storage).value();
+	auto const addr = posix::get_socket_address(path_view(addr_path), address_storage).value();
 
 	auto const create_socket = [&]()
 	{
@@ -283,18 +305,7 @@ TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][datagram_soc
 	posix::socket_address receive_addr;
 	receive_addr.size = sizeof(posix::socket_address_union);
 
-	auto receive_future = test::spawn([&]()
-	{
-		int const r = recvfrom(
-			receive_socket.get(),
-			reinterpret_cast<char*>(&receive_buffer),
-			1,
-			0,
-			&receive_addr.addr,
-			&receive_addr.size);
-		return r;
-	});
-
+	// Send a packet:
 	{
 		auto const send_socket = create_socket();
 
@@ -309,7 +320,19 @@ TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][datagram_soc
 		REQUIRE(r == 1);
 	}
 
-	REQUIRE(receive_future.get() == 1);
+	// Receive a packet:
+	{
+		int const r = recvfrom(
+			receive_socket.get(),
+			reinterpret_cast<char*>(&receive_buffer),
+			1,
+			0,
+			&receive_addr.addr,
+			&receive_addr.size);
+
+		REQUIRE(r == 1);
+	}
+
 	REQUIRE(receive_buffer == 42);
 }
 

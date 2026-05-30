@@ -29,6 +29,6 @@ vsm_add_library(
 		# Handles
 		source/allio/impl/handles/standard_stream.cpp
 
-	HEADER_DEPENDENCIES
+	HEADER_LINK_LIBRARIES
 		allio::core
 )

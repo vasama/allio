@@ -1,7 +1,5 @@
 #include <allio/test/filesystem.hpp>
 
-#include <allio/impl/unique_name.hpp>
-
 #include <vsm/exceptions.hpp>
 
 #include <atomic>

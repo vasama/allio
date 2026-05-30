@@ -7,13 +7,15 @@
 #include <vsm/lazy.hpp>
 
 #include <catch2/generators/catch_generators.hpp>
-#include <catch2/internal/catch_context.hpp>
 
 #include <filesystem>
 #include <format>
 #include <random>
 
 namespace allio::test {
+
+uint16_t get_test_network_port();
+
 
 // Use shared_ptr with the aliasing constructor to hide the storage used for the
 // local endpoint path.
@@ -71,33 +73,7 @@ public:
 	}
 };
 
-class ip_endpoint_factory : public endpoint_factory
-{
-	static constexpr uint16_t min_port = 50000;
-	static constexpr uint16_t max_port = 59999;
-
-	uint16_t next_port;
-
-protected:
-	ip_endpoint_factory()
-		: next_port(std::uniform_int_distribution<uint16_t>(min_port, max_port)(Catch::sharedRng()))
-	{
-	}
-
-	ip_endpoint_factory(ip_endpoint_factory const&) = default;
-	ip_endpoint_factory& operator=(ip_endpoint_factory const&) = default;
-
-	~ip_endpoint_factory() = default;
-
-	uint16_t get_next_port()
-	{
-		uint16_t const port = next_port;
-		next_port = port == max_port ? min_port : port + 1;
-		return port;
-	}
-};
-
-class ipv4_endpoint_factory final : public ip_endpoint_factory
+class ipv4_endpoint_factory final : public endpoint_factory
 {
 public:
 	network_address_kind address_kind() const override
@@ -107,11 +83,11 @@ public:
 
 	endpoint_type create_endpoint() override
 	{
-		return make_endpoint_view<ipv4_endpoint>(ipv4_address::localhost, get_next_port());
+		return make_endpoint_view<ipv4_endpoint>(ipv4_address::localhost, get_test_network_port());
 	}
 };
 
-class ipv6_endpoint_factory final : public ip_endpoint_factory
+class ipv6_endpoint_factory final : public endpoint_factory
 {
 public:
 	network_address_kind address_kind() const override
@@ -121,7 +97,7 @@ public:
 
 	endpoint_type create_endpoint() override
 	{
-		return make_endpoint_view<ipv6_endpoint>(ipv6_address::localhost, get_next_port());
+		return make_endpoint_view<ipv6_endpoint>(ipv6_address::localhost, get_test_network_port());
 	}
 };
 

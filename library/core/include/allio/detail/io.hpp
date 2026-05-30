@@ -6,10 +6,10 @@
 
 #include <vsm/assert.h>
 #include <vsm/concepts.hpp>
-#include <vsm/priority_tag.hpp>
 #include <vsm/result.hpp>
 #include <vsm/standard.hpp>
 #include <vsm/tag_invoke.hpp>
+#include <vsm/type_traits.hpp>
 
 namespace allio::detail {
 
