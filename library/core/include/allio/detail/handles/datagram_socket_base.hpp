@@ -27,13 +27,7 @@ struct bind_t
 	using result_type = void;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object>& h,
-		io_parameters_t<Object, bind_t> const& a)
-		requires requires { Object::bind(h, a); }
-	{
-		return Object::bind(h, a);
-	}
+	static constexpr auto& blocking_io = Object::bind;
 };
 
 struct receive_from_t
@@ -56,13 +50,7 @@ struct receive_from_t
 	using result_type = size_t;
 
 	template<object Object>
-	static vsm::result<size_t> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, receive_from_t> const& a)
-		requires requires { Object::receive_from(h, a); }
-	{
-		return Object::receive_from(h, a);
-	}
+	static constexpr auto& blocking_io = Object::receive_from;
 };
 
 struct send_to_t
@@ -78,13 +66,7 @@ struct send_to_t
 	using result_type = void;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, send_to_t> const& a)
-		requires requires { Object::send_to(h, a); }
-	{
-		return Object::send_to(h, a);
-	}
+	static constexpr auto& blocking_io = Object::send_to;
 };
 
 template<object BaseObject>

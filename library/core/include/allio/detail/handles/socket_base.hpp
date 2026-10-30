@@ -43,13 +43,7 @@ struct connect_t
 	using result_type = void;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object>& h,
-		io_parameters_t<Object, connect_t> const& args)
-		requires requires { Object::connect(h, args); }
-	{
-		return Object::connect(h, args);
-	}
+	static constexpr auto& blocking_io = Object::connect;
 };
 
 struct disconnect_t
@@ -64,13 +58,7 @@ struct disconnect_t
 	using result_type = void;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, disconnect_t> const& args)
-		requires requires { Object::disconnect(h, args); }
-	{
-		return Object::disconnect(h, args);
-	}
+	static constexpr auto& blocking_io = Object::disconnect;
 };
 
 struct get_address_t
@@ -85,13 +73,7 @@ struct get_address_t
 	using result_type = void;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, get_address_t> const& args)
-		requires requires { Object::get_address(h, args); }
-	{
-		return Object::get_address(h, args);
-	}
+	static constexpr auto& blocking_io = Object::get_address;
 };
 
 template<object BaseObject>

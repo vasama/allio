@@ -2,7 +2,6 @@
 	"authors": "Lauri Vasama",
 	"license": "MIT",
 	"website": "https://github.com/vasama/allio",
-	"package_type": "root",
 
 	"requirements": [
 		{

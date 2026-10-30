@@ -123,13 +123,7 @@ struct close_t
 	using result_type = void;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object>& h,
-		io_parameters_t<Object, close_t> const& a)
-		requires requires { Object::close(h, a); }
-	{
-		return Object::close(h, a);
-	}
+	static constexpr auto& blocking_io = Object::close;
 };
 
 struct object_t : _object

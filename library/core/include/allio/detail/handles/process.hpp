@@ -352,13 +352,7 @@ struct process_t : platform_object_t
 		using runtime_concept = bounded_runtime_t;
 
 		template<object Object>
-		static vsm::result<void> blocking_io(
-			native_handle<Object>& h,
-			io_parameters_t<Object, open_t> const& a)
-			requires requires { Object::open(h, a); }
-		{
-			return Object::open(h, a);
-		}
+		static constexpr auto& blocking_io = Object::open;
 	};
 
 	struct create_t
@@ -440,13 +434,7 @@ struct process_t : platform_object_t
 		using result_type = void;
 
 		template<object Object>
-		static vsm::result<void> blocking_io(
-			native_handle<Object>& h,
-			io_parameters_t<Object, create_t> const& a)
-			requires requires { Object::create(h, a); }
-		{
-			return Object::create(h, a);
-		}
+		static constexpr auto& blocking_io = Object::create;
 	};
 
 	struct terminate_t
@@ -469,13 +457,7 @@ struct process_t : platform_object_t
 		using runtime_concept = bounded_runtime_t;
 
 		template<object Object>
-		static vsm::result<void> blocking_io(
-			native_handle<Object> const& h,
-			io_parameters_t<Object, terminate_t> const& a)
-			requires requires { Object::terminate(h, a); }
-		{
-			return Object::terminate(h, a);
-		}
+		static constexpr auto& blocking_io = Object::terminate;
 	};
 
 	struct wait_t
@@ -485,13 +467,7 @@ struct process_t : platform_object_t
 		using result_type = process_wait_result;
 
 		template<object Object>
-		static vsm::result<process_wait_result> blocking_io(
-			native_handle<Object> const& h,
-			io_parameters_t<Object, wait_t> const& a)
-			requires requires { Object::wait(h, a); }
-		{
-			return Object::wait(h, a);
-		}
+		static constexpr auto& blocking_io = Object::wait;
 	};
 
 	struct duplicate_handle_t
@@ -506,13 +482,7 @@ struct process_t : platform_object_t
 		using result_type = native_platform_handle;
 
 		template<object Object>
-		static vsm::result<native_platform_handle> blocking_io(
-			native_handle<Object> const& h,
-			io_parameters_t<Object, duplicate_handle_t> const& a)
-			requires requires { Object::duplicate_handle(h, a); }
-		{
-			return Object::duplicate_handle(h, a);
-		}
+		static constexpr auto& blocking_io = Object::duplicate_handle;
 	};
 
 	template<platform_object TargetObject>
@@ -529,13 +499,7 @@ struct process_t : platform_object_t
 		using result_type_template = typename Handle::template rebind_object<TargetObject>;
 
 		template<object Object>
-		static vsm::result<basic_detached_handle<TargetObject>> blocking_io(
-			native_handle<Object> const& h,
-			io_parameters_t<Object, duplicate_handle_template_t<TargetObject>> const& a)
-			requires requires { Object::template duplicate_handle_template<TargetObject>(h, a); }
-		{
-			return Object::template duplicate_handle_template<TargetObject>(h, a);
-		}
+		static constexpr auto& blocking_io = Object::template duplicate_handle_template<TargetObject>;
 	};
 
 	using operations = type_list_append

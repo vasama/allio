@@ -6,7 +6,7 @@
 #include <allio/handles/object.hpp>
 #include <allio/nothrow/block.hpp>
 #include <allio/senders/sync_wait.hpp>
-#include <allio/test/match_error.hpp>
+#include <allio/testing/match_error.hpp>
 
 #include <vsm/atomic.hpp>
 #include <vsm/defer.hpp>

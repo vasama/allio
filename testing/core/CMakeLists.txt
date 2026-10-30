@@ -8,13 +8,13 @@ vsm_add_library(
 	allio::testing::core
 
 	HEADERS
-		include/allio/test/exception.hpp
-		include/allio/test/filesystem.hpp
-		include/allio/test/match_error.hpp
-		include/allio/test/memory.hpp
-		include/allio/test/network.hpp
-		include/allio/test/shared_object.hpp
-		include/allio/test/spawn.hpp
+		include/allio/testing/exception.hpp
+		include/allio/testing/filesystem.hpp
+		include/allio/testing/match_error.hpp
+		include/allio/testing/memory.hpp
+		include/allio/testing/network.hpp
+		include/allio/testing/shared_object.hpp
+		include/allio/testing/spawn.hpp
 
 	SOURCES
 		source/allio/impl/filesystem.cpp

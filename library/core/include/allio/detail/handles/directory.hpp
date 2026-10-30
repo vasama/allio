@@ -268,13 +268,7 @@ struct read_t
 	using result_type_template = decltype(detail::select_directory_stream_view<Handle>(0));
 
 	template<object Object>
-	static vsm::result<basic_directory_stream_view<void>> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, read_t> const& a)
-		requires requires { Object::read(h, a); }
-	{
-		return Object::read(h, a);
-	}
+	static constexpr auto& blocking_io = Object::read;
 };
 
 struct restart_t
@@ -284,13 +278,7 @@ struct restart_t
 	using result_type = void;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, restart_t> const& a)
-		requires requires { Object::restart(h, a); }
-	{
-		return Object::restart(h, a);
-	}
+	static constexpr auto& blocking_io = Object::restart;
 };
 
 } // namespace directory_io
@@ -366,14 +354,8 @@ struct directory_iterator_t : object_t
 		using result_type = bool;
 		using params_type = no_parameters_t;
 
-		template<std::same_as<directory_iterator_t> Object>
-		static vsm::result<bool> blocking_io(
-			native_handle<Object> const& h,
-			io_parameters_t<Object, next_t> const& a)
-			requires requires { Object::next(h, a); }
-		{
-			return Object::next(h, a);
-		}
+		template<object Object>
+		static constexpr auto& blocking_io = Object::next;
 	};
 
 	static vsm::result<bool> next(

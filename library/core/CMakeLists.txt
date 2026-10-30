@@ -115,6 +115,9 @@ vsm_add_library(
 		vsm::unique_resource
 		vsm::intrusive
 
+	TEST_FRAMEWORK_LIBRARY
+		Catch2::Catch2WithMain
+
 	TEST_SOURCES
 		source/allio/test/reverse_iterator.hpp
 

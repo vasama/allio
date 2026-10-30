@@ -158,13 +158,7 @@ struct stream_read_t
 	using result_type = read_result;
 
 	template<object Object>
-	static vsm::result<read_result> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, stream_read_t> const& a)
-		requires requires { Object::stream_read(h, a); }
-	{
-		return Object::stream_read(h, a);
-	}
+	static constexpr auto& blocking_io = Object::stream_read;
 };
 
 struct stream_write_t
@@ -174,13 +168,7 @@ struct stream_write_t
 	using result_type = size_t;
 
 	template<object Object>
-	static vsm::result<size_t> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, stream_write_t> const& a)
-		requires requires { Object::stream_write(h, a); }
-	{
-		return Object::stream_write(h, a);
-	}
+	static constexpr auto& blocking_io = Object::stream_write;
 };
 
 struct random_read_t
@@ -190,13 +178,7 @@ struct random_read_t
 	using result_type = size_t;
 
 	template<object Object>
-	static vsm::result<size_t> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, random_read_t> const& a)
-		requires requires { Object::random_read(h, a); }
-	{
-		return Object::random_read(h, a);
-	}
+	static constexpr auto& blocking_io = Object::random_read;
 };
 
 struct random_write_t
@@ -206,13 +188,7 @@ struct random_write_t
 	using result_type = size_t;
 
 	template<object Object>
-	static vsm::result<size_t> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, random_write_t> const& a)
-		requires requires { Object::random_write(h, a); }
-	{
-		return Object::random_write(h, a);
-	}
+	static constexpr auto& blocking_io = Object::random_write;
 };
 
 template<typename Handle, typename Traits>

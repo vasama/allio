@@ -118,3 +118,7 @@ This method should only be used for local development purposes and trying out th
 <summary>vcpkg installation instructions</summary>
 
 </details>
+
+## Ethics
+
+ALLIO is 100% organically produced artisanal code, and no GPUs were harmed in its creation.

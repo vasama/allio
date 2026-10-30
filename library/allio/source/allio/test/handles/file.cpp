@@ -3,7 +3,7 @@
 #include <allio/blocking/filesystem.hpp>
 
 #include <allio/filesystem.hpp>
-#include <allio/test/filesystem.hpp>
+#include <allio/testing/filesystem.hpp>
 
 #include <vsm/defer.hpp>
 #include <vsm/numeric.hpp>

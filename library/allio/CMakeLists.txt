@@ -12,6 +12,9 @@ vsm_add_library(
 		allio::blocking
 		allio::senders
 
+	TEST_FRAMEWORK_LIBRARY
+		Catch2::Catch2
+
 	TEST_SOURCES
 		source/allio/test/main.cpp
 
@@ -28,8 +31,6 @@ vsm_add_library(
 
 	TEST_LINK_LIBRARIES
 		allio::testing::core
-
-	TEST_CUSTOM_MAIN
 )
 
 get_property(

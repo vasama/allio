@@ -27,13 +27,7 @@ struct listen_t
 	using runtime_tag = bounded_runtime_t;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object>& h,
-		io_parameters_t<Object, listen_t> const& args)
-		requires requires { Object::listen(h, args); }
-	{
-		return Object::listen(h, args);
-	}
+	static constexpr auto& blocking_io = Object::listen;
 };
 
 struct accept_t
@@ -61,13 +55,7 @@ struct accept_t
 			typename Handle::object_type::socket_object_type>;
 
 	template<object Object>
-	static vsm::result<basic_detached_handle<typename Object::socket_object_type>> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, accept_t> const& args)
-		requires requires { Object::accept(h, args); }
-	{
-		return Object::accept(h, args);
-	}
+	static constexpr auto& blocking_io = Object::accept;
 };
 
 template<object BaseObject>

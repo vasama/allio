@@ -6,7 +6,7 @@
 #include <allio/handles/fs_object.hpp>
 #include <allio/senders/sync_wait.hpp>
 #include <allio/senders/task.hpp>
-#include <allio/test/filesystem.hpp>
+#include <allio/testing/filesystem.hpp>
 #include <allio/win32/path_format.hpp>
 
 #include <vsm/defer.hpp>

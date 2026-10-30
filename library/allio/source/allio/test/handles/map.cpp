@@ -2,8 +2,8 @@
 
 #include <allio/blocking/file.hpp>
 #include <allio/blocking/section.hpp>
-#include <allio/test/filesystem.hpp>
-#include <allio/test/memory.hpp>
+#include <allio/testing/filesystem.hpp>
+#include <allio/testing/memory.hpp>
 
 #include <catch2/catch_all.hpp>
 

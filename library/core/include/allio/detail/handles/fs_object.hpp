@@ -174,13 +174,7 @@ struct open_t
 	using result_type = void;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object>& h,
-		io_parameters_t<Object, open_t> const& a)
-		requires requires { Object::open(h, a); }
-	{
-		return Object::open(h, a);
-	}
+	static constexpr auto& blocking_io = Object::open;
 };
 
 struct query_file_info_t
@@ -191,23 +185,12 @@ struct query_file_info_t
 	{
 		optional_flags<fs_info_mask> mask;
 		fs_info_buffer_ref buffer;
-
-
 	};
 
 	using result_type = fs_info_view;
 
 	template<object Object>
-	static constexpr auto& blocking_io_2 = Object::query_file_info;
-
-	template<object Object>
-	static vsm::result<fs_info_view> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, query_file_info_t> const& a)
-		requires requires { Object::query_file_info(h, a); }
-	{
-		return Object::query_file_info(h, a);
-	}
+	static constexpr auto& blocking_io = Object::query_file_info;
 };
 
 struct get_current_path_t
@@ -233,13 +216,7 @@ struct get_current_path_t
 	using result_type = size_t;
 
 	template<object Object>
-	static vsm::result<size_t> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, get_current_path_t> const& a)
-		requires requires { Object::get_current_path(h, a); }
-	{
-		return Object::get_current_path(h, a);
-	}
+	static constexpr auto& blocking_io = Object::get_current_path;
 };
 
 struct link_at_t
@@ -265,13 +242,7 @@ struct link_at_t
 	using result_type = void;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, link_at_t> const& a)
-		requires requires { Object::link_at(h, a); }
-	{
-		return Object::link_at(h, a);
-	}
+	static constexpr auto& blocking_io = Object::link_at;
 };
 
 } // namespace fs_io

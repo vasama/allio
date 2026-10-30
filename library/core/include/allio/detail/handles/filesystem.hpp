@@ -29,16 +29,7 @@ struct query_path_info_t
 	using result_type = fs_info_view;
 
 	template<object Object>
-	static constexpr auto& blocking_io_2 = Object::query_path_info;
-
-	template<object Object>
-	static vsm::result<fs_info_view> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, query_path_info_t> const& a)
-		requires requires { Object::query_path_info(h, a); }
-	{
-		return Object::query_path_info(h, a);
-	}
+	static constexpr auto& blocking_io = Object::query_path_info;
 };
 
 struct filesystem_t : object_t

@@ -1,14 +1,9 @@
 {
+	"inherit": true,
 	"package": "allio.testing.core",
 	"version": "0.1",
-	"package_type": "header-library",
-
+	"package_type": "static-library",
 	"requirements": [
-		{
-			"package": "catch2",
-			"version": "[^3.4]",
-			"find_package": "Catch2"
-		},
 		{
 			"package": "allio.core",
 			"version": "0.1"

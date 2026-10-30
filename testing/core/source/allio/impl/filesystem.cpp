@@ -1,4 +1,4 @@
-#include <allio/test/filesystem.hpp>
+#include <allio/testing/filesystem.hpp>
 
 #include <vsm/exceptions.hpp>
 

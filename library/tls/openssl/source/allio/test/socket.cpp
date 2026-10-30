@@ -4,9 +4,9 @@
 #include <allio/blocking/traits.hpp>
 #include <allio/senders/sync_wait.hpp>
 #include <allio/senders/task.hpp>
-#include <allio/test/network.hpp>
-#include <allio/test/spawn.hpp>
-#include <allio/test/match_error.hpp>
+#include <allio/testing/network.hpp>
+#include <allio/testing/spawn.hpp>
+#include <allio/testing/match_error.hpp>
 
 #include <catch2/catch_all.hpp>
 

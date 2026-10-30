@@ -1,4 +1,5 @@
 {
+	"inherit": true,
 	"package": "allio.senders",
 	"version": "0.1",
 	"package_type": "header-library",

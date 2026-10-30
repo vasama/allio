@@ -9,31 +9,12 @@ struct a_s2n_connection;
 struct a_s2n_datagram_socket_t : datagram_socket_base_t<object_t>
 {
 	using base_type = datagram_socket_base_t<object_t>;
+};
 
-	struct native_type : raw_datagram_socket_t::native_type
-	{
-		a_s2n_connection* context;
-	};
-
-	static vsm::result<void> blocking_io(
-		close_t,
-		native_type& h,
-		io_parameters_t<close_t> const& args);
-
-	static vsm::result<void> blocking_io(
-		bind_t,
-		native_type& h,
-		io_parameters_t<bind_t> const& args);
-
-	static vsm::result<void> blocking_io(
-		send_to_t,
-		native_type const& h,
-		io_parameters_t<send_to_t> const& args);
-
-	static vsm::result<void> blocking_io(
-		receive_from_t,
-		native_type const& h,
-		io_parameters_t<receive_from_t> const& args);
+template<typename RawSocket>
+struct native_handle<a_s2n_datagram_socket_t<RawSocket>> : native_handle<RawSocket>
+{
+	a_s2n_connection* context;
 };
 
 } // namespace allio::detail

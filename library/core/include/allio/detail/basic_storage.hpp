@@ -3,6 +3,8 @@
 #include <allio/detail/mutable_buffer.hpp>
 #include <allio/detail/new.h>
 
+#include <span>
+
 namespace allio::detail {
 
 enum class resize_mode

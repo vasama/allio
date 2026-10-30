@@ -5,10 +5,10 @@
 #include <allio/blocking/pipe.hpp>
 #include <allio/blocking/serialization.hpp>
 #include <allio/path.hpp>
-#include <allio/test/filesystem.hpp>
 #include <allio/test/main.hpp>
-#include <allio/test/match_error.hpp>
-#include <allio/test/spawn.hpp>
+#include <allio/testing/filesystem.hpp>
+#include <allio/testing/match_error.hpp>
+#include <allio/testing/spawn.hpp>
 
 #include <catch2/catch_all.hpp>
 

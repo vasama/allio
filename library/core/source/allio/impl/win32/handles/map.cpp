@@ -249,15 +249,32 @@ static protection get_section_protection(native_handle<section_t> const& h)
 	return protection;
 };
 
+
+template<object Object>
+struct shared_native_handle_deleter
+{
+	void operator()(shared_native_handle<Object>* const handle) const
+	{
+		handle->release();
+	}
+};
+
+template<object Object>
+using shared_native_handle_ptr = std::unique_ptr<
+	shared_native_handle<Object>,
+	shared_native_handle_deleter<Object>>;
+
 template<object Object, std::convertible_to<native_handle<Object>> H>
-static vsm::result<unique_ptr<shared_native_handle<Object>>> make_shared_handle(H&& h)
+static vsm::result<shared_native_handle_ptr<Object>> make_shared_handle(H&& h)
 {
 	using shared_type = shared_native_handle<Object>;
-	return make_unique<shared_type>(vsm_lazy(shared_type
+	vsm_try(ptr, make_unique<shared_type>(vsm_lazy(shared_type
 	{
 		.ref_count = 1,
 		.h = vsm_forward(h),
-	}));
+	})));
+
+	return vsm::result<shared_native_handle_ptr<Object>>(vsm::result_value, ptr.release());
 }
 
 static vsm::result<protection> get_protection(

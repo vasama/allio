@@ -2,7 +2,7 @@
 
 #include <allio/network.hpp>
 #include <allio/path.hpp>
-#include <allio/test/shared_object.hpp>
+#include <allio/testing/shared_object.hpp>
 
 #include <vsm/lazy.hpp>
 

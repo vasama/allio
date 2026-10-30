@@ -1,4 +1,4 @@
-#include <allio/test/memory.hpp>
+#include <allio/testing/memory.hpp>
 
 #include <vsm/exceptions.hpp>
 

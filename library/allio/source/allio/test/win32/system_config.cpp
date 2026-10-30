@@ -1,4 +1,4 @@
-#include <allio/test/system_config.hpp>
+#include <allio/testing/system_config.hpp>
 
 #include <allio/impl/syscall_hook.hpp>
 #include <allio/impl/win32/kernel.hpp>

@@ -84,13 +84,7 @@ struct pipe_pair_t : object_t
 		using runtime_concept = bounded_runtime_t;
 
 		template<object Object>
-		static vsm::result<void> blocking_io(
-			native_handle<Object>& h,
-			io_parameters_t<Object, create_pair_t> const& a)
-			requires requires { Object::create_pair(h, a); }
-		{
-			return Object::create_pair(h, a);
-		}
+		static constexpr auto& blocking_io = Object::create_pair;
 	};
 
 	using operations = type_list_append

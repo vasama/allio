@@ -1,4 +1,4 @@
-#include <allio/test/filesystem.hpp>
+#include <allio/testing/filesystem.hpp>
 
 #include <vsm/unique_resource.hpp>
 #include <vsm/utility.hpp>

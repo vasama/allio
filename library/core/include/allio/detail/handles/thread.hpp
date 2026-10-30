@@ -37,13 +37,7 @@ struct thread_t : platform_object_t
 		using runtime_concept = bounded_runtime_t;
 
 		template<object Object>
-		static vsm::result<void> blocking_io(
-			native_handle<Object>& h,
-			io_parameters_t<Object, open_t> const& a)
-			requires requires { Object::open(h, a); }
-		{
-			return Object::open(h, a);
-		}
+		static constexpr auto& blocking_io = Object::open;
 	};
 
 	struct terminate_t
@@ -58,13 +52,7 @@ struct thread_t : platform_object_t
 		using runtime_concept = bounded_runtime_t;
 
 		template<object Object>
-		static vsm::result<void> blocking_io(
-			native_handle<Object> const& h,
-			io_parameters_t<Object, terminate_t> const& a)
-			requires requires { Object::terminate(h, a); }
-		{
-			return Object::terminate(h, a);
-		}
+		static constexpr auto& blocking_io = Object::terminate;
 	};
 
 	struct wait_t
@@ -75,13 +63,7 @@ struct thread_t : platform_object_t
 		using result_type = thread_exit_code;
 
 		template<object Object>
-		static vsm::result<void> blocking_io(
-			native_handle<Object> const& h,
-			io_parameters_t<Object, wait_t> const& a)
-			requires requires { Object::wait(h, a); }
-		{
-			return Object::wait(h, a);
-		}
+		static constexpr auto& blocking_io = Object::wait;
 	};
 
 	using operations = type_list_append

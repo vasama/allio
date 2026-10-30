@@ -30,13 +30,7 @@ struct tell_t
 	using result_type = fs_size;
 
 	template<object Object>
-	static vsm::result<fs_size> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, tell_t> const& a)
-		requires requires { Object::tell(h, a); }
-	{
-		return Object::tell(h, a);
-	}
+	static constexpr auto& blocking_io = Object::tell;
 };
 
 struct seek_t
@@ -49,13 +43,7 @@ struct seek_t
 	using result_type = void;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, seek_t> const& a)
-		requires requires { Object::seek(h, a); }
-	{
-		return Object::seek(h, a);
-	}
+	static constexpr auto& blocking_io = Object::seek;
 };
 
 struct get_maximum_extent_t
@@ -65,13 +53,7 @@ struct get_maximum_extent_t
 	using result_type = fs_size;
 
 	template<object Object>
-	static vsm::result<fs_size> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, get_maximum_extent_t> const& a)
-		requires requires { Object::get_maximum_extent(h, a); }
-	{
-		return Object::get_maximum_extent(h, a);
-	}
+	static constexpr auto& blocking_io = Object::get_maximum_extent;
 };
 
 struct set_maximum_extent_t
@@ -84,13 +66,7 @@ struct set_maximum_extent_t
 	using result_type = void;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, set_maximum_extent_t> const& a)
-		requires requires { Object::set_maximum_extent(h, a); }
-	{
-		return Object::set_maximum_extent(h, a);
-	}
+	static constexpr auto& blocking_io = Object::set_maximum_extent;
 };
 
 struct barrier_t
@@ -107,13 +83,7 @@ struct barrier_t
 	using result_type = void;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, barrier_t> const& a)
-		requires requires { Object::barrier(h, a); }
-	{
-		return Object::barrier(h, a);
-	}
+	static constexpr auto& blocking_io = Object::barrier;
 };
 
 } // namespace file_io

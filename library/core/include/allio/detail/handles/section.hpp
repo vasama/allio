@@ -54,13 +54,7 @@ struct create_t
 	using result_type = void;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object>& h,
-		io_parameters_t<Object, create_t> const& a)
-		requires requires { Object::create(h, a); }
-	{
-		return Object::create(h, a);
-	}
+	static constexpr auto& blocking_io = Object::create;
 };
 
 } // namespace section_io

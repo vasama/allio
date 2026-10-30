@@ -1,4 +1,5 @@
 {
+	"inherit": true,
 	"package": "allio.s2n",
 	"version": "0.1",
 	"package_type": "header-library",

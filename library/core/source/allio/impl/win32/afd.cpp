@@ -2,7 +2,7 @@
 
 #include <allio/detail/unique_handle.hpp>
 #include <allio/impl/posix/socket.hpp>
-#include <allio/test/spawn.hpp>
+#include <allio/testing/spawn.hpp>
 
 #include <vsm/out_resource.hpp>
 

@@ -26,6 +26,9 @@ vsm_add_library(
 	SOURCE_LINK_LIBRARIES
 		s2n::s2n
 
+	TEST_FRAMEWORK_LIBRARY
+		Catch2::Catch2WithMain
+
 	TEST_SOURCES
 		source/allio/test/s2n.cpp
 		source/allio/test/socket.cpp

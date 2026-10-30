@@ -53,13 +53,7 @@ struct event_t : platform_object_t
 		using runtime_tag = bounded_runtime_t;
 
 		template<object Object>
-		static vsm::result<void> blocking_io(
-			native_handle<Object>& h,
-			io_parameters_t<Object, create_t> const& args)
-			requires requires { Object::create(h, args); }
-		{
-			return Object::create(h, args);
-		}
+		static constexpr auto& blocking_io = Object::create;
 	};
 
 	struct signal_t
@@ -70,13 +64,7 @@ struct event_t : platform_object_t
 		using runtime_tag = bounded_runtime_t;
 
 		template<object Object>
-		static vsm::result<void> blocking_io(
-			native_handle<Object> const& h,
-			io_parameters_t<Object, signal_t> const& args)
-			requires requires { Object::signal(h, args); }
-		{
-			return Object::signal(h, args);
-		}
+		static constexpr auto& blocking_io = Object::signal;
 	};
 
 	struct reset_t
@@ -87,13 +75,7 @@ struct event_t : platform_object_t
 		using runtime_tag = bounded_runtime_t;
 
 		template<object Object>
-		static vsm::result<void> blocking_io(
-			native_handle<Object> const& h,
-			io_parameters_t<Object, reset_t> const& args)
-			requires requires { Object::reset(h, args); }
-		{
-			return Object::reset(h, args);
-		}
+		static constexpr auto& blocking_io = Object::reset;
 	};
 
 	struct wait_t
@@ -103,13 +85,7 @@ struct event_t : platform_object_t
 		using result_type = void;
 
 		template<object Object>
-		static vsm::result<void> blocking_io(
-			native_handle<Object> const& h,
-			io_parameters_t<Object, wait_t> const& args)
-			requires requires { Object::wait(h, args); }
-		{
-			return Object::wait(h, args);
-		}
+		static constexpr auto& blocking_io = Object::wait;
 	};
 
 	using operations = type_list_append

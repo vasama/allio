@@ -1,0 +1,10 @@
+{
+	"inherit": true,
+	"requirements": [
+		{
+			"package": "catch2",
+			"version": "[^3.4]",
+			"find_package": "Catch2"
+		}
+	]
+}

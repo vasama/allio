@@ -69,13 +69,7 @@ struct map_memory_t
 	using runtime_concept = bounded_runtime_t;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object>& h,
-		io_parameters_t<Object, map_memory_t> const& a)
-		requires requires { Object::map_memory(h, a); }
-	{
-		return Object::map_memory(h, a);
-	}
+	static constexpr auto& blocking_io = Object::map_memory;
 };
 
 struct map_path_t
@@ -91,13 +85,7 @@ struct map_path_t
 	using runtime_concept = bounded_runtime_t;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object>& h,
-		io_parameters_t<Object, map_path_t> const& a)
-		requires requires { Object::map_path(h, a); }
-	{
-		return Object::map_path(h, a);
-	}
+	static constexpr auto& blocking_io = Object::map_path;
 };
 
 struct map_file_t
@@ -121,13 +109,7 @@ struct map_file_t
 	using runtime_concept = bounded_runtime_t;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object>& h,
-		io_parameters_t<Object, map_file_t> const& a)
-		requires requires { Object::map_file(h, a); }
-	{
-		return Object::map_file(h, a);
-	}
+	static constexpr auto& blocking_io = Object::map_file;
 };
 
 struct commit_t
@@ -150,13 +132,7 @@ struct commit_t
 	using runtime_concept = bounded_runtime_t;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, commit_t> const& a)
-		requires requires { Object::commit(h, a); }
-	{
-		return Object::commit(h, a);
-	}
+	static constexpr auto& blocking_io = Object::commit;
 };
 
 struct decommit_t
@@ -173,13 +149,7 @@ struct decommit_t
 	using runtime_concept = bounded_runtime_t;
 
 	template<object Object>
-	static vsm::result<void> blocking_io(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, decommit_t> const& a)
-		requires requires { Object::decommit(h, a); }
-	{
-		return Object::decommit(h, a);
-	}
+	static constexpr auto& blocking_io = Object::decommit;
 };
 
 } // namespace map_io

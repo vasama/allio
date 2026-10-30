@@ -33,12 +33,7 @@ struct a_s2n_socket_t : socket_base_t<object_t>
 	using security_context_type = a_s2n_socket_security_context;
 
 	template<operation_c Operation>
-	static vsm::result<io_result_t<basic_detached_handle<a_s2n_socket_t>, Operation>> blocking_io(
-		handle_const_t<Operation, native_handle<a_s2n_socket_t>>& h,
-		io_parameters_t<a_s2n_socket_t, Operation> const& a)
-	{
-		return uniplexer_handle::blocking_io<a_s2n_socket_t, Operation>(h, a);
-	}
+	static constexpr auto& blocking_io = uniplexer_handle::blocking_io<a_s2n_socket_t, Operation>;
 };
 
 template<typename RawSocket>
