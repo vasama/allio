@@ -599,15 +599,6 @@ public:
 	{
 		return m_native;
 	}
-
-private:
-	friend vsm::result<bool> tag_invoke(
-		blocking_io_t<directory_iterator_t::next_t>,
-		directory_iterator_handle const& h,
-		no_parameters_t const& a)
-	{
-		return blocking_io<directory_iterator_t::next_t>(h.m_native, a);
-	}
 };
 
 template<>
@@ -642,15 +633,6 @@ public:
 	native_handle<directory_iterator_t> const& native() const
 	{
 		return m_native;
-	}
-
-private:
-	[[deprecated]] friend vsm::result<bool> tag_invoke(
-		blocking_io_t<directory_iterator_t::next_t>,
-		directory_iterator_handle const& h,
-		no_parameters_t const& a)
-	{
-		return blocking_io<directory_iterator_t::next_t>(h.m_native, a);
 	}
 };
 

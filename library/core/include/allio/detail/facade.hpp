@@ -104,35 +104,6 @@ private:
 			return r;
 		}
 	}
-
-	[[deprecated]] friend vsm::result<basic_facade> tag_invoke(
-		rebind_handle_t<basic_facade>,
-		Handle&& h)
-	{
-		return vsm::result<basic_facade>(vsm::result_value, vsm_move(h));
-	}
-
-	[[deprecated]] friend vsm::result<Handle> tag_invoke(
-		rebind_handle_t<Handle>,
-		basic_facade&& h)
-	{
-		return vsm::result<Handle>(vsm::result_value, vsm_move(h));
-	}
-
-	[[deprecated]] friend vsm::result<basic_facade> tag_invoke(
-		rebind_handle_t<basic_facade>,
-		vsm::not_same_as<basic_facade> auto&& h,
-		auto&&... args)
-		requires requires { rebind_handle<Handle>(vsm_forward(h), vsm_forward(args)...); }
-	{
-		vsm_try(new_h, rebind_handle<Handle>(
-			vsm_forward(h),
-			vsm_forward(args)...));
-
-		return vsm::result<basic_facade>(
-			vsm::result_value,
-			vsm_move(new_h));
-	}
 };
 
 template<detached_handle Handle, typename Traits>
@@ -184,36 +155,6 @@ public:
 		{
 			return r;
 		}
-	}
-
-private:
-	[[deprecated]] friend vsm::result<basic_facade> tag_invoke(
-		rebind_handle_t<basic_facade>,
-		Handle&& h)
-	{
-		return vsm::result<basic_facade>(vsm::result_value, vsm_move(h));
-	}
-
-	[[deprecated]] friend vsm::result<Handle> tag_invoke(
-		rebind_handle_t<Handle>,
-		basic_facade&& h)
-	{
-		return vsm::result<Handle>(vsm::result_value, vsm_move(h));
-	}
-
-	[[deprecated]] friend vsm::result<basic_facade> tag_invoke(
-		rebind_handle_t<basic_facade>,
-		vsm::not_same_as<basic_facade> auto&& h,
-		auto&&... args)
-		requires requires { rebind_handle<Handle>(vsm_forward(h), vsm_forward(args)...); }
-	{
-		vsm_try(new_h, rebind_handle<Handle>(
-			vsm_forward(h),
-			vsm_forward(args)...));
-
-		return vsm::result<basic_facade>(
-			vsm::result_value,
-			vsm_move(new_h));
 	}
 };
 

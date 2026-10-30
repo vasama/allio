@@ -183,24 +183,6 @@ private:
 		return r;
 	}
 
-	template<multiplexer_handle_for<Object> OtherMultiplexerHandle>
-	[[deprecated]] friend vsm::result<basic_attached_handle<Object, OtherMultiplexerHandle>> tag_invoke(
-		rebind_handle_t<basic_attached_handle<Object, OtherMultiplexerHandle>>,
-		basic_detached_handle&& h,
-		std::convertible_to<OtherMultiplexerHandle> auto&& multiplexer)
-	{
-		return _rebind<OtherMultiplexerHandle>(h, vsm_forward(multiplexer));
-	}
-
-	template<operation_c Operation>
-	[[deprecated]] friend vsm::result<io_result_t<basic_detached_handle, Operation>> tag_invoke(
-		blocking_io_t<Operation>,
-		handle_const_t<Operation, basic_detached_handle>& h,
-		io_parameters_t<Object, Operation> const& args)
-	{
-		return blocking_io<Operation>(h.m_native, args);
-	}
-
 	template<object OtherObject, multiplexer_handle_for<OtherObject> OtherMultiplexerHandle>
 	friend class basic_attached_handle;
 

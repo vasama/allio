@@ -95,208 +95,95 @@ template<operation_c Operation, typename T>
 using handle_const_t = typename _handle_const<mutation<Operation>>::template type<T>;
 
 
-struct attach_handle_t
+template<typename M, typename H, typename C>
+[[nodiscard]] vsm::result<void> attach_handle(M& m, H const& h, C& c)
 {
-	template<typename M, typename H, typename C>
-	[[nodiscard]] vsm_static_operator vsm::result<void> operator()(
-		M& m,
-		H const& h,
-		C& c) vsm_static_operator_const
+	if constexpr (requires { C::attach(m, h, c); })
 	{
-		if constexpr (requires { C::attach(m, h, c); })
-		{
-			return C::attach(m, h, c);
-		}
-		else
-		{
-			return m.attach_handle(h, c);
-		}
+		return C::attach(m, h, c);
 	}
-};
-inline constexpr attach_handle_t attach_handle = {};
+	else
+	{
+		return m.attach_handle(h, c);
+	}
+}
 
-struct detach_handle_t
+template<typename M, typename H, typename C>
+[[nodiscard]] vsm::result<void> detach_handle(M& m, H const& h, C& c)
 {
-	template<typename M, typename H, typename C>
-	[[nodiscard]] vsm_static_operator vsm::result<void> operator()(
-		M& m,
-		H const& h,
-		C& c) vsm_static_operator_const
+	if constexpr (requires { C::detach(m, h, c); })
 	{
-		if constexpr (requires { C::detach(m, h, c); })
-		{
-			return C::detach(m, h, c);
-		}
-		else
-		{
-			return m.detach_handle(h, c);
-		}
+		return C::detach(m, h, c);
 	}
-};
-inline constexpr detach_handle_t detach_handle = {};
+	else
+	{
+		return m.detach_handle(h, c);
+	}
+}
 
-template<typename To>
-struct rebind_handle_t
+template<typename To, typename From, typename... Args>
+[[nodiscard]] vsm::result<To> rebind_handle(From&& from, Args&&... args)
 {
-	template<typename From, typename... Args>
-	[[nodiscard]] vsm_static_operator vsm::result<To> operator()(
-		From&& from,
-		Args&&... args) vsm_static_operator_const
+	if constexpr (vsm::any_cvref_of<From, To>)
 	{
-		if constexpr (vsm::any_cvref_of<From, To>)
-		{
-			return vsm_forward(from);
-		}
-		else
-		{
-			return rebind_traits<std::remove_cvref_t<From>, To>::rebind(
-				vsm_forward(from),
-				vsm_forward(args)...);
-		}
+		return vsm_forward(from);
 	}
-};
-template<typename To>
-inline constexpr rebind_handle_t<To> rebind_handle = {};
-
+	else
+	{
+		return rebind_traits<std::remove_cvref_t<From>, To>::rebind(
+			vsm_forward(from),
+			vsm_forward(args)...);
+	}
+}
 
 template<typename Handle>
 struct blocking_io_traits;
 
-template<operation_c Operation>
-struct blocking_io_t
+template<operation_c Operation, object Object>
+[[nodiscard]] auto blocking_io(
+	handle_const_t<Operation, native_handle<Object>>& h,
+	io_parameters_t<Object, Operation> const& a)
 {
-	template<object Object>
-	[[nodiscard]] vsm_static_operator auto operator()(
-		handle_const_t<Operation, native_handle<Object>>& h,
-		io_parameters_t<Object, Operation> const& a) vsm_static_operator_const
+	if constexpr (requires { Object::template blocking_io<Operation>(h, a); })
 	{
-		if constexpr (requires { Object::template blocking_io<Operation>(h, a); })
-		{
-			return Object::template blocking_io<Operation>(h, a);
-		}
-		else
-		{
-			return Operation::template blocking_io<Object>(h, a);
-		}
+		return Object::template blocking_io<Operation>(h, a);
 	}
-
-	template<handle Handle>
-		requires observer<Operation>
-	[[nodiscard]] vsm_static_operator vsm::result<io_result_t<Handle, Operation>> operator()(
-		Handle const& h,
-		io_parameters_t<typename Handle::object_type, Operation> const& a) vsm_static_operator_const
+	else
 	{
-		using result_type = io_result_t<Handle, Operation>;
-
-		auto r = blocking_io_t()(h.native(), a);
-
-		if constexpr (std::is_same_v<typename decltype(r)::value_type, result_type>)
-		{
-			return r;
-		}
-		else if (r)
-		{
-			return rebind_handle<result_type>(vsm_move(*r));
-		}
-		else
-		{
-			return vsm::unexpected(r.error());
-		}
+		return Operation::template blocking_io<Object>(h, a);
 	}
+}
 
-	template<handle Handle>
-	[[nodiscard]] vsm_static_operator vsm::result<io_result_t<Handle, Operation>> operator()(
-		Handle& h,
-		io_parameters_t<typename Handle::object_type, Operation> const& a) vsm_static_operator_const
-	{
-		return handle_traits<Handle>::template blocking_io<Operation>(h, a);
-	}
-};
-
-template<operation_c Operation>
-inline constexpr blocking_io_t<Operation> blocking_io = {};
-
-#if 0
-template<consumer Operation>
-struct consume_t
+template<observer Operation, handle Handle>
+[[nodiscard]] vsm::result<io_result_t<Handle, Operation>> blocking_io(
+	Handle const& h,
+	io_parameters_t<typename Handle::object_type, Operation> const& a)
 {
-	template<handle Handle>
-	[[nodiscard]] vsm_static_operator auto operator()(
-		Handle& h,
-		io_parameters_t<typename Handle::object_type, Operation> const& a) vsm_static_operator_const
+	using result_type = io_result_t<Handle, Operation>;
+
+	auto r = detail::blocking_io<Operation>(h.native(), a);
+
+	if constexpr (std::is_same_v<typename decltype(r)::value_type, result_type>)
 	{
-		using object_type = typename Handle::object_type;
-
-		native_handle<object_type> local_h = h.native();
-		auto r = detail::blocking_io<Operation>(local_h);
-
-		if (r)
-		{
-			[[maybe_unused]] std::same_as<native_handle<object_type>> auto const _ = h.release();
-		}
-
 		return r;
 	}
-};
+	else if (r)
+	{
+		return rebind_handle<result_type>(vsm_move(*r));
+	}
+	else
+	{
+		return vsm::unexpected(r.error());
+	}
+}
 
-template<consumer Operation>
-inline constexpr consume_t<Operation> consume = {};
-#endif
-
-#if 0
-template<handle Handle, producer Operation>
-struct produce_t
+template<operation_c Operation, handle Handle>
+[[nodiscard]] vsm::result<io_result_t<Handle, Operation>> blocking_io(
+	Handle& h,
+	io_parameters_t<typename Handle::object_type, Operation> const& a)
 {
-	[[nodiscard]] vsm_static_operator vsm::result<Handle> operator()(
-		io_parameters_t<typename Handle::object_type, Operation> const& a) vsm_static_operator_const
-	{
-		using object_type = typename Handle::object_type;
-
-		native_handle<object_type> h = {};
-		vsm_try_void(detail::blocking_io<Operation>(h));
-
-		auto const r = Handle::adopt(h);
-
-		if (!r)
-		{
-			//TODO: Use a destructor instead. Ideally basic_detached_handle. This requires some
-			//      changes to the include order.
-			vsm_verify(detail::blocking_io<close_t>(h));
-		}
-
-		return r;
-	}
-};
-
-template<handle Handle, producer Operation>
-inline constexpr produce_t<Handle, Operation> produce = {};
-#endif
-
-#if 0
-template<observer Operation>
-struct blocking_observe_t
-{
-	template<object Object>
-	[[nodiscard]] vsm_static_operator auto operator()(
-		native_handle<Object> const& h,
-		io_parameters_t<Object, Operation> const& a) vsm_static_operator_const
-	{
-		return detail::blocking_io<Operation>(h, a);
-	}
-
-	template<handle Handle>
-	[[nodiscard]] vsm_static_operator auto operator()(
-		Handle const& h,
-		io_parameters_t<typename Handle::object_type, Operation> const& a) vsm_static_operator_const
-		requires requires { detail::blocking_io<Operation>(h.native(), a); }
-	{
-		return detail::blocking_io<Operation>(h.native(), a);
-	}
-};
-
-template<observer Operation>
-inline constexpr blocking_observe_t<Operation> blocking_observe = {};
-#endif
+	return handle_traits<std::remove_cv_t<Handle>>::template blocking_io<Operation>(h, a);
+}
 
 
 enum class io_notify_status : uint32_t
@@ -423,90 +310,48 @@ template<multiplexer Multiplexer, typename Handler>
 using io_handler_base = basic_io_handler_base<io_handler<Multiplexer>, Handler>;
 
 
-struct submit_io_t
+template<typename H, typename S, typename A, typename Handler>
+[[nodiscard]] auto submit_io(H& h, S& s, A const& a, Handler& handler)
 {
-	template<typename H, typename S, typename A, typename Handler>
-	[[nodiscard]] vsm_static_operator auto operator()(
-		H& h,
-		S& s,
-		A const& a,
-		Handler& handler) vsm_static_operator_const
-	{
-		return handle_traits<std::remove_cv_t<H>>::submit_io(h, s, a, handler);
-	}
+	return handle_traits<std::remove_cv_t<H>>::submit_io(h, s, a, handler);
+}
 
-	template<typename M, typename H, typename C, typename S, typename A, typename Handler>
-	[[nodiscard]] vsm_static_operator auto operator()(
-		M& m,
-		H& h,
-		C& c,
-		S& s,
-		A const& a,
-		Handler& handler) vsm_static_operator_const
-	{
-		return S::submit(m, h, c, s, a, handler);
-	}
-};
-inline constexpr submit_io_t submit_io = {};
-
-struct notify_io_t
+template<typename M, typename H, typename C, typename S, typename A, typename Handler>
+[[nodiscard]] auto submit_io(M& m, H& h, C& c, S& s, A const& a, Handler& handler)
 {
-	template<typename H, typename S, typename A, typename Handler, typename Status>
-	[[nodiscard]] vsm_static_operator auto operator()(
-		H& h,
-		S& s,
-		A const& a,
-		Handler& handler,
-		Status&& status) vsm_static_operator_const
-	{
-		return handle_traits<std::remove_cv_t<H>>::notify_io(
-			h,
-			s,
-			a,
-			handler,
-			static_cast<Status&&>(status));
-	}
+	return S::submit(m, h, c, s, a, handler);
+}
 
-	template<typename M, typename H, typename C, typename S, typename A, typename Handler, typename Status>
-	[[nodiscard]] vsm_static_operator auto operator()(
-		M& m,
-		H& h,
-		C& c,
-		S& s,
-		A const& a,
-		Handler& handler,
-		Status&& status) vsm_static_operator_const
-	{
-		return S::notify(m, h, c, s, a, handler, static_cast<Status&&>(status));
-	}
-};
-inline constexpr notify_io_t notify_io = {};
 
-struct cancel_io_t
+template<typename H, typename S, typename A, typename Handler, typename Status>
+[[nodiscard]] auto notify_io(H& h, S& s, A const& a, Handler& handler, Status&& status)
 {
-	template<typename H, typename S, typename A, typename Handler>
-	vsm_static_operator void operator()(
-		H const& h,
-		S& s,
-		A const& a,
-		Handler const& handler) vsm_static_operator_const
-	{
-		return handle_traits<std::remove_cv_t<H>>::cancel_io(h, s, a, handler);
-	}
+	return handle_traits<std::remove_cv_t<H>>::notify_io(
+		h,
+		s,
+		a,
+		handler,
+		static_cast<Status&&>(status));
+}
 
-	template<typename M, typename H, typename C, typename S, typename A, typename Handler>
-	vsm_static_operator void operator()(
-		M& m,
-		H const& h,
-		C const& c,
-		S& s,
-		A const& a,
-		Handler const& handler) vsm_static_operator_const
-	{
-		return S::cancel(m, h, c, s, a, handler);
-	}
-};
-inline constexpr cancel_io_t cancel_io = {};
+template<typename M, typename H, typename C, typename S, typename A, typename Handler, typename Status>
+[[nodiscard]] auto notify_io(M& m, H& h, C& c, S& s, A const& a, Handler& handler, Status&& status)
+{
+	return S::notify(m, h, c, s, a, handler, static_cast<Status&&>(status));
+}
+
+
+template<typename H, typename S, typename A, typename Handler>
+void cancel_io(H const& h, S& s, A const& a, Handler const& handler)
+{
+	return handle_traits<std::remove_cv_t<H>>::cancel_io(h, s, a, handler);
+}
+
+template<typename M, typename H, typename C, typename S, typename A, typename Handler>
+void cancel_io(M& m, H const& h, C const& c, S& s, A const& a, Handler const& handler)
+{
+	return S::cancel(m, h, c, s, a, handler);
+}
 
 
 //TODO: Rename to io_connector
