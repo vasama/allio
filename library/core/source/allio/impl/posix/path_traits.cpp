@@ -56,12 +56,6 @@ Char const* skip_last_separators(Char const* const beg, Char const* end)
 }
 
 template<typename Char>
-Char const* skip_one_separator(Char const* const beg, Char const* const end)
-{
-	return beg + (beg != end && is_separator(*beg));
-}
-
-template<typename Char>
 std::strong_ordering compare_chars(
 	Char const* l_beg,
 	Char const* const l_end,

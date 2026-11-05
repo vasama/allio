@@ -98,7 +98,7 @@ fs_type win32::get_file_type(ULONG const file_attributes, ULONG const reparse_ta
 
 fs_time_point win32::get_file_time(LARGE_INTEGER const file_time)
 {
-	return make_time_point(file_time.QuadPart);
+	return make_time_point(static_cast<uint64_t>(file_time.QuadPart));
 }
 
 
@@ -318,7 +318,7 @@ static vsm::atomic<nt_info_mask> unsupported_info_mask = 0;
 
 static nt_info_mask get_supported_info_mask()
 {
-	return ~unsupported_info_mask.load(std::memory_order_relaxed);
+	return static_cast<nt_info_mask>(~unsupported_info_mask.load(std::memory_order_relaxed));
 }
 
 static void record_query_status(nt_info_kind const kind, NTSTATUS const status)
@@ -326,7 +326,9 @@ static void record_query_status(nt_info_kind const kind, NTSTATUS const status)
 	if (status == STATUS_INVALID_INFO_CLASS)
 	{
 		auto const mask = static_cast<nt_info_mask>(1 << std::to_underlying(kind));
-		(void)unsupported_info_mask.fetch_and(~mask, std::memory_order_relaxed);
+		(void)unsupported_info_mask.fetch_and(
+			static_cast<nt_info_mask>(~mask),
+			std::memory_order_relaxed);
 	}
 }
 
@@ -822,12 +824,12 @@ fs_ino_id detail::_fs_info_ino_id(void const* const header)
 
 	if (auto const info = accessor.get<FILE_STAT_INFORMATION>())
 	{
-		return vsm::to_enum<fs_ino_id>(info->FileId.QuadPart);
+		return vsm::to_enum<fs_ino_id>(static_cast<uint64_t>(info->FileId.QuadPart));
 	}
 
 	if (auto const info = accessor.get<_FILE_INTERNAL_INFORMATION>())
 	{
-		return vsm::to_enum<fs_ino_id>(info->IndexNumber.QuadPart);
+		return vsm::to_enum<fs_ino_id>(static_cast<uint64_t>(info->IndexNumber.QuadPart));
 	}
 
 	vsm_unreachable();
@@ -856,12 +858,12 @@ fs_size detail::_fs_info_max_extent(void const* const header)
 
 	if (auto const info = accessor.get<FILE_STAT_INFORMATION>())
 	{
-		return info->EndOfFile.QuadPart;
+		return vsm::truncating(info->EndOfFile.QuadPart);
 	}
 
 	if (auto const info = accessor.get<FILE_STANDARD_INFORMATION>())
 	{
-		return info->EndOfFile.QuadPart;
+		return vsm::truncating(info->EndOfFile.QuadPart);
 	}
 
 	vsm_unreachable();

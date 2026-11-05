@@ -137,26 +137,26 @@ concept _get_platform_handle_concept = requires (T const& value)
 
 
 template<platform_handle Handle>
-[[nodiscard]] static auto _get_platform_handle_range(Handle const& h)
+[[nodiscard]] auto _get_platform_handle_range(Handle const& h)
 {
 	return std::span<Handle const, 1>(&h, 1);
 }
 
 template<platform_object Object>
-[[nodiscard]] static auto _get_platform_handle_range(native_handle<Object> const& h)
+[[nodiscard]] auto _get_platform_handle_range(native_handle<Object> const& h)
 {
 	return std::span<native_handle<Object> const, 1>(&h, 1);
 }
 
 template<_get_platform_handle_concept Handle, size_t Size>
-[[nodiscard]] static auto _get_platform_handle_range(Handle(&handles)[Size])
+[[nodiscard]] auto _get_platform_handle_range(Handle(&handles)[Size])
 {
 	return std::span<Handle, Size>(handles);
 }
 
 template<std::ranges::forward_range Range>
 	requires _get_platform_handle_concept<std::ranges::range_value_t<Range> const&>
-[[nodiscard]] static Range const& _get_platform_handle_range(Range const& range)
+[[nodiscard]] Range const& _get_platform_handle_range(Range const& range)
 {
 	return range;
 }
@@ -499,7 +499,8 @@ struct process_t : platform_object_t
 		using result_type_template = typename Handle::template rebind_object<TargetObject>;
 
 		template<object Object>
-		static constexpr auto& blocking_io = Object::template duplicate_handle_template<TargetObject>;
+		static constexpr auto& blocking_io =
+			Object::template duplicate_handle_template<TargetObject>;
 	};
 
 	using operations = type_list_append

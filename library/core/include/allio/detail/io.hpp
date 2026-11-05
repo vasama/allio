@@ -154,6 +154,7 @@ template<operation Operation, object Object>
 }
 
 template<observer Operation, handle Handle>
+	requires vsm::non_cvref<Handle>
 [[nodiscard]] vsm::result<io_result_t<Handle, Operation>> blocking_io(
 	Handle const& h,
 	io_parameters_t<typename Handle::object_type, Operation> const& a)
@@ -177,6 +178,7 @@ template<observer Operation, handle Handle>
 }
 
 template<operation Operation, handle Handle>
+	requires vsm::non_cvref<Handle>
 [[nodiscard]] vsm::result<io_result_t<Handle, Operation>> blocking_io(
 	Handle& h,
 	io_parameters_t<typename Handle::object_type, Operation> const& a)
