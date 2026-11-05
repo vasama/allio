@@ -36,7 +36,7 @@ public:
 	{
 	}
 
-	template<typename Object, operation_c Operation>
+	template<typename Object, operation Operation>
 	static vsm::result<io_result_t<handle_type<Object>, Operation>> blocking_io(
 		handle_const_t<Operation, native_handle<Object>>& h,
 		io_parameters_t<Object, Operation> const& a)
@@ -104,7 +104,7 @@ struct async_connector<Multiplexer, Object> : uniplexer::connector_type
 	}
 };
 
-template<std::same_as<uniplexer> Multiplexer, object Object, operation_c Operation>
+template<std::same_as<uniplexer> Multiplexer, object Object, operation Operation>
 struct async_operation<Multiplexer, Object, Operation> : uniplexer::operation_type
 {
 	using M = Multiplexer;

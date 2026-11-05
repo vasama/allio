@@ -32,7 +32,7 @@ struct a_s2n_listen_socket_t : listen_socket_base_t<object_t>
 	using socket_object_type = a_s2n_socket_t<typename RawListenSocket::socket_object_type>;
 	using security_context_type = a_s2n_listen_socket_security_context;
 
-	template<operation_c Operation>
+	template<operation Operation>
 	static vsm::result<io_result_t<basic_detached_handle<a_s2n_listen_socket_t>, Operation>> blocking_io(
 		handle_const_t<Operation, native_handle<a_s2n_listen_socket_t>>& h,
 		io_parameters_t<a_s2n_listen_socket_t, Operation> const& a)

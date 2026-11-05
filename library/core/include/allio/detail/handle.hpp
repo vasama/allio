@@ -195,7 +195,7 @@ private:
 template<object Object>
 struct handle_traits<basic_detached_handle<Object>>
 {
-	template<operation_c Operation>
+	template<operation Operation>
 	static vsm::result<io_result_t<basic_detached_handle<Object>, Operation>> blocking_io(
 		handle_const_t<Operation, basic_detached_handle<Object>>& h,
 		io_parameters_t<Object, Operation> const& a)
@@ -390,7 +390,7 @@ struct handle_traits<basic_attached_handle<Object, MultiplexerHandle>>
 		return detail::blocking_io<Operation>(h.m_native, a);
 	}
 
-	template<operation_c Operation>
+	template<operation Operation>
 	static io_result<io_result_t<_handle_type, Operation>> submit_io(
 		handle_const_t<Operation, _handle_type>& h,
 		async_operation_t<_multiplexer_type, Object, Operation>& s,
@@ -406,7 +406,7 @@ struct handle_traits<basic_attached_handle<Object, MultiplexerHandle>>
 			handler);
 	}
 
-	template<operation_c Operation>
+	template<operation Operation>
 	static io_result<io_result_t<_handle_type, Operation>> notify_io(
 		handle_const_t<Operation, _handle_type>& h,
 		async_operation_t<_multiplexer_type, Object, Operation>& s,
@@ -424,7 +424,7 @@ struct handle_traits<basic_attached_handle<Object, MultiplexerHandle>>
 			vsm_move(status));
 	}
 
-	template<operation_c Operation>
+	template<operation Operation>
 	static void cancel_io(
 		_handle_type const& h,
 		async_operation_t<_multiplexer_type, Object, Operation>& s,

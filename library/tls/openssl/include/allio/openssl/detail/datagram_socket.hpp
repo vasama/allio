@@ -9,7 +9,7 @@ struct openssl_datagram_socket_t : datagram_socket_base_t<object_t>
 {
 	using base_type = datagram_socket_base_t<object_t>;
 
-	template<operation_c Operation>
+	template<operation Operation>
 	static constexpr auto& blocking_io = uniplexer_handle::blocking_io<openssl_datagram_socket_t, Operation>;
 };
 

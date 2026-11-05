@@ -20,18 +20,17 @@ struct modifier_t;
 struct bounded_runtime_t;
 
 
-//TODO: Rename to operation
 template<typename Operation>
-concept operation_c = requires { typename Operation::operation_concept; };
+concept operation = requires { typename Operation::operation_concept; };
 
 template<typename Operation>
 concept observer =
-	operation_c<Operation> &&
+	operation<Operation> &&
 	std::is_void_v<typename Operation::operation_concept>;
 
 template<typename Operation>
 concept mutation =
-	operation_c<Operation> &&
+	operation<Operation> &&
 	!std::is_void_v<typename Operation::operation_concept>;
 
 template<typename Operation>
@@ -51,26 +50,26 @@ concept modifier =
 	std::is_same_v<typename Operation::operation_concept, modifier_t>;
 
 
-template<handle Handle, operation_c Operation>
+template<handle Handle, operation Operation>
 typename Operation::template result_type_template<Handle> _io_result(int);
 
-template<handle Handle, operation_c Operation>
+template<handle Handle, operation Operation>
 typename Operation::result_type _io_result(...);
 
-template<handle Handle, operation_c Operation>
+template<handle Handle, operation Operation>
 using io_result_t = decltype(detail::_io_result<Handle, Operation>(0));
 
 
-template<typename Object, operation_c Operation>
+template<typename Object, operation Operation>
 typename Object::template params_type<Operation> _io_params(vsm::priority_tag<2>);
 
-template<typename Object, operation_c Operation>
+template<typename Object, operation Operation>
 typename Operation::template params_type_template<Object> _io_params(vsm::priority_tag<1>);
 
-template<typename Object, operation_c Operation>
+template<typename Object, operation Operation>
 typename Operation::params_type _io_params(vsm::priority_tag<0>);
 
-template<typename Object, operation_c Operation>
+template<typename Object, operation Operation>
 using io_parameters_t = decltype(detail::_io_params<Object, Operation>(vsm::priority_tag<2>()));
 
 
@@ -91,7 +90,7 @@ struct _handle_const<1>
 	using type = T;
 };
 
-template<operation_c Operation, typename T>
+template<operation Operation, typename T>
 using handle_const_t = typename _handle_const<mutation<Operation>>::template type<T>;
 
 
@@ -139,7 +138,7 @@ template<typename To, typename From, typename... Args>
 template<typename Handle>
 struct blocking_io_traits;
 
-template<operation_c Operation, object Object>
+template<operation Operation, object Object>
 [[nodiscard]] auto blocking_io(
 	handle_const_t<Operation, native_handle<Object>>& h,
 	io_parameters_t<Object, Operation> const& a)
@@ -177,7 +176,7 @@ template<observer Operation, handle Handle>
 	}
 }
 
-template<operation_c Operation, handle Handle>
+template<operation Operation, handle Handle>
 [[nodiscard]] vsm::result<io_result_t<Handle, Operation>> blocking_io(
 	Handle& h,
 	io_parameters_t<typename Handle::object_type, Operation> const& a)
@@ -366,7 +365,7 @@ using async_connector_t = async_connector<Multiplexer, Object>;
 template<typename M, typename H, typename O>
 struct async_operation;
 
-template<multiplexer Multiplexer, object Object, operation_c Operation>
+template<multiplexer Multiplexer, object Object, operation Operation>
 using async_operation_t = async_operation<Multiplexer, Object, Operation>;
 
 

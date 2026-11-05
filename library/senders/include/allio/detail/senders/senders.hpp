@@ -37,7 +37,7 @@ struct _set_value_signature<1>
 template<typename R>
 using set_value_signature = typename _set_value_signature<std::is_void_v<R>>::template type<R>;
 
-template<handle Handle, operation_c Operation>
+template<handle Handle, operation Operation>
 class io_sender
 {
 	using object_type = typename Handle::object_type;

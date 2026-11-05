@@ -176,7 +176,7 @@ public:
 template<typename BaseObject, typename... Multiplexers>
 struct any_object_t;
 
-template<typename AnyObject, operation_c Operation>
+template<typename AnyObject, operation Operation>
 struct any_object_detached_functions_1
 {
 	template<typename T>
@@ -218,7 +218,7 @@ struct any_object_detached_functions_2
 template<typename AnyObject, typename Operations, typename... Multiplexers>
 struct any_object_detached_functions;
 
-template<typename AnyObject, operation_c... Operations, typename... Multiplexers>
+template<typename AnyObject, operation... Operations, typename... Multiplexers>
 struct any_object_detached_functions<AnyObject, type_list<Operations...>, Multiplexers...>
 	: any_object_detached_functions_1<AnyObject, Operations>...
 	, any_object_detached_functions_2<AnyObject, Multiplexers>...
@@ -230,7 +230,7 @@ struct any_object_detached_functions<AnyObject, type_list<Operations...>, Multip
 	static any_object_detached_functions const instance;
 };
 
-template<typename AnyObject, operation_c Operation, multiplexer Multiplexer>
+template<typename AnyObject, operation Operation, multiplexer Multiplexer>
 struct any_object_attached_functions_1
 {
 	template<typename T>
@@ -302,7 +302,7 @@ struct any_object_attached_functions_1
 template<typename AnyObject, typename Operations, multiplexer Multiplexer>
 struct any_object_attached_functions;
 
-template<typename AnyObject, operation_c... Operations, multiplexer Multiplexer>
+template<typename AnyObject, operation... Operations, multiplexer Multiplexer>
 struct any_object_attached_functions<AnyObject, type_list<Operations...>, Multiplexer>
 	: any_object_attached_functions_1<AnyObject, Operations, Multiplexer>...
 {
@@ -334,10 +334,10 @@ struct any_object_t : object_t
 
 	using operations = typename BaseObject::operations;
 
-	template<operation_c Operation>
+	template<operation Operation>
 	using params_type = io_parameters_t<BaseObject, Operation>;
 
-	template<operation_c Operation>
+	template<operation Operation>
 	static vsm::result<io_result_t<basic_detached_handle<any_object_t>, Operation>> blocking_io(
 		handle_const_t<Operation, native_handle<any_object_t>>& h,
 		io_parameters_t<any_object_t, Operation> const& a)
@@ -614,7 +614,7 @@ void any_cancel(
 
 // TODO: Intellisense was having issues here. Figure out if there's a workaround.
 #ifndef __INTELLISENSE__
-template<typename AnyObject, operation_c... Operations, typename... Multiplexers>
+template<typename AnyObject, operation... Operations, typename... Multiplexers>
 template<typename Object>
 any_object_detached_functions<AnyObject, type_list<Operations...>, Multiplexers...> const
 any_object_detached_functions<AnyObject, type_list<Operations...>, Multiplexers...>::instance =
@@ -628,7 +628,7 @@ any_object_detached_functions<AnyObject, type_list<Operations...>, Multiplexers.
 	}...,
 };
 
-template<typename AnyObject, operation_c... Operations, multiplexer Multiplexer>
+template<typename AnyObject, operation... Operations, multiplexer Multiplexer>
 template<typename Object>
 any_object_attached_functions<AnyObject, type_list<Operations...>, Multiplexer> const
 any_object_attached_functions<AnyObject, type_list<Operations...>, Multiplexer>::instance =
