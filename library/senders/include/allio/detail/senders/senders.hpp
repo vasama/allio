@@ -73,8 +73,7 @@ class io_sender
 	public:
 		explicit operation(auto&& sender, vsm::any_cvref_of<Receiver> auto&& receiver)
 			noexcept(noexcept(Receiver(vsm_forward(receiver))))
-			: stoppable_base(ex::get_stop_token(ex::get_env(receiver)))
-			, m_handle(*sender.m_handle)
+			: m_handle(*sender.m_handle)
 			, m_args(vsm_forward(sender).m_args)
 			, m_receiver(vsm_forward(receiver))
 		{
@@ -82,7 +81,7 @@ class io_sender
 
 		void start() & noexcept
 		{
-			stoppable_base::register_stoppable();
+			stoppable_base::register_stoppable(ex::get_stop_token(ex::get_env(m_receiver)));
 
 			auto r = submit_io(
 				m_handle,
@@ -225,8 +224,7 @@ class io_handle_sender
 
 	public:
 		explicit operation(auto&& sender, vsm::any_cvref_of<Receiver> auto&& receiver)
-			: stoppable_base(ex::get_stop_token(ex::get_env(receiver)))
-			, m_handle(get_multiplexer(ex::get_env(receiver)))
+			: m_handle(get_multiplexer(ex::get_env(receiver)))
 			, m_args(vsm_forward(sender).m_args)
 			, m_receiver(vsm_forward(receiver))
 		{
@@ -234,7 +232,7 @@ class io_handle_sender
 
 		void start() & noexcept
 		{
-			stoppable_base::register_stoppable();
+			stoppable_base::register_stoppable(ex::get_stop_token(ex::get_env(m_receiver)));
 
 			auto r = submit_io(
 				m_handle,

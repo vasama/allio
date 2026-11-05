@@ -18,7 +18,8 @@
 		},
 		{
 			"package": "stdexec",
-			"version": "0.0.20260528"
+			"version": "0.0.20261105",
+			"user": "vasama"
 		}
 	]
 }
