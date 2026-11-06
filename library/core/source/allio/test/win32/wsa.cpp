@@ -296,7 +296,7 @@ TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][datagram_soc
 	auto const receive_socket = create_socket();
 
 	posix::socket_address_storage address_storage;
-	auto const endpoint = ipv4_endpoint(ipv4_address::localhost, 51234);
+	auto const endpoint = ipv4_endpoint(ipv4_address::localhost, 41234);
 	auto const addr = posix::get_socket_address(endpoint, address_storage).value();
 
 	socket_bind(receive_socket.get(), addr).value();
