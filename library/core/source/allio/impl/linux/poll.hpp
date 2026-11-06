@@ -15,6 +15,8 @@
 
 namespace allio::linux {
 
+inline constexpr short unmaskable_poll_events = POLLERR | POLLHUP;
+
 // TODO: move out of header
 [[nodiscard]] inline vsm::result<short> poll(
 	int const fd,
@@ -22,6 +24,12 @@ namespace allio::linux {
 	deadline const deadline)
 {
 	vsm_assert(events != 0); //PRECONDITION
+
+	if (fd < 0)
+	{
+		// TODO: Use a better error code?
+		return vsm::unexpected(allio_error(error::invalid_argument));
+	}
 
 	pollfd poll_fd =
 	{
@@ -45,8 +53,16 @@ namespace allio::linux {
 		return vsm::unexpected(allio_error(error::operation_timed_out));
 	}
 
-	vsm_assert((poll_fd.revents & events) != 0);
-	vsm_assert((poll_fd.revents & ~events) == 0);
+	if (poll_fd.revents & POLLNVAL)
+	{
+		// TODO: Use a better error code?
+		return vsm::unexpected(allio_error(error::invalid_argument));
+	}
+
+	short const all_events = events | unmaskable_poll_events;
+
+	vsm_assert((poll_fd.revents & all_events) != 0);
+	vsm_assert((poll_fd.revents & ~all_events) == 0);
 
 	return poll_fd.revents;
 }

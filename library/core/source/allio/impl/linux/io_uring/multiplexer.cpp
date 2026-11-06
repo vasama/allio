@@ -603,7 +603,7 @@ vsm::result<io_uring_multiplexer> io_uring_multiplexer::_create(
 		}
 	}
 
-	if (kernel_version < KERNEL_VERSION(6, 12, 0))
+	if (kernel_version < KERNEL_VERSION(6, 13, 0))
 	{
 		//TODO: Resubmit the poll operation if it ends due to CQE exhaustion.
 
@@ -649,6 +649,7 @@ void _io_uring_multiplexer_impl::wake_poll_thread()
 
 			io_uring_sqe sqe =
 			{
+				.opcode = IORING_OP_MSG_RING,
 				.fd = m_io_uring.get(),
 			};
 
@@ -881,9 +882,12 @@ bool _io_uring_multiplexer_impl::reap_all_cqes()
 
 	m_cq_consume = cq_produce;
 
-	// In case a wake CQE was posted, the wake flag must be reset for the next time a wake up is
-	// required.
-	wake_poll_thread_reset();
+	if (m_wake_event)
+	{
+		// In case a wake CQE was posted, the wake flag must be reset for the next time a wake up is
+		// required.
+		wake_poll_thread_reset();
+	}
 
 	return true;
 }
