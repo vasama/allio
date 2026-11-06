@@ -21,6 +21,10 @@ struct raw_socket_t : socket_base_t<raw_common_socket_base_t>
 		native_handle<raw_socket_t> const& h,
 		io_parameters_t<raw_socket_t, disconnect_t> const& args);
 
+	static vsm::result<void> get_endpoint(
+		native_handle<raw_socket_t> const& h,
+		io_parameters_t<raw_socket_t, get_endpoint_t> const& args);
+
 	static vsm::result<read_result> stream_read(
 		native_handle<raw_socket_t> const& h,
 		io_parameters_t<raw_socket_t, stream_read_t> const& args);

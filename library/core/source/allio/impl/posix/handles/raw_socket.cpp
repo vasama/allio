@@ -44,6 +44,47 @@ vsm::result<void> raw_socket_t::disconnect(
 	return socket_disconnect(unwrap_socket(h.platform_handle), socket_disconnect_rw);
 }
 
+vsm::result<void> raw_socket_t::get_endpoint(
+	native_handle<raw_socket_t> const& h,
+	io_parameters_t<raw_socket_t, get_endpoint_t> const& a)
+{
+	posix::socket_address_family_type const address_family = posix::get_address_family(h.flags);
+	size_t const max_address_size = posix::get_max_socket_address_size(address_family);
+
+	posix::socket_address_union local_address_storage;
+	void* address_storage = &local_address_storage;
+	posix::socket_address_size_type address_size = sizeof(local_address_storage);
+
+	if (a.endpoint)
+	{
+		if (a.endpoint.is_platform_endpoint())
+		{
+			vsm_try_assign(address_storage, a.endpoint.resize(
+				max_address_size,
+				max_address_size,
+				std::align_val_t(alignof(posix::socket_address_union))));
+
+			address_size = vsm::truncating(max_address_size);
+		}
+		else if (a.endpoint.kind() != posix::get_address_kind(address_family))
+		{
+			return vsm::unexpected(allio_error(error::invalid_argument));
+		}
+		else
+		{
+			//TODO: Implement typed endpoint buffer usage.
+			return vsm::unexpected(allio_error(error::unsupported_operation));
+		}
+	}
+
+	vsm_try(posix::get_socket_address(
+		posix::unwrap_socket(h.platform_handle),
+		static_cast<sockaddr*>(address_storage),
+		&address_size));
+
+	return {};
+}
+
 vsm::result<read_result> raw_socket_t::stream_read(
 	native_handle<raw_socket_t> const& h,
 	io_parameters_t<raw_socket_t, stream_read_t> const& a)

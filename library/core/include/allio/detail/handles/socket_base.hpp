@@ -83,6 +83,7 @@ struct socket_base_t : common_socket_base_t<BaseObject>
 
 	using connect_t = detail::connect_t;
 	using disconnect_t = detail::disconnect_t;
+	using get_endpoint_t = detail::get_endpoint_t;
 	using stream_read_t = byte_io::stream_read_t;
 	using stream_write_t = byte_io::stream_write_t;
 
@@ -91,6 +92,7 @@ struct socket_base_t : common_socket_base_t<BaseObject>
 		typename base_type::operations
 		, connect_t
 		, disconnect_t
+		, get_endpoint_t
 		, stream_read_t
 		, stream_write_t
 	>;

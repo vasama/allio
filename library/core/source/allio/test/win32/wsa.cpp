@@ -295,11 +295,19 @@ TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][datagram_soc
 
 	auto const receive_socket = create_socket();
 
-	posix::socket_address_storage address_storage;
-	auto const endpoint = ipv4_endpoint(ipv4_address::localhost, 41234);
-	auto const addr = posix::get_socket_address(endpoint, address_storage).value();
+	posix::socket_address_storage bind_address_storage;
+	auto const endpoint = ipv4_endpoint(ipv4_address::localhost, 0);
+	auto const bind_addr = posix::get_socket_address(endpoint, bind_address_storage).value();
 
-	socket_bind(receive_socket.get(), addr).value();
+	socket_bind(receive_socket.get(), bind_addr).value();
+
+	posix::socket_address addr;
+	addr.size = sizeof(posix::socket_address_union);
+
+	posix::socket_get_address(
+		receive_socket.get(),
+		&addr.addr,
+		&addr.size).value();
 
 	signed char receive_buffer = 0;
 	posix::socket_address receive_addr;
@@ -315,7 +323,7 @@ TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][datagram_soc
 			reinterpret_cast<char*>(&send_buffer),
 			1,
 			0,
-			addr.addr,
+			&addr.addr,
 			addr.size);
 		REQUIRE(r == 1);
 	}
@@ -338,14 +346,14 @@ TEST_CASE("WSA blocking datagram send and receive", "[windows][wsa][datagram_soc
 
 TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram_socket][async]")
 {
-	posix::socket_address_storage address_storage;
-	auto const endpoint = ipv4_endpoint(ipv4_address::localhost, 51234);
-	auto const addr = posix::get_socket_address(endpoint, address_storage).value();
+	posix::socket_address_storage bind_address_storage;
+	auto const endpoint = ipv4_endpoint(ipv4_address::localhost, 0);
+	auto const bind_addr = posix::get_socket_address(endpoint, bind_address_storage).value();
 
 	auto const create_socket = [&]()
 	{
 		return posix::create_socket(
-			addr.addr->sa_family,
+			bind_addr.addr->sa_family,
 			SOCK_DGRAM,
 			IPPROTO_UDP,
 			io_flags::create_non_blocking).value().socket;
@@ -357,7 +365,15 @@ TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram
 	/* Receive */
 
 	auto const receive_socket = create_socket();
-	socket_bind(receive_socket.get(), addr).value();
+	socket_bind(receive_socket.get(), bind_addr).value();
+
+	posix::socket_address addr;
+	addr.size = sizeof(posix::socket_address_union);
+
+	posix::socket_get_address(
+		receive_socket.get(),
+		&addr.addr,
+		&addr.size).value();
 
 	set_completion_information(
 		(HANDLE)receive_socket.get(),
@@ -421,7 +437,7 @@ TEST_CASE("WSA asynchronous datagram send and receive", "[windows][wsa][datagram
 			1,
 			&transferred,
 			/* dwFlags: */ 0,
-			addr.addr,
+			&addr.addr,
 			addr.size,
 			&send_overlapped,
 			/* lpCompletionRoutine: */ nullptr);
