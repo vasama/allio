@@ -61,7 +61,7 @@ struct disconnect_t
 	static constexpr auto& blocking_io = Object::disconnect;
 };
 
-struct get_address_t
+struct get_endpoint_t
 {
 	using operation_concept = void;
 
@@ -73,7 +73,7 @@ struct get_address_t
 	using result_type = void;
 
 	template<object Object>
-	static constexpr auto& blocking_io = Object::get_address;
+	static constexpr auto& blocking_io = Object::get_endpoint;
 };
 
 template<object BaseObject>
@@ -107,11 +107,11 @@ struct socket_base_t : common_socket_base_t<BaseObject>
 			return Traits::template observe<disconnect_t>(static_cast<Handle const&>(*this), a);
 		}
 
-		[[nodiscard]] auto get_address(any_endpoint_buffer const endpoint, auto&&... args) const
+		[[nodiscard]] auto get_endpoint(any_endpoint_buffer const endpoint, auto&&... args) const
 		{
-			auto a = io_parameters_t<typename Handle::object_type, get_address_t>();
+			auto a = io_parameters_t<typename Handle::object_type, get_endpoint_t>();
 			(set_argument(a, vsm_forward(args)), ...);
-			return Traits::template observe<get_address_t>(static_cast<Handle const&>(*this), a);
+			return Traits::template observe<get_endpoint_t>(static_cast<Handle const&>(*this), a);
 		}
 	};
 };

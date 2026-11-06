@@ -51,8 +51,8 @@ struct async_operation<io_uring_multiplexer, raw_socket_t, disconnect_t>
 };
 
 template<>
-struct async_operation<io_uring_multiplexer, raw_socket_t, get_address_t>
-	: io_uring_raw_socket_get_address<raw_socket_t>
+struct async_operation<io_uring_multiplexer, raw_socket_t, get_endpoint_t>
+	: io_uring_raw_socket_get_endpoint<raw_socket_t>
 {
 };
 

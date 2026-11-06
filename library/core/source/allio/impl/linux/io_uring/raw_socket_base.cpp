@@ -17,15 +17,15 @@ using M = io_uring_multiplexer;
 using H = native_handle<platform_object_t>;
 using C = async_connector_t<M, platform_object_t>;
 
-using get_address_s = io_uring_raw_socket_get_address_1;
-using get_address_a = io_parameters_t<raw_socket_t, get_address_t>;
+using get_endpoint_s = io_uring_raw_socket_get_endpoint_1;
+using get_endpoint_a = io_parameters_t<raw_socket_t, get_endpoint_t>;
 
-io_result<void> get_address_s::submit(
+io_result<void> get_endpoint_s::submit(
 	M& m,
 	H const& h,
 	C const& c,
-	get_address_s& s,
-	get_address_a const& a,
+	get_endpoint_s& s,
+	get_endpoint_a const& a,
 	io_handler<M>& handler)
 {
 	static_assert(std::is_same_v<decltype(s.addr_size), socklen_t>);
@@ -60,12 +60,12 @@ io_result<void> get_address_s::submit(
 	return vsm::unexpected(io_notify_status::submitted);
 }
 
-io_result<void> get_address_s::notify(
+io_result<void> get_endpoint_s::notify(
 	M& m,
 	H const& h,
 	C const& c,
-	get_address_s& s,
-	get_address_a const& a,
+	get_endpoint_s& s,
+	get_endpoint_a const& a,
 	io_handler<M>&,
 	M::io_status_type const status)
 {
@@ -77,7 +77,7 @@ io_result<void> get_address_s::notify(
 	return {};
 }
 
-void get_address_s::cancel(M& m, H const&, C const&, S& s, A const&, io_handler<M> const&)
+void get_endpoint_s::cancel(M& m, H const&, C const&, S& s, A const&, io_handler<M> const&)
 {
 	(void)m.cancel_io(s);
 }
