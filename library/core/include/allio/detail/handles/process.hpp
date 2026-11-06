@@ -499,7 +499,7 @@ struct process_t : platform_object_t
 		using result_type_template = typename Handle::template rebind_object<TargetObject>;
 
 		template<object Object>
-		static constexpr auto& blocking_io =
+		static constexpr auto blocking_io =
 			Object::template duplicate_handle_template<TargetObject>;
 	};
 
